@@ -27,7 +27,6 @@
 
 ---
 ## 🧱 프로젝트 구조
--
 ├─ backend/ # 공통 API 서버 (계층형 구조)
 ├─ frontend_admin/ # 관리자 전용 웹
 ├─ mobile_app/ # 화주·기사 통합 모바일 앱
