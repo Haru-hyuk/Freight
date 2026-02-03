@@ -1,0 +1,30 @@
+{
+  "name": "@rodia/tokens",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./dist/index.css": "./dist/index.css",
+    "./web-tokens": {
+      "types": "./dist/web-tokens.d.ts",
+      "default": "./dist/web-tokens.js"
+    }
+  },
+  "scripts": {
+    "build:tokens": "tsx scripts/build-tokens.ts",
+    "clean": "rimraf dist"
+  },
+  "devDependencies": {
+    "rimraf": "^6.0.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "zod": "^3.23.8"
+  }
+}

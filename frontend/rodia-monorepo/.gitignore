@@ -1,0 +1,24 @@
+# Node
+node_modules/
+.pnpm-store/
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Build outputs (apps/web, apps/mobile)
+apps/**/dist/
+apps/**/.expo/
+apps/**/web-build/
+apps/**/build/
+apps/**/coverage/
+
+# Env
+.env
+.env.*
