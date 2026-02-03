@@ -1,0 +1,78 @@
+{
+  "themes": {
+    "light": {
+      "colors": {
+        "bg": {
+          "main": { "value": "#F8FAFC" },
+          "surfaceAlt": { "value": "#F1F5F9" }
+        },
+        "text": {
+          "main": { "value": "#0F172A" }
+        },
+        "brand": {
+          "primary": { "value": "#FF6A00" },
+          "secondary": { "value": "#0F172A" },
+          "accent": { "value": "#00E5A8" },
+          "onPrimary": { "value": "#FFFFFF" }
+        },
+        "border": {
+          "default": { "value": "#E2E8F0" }
+        },
+        "semantic": {
+          "danger": { "value": "#EF4444" }
+        }
+      }
+    },
+    "dark": {
+      "colors": {
+        "bg": {
+          "main": { "value": "#0F172A" },
+          "surfaceAlt": { "value": "#111827" }
+        },
+        "text": {
+          "main": { "value": "#F8FAFC" }
+        },
+        "brand": {
+          "primary": { "value": "#FF6A00" },
+          "secondary": { "value": "#F8FAFC" },
+          "accent": { "value": "#00E5A8" },
+          "onPrimary": { "value": "#FFFFFF" }
+        },
+        "border": {
+          "default": { "value": "#1F2937" }
+        },
+        "semantic": {
+          "danger": { "value": "#F87171" }
+        }
+      }
+    }
+  },
+  "layout": {
+    "radii": {
+      "card": { "value": 16 }
+    }
+  },
+  "typography": {
+    "scale": {
+      "heading": { "size": 18, "weight": "700" },
+      "body": { "size": 14, "weight": "400" }
+    }
+  },
+  "elevation": {
+    "app": {
+      "android": {
+        "cardRaised": {
+          "elevation": 6
+        }
+      },
+      "ios": {
+        "cardRaised": {
+          "shadowColor": "#000000",
+          "shadowOpacity": 0.12,
+          "shadowRadius": 10,
+          "shadowOffset": { "width": 0, "height": 6 }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,16 @@
+﻿{
+    "include":  [
+                    "src",
+                    "scripts"
+                ],
+    "compilerOptions":  {
+                            "forceConsistentCasingInFileNames":  true,
+                            "strict":  true,
+                            "module":  "ES2022",
+                            "moduleResolution":  "Bundler",
+                            "skipLibCheck":  true,
+                            "esModuleInterop":  true,
+                            "target":  "ES2022",
+                            "resolveJsonModule":  true
+                        }
+}

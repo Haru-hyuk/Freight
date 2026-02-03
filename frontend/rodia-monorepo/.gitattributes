@@ -1,0 +1,15 @@
+* text=auto eol=lf
+
+# images / binaries
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+
+# lockfiles keep stable
+pnpm-lock.yaml text eol=lf

@@ -1,0 +1,10 @@
+{
+  "name": "rodia-monorepo",
+  "private": true,
+  "packageManager": "pnpm@9.0.0",
+  "scripts": {
+    "tokens:build": "pnpm -C packages/design-tokens build:tokens",
+    "dev:web": "pnpm -C apps/web dev",
+    "dev:mobile": "pnpm -C apps/mobile start"
+  }
+}

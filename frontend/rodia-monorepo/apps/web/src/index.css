@@ -1,0 +1,39 @@
+/* apps/web/src/index.css */
+@import "@rodia/tokens/dist/index.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /*
+      shadcn이 기대하는 추가 변수들을 "토큰 변수에서 파생"시켜 정의합니다.
+      => 하드코딩 HSL/HEX 없이, tokens가 SoT인 상태 유지
+    */
+    --card: var(--background);
+    --card-foreground: var(--foreground);
+
+    --popover: var(--background);
+    --popover-foreground: var(--foreground);
+
+    --secondary-foreground: var(--foreground);
+    --accent-foreground: var(--foreground);
+    --destructive-foreground: var(--foreground);
+    --muted-foreground: var(--foreground);
+
+    --input: var(--border);
+    --ring: var(--primary);
+
+    /* shadcn radius는 토큰에서 생성되는 카드 radius를 그대로 연결 */
+    --radius: var(--rd-radius-card);
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
