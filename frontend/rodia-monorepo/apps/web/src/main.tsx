@@ -2,7 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 
 import "@rodia/tokens/dist/index.css";
-import "./index.css";
+import '@/shared/styles/index.css'
 
 import App from "./App";
 
