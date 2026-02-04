@@ -16,6 +16,15 @@ export type AppThemeColors = {
   semanticDanger: string;
 };
 
+export type AndroidCardRaisedStyle = { elevation: number } & Record<string, unknown>;
+
+export type IOSCardRaisedStyle = {
+  shadowColor: string;
+  shadowOpacity: number;
+  shadowRadius: number;
+  shadowOffset: { width: number; height: number };
+} & Record<string, unknown>;
+
 export type AppTheme = {
   mode: AppColorMode;
   isDark: boolean;
@@ -36,12 +45,7 @@ export type AppTheme = {
   };
 
   elevation: {
-    androidCardRaised: { elevation: number };
-    iosCardRaised: {
-      shadowColor: string;
-      shadowOpacity: number;
-      shadowRadius: number;
-      shadowOffset: { width: number; height: number };
-    };
+    androidCardRaised: AndroidCardRaisedStyle;
+    iosCardRaised: IOSCardRaisedStyle;
   };
 };
