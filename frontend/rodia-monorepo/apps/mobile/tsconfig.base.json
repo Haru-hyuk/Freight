@@ -1,0 +1,17 @@
+{
+    "compilerOptions":  {
+                            "noEmit":  true,
+                            "resolveJsonModule":  true,
+                            "lib":  [
+                                        "ESNext",
+                                        "DOM"
+                                    ],
+                            "jsx":  "react-native",
+                            "moduleResolution":  "Bundler",
+                            "target":  "ESNext",
+                            "esModuleInterop":  true,
+                            "allowJs":  true,
+                            "module":  "ESNext",
+                            "skipLibCheck":  true
+                        }
+}

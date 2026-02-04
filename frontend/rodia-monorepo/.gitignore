@@ -19,6 +19,10 @@ apps/**/web-build/
 apps/**/build/
 apps/**/coverage/
 
+# Tokens build outputs
+packages/design-tokens/dist/
+packages/**/dist/
+
 # Env
 .env
 .env.*
