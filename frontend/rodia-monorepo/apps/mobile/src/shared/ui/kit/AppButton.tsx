@@ -4,12 +4,11 @@ import {
   Pressable,
   type PressableProps,
   type StyleProp,
-  StyleSheet,
   type TextStyle,
-  type ViewStyle,
   View,
+  type ViewStyle
 } from "react-native";
-import { useAppTheme, createThemedStyles } from "../../theme/useAppTheme";
+import { createThemedStyles, useAppTheme } from "../../theme/useAppTheme";
 import { AppText } from "./AppText";
 
 export type AppButtonVariant = "primary" | "secondary" | "destructive";

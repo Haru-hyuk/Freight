@@ -1,9 +1,9 @@
 import React from "react";
-import { Redirect } from "expo-router";
+import { Redirect, Stack } from "expo-router";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { useAuth } from "@/features/auth/model/useAuth";
 
-export default function Index() {
+export default function DriverLayout() {
   const auth = useAuth();
 
   if (auth.status === "checking") {
@@ -26,7 +26,11 @@ export default function Index() {
     );
   }
 
-  return <Redirect href={auth.user.role === "driver" ? "/(driver)/home" : "/(shipper)/home"} />;
+  if (auth.user.role !== "driver") {
+    return <Redirect href="/(shipper)/home" />;
+  }
+
+  return <Stack screenOptions={{ headerShown: false }} />;
 }
 
 const styles = StyleSheet.create({

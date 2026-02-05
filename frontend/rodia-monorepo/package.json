@@ -4,7 +4,7 @@
   "packageManager": "pnpm@9.0.0",
   "scripts": {
     "tokens:build": "pnpm -C packages/design-tokens build:tokens",
-    "dev:web": "pnpm -w tokens:build && pnpm -C apps/web dev",
-    "dev:mobile": "pnpm -w tokens:build && pnpm -C apps/mobile start"
+    "dev:mobile": "pnpm -C apps/mobile start",
+    "dev:mobile:full": "pnpm -w tokens:build && pnpm -C apps/mobile start"
   }
 }
