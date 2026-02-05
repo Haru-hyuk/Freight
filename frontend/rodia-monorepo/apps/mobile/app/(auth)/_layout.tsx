@@ -1,9 +1,9 @@
 import React from "react";
-import { Redirect } from "expo-router";
+import { Redirect, Stack } from "expo-router";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { useAuth } from "@/features/auth/model/useAuth";
 
-export default function Index() {
+export default function AuthLayout() {
   const auth = useAuth();
 
   if (auth.status === "checking") {
@@ -14,19 +14,11 @@ export default function Index() {
     );
   }
 
-  if (auth.status !== "authenticated") {
-    return <Redirect href="/(auth)/login" />;
+  if (auth.status === "authenticated" && auth.user?.role) {
+    return <Redirect href={auth.user.role === "driver" ? "/(driver)/home" : "/(shipper)/home"} />;
   }
 
-  if (!auth.user?.role) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator />
-      </View>
-    );
-  }
-
-  return <Redirect href={auth.user.role === "driver" ? "/(driver)/home" : "/(shipper)/home"} />;
+  return <Stack screenOptions={{ headerShown: false }} />;
 }
 
 const styles = StyleSheet.create({
