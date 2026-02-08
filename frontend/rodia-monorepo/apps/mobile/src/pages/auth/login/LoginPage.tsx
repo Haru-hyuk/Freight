@@ -33,9 +33,6 @@ export default function LoginPage() {
       <View style={s.root}>
         <View style={s.header}>
           <AppText variant="heading">Rodia</AppText>
-          <AppText variant="caption" color="borderDefault" style={s.subtitle}>
-            로그인 후 역할에 따라 자동으로 화면이 분기됩니다.
-          </AppText>
         </View>
 
         <View style={s.cardWrap}>

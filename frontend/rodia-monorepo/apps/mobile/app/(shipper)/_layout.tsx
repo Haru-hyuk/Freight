@@ -1,15 +1,76 @@
-import React from "react";
-import { Redirect, Stack } from "expo-router";
-import { View, ActivityIndicator, StyleSheet } from "react-native";
+// apps/mobile/app/(shipper)/_layout.tsx
+import React, { useMemo } from "react";
+import { Redirect, Stack, useRouter, useSegments } from "expo-router";
+import { ActivityIndicator, StyleSheet, View, type ViewStyle } from "react-native";
+
 import { useAuth } from "@/features/auth/model/useAuth";
+import { useAppTheme } from "@/shared/theme/useAppTheme";
+import { BottomTabBar } from "@/widgets/layout/BottomTabBar";
+
+type BottomTabKey = "home" | "quotes" | "matchings" | "profile";
+
+function safeString(v: unknown, fallback = ""): string {
+  return typeof v === "string" && v.trim().length > 0 ? v : fallback;
+}
+
+function pickActiveKey(segments: readonly string[] | undefined | null): BottomTabKey {
+  const segs = Array.isArray(segments) ? segments : [];
+
+  if (segs.includes("quotes")) return "quotes";
+  if (segs.includes("matchings")) return "matchings";
+  if (segs.includes("profile")) return "profile";
+  if (segs.includes("home")) return "home";
+
+  // create/detail 등 하위 라우트에서도 탭 유지되도록 fallback
+  const last = segs
+    .filter((s) => safeString(s).trim() && !safeString(s).startsWith("("))
+    .slice(-1)[0];
+
+  if (last === "quotes") return "quotes";
+  if (last === "matchings") return "matchings";
+  if (last === "profile") return "profile";
+  return "home";
+}
+
+function hrefForKey(key: BottomTabKey): `/(shipper)/${string}` {
+  if (key === "home") return "/(shipper)/home";
+  if (key === "quotes") return "/(shipper)/quotes";
+  if (key === "matchings") return "/(shipper)/matchings";
+  return "/(shipper)/profile";
+}
 
 export default function ShipperLayout() {
+  const theme = useAppTheme();
+  const router = useRouter();
+  const segments = useSegments();
   const auth = useAuth();
+
+  const cBgBase = safeString(theme?.colors?.bgSurfaceAlt, "#F3F4F6");
+  const cCard = safeString(theme?.colors?.bgMain, "#FFFFFF");
+  const cBorder = safeString(theme?.colors?.borderDefault, "#E5E7EB");
+  const cText = safeString(theme?.colors?.textMain, "#111827");
+
+  const styles = useMemo(
+    () =>
+      StyleSheet.create({
+        center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: cBgBase },
+        root: { flex: 1, backgroundColor: cBgBase },
+        stackWrap: { flex: 1, backgroundColor: cBgBase },
+        bottomWrap: {
+          backgroundColor: cCard,
+          borderTopWidth: 1,
+          borderTopColor: cBorder,
+        } as ViewStyle,
+      }),
+    [cBgBase, cBorder, cCard]
+  );
+
+  const activeKey = useMemo(() => pickActiveKey(segments), [segments]);
 
   if (auth.status === "checking") {
     return (
       <View style={styles.center}>
-        <ActivityIndicator />
+        <ActivityIndicator color={cText} />
       </View>
     );
   }
@@ -22,7 +83,7 @@ export default function ShipperLayout() {
   if (!auth.user?.role) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator />
+        <ActivityIndicator color={cText} />
       </View>
     );
   }
@@ -31,9 +92,39 @@ export default function ShipperLayout() {
     return <Redirect href="/(driver)/home" />;
   }
 
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <View style={styles.root}>
+      <View style={styles.stackWrap}>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: cBgBase },
+          }}
+        />
+      </View>
+
+      <View style={styles.bottomWrap}>
+        <BottomTabBar
+          activeKey={activeKey}
+          onChange={(key) => {
+            const next = hrefForKey(key);
+            router?.push?.(next);
+          }}
+          items={[
+            { key: "home", label: "홈", iconActive: "home", iconInactive: "home-outline" },
+            { key: "quotes", label: "견적", iconActive: "clipboard", iconInactive: "clipboard-outline" },
+            { key: "matchings", label: "매칭", iconActive: "location", iconInactive: "location-outline" },
+            { key: "profile", label: "내 정보", iconActive: "person", iconInactive: "person-outline" },
+          ]}
+        />
+      </View>
+    </View>
+  );
 }
 
-const styles = StyleSheet.create({
-  center: { flex: 1, alignItems: "center", justifyContent: "center" },
-});
+/*
+요약(3줄)
+- (shipper) 레이아웃에서 인증/role 가드를 유지하면서 Stack 아래에 BottomTabBar를 고정했습니다.
+- 탭 전환은 router.push로 / (shipper)/home|quotes|matchings|profile 라우트로 이동합니다.
+- useSegments 기반으로 하위 라우트에서도 활성 탭을 안정적으로 유지합니다.
+*/

@@ -56,6 +56,71 @@ function requireHex(tokensRaw: unknown, p: RodiaPath) {
   return s;
 }
 
+type CssColorVar = {
+  varName: string;
+  value: string;
+  tokenPath: string;
+};
+
+function toCssSegment(input: string) {
+  return input
+    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+    .replace(/[^a-zA-Z0-9-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .toLowerCase();
+}
+
+function collectThemeColorVars(themeColors: unknown) {
+  const out: CssColorVar[] = [];
+
+  const walk = (node: unknown, rawPath: string[], cssPath: string[]) => {
+    if (!node || typeof node !== "object" || Array.isArray(node)) return;
+    const record = node as Record<string, unknown>;
+
+    const maybeValue = record?.value;
+    if (typeof maybeValue === "string" && isHexColor(maybeValue) && cssPath.length > 0) {
+      out.push({
+        varName: `--rd-color-${cssPath.join("-")}`,
+        value: maybeValue,
+        tokenPath: rawPath.join("."),
+      });
+    }
+
+    for (const [key, value] of Object.entries(record)) {
+      if (key === "value") continue;
+      walk(value, [...rawPath, key], [...cssPath, toCssSegment(key)]);
+    }
+  };
+
+  walk(themeColors, [], []);
+  return out.sort((a, b) => a.varName.localeCompare(b.varName));
+}
+
+function collectHexVars(node: unknown, prefix: string, basePath: string[]) {
+  const out: CssColorVar[] = [];
+
+  const walk = (input: unknown, rawPath: string[], cssPath: string[]) => {
+    if (typeof input === "string") {
+      if (!isHexColor(input) || cssPath.length === 0) return;
+      out.push({
+        varName: `--${prefix}-${cssPath.join("-")}`,
+        value: input,
+        tokenPath: rawPath.join("."),
+      });
+      return;
+    }
+
+    if (!input || typeof input !== "object" || Array.isArray(input)) return;
+    for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+      walk(value, [...rawPath, key], [...cssPath, toCssSegment(key)]);
+    }
+  };
+
+  walk(node, [...basePath], []);
+  return out.sort((a, b) => a.varName.localeCompare(b.varName));
+}
+
 function emitCss(tokensRaw: unknown) {
   const lightLines: string[] = [];
   const darkLines: string[] = [];
@@ -111,6 +176,24 @@ function emitCss(tokensRaw: unknown) {
   lightLines.push(`  --rd-brand-on-primary-hex: ${rawOnPrimaryLight};`);
   lightLines.push(`  --rd-brand-on-primary-hsl: ${onPrimaryHslLight};`);
   lightLines.push(`  --rd-radius-card: ${radiusPx};`);
+
+  const lightColorVars = collectThemeColorVars(getByPath(tokensRaw, "themes.light.colors"));
+  if (lightColorVars.length > 0) {
+    lightLines.push("");
+    lightLines.push("  /* Rodia Theme Color Tokens (raw hex) */");
+    for (const item of lightColorVars) {
+      lightLines.push(`  ${item.varName}: ${item.value}; /* ${item.tokenPath} */`);
+    }
+  }
+
+  const paletteVars = collectHexVars(getByPath(tokensRaw, "palette"), "rd-palette", ["palette"]);
+  if (paletteVars.length > 0) {
+    lightLines.push("");
+    lightLines.push("  /* Rodia Palette Tokens (raw hex) */");
+    for (const item of paletteVars) {
+      lightLines.push(`  ${item.varName}: ${item.value}; /* ${item.tokenPath} */`);
+    }
+  }
   lightLines.push("}");
 
   darkLines.push("");
@@ -120,6 +203,15 @@ function emitCss(tokensRaw: unknown) {
   darkLines.push(`  --rd-brand-on-primary-hex: ${rawOnPrimaryDark};`);
   darkLines.push(`  --rd-brand-on-primary-hsl: ${onPrimaryHslDark};`);
   darkLines.push(`  --rd-radius-card: ${radiusPx};`);
+
+  const darkColorVars = collectThemeColorVars(getByPath(tokensRaw, "themes.dark.colors"));
+  if (darkColorVars.length > 0) {
+    darkLines.push("");
+    darkLines.push("  /* Rodia Theme Color Tokens (raw hex) */");
+    for (const item of darkColorVars) {
+      darkLines.push(`  ${item.varName}: ${item.value}; /* ${item.tokenPath} */`);
+    }
+  }
   darkLines.push("}");
 
   return `${lightLines.join("\n")}\n\n${darkLines.join("\n")}\n`;
