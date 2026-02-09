@@ -41,7 +41,7 @@ public class JwtTokenProvider {
         return null;
     }
 
-    public String generateAccessToken(Integer userId, String email, String role) {
+    public String generateAccessToken(Long userId, String email, String role) {
         Date now = new Date();
         Map<String, Object> claims = new HashMap<>();
         claims.put("email", email);
