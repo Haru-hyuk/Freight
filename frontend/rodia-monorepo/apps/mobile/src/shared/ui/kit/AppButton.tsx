@@ -142,8 +142,8 @@ export function AppButton({
         {
           backgroundColor: isDisabled ? palette.disabledBg : pressed ? palette.pressedBg : palette.bg,
           borderColor: isDisabled ? palette.disabledBorder : palette.border,
-          transform: !isDisabled && pressed ? [{ scale: 0.98 }] : undefined,
         },
+        !isDisabled && pressed ? styles.pressed : undefined,
         sizeStyle,
         style as any,
       ]}
@@ -186,6 +186,9 @@ const useStyles = createThemedStyles((theme) => {
     side: {
       alignItems: "center",
       justifyContent: "center",
+    },
+    pressed: {
+      transform: [{ scale: 0.98 }],
     },
   };
 });

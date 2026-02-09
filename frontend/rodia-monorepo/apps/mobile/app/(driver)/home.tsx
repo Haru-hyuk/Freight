@@ -1,6 +1,6 @@
 import React from "react";
-import { DriverUiKitPlaygroundPage } from "@/pages/driver/DriverUiKitPlaygroundPage";
+import DriverHomePage from "@/pages/driver/DriverHomePage";
 
 export default function DriverHomeRoute() {
-  return <DriverUiKitPlaygroundPage />;
+  return <DriverHomePage />;
 }

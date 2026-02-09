@@ -203,7 +203,13 @@ export function ShipperProfilePage() {
           </View>
 
           <View style={{ height: 8 }} />
-          <AppButton title="로그아웃(연결 예정)" variant="secondary" onPress={() => {}} />
+          <AppButton
+            title={auth.isBusy ? "로그아웃 중..." : "로그아웃"}
+            variant="secondary"
+            disabled={auth.isBusy}
+            loading={auth.isBusy}
+            onPress={() => auth.logout()}
+          />
           <View style={{ height: 120 }} />
         </>
       )}

@@ -129,6 +129,32 @@ function readButtonSizeToken(input: unknown, fallback: ButtonSizeToken, path: st
   };
 }
 
+function readAndroidCardRaisedStyle(
+  input: unknown,
+  fallback: AndroidCardRaisedStyle,
+  path: string
+): AndroidCardRaisedStyle {
+  const s = safePlainObject(input, fallback) as any;
+  return {
+    elevation: safeNumber(s?.elevation, fallback.elevation, `${path}.elevation`),
+  };
+}
+
+function readIOSCardRaisedStyle(input: unknown, fallback: IOSCardRaisedStyle, path: string): IOSCardRaisedStyle {
+  const s = safePlainObject(input, fallback) as any;
+  const o = safePlainObject(s?.shadowOffset, fallback.shadowOffset) as any;
+
+  return {
+    shadowColor: safeAnyColor(s?.shadowColor, fallback.shadowColor, `${path}.shadowColor`),
+    shadowOpacity: safeNumber(s?.shadowOpacity, fallback.shadowOpacity, `${path}.shadowOpacity`),
+    shadowRadius: safeNumber(s?.shadowRadius, fallback.shadowRadius, `${path}.shadowRadius`),
+    shadowOffset: {
+      width: safeNumber(o?.width, fallback.shadowOffset.width, `${path}.shadowOffset.width`),
+      height: safeNumber(o?.height, fallback.shadowOffset.height, `${path}.shadowOffset.height`),
+    },
+  };
+}
+
 export function resolveColorMode(mode: AppColorMode, system: ReturnType<typeof useColorScheme>): "light" | "dark" {
   if (mode === "system") return (system ?? "light") === "dark" ? "dark" : "light";
   return mode === "dark" ? "dark" : "light";
@@ -312,8 +338,16 @@ export function createTheme(resolved: "light" | "dark", mode: AppColorMode): App
     ios: { cardRaised: FALLBACK_IOS_CARD_RAISED },
   });
 
-  const androidCardRaised = safePlainObject((elevationApp as any)?.android?.cardRaised, FALLBACK_ANDROID_CARD_RAISED);
-  const iosCardRaised = safePlainObject((elevationApp as any)?.ios?.cardRaised, FALLBACK_IOS_CARD_RAISED);
+  const androidCardRaised = readAndroidCardRaisedStyle(
+    (elevationApp as any)?.android?.cardRaised,
+    FALLBACK_ANDROID_CARD_RAISED,
+    "elevation.app.android.cardRaised"
+  );
+  const iosCardRaised = readIOSCardRaisedStyle(
+    (elevationApp as any)?.ios?.cardRaised,
+    FALLBACK_IOS_CARD_RAISED,
+    "elevation.app.ios.cardRaised"
+  );
 
   return {
     mode,

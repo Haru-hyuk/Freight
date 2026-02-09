@@ -28,10 +28,42 @@ const toArrayStyle = <T,>(style?: T | T[]) => {
   return Array.isArray(style) ? style : [style];
 };
 
+function safeNumber(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function safeString(value: unknown, fallback: string): string {
+  return typeof value === "string" && value.trim().length > 0 ? value : fallback;
+}
+
+function readAndroidCardRaised(input: unknown): ViewStyle {
+  const source = (input ?? {}) as Record<string, unknown>;
+  return {
+    elevation: safeNumber(source.elevation, 4),
+  };
+}
+
+function readIOSCardRaised(input: unknown): ViewStyle {
+  const source = (input ?? {}) as Record<string, unknown>;
+  const offset = ((source.shadowOffset ?? {}) as Record<string, unknown>) ?? {};
+
+  return {
+    shadowColor: safeString(source.shadowColor, "#000000"),
+    shadowOpacity: safeNumber(source.shadowOpacity, 0.12),
+    shadowRadius: safeNumber(source.shadowRadius, 10),
+    shadowOffset: {
+      width: safeNumber(offset.width, 0),
+      height: safeNumber(offset.height, 6),
+    },
+  };
+}
+
 const useStyles = createThemedStyles((theme) => {
   const cardRadius = theme.components.card.radius;
   const cardPaddingSm = theme.components.card.paddingSm;
   const cardPaddingMd = theme.components.card.paddingMd;
+  const androidRaised = readAndroidCardRaised(theme.elevation.androidCardRaised);
+  const iosRaised = readIOSCardRaised(theme.elevation.iosCardRaised);
 
   return StyleSheet.create({
     card: {
@@ -39,8 +71,8 @@ const useStyles = createThemedStyles((theme) => {
       borderWidth: 1,
       borderColor: theme.colors.borderDefault,
       backgroundColor: theme.colors.bgSurface,
-      ...(Platform.OS === "android" ? theme.elevation.androidCardRaised : null),
-      ...(Platform.OS === "ios" ? theme.elevation.iosCardRaised : null),
+      ...(Platform.OS === "android" ? androidRaised : null),
+      ...(Platform.OS === "ios" ? iosRaised : null),
     },
     header: {
       padding: cardPaddingMd,

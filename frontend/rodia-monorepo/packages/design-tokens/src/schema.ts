@@ -9,6 +9,28 @@ const HexColor = z
 
 const FontWeight = z.union([z.string().min(1), z.number().int().nonnegative()]);
 
+const IOSShadowOffset = z
+  .object({
+    width: z.number().finite(),
+    height: z.number().finite()
+  })
+  .passthrough();
+
+const IOSCardRaised = z
+  .object({
+    shadowColor: z.string().min(1),
+    shadowOpacity: z.number().finite(),
+    shadowRadius: z.number().finite(),
+    shadowOffset: IOSShadowOffset
+  })
+  .passthrough();
+
+const AndroidCardRaised = z
+  .object({
+    elevation: z.number().finite()
+  })
+  .passthrough();
+
 const ColorToken = z
   .object({
     value: HexColor
@@ -96,7 +118,28 @@ const TokensSchema = z
       })
       .passthrough()
       .optional(),
-    elevation: z.any().optional()
+    elevation: z
+      .object({
+        app: z
+          .object({
+            ios: z
+              .object({
+                cardRaised: IOSCardRaised
+              })
+              .passthrough()
+              .optional(),
+            android: z
+              .object({
+                cardRaised: AndroidCardRaised
+              })
+              .passthrough()
+              .optional()
+          })
+          .passthrough()
+          .optional()
+      })
+      .passthrough()
+      .optional()
   })
   .passthrough();
 
