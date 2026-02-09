@@ -3,10 +3,14 @@ package com.freight.backend.service;
 import com.freight.backend.config.jwt.JwtTokenProvider;
 import com.freight.backend.dto.auth.LoginRequest;
 import com.freight.backend.dto.auth.TokenResponse;
-import com.freight.backend.entity.User;
+import com.freight.backend.entity.Admin;
+import com.freight.backend.entity.Driver;
+import com.freight.backend.entity.Shipper;
 import com.freight.backend.exception.CustomException;
 import com.freight.backend.exception.ErrorCode;
-import com.freight.backend.repository.UserRepository;
+import com.freight.backend.repository.AdminRepository;
+import com.freight.backend.repository.DriverRepository;
+import com.freight.backend.repository.ShipperRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -16,27 +20,55 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class AuthService {
 
-    private final UserRepository userRepository;
+    private final DriverRepository driverRepository;
+    private final ShipperRepository shipperRepository;
+    private final AdminRepository adminRepository;
     private final JwtTokenProvider jwtTokenProvider;
     private final BCryptPasswordEncoder passwordEncoder;
 
     @Transactional
-    public TokenResponse login(LoginRequest req) {
-        User user = userRepository.findByEmail(req.getEmail())
+    public TokenResponse loginDriver(LoginRequest req) {
+        Driver driver = driverRepository.findByEmail(req.getEmail())
                 .orElseThrow(() -> new CustomException(ErrorCode.AUTH_UNAUTHORIZED));
 
-        if (!passwordEncoder.matches(req.getPassword(), user.getPassword())) {
+        if (!passwordEncoder.matches(req.getPassword(), driver.getPasswordHash())) {
             throw new CustomException(ErrorCode.AUTH_UNAUTHORIZED);
         }
 
-        return issueAccessToken(user);
+        return issueAccessToken(driver.getDriverId(), driver.getEmail(), "DRIVER");
     }
 
-    private TokenResponse issueAccessToken(User user) {
-        String role = "USER";
+    @Transactional
+    public TokenResponse loginShipper(LoginRequest req) {
+        Shipper shipper = shipperRepository.findByEmail(req.getEmail())
+                .orElseThrow(() -> new CustomException(ErrorCode.AUTH_UNAUTHORIZED));
+
+        if (!passwordEncoder.matches(req.getPassword(), shipper.getPasswordHash())) {
+            throw new CustomException(ErrorCode.AUTH_UNAUTHORIZED);
+        }
+
+        return issueAccessToken(shipper.getShipperId(), shipper.getEmail(), "SHIPPER");
+    }
+
+    @Transactional
+    public TokenResponse loginAdmin(LoginRequest req) {
+        Admin admin = adminRepository.findByEmail(req.getEmail())
+                .orElseThrow(() -> new CustomException(ErrorCode.AUTH_UNAUTHORIZED));
+
+        if (!passwordEncoder.matches(req.getPassword(), admin.getPasswordHash())) {
+            throw new CustomException(ErrorCode.AUTH_UNAUTHORIZED);
+        }
+
+        String role = admin.getRole() == null || admin.getRole().isBlank()
+                ? "ADMIN"
+                : admin.getRole();
+        return issueAccessToken(admin.getAdminId(), admin.getEmail(), role);
+    }
+
+    private TokenResponse issueAccessToken(Long userId, String email, String role) {
         String accessToken = jwtTokenProvider.generateAccessToken(
-                user.getUserId(),
-                user.getEmail(),
+                userId,
+                email,
                 role
         );
 

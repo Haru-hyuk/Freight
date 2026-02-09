@@ -17,8 +17,18 @@ public class AuthController {
 
     private final AuthService authService;
 
-    @PostMapping("/login")
-    public ResponseEntity<TokenResponse> login(@RequestBody LoginRequest req) {
-        return ResponseEntity.ok(authService.login(req));
+    @PostMapping("/driver/login")
+    public ResponseEntity<TokenResponse> driverLogin(@RequestBody LoginRequest req) {
+        return ResponseEntity.ok(authService.loginDriver(req));
+    }
+
+    @PostMapping("/shipper/login")
+    public ResponseEntity<TokenResponse> shipperLogin(@RequestBody LoginRequest req) {
+        return ResponseEntity.ok(authService.loginShipper(req));
+    }
+
+    @PostMapping("/admin/login")
+    public ResponseEntity<TokenResponse> adminLogin(@RequestBody LoginRequest req) {
+        return ResponseEntity.ok(authService.loginAdmin(req));
     }
 }
