@@ -12,6 +12,7 @@ public class QuoteListResponse {
     private String originAddress;
     private String destinationAddress;
     private Integer distanceKm;
+    private String vehicleType;
     private Integer desiredPrice;
     private Integer finalPrice;
     private String status;
