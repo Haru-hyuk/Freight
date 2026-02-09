@@ -19,7 +19,11 @@ spring:
 jwt:
   secret: ${JWT_SECRET}
 
+odcloud:
+  api:
+    base-url: ${ODCLOUD_API_BASE_URL:https://api.odcloud.kr}
+    key: ${ODCLOUD_API_KEY:}
+
 deepseek:
   api:
     key: ${DEEPSEEK_API_KEY}
-
