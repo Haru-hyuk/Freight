@@ -17,6 +17,7 @@ public class QuoteCreateRequest {
     private Integer distanceKm;
     private Integer weightKg;
     private Integer volumeCbm;
+    private String vehicleType;
     private String cargoType;
     private String cargoDesc;
     private Integer basePrice;
