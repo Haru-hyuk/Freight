@@ -1,33 +1,11 @@
 // apps/mobile/src/widgets/layout/BottomTabBar.tsx
 import React, { useMemo } from "react";
 import { Platform, StyleSheet, View, type ViewStyle } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
 import { useAppTheme } from "@/shared/theme/useAppTheme";
 import { BottomNavButton } from "@/shared/ui/kit/BottomNavButton";
-
-function safeString(v: unknown, fallback = ""): string {
-  return typeof v === "string" && v.trim().length > 0 ? v : fallback;
-}
-
-function rgbaFromHex(hex: string, opacity: number): string | null {
-  const s = safeString(hex).trim();
-  if (!/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(s)) return null;
-
-  const raw = s.replace("#", "");
-  const full = raw.length === 3 ? raw.split("").map((c) => c + c).join("") : raw;
-
-  const r = parseInt(full.slice(0, 2), 16);
-  const g = parseInt(full.slice(2, 4), 16);
-  const b = parseInt(full.slice(4, 6), 16);
-  if ([r, g, b].some((x) => Number.isNaN(x))) return null;
-
-  const a = Math.max(0, Math.min(1, opacity));
-  return `rgba(${r}, ${g}, ${b}, ${a})`;
-}
-
-function tint(color: string, opacity: number, fallback: string): string {
-  return rgbaFromHex(color, opacity) ?? fallback;
-}
 
 export type BottomTabItem<K extends string> = {
   key: K;
@@ -42,6 +20,7 @@ export function BottomTabBar<K extends string>(props: {
   items: Array<BottomTabItem<K>>;
 }) {
   const theme = useAppTheme();
+  const insets = useSafeAreaInsets();
 
   const cCard = safeString(theme?.colors?.bgMain, "#FFFFFF");
   const cText = safeString(theme?.colors?.textMain, "#111827");
@@ -49,7 +28,8 @@ export function BottomTabBar<K extends string>(props: {
 
   const inactive = useMemo(() => tint(cText, 0.55, "rgba(17,24,39,0.55)"), [cText]);
 
-  const styles = useMemo(() => createStyles({ cCard }), [cCard]);
+  const bottomInset = Math.max(0, safeNumber(insets?.bottom, 0));
+  const styles = useMemo(() => createStyles({ cCard, bottomInset }), [cCard, bottomInset]);
 
   return (
     <View style={styles.root}>
@@ -72,7 +52,7 @@ export function BottomTabBar<K extends string>(props: {
   );
 }
 
-function createStyles(input: { cCard: string }) {
+function createStyles(input: { cCard: string; bottomInset: number }) {
   const shadow = Platform.select<ViewStyle>({
     ios: {
       shadowColor: "#000000",
@@ -85,9 +65,10 @@ function createStyles(input: { cCard: string }) {
   });
 
   return StyleSheet.create({
-    // ✅ SafeArea 하단 inset은 PageScaffold의 AppContainer가 처리하므로 여기서는 고정 높이만 둠
+    // ✅ SafeArea 하단 inset을 paddingBottom에 추가하여 시스템 바와 겹치지 않도록 처리
     root: {
-      height: 64,
+      paddingBottom: input.bottomInset,
+      height: 64 + input.bottomInset,
       backgroundColor: tint(input.cCard, 0.96, input.cCard),
       borderTopWidth: 1,
       borderTopColor: tint("#000000", 0.05, "rgba(0,0,0,0.05)"),

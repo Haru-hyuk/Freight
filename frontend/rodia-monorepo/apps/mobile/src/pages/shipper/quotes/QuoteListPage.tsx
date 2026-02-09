@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, View, type ViewStyle } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
+import { safeString, tint } from "@/shared/theme/colorUtils";
 import { useAppTheme } from "@/shared/theme/useAppTheme";
 import { PageScaffold } from "@/widgets/layout/PageScaffold";
 import { AppText } from "@/shared/ui/kit/AppText";
@@ -12,26 +13,6 @@ import { AppButton } from "@/shared/ui/kit/AppButton";
 import { AppEmptyState } from "@/shared/ui/kit/AppEmptyState";
 
 const VIEW_PRESSED: ViewStyle = { opacity: 0.85 };
-
-function safeString(v: unknown, fallback = ""): string {
-  return typeof v === "string" && v.trim().length > 0 ? v : fallback;
-}
-
-function tint(color: string, opacity: number, fallback: string): string {
-  const s = safeString(color).trim();
-  if (!/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(s)) return fallback;
-
-  const raw = s.replace("#", "");
-  const full = raw.length === 3 ? raw.split("").map((c) => c + c).join("") : raw;
-
-  const r = parseInt(full.slice(0, 2), 16);
-  const g = parseInt(full.slice(2, 4), 16);
-  const b = parseInt(full.slice(4, 6), 16);
-  if ([r, g, b].some((x) => Number.isNaN(x))) return fallback;
-
-  const a = Math.max(0, Math.min(1, opacity));
-  return `rgba(${r}, ${g}, ${b}, ${a})`;
-}
 
 type QuoteStatus = "draft" | "negotiating" | "matched";
 type QuoteItem = {
@@ -49,7 +30,6 @@ export function QuoteListPage() {
 
   const cText = safeString(theme?.colors?.textMain, "#111827");
   const cBg = safeString(theme?.colors?.bgSurfaceAlt, "#F3F4F6");
-  const cCard = safeString(theme?.colors?.bgMain, "#FFFFFF");
   const cBorder = safeString(theme?.colors?.borderDefault, "#E5E7EB");
   const cPrimary = safeString(theme?.colors?.brandPrimary, "#FF6A00");
   const subtleText = useMemo(() => tint(cText, 0.7, "rgba(17,24,39,0.7)"), [cText]);

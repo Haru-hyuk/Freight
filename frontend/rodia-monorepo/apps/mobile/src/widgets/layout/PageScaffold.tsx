@@ -1,137 +1,234 @@
 // apps/mobile/src/widgets/layout/PageScaffold.tsx
 import React, { useMemo } from "react";
-import { Platform, StyleSheet, View, type ViewStyle } from "react-native";
+import {
+  Platform,
+  StatusBar,
+  StyleSheet,
+  TouchableOpacity,
+  View,
+  type ViewStyle,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { useAppTheme } from "../../shared/theme/useAppTheme";
-import { AppContainer } from "../../shared/ui/kit/AppContainer";
-import { AppText } from "../../shared/ui/kit/AppText";
+import { safeString, tint } from "@/shared/theme/colorUtils";
+import { useAppTheme } from "@/shared/theme/useAppTheme";
+import { AppContainer } from "@/shared/ui/kit/AppContainer";
+import { AppText } from "@/shared/ui/kit/AppText";
 
-function safeString(v: unknown, fallback = ""): string {
-  return typeof v === "string" && v.trim().length > 0 ? v : fallback;
-}
-
-function rgbaFromHex(hex: string, opacity: number): string | null {
-  const s = safeString(hex).trim();
-  if (!/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(s)) return null;
-
-  const raw = s.replace("#", "");
-  const full = raw.length === 3 ? raw.split("").map((c) => c + c).join("") : raw;
-
-  const r = parseInt(full.slice(0, 2), 16);
-  const g = parseInt(full.slice(2, 4), 16);
-  const b = parseInt(full.slice(4, 6), 16);
-  if ([r, g, b].some((x) => Number.isNaN(x))) return null;
-
-  const a = Math.max(0, Math.min(1, opacity));
-  return `rgba(${r}, ${g}, ${b}, ${a})`;
-}
-
-function tint(color: string, opacity: number, fallback: string): string {
-  return rgbaFromHex(color, opacity) ?? fallback;
-}
-
-export function PageScaffold(props: {
+type Props = {
   title: string;
+  subtitle?: string;
+
+  /** ✅ TopBar slots */
+  headerLeft?: React.ReactNode;
   headerRight?: React.ReactNode;
+
+  /** ✅ Optional Back button (if provided, will show when headerLeft is not set) */
+  onPressBack?: () => void;
+  backLabel?: string;
+
   children?: React.ReactNode;
   bottomBar?: React.ReactNode;
   floating?: React.ReactNode;
   backgroundColor?: string;
-}) {
+
+  /** ✅ Layout */
+  scroll?: boolean;
+  padding?: number;
+  contentStyle?: ViewStyle;
+
+  /**
+   * ✅ Status bar / notch safe area padding for the header content.
+   * - default: auto (safe-area top + android StatusBar height fallback)
+   * - set 0 if your AppContainer already applies top inset and you see double padding
+   */
+  headerInsetTop?: number;
+};
+
+export function PageScaffold(props: Props) {
   const theme = useAppTheme();
+  const insets = useSafeAreaInsets();
 
   const cCard = safeString(theme?.colors?.bgMain, "#FFFFFF");
   const cText = safeString(theme?.colors?.textMain, "#111827");
-  const bg = safeString(props.backgroundColor, safeString(theme?.colors?.bgSurfaceAlt, "#F3F4F6"));
+  const cSub = safeString(theme?.colors?.textSub, safeString(theme?.colors?.textMuted, "#6B7280"));
+  const cBorder = safeString(theme?.colors?.borderDefault, "rgba(0,0,0,0.08)");
+  const cShadow = safeString(theme?.colors?.textMain, "#000000");
 
-  const styles = useMemo(() => createStyles({ cCard }), [cCard]);
+  const bg = safeString(props.backgroundColor, safeString(theme?.colors?.bgSurfaceAlt, "#FAFBFC"));
+
+  const styles = useMemo(() => createStyles({ cCard, cBorder, cShadow }), [cCard, cBorder, cShadow]);
+
+  const scroll = props.scroll ?? true;
+  const padding = typeof props.padding === "number" ? props.padding : 20;
+
+  const shouldShowBack = !props.headerLeft && typeof props.onPressBack === "function";
+  const backLabel = safeString(props.backLabel, "뒤로");
+
+  const androidStatusBar = Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0;
+  const safeTop = Math.max(0, insets?.top ?? 0, androidStatusBar);
+  const headerInsetTop =
+    typeof props.headerInsetTop === "number" ? Math.max(0, props.headerInsetTop) : safeTop;
+
+  const headerPaddingTop = 10 + headerInsetTop;
 
   return (
     <View style={styles.root}>
-      {/* ✅ SafeArea: 상/하단 모두 AppContainer(SafeAreaView)로 처리 */}
+      {/* ✅ SafeArea: AppContainer가 safe inset을 처리한다고 가정(프로젝트 기존 규칙 유지) */}
       <AppContainer scroll={false} padding={0} backgroundColor={bg}>
-        {/* ✅ 헤더: SafeArea 상단 inset 포함 */}
-        <View style={styles.header}>
-          <AppText variant="heading" weight="900" color={cText}>
-            {props.title}
-          </AppText>
+        {/* ✅ TopBar (Header) */}
+        <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
+          <View style={styles.headerLeft}>
+            {props.headerLeft ? (
+              props.headerLeft
+            ) : shouldShowBack ? (
+              <TouchableOpacity
+                onPress={props.onPressBack}
+                activeOpacity={0.3}
+                style={styles.backBtn}
+                accessibilityRole="button"
+                accessibilityLabel={backLabel}
+              >
+                <AppText variant="detail" weight="800" color={cText}>
+                  ←
+                </AppText>
+                <AppText variant="detail" weight="700" color={cText} style={styles.backLabel}>
+                  {backLabel}
+                </AppText>
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.headerSlotPlaceholder} />
+            )}
+          </View>
 
-          <View style={styles.headerRight}>{props.headerRight ?? null}</View>
+          <View style={styles.headerCenter}>
+            <AppText variant="heading" weight="900" color={cText} numberOfLines={1}>
+              {props.title}
+            </AppText>
+            {props.subtitle ? (
+              <AppText variant="caption" weight="600" color={cSub} numberOfLines={1} style={styles.subtitle}>
+                {props.subtitle}
+              </AppText>
+            ) : null}
+          </View>
+
+          <View style={styles.headerRight}>
+            {props.headerRight ? props.headerRight : <View style={styles.headerSlotPlaceholder} />}
+          </View>
         </View>
 
-        {/* ✅ 본문: bottom bar 높이만큼 paddingBottom 확보 (iOS safe-bottom은 AppContainer가 포함) */}
+        {/* ✅ Body */}
         <AppContainer
-          scroll
-          padding={20}
+          scroll={scroll}
+          padding={padding}
           backgroundColor={bg}
           style={styles.bodyWrap}
-          contentStyle={styles.bodyContent}
+          contentStyle={[styles.bodyContent, props.contentStyle]}
         >
           {props.children ?? null}
         </AppContainer>
 
-        {/* ✅ floating: bottom bar + safe-bottom 고려한 위치 */}
+        {/* ✅ floating */}
         {props.floating ? <View style={styles.floatingWrap}>{props.floating}</View> : null}
 
-        {/* ✅ bottomBar: SafeArea 하단은 이미 AppContainer가 처리하므로, 바 자체 높이는 고정 + paddingBottom은 bar 내부에서 처리 */}
+        {/* ✅ bottomBar */}
         {props.bottomBar ? <View style={styles.bottomBarWrap}>{props.bottomBar}</View> : null}
       </AppContainer>
     </View>
   );
 }
 
-function createStyles(input: { cCard: string }) {
+function createStyles(input: { cCard: string; cBorder: string; cShadow: string }) {
   const headerShadow = Platform.select<ViewStyle>({
     ios: {
-      shadowColor: "#000000",
-      shadowOpacity: 0.06,
-      shadowRadius: 14,
-      shadowOffset: { width: 0, height: 8 },
+      shadowColor: input.cShadow,
+      shadowOpacity: 0.1,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 6 },
     },
-    android: { elevation: 4 },
+    android: { elevation: 2 },
     default: {},
   });
 
   const bottomShadow = Platform.select<ViewStyle>({
     ios: {
-      shadowColor: "#000000",
-      shadowOpacity: 0.05,
-      shadowRadius: 18,
-      shadowOffset: { width: 0, height: -6 },
+      shadowColor: input.cShadow,
+      shadowOpacity: 0.04,
+      shadowRadius: 16,
+      shadowOffset: { width: 0, height: -4 },
     },
-    android: { elevation: 10 },
+    android: { elevation: 8 },
     default: {},
   });
+
+  const headerBg = input.cCard;
+  const headerBorder = tint(input.cBorder, 0.9, input.cBorder);
 
   return StyleSheet.create({
     root: { flex: 1 },
 
     header: {
-      backgroundColor: tint(input.cCard, 0.92, input.cCard),
+      backgroundColor: headerBg,
       paddingHorizontal: 20,
-      paddingVertical: 12,
-      borderBottomWidth: 1,
-      borderBottomColor: tint("#000000", 0.05, "rgba(0,0,0,0.05)"),
+      paddingBottom: 12, // ✅ paddingTop은 safe inset 포함해서 inline으로 주입
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: headerBorder,
       flexDirection: "row",
       alignItems: "center",
-      justifyContent: "space-between",
-      ...(headerShadow ?? {}),
+      zIndex: 15,
+      ...headerShadow,
     },
 
-    headerRight: { minHeight: 36, alignItems: "flex-end", justifyContent: "center" },
+    headerLeft: {
+      position: "absolute",
+      left: 20,
+      zIndex: 10,
+    },
+
+    headerCenter: {
+      flex: 1,
+      alignItems: "flex-start",
+      justifyContent: "center",
+      paddingHorizontal: 0,
+      paddingLeft: 0,
+    },
+
+    headerRight: {
+      position: "absolute",
+      right: 20,
+      zIndex: 10,
+    },
+
+    headerSlotPlaceholder: {
+      minWidth: 36,
+      minHeight: 36,
+    },
+
+    backBtn: {
+      minHeight: 36,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "flex-start",
+    },
+
+    backLabel: {
+      marginLeft: 8,
+    },
+
+    subtitle: {
+      marginTop: 2,
+    },
 
     bodyWrap: { flex: 1 },
     bodyContent: {
       flexGrow: 1,
-      // ✅ 바텀 탭이 콘텐츠를 가리지 않도록 기본 공간 확보
-      paddingBottom: 120,
+      paddingTop: 0,
     },
 
     floatingWrap: {
       position: "absolute",
       right: 20,
-      // ✅ 탭 바 높이(64) + 여유(16) 기반. safe-bottom은 AppContainer(SafeArea)로 포함됨.
-      bottom: 64 + 16,
+      bottom: 10,
       zIndex: 30,
     },
 
@@ -148,7 +245,7 @@ function createStyles(input: { cCard: string }) {
 
 /*
 요약(3줄)
-- AppContainer(SafeAreaView)를 사용해 iOS/Android 상·하단 inset을 기본으로 처리합니다.
-- 본문은 paddingBottom을 확보해 하단 탭이 스크롤 콘텐츠를 가리지 않게 했습니다.
-- FAB는 탭 바 높이를 기준으로 배치해 기기별 safe-bottom 영향을 최소화했습니다.
+- useSafeAreaInsets + Android StatusBar 높이를 합쳐 헤더 paddingTop에 반영했습니다.
+- 노치/상단 시간 영역을 안전하게 피하면서도 기존 PageScaffold API는 유지합니다.
+- AppContainer가 이미 top inset을 적용한다면 headerInsetTop={0}으로 중복 여백을 끌 수 있습니다.
 */

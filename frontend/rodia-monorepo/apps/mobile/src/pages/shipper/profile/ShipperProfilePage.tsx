@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, View, type ViewStyle } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
+import { safeString, tint } from "@/shared/theme/colorUtils";
 import { useAppTheme } from "@/shared/theme/useAppTheme";
 import { PageScaffold } from "@/widgets/layout/PageScaffold";
 import { AppText } from "@/shared/ui/kit/AppText";
@@ -13,26 +14,6 @@ import { AppEmptyState } from "@/shared/ui/kit/AppEmptyState";
 import { useAuth } from "@/features/auth/model/useAuth";
 
 const VIEW_PRESSED: ViewStyle = { opacity: 0.85 };
-
-function safeString(v: unknown, fallback = ""): string {
-  return typeof v === "string" && v.trim().length > 0 ? v : fallback;
-}
-
-function tint(color: string, opacity: number, fallback: string): string {
-  const s = safeString(color).trim();
-  if (!/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(s)) return fallback;
-
-  const raw = s.replace("#", "");
-  const full = raw.length === 3 ? raw.split("").map((c) => c + c).join("") : raw;
-
-  const r = parseInt(full.slice(0, 2), 16);
-  const g = parseInt(full.slice(2, 4), 16);
-  const b = parseInt(full.slice(4, 6), 16);
-  if ([r, g, b].some((x) => Number.isNaN(x))) return fallback;
-
-  const a = Math.max(0, Math.min(1, opacity));
-  return `rgba(${r}, ${g}, ${b}, ${a})`;
-}
 
 export function ShipperProfilePage() {
   const theme = useAppTheme();

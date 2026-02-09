@@ -3,6 +3,7 @@ import type { PropsWithChildren } from "react";
 import { useColorScheme } from "react-native";
 import { rodiaTheme } from "@rodia/tokens";
 import type { AppColorMode, AppTheme, AndroidCardRaisedStyle, IOSCardRaisedStyle } from "./types";
+import { safeNumber as coerceNumber } from "./colorUtils";
 
 declare const __DEV__: boolean;
 
@@ -73,9 +74,9 @@ function safeHexColor(input: unknown, fallback: string, warnKey?: string) {
   return fallback;
 }
 
-function safeNumber(input: unknown, fallback: number, warnKey?: string) {
+function safeThemeNumber(input: unknown, fallback: number, warnKey?: string) {
   const n = readTokenNumber(input);
-  if (typeof n === "number") return n;
+  if (typeof n === "number") return coerceNumber(n, fallback);
   if (warnKey) warnOnce(warnKey, `[theme] missing/invalid number token: ${warnKey} -> fallback(${fallback})`);
   return fallback;
 }
@@ -107,10 +108,10 @@ function readTypeScale(input: unknown, fallback: TypeScaleToken, path: string): 
 
   const s = input as any;
   return {
-    size: safeNumber(s?.size, fallback.size, `${path}.size`),
-    lineHeight: safeNumber(s?.lineHeight, fallback.lineHeight, `${path}.lineHeight`),
+    size: safeThemeNumber(s?.size, fallback.size, `${path}.size`),
+    lineHeight: safeThemeNumber(s?.lineHeight, fallback.lineHeight, `${path}.lineHeight`),
     weight: safeAnyColor(s?.weight, fallback.weight, `${path}.weight`),
-    letterSpacing: safeNumber(s?.letterSpacing, fallback.letterSpacing, `${path}.letterSpacing`),
+    letterSpacing: safeThemeNumber(s?.letterSpacing, fallback.letterSpacing, `${path}.letterSpacing`),
   };
 }
 
@@ -122,10 +123,10 @@ function readButtonSizeToken(input: unknown, fallback: ButtonSizeToken, path: st
 
   const s = input as any;
   return {
-    minHeight: safeNumber(s?.minHeight, fallback.minHeight, `${path}.minHeight`),
-    paddingX: safeNumber(s?.paddingX, fallback.paddingX, `${path}.paddingX`),
-    paddingY: safeNumber(s?.paddingY, fallback.paddingY, `${path}.paddingY`),
-    radius: safeNumber(s?.radius, fallback.radius, `${path}.radius`),
+    minHeight: safeThemeNumber(s?.minHeight, fallback.minHeight, `${path}.minHeight`),
+    paddingX: safeThemeNumber(s?.paddingX, fallback.paddingX, `${path}.paddingX`),
+    paddingY: safeThemeNumber(s?.paddingY, fallback.paddingY, `${path}.paddingY`),
+    radius: safeThemeNumber(s?.radius, fallback.radius, `${path}.radius`),
   };
 }
 
@@ -136,7 +137,7 @@ function readAndroidCardRaisedStyle(
 ): AndroidCardRaisedStyle {
   const s = safePlainObject(input, fallback) as any;
   return {
-    elevation: safeNumber(s?.elevation, fallback.elevation, `${path}.elevation`),
+    elevation: safeThemeNumber(s?.elevation, fallback.elevation, `${path}.elevation`),
   };
 }
 
@@ -146,11 +147,11 @@ function readIOSCardRaisedStyle(input: unknown, fallback: IOSCardRaisedStyle, pa
 
   return {
     shadowColor: safeAnyColor(s?.shadowColor, fallback.shadowColor, `${path}.shadowColor`),
-    shadowOpacity: safeNumber(s?.shadowOpacity, fallback.shadowOpacity, `${path}.shadowOpacity`),
-    shadowRadius: safeNumber(s?.shadowRadius, fallback.shadowRadius, `${path}.shadowRadius`),
+    shadowOpacity: safeThemeNumber(s?.shadowOpacity, fallback.shadowOpacity, `${path}.shadowOpacity`),
+    shadowRadius: safeThemeNumber(s?.shadowRadius, fallback.shadowRadius, `${path}.shadowRadius`),
     shadowOffset: {
-      width: safeNumber(o?.width, fallback.shadowOffset.width, `${path}.shadowOffset.width`),
-      height: safeNumber(o?.height, fallback.shadowOffset.height, `${path}.shadowOffset.height`),
+      width: safeThemeNumber(o?.width, fallback.shadowOffset.width, `${path}.shadowOffset.width`),
+      height: safeThemeNumber(o?.height, fallback.shadowOffset.height, `${path}.shadowOffset.height`),
     },
   };
 }
@@ -297,10 +298,10 @@ export function createTheme(resolved: "light" | "dark", mode: AppColorMode): App
   );
 
   const layoutRoot = (rodiaTheme as any)?.layout;
-  const radiusCard = safeNumber(layoutRoot?.radii?.card, 16, "layout.radii.card");
-  const radiusControl = safeNumber(layoutRoot?.radii?.control, 12, "layout.radii.control");
-  const radiusPill = safeNumber(layoutRoot?.radii?.pill, 999, "layout.radii.pill");
-  const spacingBase = safeNumber(layoutRoot?.spacing?.base, 4, "layout.spacing.base");
+  const radiusCard = safeThemeNumber(layoutRoot?.radii?.card, 16, "layout.radii.card");
+  const radiusControl = safeThemeNumber(layoutRoot?.radii?.control, 12, "layout.radii.control");
+  const radiusPill = safeThemeNumber(layoutRoot?.radii?.pill, 999, "layout.radii.pill");
+  const spacingBase = safeThemeNumber(layoutRoot?.spacing?.base, 4, "layout.spacing.base");
   const spacingSteps = safeNumberArray(layoutRoot?.spacing?.steps, [...FALLBACK_SPACING_STEPS], "layout.spacing.steps");
 
   const typRoot = (rodiaTheme as any)?.typography;
@@ -329,9 +330,9 @@ export function createTheme(resolved: "light" | "dark", mode: AppColorMode): App
     "components.button.sizes.lg"
   );
 
-  const componentCardRadius = safeNumber(componentRoot?.card?.radius, radiusCard, "components.card.radius");
-  const componentCardPaddingSm = safeNumber(componentRoot?.card?.padding?.sm, 16, "components.card.padding.sm");
-  const componentCardPaddingMd = safeNumber(componentRoot?.card?.padding?.md, 20, "components.card.padding.md");
+  const componentCardRadius = safeThemeNumber(componentRoot?.card?.radius, radiusCard, "components.card.radius");
+  const componentCardPaddingSm = safeThemeNumber(componentRoot?.card?.padding?.sm, 16, "components.card.padding.sm");
+  const componentCardPaddingMd = safeThemeNumber(componentRoot?.card?.padding?.md, 20, "components.card.padding.md");
 
   const elevationApp = safePlainObject((rodiaTheme as any)?.elevation?.app, {
     android: { cardRaised: FALLBACK_ANDROID_CARD_RAISED },

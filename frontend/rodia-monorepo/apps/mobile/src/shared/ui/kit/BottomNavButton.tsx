@@ -3,6 +3,7 @@ import React, { useMemo } from "react";
 import { Pressable, StyleSheet, View, type TextStyle, type ViewStyle } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
+import { safeString, tint } from "@/shared/theme/colorUtils";
 import { useAppTheme } from "../../theme/useAppTheme";
 import { AppText } from "./AppText";
 
@@ -23,34 +24,6 @@ type BottomNavButtonProps = {
 
   hitSlop?: number;
 };
-
-function safeString(v: unknown, fallback: string) {
-  return typeof v === "string" && v.trim().length > 0 ? v : fallback;
-}
-
-function clamp01(n: number) {
-  if (!Number.isFinite(n)) return 0;
-  return Math.max(0, Math.min(1, n));
-}
-
-function rgbaFromHex(hex: string, opacity: number): string | null {
-  const s = safeString(hex, "").trim();
-  if (!/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(s)) return null;
-
-  const raw = s.replace("#", "");
-  const full = raw.length === 3 ? raw.split("").map((c) => c + c).join("") : raw;
-
-  const r = parseInt(full.slice(0, 2), 16);
-  const g = parseInt(full.slice(2, 4), 16);
-  const b = parseInt(full.slice(4, 6), 16);
-  if ([r, g, b].some((x) => Number.isNaN(x))) return null;
-
-  return `rgba(${r}, ${g}, ${b}, ${clamp01(opacity)})`;
-}
-
-function tint(hex: string, opacity: number, fallback: string) {
-  return rgbaFromHex(hex, opacity) ?? fallback;
-}
 
 const PRESSED: ViewStyle = { opacity: 0.85 };
 

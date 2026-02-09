@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
 import { useAuth } from "@/features/auth/model/useAuth";
+import { clamp01, safeString, tint } from "@/shared/theme/colorUtils";
 import { useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppButton } from "@/shared/ui/kit/AppButton";
 import { AppCard } from "@/shared/ui/kit/AppCard";
@@ -28,35 +29,6 @@ type DeliveryItem = {
 };
 
 const VIEW_PRESSED: ViewStyle = { opacity: 0.85 };
-
-function safeString(v: unknown, fallback = ""): string {
-  return typeof v === "string" && v.trim().length > 0 ? v : fallback;
-}
-
-function clamp01(n: number): number {
-  if (!Number.isFinite(n)) return 0;
-  return Math.max(0, Math.min(1, n));
-}
-
-function rgbaFromHex(hex: string, opacity: number): string | null {
-  const s = safeString(hex).trim();
-  if (!/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(s)) return null;
-
-  const raw = s.replace("#", "");
-  const full = raw.length === 3 ? raw.split("").map((c) => c + c).join("") : raw;
-
-  const r = parseInt(full.slice(0, 2), 16);
-  const g = parseInt(full.slice(2, 4), 16);
-  const b = parseInt(full.slice(4, 6), 16);
-  if ([r, g, b].some((x) => Number.isNaN(x))) return null;
-
-  const a = clamp01(opacity);
-  return `rgba(${r}, ${g}, ${b}, ${a})`;
-}
-
-function tint(color: string, opacity: number, fallback: string): string {
-  return rgbaFromHex(color, opacity) ?? fallback;
-}
 
 export function DriverHomePage() {
   const auth = useAuth();

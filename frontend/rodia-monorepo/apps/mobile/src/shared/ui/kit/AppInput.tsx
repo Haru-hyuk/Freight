@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { forwardRef, useCallback, useMemo, useState } from "react";
 import {
   StyleSheet,
   TextInput,
@@ -21,20 +21,23 @@ export type AppInputProps = Omit<TextInputProps, "style"> & {
   right?: React.ReactNode;
 };
 
-export function AppInput({
-  label,
-  helperText,
-  error,
-  containerStyle,
-  inputStyle,
-  left,
-  right,
-  editable,
-  onFocus,
-  onBlur,
-  placeholderTextColor,
-  ...props
-}: AppInputProps) {
+export const AppInput = forwardRef<TextInput, AppInputProps>(function AppInput(
+  {
+    label,
+    helperText,
+    error,
+    containerStyle,
+    inputStyle,
+    left,
+    right,
+    editable,
+    onFocus,
+    onBlur,
+    placeholderTextColor,
+    ...props
+  },
+  ref
+) {
   const theme = useAppTheme();
   const styles = useStyles();
   const [focused, setFocused] = useState(false);
@@ -90,6 +93,7 @@ export function AppInput({
         {left ? <View style={styles.adornment}>{left}</View> : null}
 
         <TextInput
+          ref={ref}
           {...props}
           editable={isEditable}
           onFocus={handleFocus}
@@ -112,7 +116,7 @@ export function AppInput({
       ) : null}
     </View>
   );
-}
+});
 
 const useStyles = createThemedStyles((theme) => {
   const minHeight = theme.components.button.sizes.md.minHeight;

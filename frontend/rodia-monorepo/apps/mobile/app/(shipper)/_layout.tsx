@@ -4,14 +4,11 @@ import { Redirect, Stack, useRouter, useSegments } from "expo-router";
 import { ActivityIndicator, StyleSheet, View, type ViewStyle } from "react-native";
 
 import { useAuth } from "@/features/auth/model/useAuth";
+import { safeString } from "@/shared/theme/colorUtils";
 import { useAppTheme } from "@/shared/theme/useAppTheme";
 import { BottomTabBar } from "@/widgets/layout/BottomTabBar";
 
 type BottomTabKey = "home" | "quotes" | "matchings" | "profile";
-
-function safeString(v: unknown, fallback = ""): string {
-  return typeof v === "string" && v.trim().length > 0 ? v : fallback;
-}
 
 function pickActiveKey(segments: readonly string[] | undefined | null): BottomTabKey {
   const segs = Array.isArray(segments) ? segments : [];
