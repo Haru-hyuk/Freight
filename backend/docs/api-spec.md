@@ -59,6 +59,32 @@
 }
 ```
 
+### Shipper Signup
+- Method: `POST`
+- Path: `/api/auth/shipper/signup`
+- Request
+```json
+{
+  "email": "shipper@test.com",
+  "password": "1234",
+  "name": "홍길동",
+  "companyName": "테스트상사",
+  "phone": "010-1234-5678",
+  "address": "서울시 강남구",
+  "addressDetail": "101호",
+  "bizRegNo": "1234567890",
+  "bizPhone": "02-123-4567",
+  "openDate": "20200101",
+  "ownerName": "홍길동"
+}
+```
+- Response
+```json
+{
+  "shipperId": 1
+}
+```
+
 ## Driver
 
 ### Truck Create
