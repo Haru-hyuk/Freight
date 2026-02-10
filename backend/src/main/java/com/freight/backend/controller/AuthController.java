@@ -2,6 +2,12 @@ package com.freight.backend.controller;
 
 import com.freight.backend.dto.auth.LoginRequest;
 import com.freight.backend.dto.auth.TokenResponse;
+import com.freight.backend.dto.driver.DriverSignupRequest;
+import com.freight.backend.dto.driver.DriverSignupResponse;
+import com.freight.backend.dto.shipper.ShipperSignupRequest;
+import com.freight.backend.dto.shipper.ShipperSignupResponse;
+import com.freight.backend.service.AuthService;
+import com.freight.backend.service.DriverSignupService;
 import com.freight.backend.dto.shipper.ShipperSignupRequest;
 import com.freight.backend.dto.shipper.ShipperSignupResponse;
 import com.freight.backend.service.AuthService;
@@ -19,6 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthService authService;
+    private final DriverSignupService driverSignupService;
     private final ShipperSignupService shipperSignupService;
 
     @PostMapping("/driver/login")
@@ -39,5 +46,15 @@ public class AuthController {
     @PostMapping("/shipper/signup")
     public ResponseEntity<ShipperSignupResponse> shipperSignup(@RequestBody ShipperSignupRequest req) {
         return ResponseEntity.ok(shipperSignupService.signup(req));
+    }
+
+    @PostMapping("/driver/signup")
+    public ResponseEntity<DriverSignupResponse> driverSignup(@RequestBody DriverSignupRequest req) {
+        return ResponseEntity.ok(driverSignupService.signup(req));
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout() {
+        return ResponseEntity.noContent().build();
     }
 }
