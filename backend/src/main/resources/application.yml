@@ -3,7 +3,7 @@ server:
 
 spring:
   datasource:
-    url: jdbc:mysql://localhost:3306/flower_db?serverTimezone=Asia/Seoul
+    url: jdbc:mysql://localhost:3306/rodia_db?serverTimezone=Asia/Seoul
     driver-class-name: com.mysql.cj.jdbc.Driver
     username: root
     password: 1234
