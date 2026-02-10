@@ -52,7 +52,8 @@ public class SecurityConfig {
                                 "/api/auth/driver/login",
                                 "/api/auth/driver/signup",
                                 "/api/auth/shipper/login",
-                                "/api/auth/admin/login"
+                                "/api/auth/admin/login",
+                                "/api/auth/shipper/signup"
                         ).permitAll()
                         .requestMatchers("/api/**").authenticated()
                         .anyRequest().permitAll()

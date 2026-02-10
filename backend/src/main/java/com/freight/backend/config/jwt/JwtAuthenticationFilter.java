@@ -28,7 +28,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         return "/api/auth/driver/login".equals(uri)
                 || "/api/auth/driver/signup".equals(uri)
                 || "/api/auth/shipper/login".equals(uri)
-                || "/api/auth/admin/login".equals(uri);
+                || "/api/auth/admin/login".equals(uri)
+                || "/api/auth/shipper/signup".equals(uri);
     }
 
     @Override

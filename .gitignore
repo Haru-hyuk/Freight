@@ -179,4 +179,4 @@ build/Release
 # End of .gitignore
 # =====================================================
 backend/build.gradle
-_local/test-client/index.html
+_local/
