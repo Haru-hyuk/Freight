@@ -48,8 +48,8 @@ public class JwtTokenProvider {
         claims.put("role", role);
 
         return Jwts.builder()
-                .setSubject(String.valueOf(userId))
                 .setClaims(claims)
+                .setSubject(String.valueOf(userId))
                 .setIssuedAt(now)
                 .setExpiration(new Date(now.getTime() + accessTokenExpirationMs))
                 .signWith(key, SignatureAlgorithm.HS256)
