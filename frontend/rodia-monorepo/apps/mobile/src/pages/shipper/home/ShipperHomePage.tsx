@@ -1,5 +1,5 @@
 ﻿// src/pages/shipper/ShipperHomePage.tsx
-import React from "react";
+import React, { useRef } from "react";
 import {
   Pressable,
   StyleSheet,
@@ -9,6 +9,8 @@ import {
   type ViewStyle,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
@@ -36,6 +38,7 @@ const RECENT_ROUTES = [
 ];
 
 const VIEW_PRESSED: ViewStyle = { opacity: 0.85, transform: [{ scale: 0.98 }] };
+const FAB_PRESSED: ViewStyle = { transform: [{ scale: 0.95 }] };
 
 const useStyles = createThemedStyles((theme) => {
   const spacing = safeNumber(theme?.layout?.spacing?.base, 4);
@@ -247,12 +250,22 @@ const useStyles = createThemedStyles((theme) => {
     bottomSpacer: {
       minHeight: spacing * 5,
     },
+    fab: {
+      width: 56,
+      height: 56,
+      borderRadius: 20,
+      alignItems: "center",
+      justifyContent: "center",
+    },
   });
 });
 
 export function ShipperHomePage() {
   const theme = useAppTheme();
   const styles = useStyles();
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const isNavigating = useRef(false);
 
   // Colors
   const cText = safeString(theme?.colors?.textMain, "#111827");
@@ -266,16 +279,38 @@ export function ShipperHomePage() {
   const avatarBg = safeString(theme?.colors?.brandSecondary, cText).replace("#", "");
   const avatarFg = cOnBrand.replace("#", "");
 
-  // Handlers (Mock)
+  // Handlers
   const goToRequest = () => {
-    // navigation.navigate('Request');
-    console.log("Navigate to Request");
+    if (isNavigating.current) return;
+
+    // 즉시 잠금
+    isNavigating.current = true;
+    router.push("/(shipper)/quotes/create");
+    setTimeout(() => {
+      isNavigating.current = false;
+    }, 1000);
   };
 
   const goToHistory = () => {
     // navigation.navigate('History');
     console.log("Navigate to History");
   };
+
+  const bottomInset = Math.max(0, safeNumber(insets?.bottom, 0));
+  const floating = (
+    <Pressable
+      onPress={goToRequest}
+      accessibilityRole="button"
+      accessibilityLabel="요청 등록"
+      style={({ pressed }) => [
+        styles.fab,
+        { backgroundColor: cPrimary, marginBottom: Math.max(0, bottomInset - 8) },
+        pressed ? FAB_PRESSED : undefined,
+      ]}
+    >
+      <Ionicons name="add" size={26} color={cOnBrand} />
+    </Pressable>
+  );
 
   return (
     <PageScaffold
@@ -297,7 +332,8 @@ export function ShipperHomePage() {
       }
       backgroundColor={cSurfaceAlt}
       scroll={true}
-     contentStyle={styles.pageContent}
+      contentStyle={styles.pageContent}
+      floating={floating}
     >
       {/* 1. Hero Section */}
       <View style={styles.heroSection}>
@@ -465,6 +501,8 @@ export function ShipperHomePage() {
           <View style={styles.guideDeco} />
         </Pressable>
       </View>
+
+      <View style={styles.bottomSpacer} />
     </PageScaffold>
   );
 }

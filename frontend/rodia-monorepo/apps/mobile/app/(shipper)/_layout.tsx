@@ -10,6 +10,13 @@ import { BottomTabBar } from "@/widgets/layout/BottomTabBar";
 
 type BottomTabKey = "home" | "quotes" | "matchings" | "profile";
 
+function shouldHideBottomBar(segments: readonly string[] | undefined | null): boolean {
+  const segs = Array.isArray(segments) ? segments : [];
+  const isQuotesCreate = segs.includes("quotes") && segs.includes("create");
+  const isQuotesDetail = segs.includes("quotes") && (segs.includes("[id]") || segs.includes("detail"));
+  return isQuotesCreate || isQuotesDetail;
+}
+
 function pickActiveKey(segments: readonly string[] | undefined | null): BottomTabKey {
   const segs = Array.isArray(segments) ? segments : [];
 
@@ -63,6 +70,7 @@ export default function ShipperLayout() {
   );
 
   const activeKey = useMemo(() => pickActiveKey(segments), [segments]);
+  const hideBottomBar = useMemo(() => shouldHideBottomBar(segments), [segments]);
 
   if (auth.status === "checking") {
     return (
@@ -100,6 +108,7 @@ export default function ShipperLayout() {
         />
       </View>
 
+      {!hideBottomBar ? (
       <View style={styles.bottomWrap}>
         <BottomTabBar
           activeKey={activeKey}
@@ -114,6 +123,7 @@ export default function ShipperLayout() {
           ]}
         />
       </View>
+      ) : null}
     </View>
   );
 }
