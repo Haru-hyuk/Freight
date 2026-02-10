@@ -467,17 +467,6 @@
     "sortOrder": 3
   },
   {
-    "checklistItemId": 4,
-    "category": "REQUEST",
-    "name": "TEMPERATURE_CONTROL",
-    "icon": "snowflake",
-    "hasExtraFee": true,
-    "baseExtraFee": 30000.0,
-    "requiresExtraInput": false,
-    "extraInputLabel": "온도 유지 필수",
-    "sortOrder": 4
-  },
-  {
     "checklistItemId": 5,
     "category": "REQUEST",
     "name": "EASY_BREAK",
@@ -486,7 +475,7 @@
     "baseExtraFee": 5000.0,
     "requiresExtraInput": false,
     "extraInputLabel": "충격 최소화",
-    "sortOrder": 5
+    "sortOrder": 4
   }
 ]
 ```
