@@ -109,8 +109,7 @@ export default function ShipperLayout() {
           }}
           items={[
             { key: "home", label: "홈", iconActive: "home", iconInactive: "home-outline" },
-            { key: "quotes", label: "견적", iconActive: "clipboard", iconInactive: "clipboard-outline" },
-            { key: "matchings", label: "매칭", iconActive: "location", iconInactive: "location-outline" },
+            { key: "quotes", label: "이용내역", iconActive: "clipboard", iconInactive: "clipboard-outline" },
             { key: "profile", label: "내 정보", iconActive: "person", iconInactive: "person-outline" },
           ]}
         />
