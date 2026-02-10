@@ -2,7 +2,6 @@
 
 ## Auth
 
-
 ### Driver Signup
 - Method: `POST`
 - Path: `/api/auth/driver/signup`
@@ -11,23 +10,14 @@
 {
   "email": "driver@test.com",
   "password": "1234",
-  "name": "???",
+  "name": "홍길동",
   "phone": "010-0000-0000",
-  "address": "??? ???",
-  "addressDetail": "101?",
-  "bankName": "??",
+  "address": "서울시 강남구",
+  "addressDetail": "101호",
+  "bankName": "국민",
   "bankAccount": "123-456-7890"
 }
 ```
-- Request Fields
-- `email`: ???
-- `password`: ????
-- `name`: ??
-- `phone`: ???
-- `address`: ??
-- `addressDetail`: ?? ??
-- `bankName`: ???
-- `bankAccount`: ????
 - Response
 ```json
 {
@@ -35,7 +25,7 @@
 }
 ```
 - Errors
-- `400 INVALID_INPUT_VALUE`: ??? ??
+- `400 INVALID_INPUT_VALUE`: 이메일 중복
 
 ### Driver Login
 - Method: `POST`
@@ -102,29 +92,17 @@
 {
   "email": "shipper@test.com",
   "password": "1234",
-  "name": "???",
-  "companyName": "?????",
+  "name": "홍길동",
+  "companyName": "테스트상사",
   "phone": "010-1234-5678",
-  "address": "??? ???",
-  "addressDetail": "101?",
+  "address": "서울시 강남구",
+  "addressDetail": "101호",
   "bizRegNo": "1234567890",
   "bizPhone": "02-123-4567",
   "openDate": "20200101",
-  "ownerName": "???"
+  "ownerName": "홍길동"
 }
 ```
-- Request Fields
-- `email`: ???
-- `password`: ????
-- `name`: ??? ??
-- `companyName`: ???
-- `phone`: ??? ???
-- `address`: ??
-- `addressDetail`: ?? ??
-- `bizRegNo`: ???????(?? 10??)
-- `bizPhone`: ?? ????
-- `openDate`: ????(`yyyyMMdd`)
-- `ownerName`: ??? ??
 - Response
 ```json
 {
@@ -132,10 +110,16 @@
 }
 ```
 - Notes
-- ???? ? ??? ??????? ????? ?????.
-- ???? ?? `valid != "01"`?? ??? ?????.
+- 회원가입 시 국세청 사업자 진위확인 수행
+- 진위확인 결과 `valid != "01"`이면 가입 실패
 - Errors
-- `400 INVALID_INPUT_VALUE`: ??? ?? ?? ??? ???? ??
+- `400 INVALID_INPUT_VALUE`: 이메일 중복 또는 사업자 진위확인 실패
+
+### Logout
+- Method: `POST`
+- Path: `/api/auth/logout`
+- Headers: `Authorization: Bearer {accessToken}`
+- Response: `204 No Content`
 
 
 ## Driver
@@ -277,8 +261,6 @@
   "vehicleType": "TON_1",
   "cargoType": "FROZEN",
   "cargoDesc": "Frozen seafood",
-  "basePrice": 100000,
-  "distancePrice": 50000,
   "desiredPrice": 170000,
   "allowCombine": true,
   "loadMethod": "SHIPPER",
@@ -386,8 +368,6 @@
   "vehicleType": "TON_1",
   "cargoType": "FROZEN",
   "cargoDesc": "Frozen seafood",
-  "basePrice": 100000,
-  "distancePrice": 50000,
   "desiredPrice": 170000,
   "allowCombine": true,
   "loadMethod": "SHIPPER",
@@ -455,14 +435,58 @@
 [
   {
     "checklistItemId": 1,
-    "category": "VEHICLE",
-    "name": "LIFT_WINGBODY",
-    "icon": "lift_wing",
+    "category": "REQUEST",
+    "name": "FRAGILE",
+    "icon": "fragile",
+    "hasExtraFee": true,
+    "baseExtraFee": 5000.0,
+    "requiresExtraInput": false,
+    "extraInputLabel": "취급 주의 요망",
+    "sortOrder": 1
+  },
+  {
+    "checklistItemId": 2,
+    "category": "REQUEST",
+    "name": "UPRIGHT",
+    "icon": "upright",
+    "hasExtraFee": true,
+    "baseExtraFee": 3000.0,
+    "requiresExtraInput": false,
+    "extraInputLabel": "눕힘 금지",
+    "sortOrder": 2
+  },
+  {
+    "checklistItemId": 3,
+    "category": "REQUEST",
+    "name": "KEEP_DRY",
+    "icon": "umbrella",
+    "hasExtraFee": true,
+    "baseExtraFee": 5000.0,
+    "requiresExtraInput": false,
+    "extraInputLabel": "비/물기 주의",
+    "sortOrder": 3
+  },
+  {
+    "checklistItemId": 4,
+    "category": "REQUEST",
+    "name": "TEMPERATURE_CONTROL",
+    "icon": "snowflake",
     "hasExtraFee": true,
     "baseExtraFee": 30000.0,
     "requiresExtraInput": false,
-    "extraInputLabel": null,
-    "sortOrder": 1
+    "extraInputLabel": "온도 유지 필수",
+    "sortOrder": 4
+  },
+  {
+    "checklistItemId": 5,
+    "category": "REQUEST",
+    "name": "EASY_BREAK",
+    "icon": "shock",
+    "hasExtraFee": true,
+    "baseExtraFee": 5000.0,
+    "requiresExtraInput": false,
+    "extraInputLabel": "충격 최소화",
+    "sortOrder": 5
   }
 ]
 ```
