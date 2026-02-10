@@ -180,3 +180,4 @@ build/Release
 # =====================================================
 backend/build.gradle
 _local/
+backend/src/main/resources/application.yml
