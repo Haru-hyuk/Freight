@@ -23,7 +23,7 @@ public class PricingCalculator {
     public PricingResult estimate(
             int distanceKm,
             PricingVehicleType vehicleType,
-            Set<SurchargeOption> options,
+            Set<SurchargeOptionRule> options,
             LoadHandlingMethod loadMethod,
             LoadHandlingMethod unloadMethod,
             boolean combinedShipment
@@ -87,7 +87,7 @@ public class PricingCalculator {
     }
 
     private SurchargeSummary calculateSurcharges(
-            Set<SurchargeOption> options,
+            Set<SurchargeOptionRule> options,
             BigDecimal baseTotalWon,
             PricingVehicleType vehicleType,
             LoadHandlingMethod loadMethod,
@@ -101,11 +101,11 @@ public class PricingCalculator {
         BigDecimal multMax = MULTIPLIER_ONE;
         boolean hasMultiplier = false;
         if (hasOptions) {
-            for (SurchargeOption option : options) {
+            for (SurchargeOptionRule option : options) {
                 if (option.isFixedByVehicle()) {
                     BigDecimal fixedAdd = option.resolveFixedAdd(vehicleType);
                     if (fixedAdd == null) {
-                        throw new IllegalArgumentException("option not available for vehicle type: " + option.name());
+                        throw new IllegalArgumentException("option not available for vehicle type: " + option.getCode());
                     }
                     addMin = addMin.add(fixedAdd);
                     addMax = addMax.add(fixedAdd);

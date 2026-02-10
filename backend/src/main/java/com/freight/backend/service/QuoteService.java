@@ -16,7 +16,8 @@ import com.freight.backend.pricing.LoadHandlingMethod;
 import com.freight.backend.pricing.PricingCalculator;
 import com.freight.backend.pricing.PricingResult;
 import com.freight.backend.pricing.PricingVehicleType;
-import com.freight.backend.pricing.SurchargeOption;
+import com.freight.backend.pricing.SurchargeOptionRule;
+import com.freight.backend.pricing.SurchargeOptionService;
 import com.freight.backend.repository.ChecklistItemRepository;
 import com.freight.backend.repository.QuoteChecklistItemRepository;
 import com.freight.backend.repository.QuoteRepository;
@@ -40,6 +41,7 @@ public class QuoteService {
     private final QuoteChecklistItemRepository quoteChecklistItemRepository;
     private final ChecklistItemRepository checklistItemRepository;
     private final PricingCalculator pricingCalculator;
+    private final SurchargeOptionService surchargeOptionService;
 
     @Transactional
     public QuoteCreateResponse createQuote(QuoteCreateRequest req) {
@@ -292,7 +294,7 @@ public class QuoteService {
         if (type == null) {
             throw new CustomException(ErrorCode.INVALID_REQUEST);
         }
-        Set<SurchargeOption> options = resolveOptions(items);
+        Set<SurchargeOptionRule> options = resolveOptions(items);
         LoadHandlingMethod load = LoadHandlingMethod.from(loadMethod);
         LoadHandlingMethod unload = LoadHandlingMethod.from(unloadMethod);
         if (load == null || unload == null) {
@@ -301,7 +303,7 @@ public class QuoteService {
         return pricingCalculator.estimate(distanceKm, type, options, load, unload, combinedShipment);
     }
 
-    private Set<SurchargeOption> resolveOptions(List<QuoteChecklistItemRequest> items) {
+    private Set<SurchargeOptionRule> resolveOptions(List<QuoteChecklistItemRequest> items) {
         if (items == null || items.isEmpty()) {
             return Set.of();
         }
@@ -313,16 +315,10 @@ public class QuoteService {
             throw new CustomException(ErrorCode.INVALID_REQUEST);
         }
         try {
-            return checklistItems.stream()
+            Set<String> codes = checklistItems.stream()
                     .map(ChecklistItem::getName)
-                    .map(SurchargeOption::fromCode)
-                    .map(option -> {
-                        if (option == null) {
-                            throw new IllegalArgumentException("invalid option code");
-                        }
-                        return option;
-                    })
                     .collect(Collectors.toSet());
+            return surchargeOptionService.resolveOptionsByCodes(codes);
         } catch (IllegalArgumentException e) {
             throw new CustomException(ErrorCode.INVALID_REQUEST);
         }
