@@ -65,20 +65,39 @@ export function PageScaffold(props: Props) {
   const shouldShowBack = !props.headerLeft && typeof props.onPressBack === "function";
   const backLabel = safeString(props.backLabel, "뒤로");
 
-  const androidStatusBar = Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0;
-  const safeTop = Math.max(0, insets?.top ?? 0, androidStatusBar);
-  const headerInsetTop =
-    typeof props.headerInsetTop === "number" ? Math.max(0, props.headerInsetTop) : safeTop;
+  // ✅ [수정] 안전한 상단 여백 계산 (Safe Area Logic)
+  // 1. 기기의 물리적 안전 영역 (노치, 상태바 등) 가져오기
+  const safeAreaTop = insets.top > 0 
+    ? insets.top 
+    : (Platform.OS === 'android' ? StatusBar.currentHeight || 24 : 0);
 
-  const headerPaddingTop = 10 + headerInsetTop;
+  // 2. 사용자가 강제로 값을 넘겼으면 그 값 사용, 아니면 자동 계산 값 사용
+  const baseTop = typeof props.headerInsetTop === "number" 
+    ? Math.max(0, props.headerInsetTop) 
+    : safeAreaTop;
+
+  const contentSpacing = 18;
+
+  const headerPaddingTop = baseTop + contentSpacing;
+  const headerPaddingBottom = 20; // 하단 여백도 살짝 주어 균형 맞춤
+
+  const headerSideSlotBounds = { top: headerPaddingTop, bottom: headerPaddingBottom };
 
   return (
     <View style={styles.root}>
-      {/* ✅ SafeArea: AppContainer가 safe inset을 처리한다고 가정(프로젝트 기존 규칙 유지) */}
       <AppContainer scroll={false} padding={0} backgroundColor={bg}>
-        {/* ✅ TopBar (Header) */}
-        <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
-          <View style={styles.headerLeft}>
+        {/* TopBar */}
+        <View 
+          style={[
+            styles.header, 
+            { 
+              paddingTop: headerPaddingTop, 
+              paddingBottom: headerPaddingBottom,
+              height: undefined // 높이를 자동으로 늘려 패딩을 수용
+            }
+          ]}
+        >
+          <View style={[styles.headerLeft, headerSideSlotBounds]}>
             {props.headerLeft ? (
               props.headerLeft
             ) : shouldShowBack ? (
@@ -112,7 +131,7 @@ export function PageScaffold(props: Props) {
             ) : null}
           </View>
 
-          <View style={styles.headerRight}>
+          <View style={[styles.headerRight, headerSideSlotBounds]}>
             {props.headerRight ? props.headerRight : <View style={styles.headerSlotPlaceholder} />}
           </View>
         </View>
@@ -170,7 +189,6 @@ function createStyles(input: { cCard: string; cBorder: string; cShadow: string }
     header: {
       backgroundColor: headerBg,
       paddingHorizontal: 20,
-      paddingBottom: 12, // ✅ paddingTop은 safe inset 포함해서 inline으로 주입
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: headerBorder,
       flexDirection: "row",
@@ -183,6 +201,7 @@ function createStyles(input: { cCard: string; cBorder: string; cShadow: string }
       position: "absolute",
       left: 20,
       zIndex: 10,
+      justifyContent: "center",
     },
 
     headerCenter: {
@@ -197,6 +216,7 @@ function createStyles(input: { cCard: string; cBorder: string; cShadow: string }
       position: "absolute",
       right: 20,
       zIndex: 10,
+      justifyContent: "center",
     },
 
     headerSlotPlaceholder: {
@@ -242,10 +262,3 @@ function createStyles(input: { cCard: string; cBorder: string; cShadow: string }
     },
   });
 }
-
-/*
-요약(3줄)
-- useSafeAreaInsets + Android StatusBar 높이를 합쳐 헤더 paddingTop에 반영했습니다.
-- 노치/상단 시간 영역을 안전하게 피하면서도 기존 PageScaffold API는 유지합니다.
-- AppContainer가 이미 top inset을 적용한다면 headerInsetTop={0}으로 중복 여백을 끌 수 있습니다.
-*/
