@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { Slot } from "expo-router";
+import { Stack  } from "expo-router";
 import { ThemeProvider } from "@/shared/theme/ThemeProvider";
 import { useAuth } from "@/features/auth/model/useAuth";
 
@@ -12,7 +12,7 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider>
-      <Slot />
+      <Stack screenOptions={{ headerShown: false }} />
     </ThemeProvider>
   );
 }

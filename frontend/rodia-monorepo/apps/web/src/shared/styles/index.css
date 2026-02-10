@@ -11,7 +11,9 @@
       shadcn이 기대하는 추가 변수들을 "토큰 변수에서 파생"시켜 정의합니다.
       => 하드코딩 HSL/HEX 없이, tokens가 SoT인 상태 유지
     */
-    --card: var(--background);
+
+    /* ✅ 모바일 AppCard 배경(bgSurfaceAlt)과 동일 톤: tokens의 --secondary가 surfaceAlt로 매핑됨 */
+    --card: var(--secondary);
     --card-foreground: var(--foreground);
 
     --popover: var(--background);

@@ -7,68 +7,141 @@ const HexColor = z
     message: "Color must be #RGB or #RRGGBB hex"
   });
 
-const ColorToken = z.object({
-  value: HexColor
-});
+const FontWeight = z.union([z.string().min(1), z.number().int().nonnegative()]);
 
-const ThemeColors = z.object({
-  bg: z.object({
-    main: ColorToken,
-    surfaceAlt: ColorToken
-  }),
-  text: z.object({
-    main: ColorToken
-  }),
-  brand: z.object({
-    primary: ColorToken,
-    secondary: ColorToken,
-    accent: ColorToken,
-    onPrimary: ColorToken
-  }),
-  border: z.object({
-    default: ColorToken
-  }),
-  semantic: z.object({
-    danger: ColorToken
+const IOSShadowOffset = z
+  .object({
+    width: z.number().finite(),
+    height: z.number().finite()
   })
-});
+  .passthrough();
 
-const Theme = z.object({
-  colors: ThemeColors
-});
+const IOSCardRaised = z
+  .object({
+    shadowColor: z.string().min(1),
+    shadowOpacity: z.number().finite(),
+    shadowRadius: z.number().finite(),
+    shadowOffset: IOSShadowOffset
+  })
+  .passthrough();
 
-const TokensSchema = z.object({
-  themes: z.object({
-    light: Theme,
-    dark: Theme
-  }),
-  layout: z
-    .object({
-      radii: z
-        .object({
-          card: z.object({ value: z.number().nonnegative() })
-        })
-        .optional()
-    })
-    .optional(),
-  typography: z
-    .object({
-      scale: z
-        .object({
-          heading: z.object({
-            size: z.number().positive(),
-            weight: z.string().min(1)
-          }),
-          body: z.object({
-            size: z.number().positive(),
-            weight: z.string().min(1)
+const AndroidCardRaised = z
+  .object({
+    elevation: z.number().finite()
+  })
+  .passthrough();
+
+const ColorToken = z
+  .object({
+    value: HexColor
+  })
+  .passthrough();
+
+const ThemeColors = z
+  .object({
+    bg: z
+      .object({
+        main: ColorToken,
+        surfaceAlt: ColorToken
+      })
+      .passthrough(),
+    text: z
+      .object({
+        main: ColorToken
+      })
+      .passthrough(),
+    brand: z
+      .object({
+        primary: ColorToken,
+        secondary: ColorToken,
+        accent: ColorToken,
+        onPrimary: ColorToken
+      })
+      .passthrough(),
+    border: z
+      .object({
+        default: ColorToken
+      })
+      .passthrough(),
+    semantic: z
+      .object({
+        danger: ColorToken
+      })
+      .passthrough()
+  })
+  .passthrough();
+
+const Theme = z
+  .object({
+    colors: ThemeColors
+  })
+  .passthrough();
+
+const TokensSchema = z
+  .object({
+    themes: z
+      .object({
+        light: Theme,
+        dark: Theme
+      })
+      .passthrough(),
+    layout: z
+      .object({
+        radii: z
+          .object({
+            card: z.object({ value: z.number().nonnegative() }).passthrough()
           })
-        })
-        .optional()
-    })
-    .optional(),
-  elevation: z.any().optional()
-});
+          .passthrough()
+          .optional()
+      })
+      .passthrough()
+      .optional(),
+    typography: z
+      .object({
+        scale: z
+          .object({
+            heading: z
+              .object({
+                size: z.number().positive(),
+                weight: FontWeight
+              })
+              .passthrough(),
+            body: z
+              .object({
+                size: z.number().positive(),
+                weight: FontWeight
+              })
+              .passthrough()
+          })
+          .passthrough()
+          .optional()
+      })
+      .passthrough()
+      .optional(),
+    elevation: z
+      .object({
+        app: z
+          .object({
+            ios: z
+              .object({
+                cardRaised: IOSCardRaised
+              })
+              .passthrough()
+              .optional(),
+            android: z
+              .object({
+                cardRaised: AndroidCardRaised
+              })
+              .passthrough()
+              .optional()
+          })
+          .passthrough()
+          .optional()
+      })
+      .passthrough()
+      .optional()
+  })
+  .passthrough();
 
 export type RodiaTokens = z.infer<typeof TokensSchema>;
 

@@ -1,78 +1,609 @@
 {
+  "brand": {
+    "name": "Rodia",
+    "tokensVersion": "1.2.0",
+    "description": "Cross-platform design tokens for Web + App with Dark Mode (Slate-only neutrals, refined typography, z-index)"
+  },
+  "palette": {
+    "brand": {
+      "orange": {
+        "500": "#FF6A00",
+        "600": "#E65F00",
+        "700": "#CC5500"
+      },
+      "charcoal": {
+        "900": "#0B0F19",
+        "800": "#111827",
+        "700": "#1F2937"
+      },
+      "mint": {
+        "500": "#00E5A8",
+        "600": "#00D6A3"
+      }
+    },
+    "neutral": {
+      "white": "#FFFFFF",
+      "black": "#000000",
+      "slate": {
+        "50": "#F8FAFC",
+        "100": "#F1F5F9",
+        "200": "#E2E8F0",
+        "300": "#CBD5E1",
+        "400": "#94A3B8",
+        "500": "#64748B",
+        "600": "#475569",
+        "700": "#334155",
+        "800": "#1E293B",
+        "900": "#0F172A"
+      }
+    },
+    "semantic": {
+      "success": {
+        "500": "#10B981",
+        "600": "#059669",
+        "700": "#047857"
+      },
+      "warning": {
+        "500": "#F59E0B",
+        "600": "#D97706",
+        "700": "#B45309"
+      },
+      "danger": {
+        "500": "#EF4444",
+        "600": "#DC2626",
+        "700": "#B91C1C"
+      },
+      "info": {
+        "500": "#FF6A00",
+        "600": "#E65F00",
+        "700": "#CC5500"
+      }
+    }
+  },
   "themes": {
     "light": {
       "colors": {
+        "brand": {
+          "primary": {
+            "value": "#FF6A00",
+            "usage": "CTA, highlights, active states"
+          },
+          "secondary": {
+            "value": "#111827",
+            "usage": "Primary text, dark surfaces"
+          },
+          "accent": {
+            "value": "#00E5A8",
+            "usage": "Positive accents, success emphasis"
+          },
+          "onPrimary": {
+            "value": "#FFFFFF",
+            "usage": "Text/icons on primary surfaces"
+          }
+        },
         "bg": {
-          "main": { "value": "#F8FAFC" },
-          "surfaceAlt": { "value": "#F1F5F9" }
+          "main": {
+            "value": "#F8FAFC",
+            "usage": "Page/app background"
+          },
+          "surface": {
+            "value": "#FFFFFF",
+            "usage": "Cards, sheets, modals"
+          },
+          "surfaceAlt": {
+            "value": "#F1F5F9",
+            "usage": "Subtle surface (lists, sections)"
+          }
         },
         "text": {
-          "main": { "value": "#0F172A" }
-        },
-        "brand": {
-          "primary": { "value": "#FF6A00" },
-          "secondary": { "value": "#0F172A" },
-          "accent": { "value": "#00E5A8" },
-          "onPrimary": { "value": "#FFFFFF" }
+          "main": {
+            "value": "#111827",
+            "usage": "Primary text"
+          },
+          "sub": {
+            "value": "#334155",
+            "usage": "Secondary text (Slate 700)"
+          },
+          "muted": {
+            "value": "#475569",
+            "usage": "Muted text (Slate 600)"
+          },
+          "inverse": {
+            "value": "#FFFFFF",
+            "usage": "Text on dark/brand surfaces"
+          }
         },
         "border": {
-          "default": { "value": "#E2E8F0" }
+          "default": {
+            "value": "#E2E8F0",
+            "usage": "Borders/dividers (Slate 200)"
+          },
+          "strong": {
+            "value": "#CBD5E1",
+            "usage": "Strong borders (Slate 300)"
+          }
+        },
+        "state": {
+          "brand": {
+            "hover": {
+              "value": "#E65F00",
+              "usage": "Primary hover (web)"
+            },
+            "pressed": {
+              "value": "#CC5500",
+              "usage": "Primary pressed (web/app)"
+            }
+          },
+          "overlay": {
+            "hover": {
+              "value": "#F3F3F4",
+              "usage": "Neutral hover overlay"
+            },
+            "pressed": {
+              "value": "#ECEDEE",
+              "usage": "Neutral pressed overlay"
+            }
+          },
+          "disabled": {
+            "bg": {
+              "value": "#E2E8F0",
+              "usage": "Disabled surfaces (Slate 200)"
+            },
+            "text": {
+              "value": "#94A3B8",
+              "usage": "Disabled text/icons (Slate 400)"
+            },
+            "border": {
+              "value": "#E2E8F0",
+              "usage": "Disabled borders (Slate 200)"
+            }
+          },
+          "focus": {
+            "ring": {
+              "value": "#FF6A00",
+              "usage": "Focus ring (web)",
+              "alpha": 0.35
+            },
+            "width": {
+              "value": 2
+            }
+          }
         },
         "semantic": {
-          "danger": { "value": "#EF4444" }
+          "success": {
+            "bg": {
+              "value": "#ECFDF5"
+            },
+            "text": {
+              "value": "#059669"
+            },
+            "icon": {
+              "value": "#00E5A8"
+            },
+            "border": {
+              "value": "#A7F3D0"
+            }
+          },
+          "warning": {
+            "bg": {
+              "value": "#FFFBEB"
+            },
+            "text": {
+              "value": "#D97706"
+            },
+            "icon": {
+              "value": "#F59E0B"
+            },
+            "border": {
+              "value": "#FDE68A"
+            }
+          },
+          "danger": {
+            "bg": {
+              "value": "#FEF2F2"
+            },
+            "text": {
+              "value": "#DC2626"
+            },
+            "icon": {
+              "value": "#EF4444"
+            },
+            "border": {
+              "value": "#FECACA"
+            },
+            "value": "#EF4444"
+          },
+          "info": {
+            "bg": {
+              "value": "#FFF4E6"
+            },
+            "text": {
+              "value": "#CC5500"
+            },
+            "icon": {
+              "value": "#FF6A00"
+            },
+            "border": {
+              "value": "#FFD7B5"
+            }
+          }
         }
       }
     },
     "dark": {
       "colors": {
+        "brand": {
+          "primary": {
+            "value": "#FF6A00",
+            "usage": "CTA, highlights, active states"
+          },
+          "secondary": {
+            "value": "#111827",
+            "usage": "Surfaces, base dark tone"
+          },
+          "accent": {
+            "value": "#00E5A8",
+            "usage": "Positive accents, success emphasis"
+          },
+          "onPrimary": {
+            "value": "#FFFFFF",
+            "usage": "Text/icons on primary surfaces"
+          }
+        },
         "bg": {
-          "main": { "value": "#0F172A" },
-          "surfaceAlt": { "value": "#111827" }
+          "main": {
+            "value": "#0B0F19",
+            "usage": "Page/app background"
+          },
+          "surface": {
+            "value": "#111827",
+            "usage": "Cards, sheets, modals"
+          },
+          "surfaceAlt": {
+            "value": "#1F2937",
+            "usage": "Subtle elevated surface"
+          }
         },
         "text": {
-          "main": { "value": "#F8FAFC" }
-        },
-        "brand": {
-          "primary": { "value": "#FF6A00" },
-          "secondary": { "value": "#F8FAFC" },
-          "accent": { "value": "#00E5A8" },
-          "onPrimary": { "value": "#FFFFFF" }
+          "main": {
+            "value": "#F8FAFC",
+            "usage": "Primary text (Slate 50)"
+          },
+          "sub": {
+            "value": "#CBD5E1",
+            "usage": "Secondary text (Slate 300)"
+          },
+          "muted": {
+            "value": "#94A3B8",
+            "usage": "Muted text (Slate 400)"
+          },
+          "inverse": {
+            "value": "#0B0F19",
+            "usage": "Text on light surfaces"
+          }
         },
         "border": {
-          "default": { "value": "#1F2937" }
+          "default": {
+            "value": "#282F3C",
+            "usage": "Borders/dividers"
+          },
+          "strong": {
+            "value": "#363C49",
+            "usage": "Stronger borders"
+          }
+        },
+        "state": {
+          "brand": {
+            "hover": {
+              "value": "#FF7B1F",
+              "usage": "Primary hover (web)"
+            },
+            "pressed": {
+              "value": "#E65F00",
+              "usage": "Primary pressed (web/app)"
+            }
+          },
+          "overlay": {
+            "hover": {
+              "value": "#1F2634",
+              "usage": "Neutral hover overlay"
+            },
+            "pressed": {
+              "value": "#282F3C",
+              "usage": "Neutral pressed overlay"
+            }
+          },
+          "disabled": {
+            "bg": {
+              "value": "#232A38",
+              "usage": "Disabled surfaces"
+            },
+            "text": {
+              "value": "#626772",
+              "usage": "Disabled text/icons"
+            },
+            "border": {
+              "value": "#282F3C",
+              "usage": "Disabled borders"
+            }
+          },
+          "focus": {
+            "ring": {
+              "value": "#FF6A00",
+              "usage": "Focus ring (web)",
+              "alpha": 0.45
+            },
+            "width": {
+              "value": 2
+            }
+          }
         },
         "semantic": {
-          "danger": { "value": "#F87171" }
+          "success": {
+            "bg": {
+              "value": "#0F3136"
+            },
+            "text": {
+              "value": "#34D399"
+            },
+            "icon": {
+              "value": "#00E5A8"
+            },
+            "border": {
+              "value": "#0D4946"
+            }
+          },
+          "warning": {
+            "bg": {
+              "value": "#2C2824"
+            },
+            "text": {
+              "value": "#FBBF24"
+            },
+            "icon": {
+              "value": "#F59E0B"
+            },
+            "border": {
+              "value": "#483820"
+            }
+          },
+          "danger": {
+            "bg": {
+              "value": "#2C1D2A"
+            },
+            "text": {
+              "value": "#F87171"
+            },
+            "icon": {
+              "value": "#EF4444"
+            },
+            "border": {
+              "value": "#46232E"
+            },
+            "value": "#F87171"
+          },
+          "info": {
+            "bg": {
+              "value": "#2E2222"
+            },
+            "text": {
+              "value": "#FF8A3D"
+            },
+            "icon": {
+              "value": "#FF6A00"
+            },
+            "border": {
+              "value": "#4A2C1E"
+            }
+          }
         }
+      }
+    }
+  },
+  "typography": {
+    "fontFamily": {
+      "primary": "Pretendard",
+      "numbers": "Pretendard, -apple-system, sans-serif"
+    },
+    "features": {
+      "numeric": "'tnum' on, 'cv01' on"
+    },
+    "scale": {
+      "display": {
+        "size": 28,
+        "lineHeight": 36,
+        "weight": 700,
+        "letterSpacing": -0.2
+      },
+      "title": {
+        "size": 22,
+        "lineHeight": 30,
+        "weight": 700,
+        "letterSpacing": -0.1
+      },
+      "heading": {
+        "size": 18,
+        "lineHeight": 26,
+        "weight": "600",
+        "letterSpacing": -0.1
+      },
+      "body": {
+        "size": 16,
+        "lineHeight": 24,
+        "weight": "400",
+        "letterSpacing": 0
+      },
+      "detail": {
+        "size": 14,
+        "lineHeight": 20,
+        "weight": 400,
+        "letterSpacing": 0
+      },
+      "caption": {
+        "size": 12,
+        "lineHeight": 16,
+        "weight": 500,
+        "letterSpacing": 0.1
       }
     }
   },
   "layout": {
+    "spacing": {
+      "base": 4,
+      "steps": [4, 8, 12, 16, 20, 24, 32, 40, 48]
+    },
     "radii": {
-      "card": { "value": 16 }
+      "control": {
+        "value": 12,
+        "usage": "Buttons, inputs, chips"
+      },
+      "card": {
+        "value": 16,
+        "usage": "Cards, sheets"
+      },
+      "pill": {
+        "value": 999,
+        "usage": "Badges, pills"
+      }
+    },
+    "zIndex": {
+      "base": 0,
+      "dropdown": 1000,
+      "sticky": 1100,
+      "overlay": 1200,
+      "modal": 1300,
+      "toast": 1400,
+      "tooltip": 1500
     }
   },
-  "typography": {
-    "scale": {
-      "heading": { "size": 18, "weight": "700" },
-      "body": { "size": 14, "weight": "400" }
+  "motion": {
+    "durationMs": {
+      "fast": 120,
+      "base": 180,
+      "slow": 260
+    },
+    "easing": {
+      "standard": "cubic-bezier(0.2, 0, 0, 1)",
+      "emphasized": "cubic-bezier(0.2, 0, 0, 1)"
     }
   },
   "elevation": {
-    "app": {
-      "android": {
-        "cardRaised": {
-          "elevation": 6
-        }
+    "web": {
+      "cardRaised": {
+        "shadow": "0 6px 16px rgba(17, 24, 39, 0.12)"
       },
+      "dropdown": {
+        "shadow": "0 10px 24px rgba(17, 24, 39, 0.16)"
+      }
+    },
+    "app": {
       "ios": {
         "cardRaised": {
           "shadowColor": "#000000",
-          "shadowOpacity": 0.12,
-          "shadowRadius": 10,
-          "shadowOffset": { "width": 0, "height": 6 }
+          "shadowOpacity": 0.25,
+          "shadowRadius": 16,
+          "shadowOffset": {
+            "width": 0,
+            "height": 6
+          }
+        },
+        "sheet": {
+          "shadowColor": "#000000",
+          "shadowOpacity": 0.28,
+          "shadowRadius": 24,
+          "shadowOffset": {
+            "width": 0,
+            "height": 10
+          }
+        }
+      },
+      "android": {
+        "cardRaised": {
+          "elevation": 4
+        },
+        "sheet": {
+          "elevation": 8
         }
       }
+    }
+  },
+  "platform": {
+    "web": {
+      "interaction": {
+        "supportsHover": true,
+        "focusVisible": true
+      },
+      "grid": {
+        "columns": 12,
+        "gutter": 24,
+        "containerMaxWidth": 1280,
+        "breakpoints": [360, 768, 1024, 1280, 1440]
+      }
+    },
+    "app": {
+      "interaction": {
+        "supportsHover": false,
+        "pressedFeedback": "overlay",
+        "minTapTarget": 44
+      },
+      "safeArea": {
+        "useInsets": true
+      }
+    }
+  },
+  "components": {
+    "button": {
+      "sizes": {
+        "sm": {
+          "minHeight": 36,
+          "paddingX": 12,
+          "paddingY": 10,
+          "radius": 12
+        },
+        "md": {
+          "minHeight": 44,
+          "paddingX": 16,
+          "paddingY": 12,
+          "radius": 12
+        },
+        "lg": {
+          "minHeight": 52,
+          "paddingX": 20,
+          "paddingY": 14,
+          "radius": 12
+        }
+      },
+      "variants": ["primary", "secondary", "outline", "ghost"]
+    },
+    "card": {
+      "radius": 16,
+      "padding": {
+        "sm": 16,
+        "md": 20
+      },
+      "variants": ["flat", "raised"]
+    },
+    "badge": {
+      "radius": 999,
+      "padding": {
+        "sm": {
+          "x": 8,
+          "y": 4
+        },
+        "md": {
+          "x": 10,
+          "y": 6
+        }
+      },
+      "tones": ["brand", "neutral", "success", "warning", "danger"],
+      "styles": ["soft", "solid"]
+    },
+    "status": {
+      "dotSize": {
+        "sm": 8,
+        "md": 10
+      },
+      "types": ["pending", "in_transit", "delivered", "delayed", "canceled"]
     }
   }
 }

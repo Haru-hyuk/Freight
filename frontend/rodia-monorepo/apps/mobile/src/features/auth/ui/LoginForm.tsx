@@ -1,12 +1,19 @@
-// apps/mobile/src/features/auth/ui/LoginForm.tsx
+/// 로그인 폼 구버전
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { createThemedStyles } from "@/shared/theme/useAppTheme";
 import { AppText } from "@/shared/ui/kit/AppText";
 import { AppButton } from "@/shared/ui/kit/AppButton";
 import { AppInput } from "@/shared/ui/kit/AppInput";
+import { AppCard } from "@/shared/ui/kit/AppCard";
 import { useAuth } from "@/features/auth/model/useAuth";
-import { MOCK_EMAIL_BY_ROLE, MOCK_PASSWORD, inferMockRoleFromEmail } from "@/features/auth/model/auth.consts";
+import { 
+  MOCK_EMAIL_BY_ROLE, 
+  MOCK_PASSWORD,
+  AUTH_VALIDATION_MESSAGES,
+  AUTH_MESSAGES,
+  inferMockRoleFromEmail,
+} from "@/features/auth/model/auth.consts";
 
 type Props = {
   onSuccess?: () => void;
@@ -68,14 +75,14 @@ export function LoginForm({
   const passwordTrimmed = useMemo(() => password.trim(), [password]);
 
   const emailError = useMemo(() => {
-    if (!emailTrimmed) return "이메일을 입력하세요.";
+    if (!emailTrimmed) return AUTH_VALIDATION_MESSAGES.email.required;
     const ok = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed);
-    return ok ? undefined : "이메일 형식이 올바르지 않습니다.";
+    return ok ? undefined : AUTH_VALIDATION_MESSAGES.email.invalid;
   }, [emailTrimmed]);
 
   const passwordError = useMemo(() => {
-    if (!passwordTrimmed) return "비밀번호를 입력하세요.";
-    if (passwordTrimmed.length < 6) return "비밀번호는 6자 이상이어야 합니다.";
+    if (!passwordTrimmed) return AUTH_VALIDATION_MESSAGES.password.required;
+    if (passwordTrimmed.length < 6) return AUTH_VALIDATION_MESSAGES.password.tooShort;
     return undefined;
   }, [passwordTrimmed]);
 
@@ -111,9 +118,9 @@ export function LoginForm({
   }, [auth, emailError, passwordError, emailTrimmed, passwordTrimmed, onSuccess]);
 
   const mockHint = useMemo(() => {
-    if (!isMock) return "역할은 로그인 후 서버에서 자동 결정됩니다.";
+    if (!isMock) return AUTH_MESSAGES.roleAutoDetect;
     const role = inferMockRoleFromEmail(emailTrimmed);
-    return `Mock 모드: ${role === "driver" ? "기사" : "화주"}로 분기됩니다. (driver 포함 → 기사)`;
+    return AUTH_MESSAGES.mockModeHint(role);
   }, [isMock, emailTrimmed]);
 
   const content = (
@@ -156,9 +163,14 @@ export function LoginForm({
       />
 
       {auth.errorMessage ? (
-        <AppText variant="caption" color="semanticDanger">
-          {auth.errorMessage}
-        </AppText>
+        <AppCard 
+          outerStyle={{ borderWidth: 0, marginVertical: 4 }} 
+          tone="actionRequired"
+        >
+          <AppText variant="detail" color="semanticDanger">
+            {auth.errorMessage}
+          </AppText>
+        </AppCard>
       ) : null}
 
       <View style={s.footer}>
