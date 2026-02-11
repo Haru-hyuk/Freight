@@ -44,11 +44,7 @@ public class MatchService {
             throw new CustomException(ErrorCode.QUOTE_NOT_OPEN);
         }
 
-        // 이미 취소되지 않은 매칭이 존재하는지 확인 (견적 하나당 매칭 하나)
-        if (matchRepository.existsByQuoteIdAndStatusNot(quoteId, Match.Status.CANCELLED)) {
-            throw new CustomException(ErrorCode.MATCH_ALREADY_EXISTS);
-        }
-
+        // 견적 1 : 매칭 N (동일 견적에 여러 매칭 생성 가능)
         Match match = Match.builder()
                 .quoteId(quoteId)
                 .driverId(0L)
@@ -114,9 +110,9 @@ public class MatchService {
         Quote quote = quoteRepository.findById(match.getQuoteId())
                 .orElseThrow(() -> new CustomException(ErrorCode.INVALID_REQUEST));
 
-        // 권한 확인
+        // 권한 확인 (driverId는 미수락 시 0L, null일 수 있음)
         boolean isShipperOwner = "ROLE_SHIPPER".equals(role) && quote.getShipperId().equals(userId);
-        boolean isMatchedDriver = "ROLE_DRIVER".equals(role) && match.getDriverId().equals(userId);
+        boolean isMatchedDriver = "ROLE_DRIVER".equals(role) && match.getDriverId() != null && match.getDriverId().equals(userId);
 
         if (!isShipperOwner && !isMatchedDriver) {
             throw new CustomException(ErrorCode.AUTH_FORBIDDEN);
@@ -131,21 +127,48 @@ public class MatchService {
     }
 
     /**
-     * 매칭 상세 조회
+     * 매칭 상세 조회.
+     * 해당 매칭의 견적 소유 화주 또는 수락한 기사만 조회 가능.
+     *
+     * @param userId 인증된 사용자 ID (null이면 403)
+     * @param role   ROLE_SHIPPER 또는 ROLE_DRIVER
      */
     @Transactional(readOnly = true)
-    public MatchResponse getMatch(Long matchId) {
+    public MatchResponse getMatch(Long matchId, Long userId, String role) {
+        if (userId == null) {
+            throw new CustomException(ErrorCode.AUTH_FORBIDDEN);
+        }
         Match match = matchRepository.findById(matchId)
                 .orElseThrow(() -> new CustomException(ErrorCode.MATCH_NOT_FOUND));
+        Quote quote = quoteRepository.findById(match.getQuoteId())
+                .orElseThrow(() -> new CustomException(ErrorCode.INVALID_REQUEST));
+
+        boolean isShipperOwner = "ROLE_SHIPPER".equals(role) && quote.getShipperId().equals(userId);
+        boolean isMatchedDriver = "ROLE_DRIVER".equals(role) && userId.equals(match.getDriverId());
+
+        if (!isShipperOwner && !isMatchedDriver) {
+            throw new CustomException(ErrorCode.AUTH_FORBIDDEN);
+        }
         return MatchResponse.from(match);
     }
 
     /**
-     * 기사의 매칭 목록 조회
+     * 기사가 수락한 매칭 목록 (취소 제외, 진행 중인 것만)
      */
     @Transactional(readOnly = true)
     public List<MatchResponse> getDriverMatches(Long driverId) {
-        return matchRepository.findByDriverId(driverId)
+        return matchRepository.findByDriverIdAndStatusNot(driverId, Match.Status.CANCELLED)
+                .stream()
+                .map(MatchResponse::from)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 화주가 생성한 매칭 목록 (본인 견적의 매칭, 취소 제외)
+     */
+    @Transactional(readOnly = true)
+    public List<MatchResponse> getShipperMatches(Long shipperId) {
+        return matchRepository.findByShipperIdAndStatusNotCancelled(shipperId)
                 .stream()
                 .map(MatchResponse::from)
                 .collect(Collectors.toList());
