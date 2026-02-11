@@ -1,4 +1,4 @@
-﻿package com.freight.backend.service;
+package com.freight.backend.service;
 
 import com.freight.backend.dto.driver.DriverSignupRequest;
 import com.freight.backend.dto.driver.DriverSignupResponse;
@@ -19,7 +19,7 @@ public class DriverSignupService {
 
     public DriverSignupResponse signup(DriverSignupRequest req) {
         if (driverRepository.findByEmail(req.getEmail()).isPresent()) {
-            throw new CustomException(ErrorCode.INVALID_INPUT_VALUE);
+            throw new CustomException(ErrorCode.DUPLICATE_EMAIL);
         }
 
         Driver driver = Driver.builder()

@@ -162,4 +162,32 @@ public class Quote {
         this.loadMethod = loadMethod;
         this.unloadMethod = unloadMethod;
     }
+
+    /**
+     * 견적 상태를 MATCHED로 변경 (기사가 수락 시)
+     */
+    public void markMatched() {
+        this.status = "MATCHED";
+    }
+
+    /**
+     * 견적 상태를 OPEN으로 되돌림 (매칭 취소 시)
+     */
+    public void reopen() {
+        this.status = "OPEN";
+    }
+
+    /**
+     * 견적 상태를 CANCELLED로 변경
+     */
+    public void cancel() {
+        this.status = "CANCELLED";
+    }
+
+    /**
+     * 견적이 공개(OPEN) 상태인지 확인
+     */
+    public boolean isOpen() {
+        return "OPEN".equals(this.status);
+    }
 }
