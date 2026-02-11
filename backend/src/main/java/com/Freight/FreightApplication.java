@@ -9,4 +9,3 @@ public class FreightApplication {
         SpringApplication.run(FreightApplication.class, args);
     }
 }
-
