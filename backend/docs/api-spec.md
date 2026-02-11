@@ -259,6 +259,7 @@
   "weightKg": 1200,
   "volumeCbm": 10,
   "vehicleType": "TON_1",
+  "cargoName": "냉동 해산물",
   "cargoType": "FROZEN",
   "cargoDesc": "Frozen seafood",
   "desiredPrice": 170000,
@@ -286,6 +287,23 @@
 }
 ```
 
+### Quote Validate
+- Method: `POST`
+- Path: `/api/shipper/quotes/validate`
+- Request: Quote Create와 동일
+- Response
+```json
+{
+  "estimatedMinPrice": 150000,
+  "estimatedMaxPrice": 190000,
+  "estimatedWeightedPrice": 172000,
+  "comments": [
+    "희망금액이 예상 최저가의 85% 미만입니다. 매칭이 어려울 수 있어요.",
+    "화물 특성상 파손주의/충격주의 체크리스트를 고려해보세요."
+  ]
+}
+```
+
 ### Quote List
 - Method: `GET`
 - Path: `/api/shipper/quotes`
@@ -299,6 +317,7 @@
     "destinationAddress": "Busan, KR",
   "distanceKm": 325,
   "vehicleType": "TON_1",
+    "cargoName": "냉동 해산물",
   "desiredPrice": 170000,
     "finalPrice": 170000,
     "status": "OPEN",
@@ -326,6 +345,7 @@
   "weightKg": 1200,
   "volumeCbm": 10,
   "vehicleType": "TON_1",
+  "cargoName": "냉동 해산물",
   "cargoType": "FROZEN",
   "cargoDesc": "Frozen seafood",
   "basePrice": 100000,
@@ -366,6 +386,7 @@
   "weightKg": 1200,
   "volumeCbm": 10,
   "vehicleType": "TON_1",
+  "cargoName": "냉동 해산물",
   "cargoType": "FROZEN",
   "cargoDesc": "Frozen seafood",
   "desiredPrice": 170000,
@@ -397,6 +418,7 @@
   "weightKg": 1200,
   "volumeCbm": 10,
   "vehicleType": "TON_1",
+  "cargoName": "냉동 해산물",
   "cargoType": "FROZEN",
   "cargoDesc": "Frozen seafood",
   "basePrice": 100000,
