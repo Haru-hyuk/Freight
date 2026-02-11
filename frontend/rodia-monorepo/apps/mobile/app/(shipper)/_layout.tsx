@@ -1,5 +1,5 @@
 // apps/mobile/app/(shipper)/_layout.tsx
-import React, { useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import { Redirect, Stack, useRouter, useSegments } from "expo-router";
 import { ActivityIndicator, StyleSheet, View, type ViewStyle } from "react-native";
 
@@ -9,6 +9,13 @@ import { useAppTheme } from "@/shared/theme/useAppTheme";
 import { BottomTabBar } from "@/widgets/layout/BottomTabBar";
 
 type BottomTabKey = "home" | "quotes" | "matchings" | "profile";
+
+function shouldHideBottomBar(segments: readonly string[] | undefined | null): boolean {
+  const segs = Array.isArray(segments) ? segments : [];
+  const isQuotesCreate = segs.includes("quotes") && segs.includes("create");
+  const isQuotesDetail = segs.includes("quotes") && (segs.includes("[id]") || segs.includes("detail"));
+  return isQuotesCreate || isQuotesDetail;
+}
 
 function pickActiveKey(segments: readonly string[] | undefined | null): BottomTabKey {
   const segs = Array.isArray(segments) ? segments : [];
@@ -41,6 +48,8 @@ export default function ShipperLayout() {
   const router = useRouter();
   const segments = useSegments();
   const auth = useAuth();
+  const tabNavLockedRef = useRef(false);
+  const tabNavUnlockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const cBgBase = safeString(theme?.colors?.bgSurfaceAlt, "#F3F4F6");
   const cCard = safeString(theme?.colors?.bgMain, "#FFFFFF");
@@ -63,6 +72,35 @@ export default function ShipperLayout() {
   );
 
   const activeKey = useMemo(() => pickActiveKey(segments), [segments]);
+  const hideBottomBar = useMemo(() => shouldHideBottomBar(segments), [segments]);
+
+  useEffect(() => {
+    return () => {
+      if (tabNavUnlockTimerRef.current) {
+        clearTimeout(tabNavUnlockTimerRef.current);
+      }
+    };
+  }, []);
+
+  const onChangeTab = useCallback(
+    (key: BottomTabKey) => {
+      if (key === activeKey) return;
+      if (tabNavLockedRef.current) return;
+
+      tabNavLockedRef.current = true;
+      const next = hrefForKey(key);
+      router?.replace?.(next);
+
+      if (tabNavUnlockTimerRef.current) {
+        clearTimeout(tabNavUnlockTimerRef.current);
+      }
+      tabNavUnlockTimerRef.current = setTimeout(() => {
+        tabNavLockedRef.current = false;
+        tabNavUnlockTimerRef.current = null;
+      }, 550);
+    },
+    [activeKey, router]
+  );
 
   if (auth.status === "checking") {
     return (
@@ -100,13 +138,11 @@ export default function ShipperLayout() {
         />
       </View>
 
+      {!hideBottomBar ? (
       <View style={styles.bottomWrap}>
         <BottomTabBar
           activeKey={activeKey}
-          onChange={(key) => {
-            const next = hrefForKey(key);
-            router?.push?.(next);
-          }}
+          onChange={onChangeTab}
           items={[
             { key: "home", label: "홈", iconActive: "home", iconInactive: "home-outline" },
             { key: "quotes", label: "이용내역", iconActive: "clipboard", iconInactive: "clipboard-outline" },
@@ -114,6 +150,7 @@ export default function ShipperLayout() {
           ]}
         />
       </View>
+      ) : null}
     </View>
   );
 }

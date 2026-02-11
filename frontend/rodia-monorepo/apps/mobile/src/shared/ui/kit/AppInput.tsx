@@ -16,6 +16,7 @@ export type AppInputProps = Omit<TextInputProps, "style"> & {
   helperText?: string;
   error?: string;
   containerStyle?: StyleProp<ViewStyle>;
+  shellStyle?: StyleProp<ViewStyle>;
   inputStyle?: StyleProp<TextStyle>;
   left?: React.ReactNode;
   right?: React.ReactNode;
@@ -27,6 +28,7 @@ export const AppInput = forwardRef<TextInput, AppInputProps>(function AppInput(
     helperText,
     error,
     containerStyle,
+    shellStyle,
     inputStyle,
     left,
     right,
@@ -88,6 +90,7 @@ export const AppInput = forwardRef<TextInput, AppInputProps>(function AppInput(
             backgroundColor: bgColor,
             borderColor,
           },
+          shellStyle as any,
         ]}
       >
         {left ? <View style={styles.adornment}>{left}</View> : null}

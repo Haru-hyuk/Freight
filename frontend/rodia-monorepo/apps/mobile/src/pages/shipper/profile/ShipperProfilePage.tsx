@@ -1,208 +1,403 @@
-// apps/mobile/src/pages/shipper/profile/ShipperProfilePage.tsx
 import React, { useMemo } from "react";
-import { Pressable, StyleSheet, View, type ViewStyle } from "react-native";
+import { Alert, Image, Pressable, StyleSheet, View, type ViewStyle } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
-import { safeString, tint } from "@/shared/theme/colorUtils";
-import { useAppTheme } from "@/shared/theme/useAppTheme";
-import { PageScaffold } from "@/widgets/layout/PageScaffold";
-import { AppText } from "@/shared/ui/kit/AppText";
-import { AppCard } from "@/shared/ui/kit/AppCard";
-import { AppButton } from "@/shared/ui/kit/AppButton";
-import { AppEmptyState } from "@/shared/ui/kit/AppEmptyState";
 import { useAuth } from "@/features/auth/model/useAuth";
+import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
+import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
+import { AppButton } from "@/shared/ui/kit/AppButton";
+import { AppCard } from "@/shared/ui/kit/AppCard";
+import { AppText } from "@/shared/ui/kit/AppText";
+import { PageScaffold } from "@/widgets/layout/PageScaffold";
 
-const VIEW_PRESSED: ViewStyle = { opacity: 0.85 };
+type MenuAction = {
+  id: string;
+  title: string;
+  onPress: () => void;
+  danger?: boolean;
+};
+
+const VIEW_PRESSED: ViewStyle = { opacity: 0.85, transform: [{ scale: 0.98 }] };
+
+const useStyles = createThemedStyles((theme) => {
+  const spacing = safeNumber(theme?.layout?.spacing?.base, 4);
+  const radiusCard = safeNumber(theme?.components?.card?.radius, safeNumber(theme?.layout?.radii?.card, 16));
+  const radiusControl = safeNumber(theme?.layout?.radii?.control, 12);
+  const buttonSm = safeNumber(theme?.components?.button?.sizes?.sm?.minHeight, 36);
+  const cardPadding = safeNumber(theme?.components?.card?.paddingMd, 20);
+
+  const cBg = safeString(theme?.colors?.bgMain, safeString(theme?.colors?.bgSurfaceAlt, safeString(theme?.colors?.bgSurface, "")));
+  const cSurface = safeString(theme?.colors?.bgSurface, cBg);
+  const cTextMain = safeString(theme?.colors?.textMain, safeString(theme?.colors?.textSub, safeString(theme?.colors?.textMuted, "")));
+  const cTextSub = safeString(theme?.colors?.textSub, cTextMain);
+  const cTextMuted = safeString(theme?.colors?.textMuted, cTextSub);
+  const cBorder = safeString(theme?.colors?.borderDefault, safeString(theme?.colors?.borderStrong, cSurface));
+  const cPrimary = safeString(theme?.colors?.brandPrimary, cTextMain);
+  const cDanger = safeString(theme?.colors?.semanticDanger, cPrimary);
+
+  const cPressed = safeString(theme?.colors?.stateOverlayPressed, tint(cTextMain, 0.06, cSurface));
+  const cBizBadgeBg = tint(cPrimary, 0.1, cSurface);
+  const cStatsAccentBg = tint(cPrimary, 0.14, cSurface);
+  const cDivider = tint(cBorder, 0.65, cBorder);
+  const cSectionLabel = tint(cTextSub, 0.9, cTextSub);
+
+  return StyleSheet.create({
+    pageContent: {
+      paddingTop: spacing * 3,
+      paddingBottom: spacing * 24,
+      paddingHorizontal: spacing * 5,
+      backgroundColor: cBg,
+    },
+
+    profileCard: {
+      borderRadius: radiusCard,
+      padding: cardPadding,
+      marginBottom: spacing * 4,
+    },
+    profileRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing * 3,
+    },
+    avatar: {
+      width: spacing * 15,
+      height: spacing * 15,
+      borderRadius: (spacing * 15) / 2,
+      borderWidth: 1,
+      borderColor: cDivider,
+      backgroundColor: cSurface,
+    },
+    profileInfo: {
+      flex: 1,
+      minWidth: 0,
+    },
+    nameRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing + 2,
+      marginBottom: spacing,
+    },
+    bizBadge: {
+      backgroundColor: cBizBadgeBg,
+      borderRadius: radiusControl - 6,
+      paddingHorizontal: spacing + 2,
+      paddingVertical: 2,
+    },
+    profileEditBtn: {
+      minHeight: buttonSm,
+      paddingHorizontal: spacing * 3,
+    },
+
+    statsCard: {
+      borderRadius: radiusCard,
+      paddingVertical: spacing * 4 + 2,
+      paddingHorizontal: spacing * 2,
+      marginBottom: spacing * 5,
+    },
+    statsRow: {
+      flexDirection: "row",
+      alignItems: "center",
+    },
+    statItem: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      minHeight: spacing * 13,
+      borderRadius: radiusControl,
+    },
+    statPressed: {
+      backgroundColor: cPressed,
+    },
+    statDivider: {
+      width: 1,
+      height: "65%",
+      backgroundColor: cDivider,
+      alignSelf: "center",
+    },
+    statNum: {
+      color: cTextMain,
+      fontWeight: "800",
+      marginBottom: spacing,
+    },
+    statNumHighlight: {
+      color: cPrimary,
+      backgroundColor: cStatsAccentBg,
+      paddingHorizontal: spacing * 2,
+      paddingVertical: spacing,
+      borderRadius: radiusControl - 6,
+      overflow: "hidden",
+    },
+
+    sectionLabel: {
+      color: cSectionLabel,
+      fontWeight: "700",
+      marginBottom: spacing * 2 + 2,
+      marginLeft: spacing,
+    },
+    sectionGap: {
+      marginTop: spacing * 2,
+    },
+    menuCard: {
+      borderRadius: radiusCard,
+      padding: 0,
+      overflow: "hidden",
+      marginBottom: spacing * 3,
+    },
+    menuItem: {
+      minHeight: spacing * 13,
+      paddingHorizontal: cardPadding,
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      borderBottomWidth: 1,
+      borderBottomColor: cDivider,
+      backgroundColor: cSurface,
+    },
+    menuItemLast: {
+      borderBottomWidth: 0,
+    },
+    menuItemPressed: {
+      backgroundColor: cPressed,
+    },
+
+    footerActions: {
+      marginTop: spacing * 4,
+      gap: spacing * 2,
+    },
+    versionText: {
+      textAlign: "center",
+      color: cTextMuted,
+      marginTop: spacing * 2,
+    },
+    textDanger: {
+      color: cDanger,
+    },
+    textMain: {
+      color: cTextMain,
+    },
+    textSub: {
+      color: cTextSub,
+    },
+    textMuted: {
+      color: cTextMuted,
+    },
+  });
+});
+
+function MenuRow({
+  title,
+  isLast,
+  onPress,
+  danger = false,
+  styles,
+}: {
+  title: string;
+  isLast: boolean;
+  onPress: () => void;
+  danger?: boolean;
+  styles: ReturnType<typeof useStyles>;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.menuItem,
+        isLast && styles.menuItemLast,
+        pressed && styles.menuItemPressed,
+      ]}
+    >
+      <AppText variant="detail" weight="600" style={danger ? styles.textDanger : styles.textMain}>
+        {title}
+      </AppText>
+      <Ionicons name="chevron-forward" size={18} style={styles.textMuted} />
+    </Pressable>
+  );
+}
 
 export function ShipperProfilePage() {
   const theme = useAppTheme();
+  const styles = useStyles();
   const router = useRouter();
   const auth = useAuth();
 
-  const cText = safeString(theme?.colors?.textMain, "#111827");
-  const cBg = safeString(theme?.colors?.bgSurfaceAlt, "#F3F4F6");
-  const cCard = safeString(theme?.colors?.bgMain, "#FFFFFF");
-  const cBorder = safeString(theme?.colors?.borderDefault, "#E5E7EB");
-  const cPrimary = safeString(theme?.colors?.brandPrimary, "#FF6A00");
-  const subtleText = useMemo(() => tint(cText, 0.7, "rgba(17,24,39,0.7)"), [cText]);
+  const cBg = safeString(theme?.colors?.bgMain, safeString(theme?.colors?.bgSurfaceAlt, ""));
+  const cTextMain = safeString(theme?.colors?.textMain, "");
+  const cOnBrand = safeString(theme?.colors?.textOnBrand, safeString(theme?.colors?.textInverse, ""));
 
-  const styles = useMemo(
-    () =>
-      StyleSheet.create({
-        sectionTitle: { marginTop: 8, marginBottom: 10 },
-        cardOuter: { borderRadius: 16, overflow: "hidden", marginBottom: 12 },
-        cardInner: { padding: 16 },
-        row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-        item: {
-          paddingVertical: 12,
-          borderTopWidth: 1,
-          borderTopColor: tint("#000000", 0.06, "rgba(0,0,0,0.06)"),
-        },
-        pill: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, alignSelf: "flex-start" },
-        avatar: {
-          width: 44,
-          height: 44,
-          borderRadius: 16,
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: tint(cBorder, 0.9, cBorder),
-          borderWidth: 2,
-          borderColor: cCard,
-          marginRight: 12,
-        },
-        topLeft: { flexDirection: "row", alignItems: "center" },
-        ghostBtn: { paddingHorizontal: 10, paddingVertical: 8, borderRadius: 12 },
-      }),
-    [cBorder, cCard]
+  const profileName = safeString((auth?.user as any)?.name, "(주) 로디아 유통");
+  const email = safeString((auth?.user as any)?.email, "business@rodia.co.kr");
+
+  const avatarBg = safeString(theme?.colors?.brandSecondary, cTextMain).replace("#", "");
+  const avatarFg = cOnBrand.replace("#", "");
+  const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(profileName)}&background=${avatarBg}&color=${avatarFg}&size=128`;
+
+  const businessMenus = useMemo<MenuAction[]>(
+    () => [
+      { id: "payment", title: "결제 수단 관리", onPress: () => Alert.alert("결제 수단 관리") },
+      { id: "tax", title: "세금계산서 정보", onPress: () => Alert.alert("세금계산서 정보") },
+      { id: "address", title: "자주 쓰는 주소지", onPress: () => Alert.alert("주소지 관리") },
+    ],
+    []
   );
 
-  const role = safeString(auth?.user?.role, "");
-  const name = safeString((auth?.user as any)?.name, "화주");
-  const company = safeString((auth?.user as any)?.companyName, "회사 정보 미등록");
+  const supportMenus = useMemo<MenuAction[]>(
+    () => [
+      { id: "notice", title: "공지사항", onPress: () => Alert.alert("공지사항") },
+      { id: "support", title: "1:1 문의 / 고객센터", onPress: () => Alert.alert("고객센터") },
+      { id: "terms", title: "이용약관", onPress: () => Alert.alert("이용약관") },
+    ],
+    []
+  );
+
+  const accountMenus = useMemo<MenuAction[]>(
+    () => [
+      { id: "logout", title: auth.isBusy ? "로그아웃 중..." : "로그아웃", onPress: async () => {
+        try {
+          await auth.logout();
+          Alert.alert("로그아웃", "로그아웃되었습니다.");
+        } catch (error) {
+          console.error(error);
+        }
+      }, danger: true },
+    ],
+    [auth]
+  );
 
   return (
-    <PageScaffold title="내 정보" backgroundColor={cBg}>
-      {auth?.status !== "authenticated" ? (
-        <AppEmptyState
-          fullScreen={false}
-          title="로그인이 필요해요"
-          description="내 정보는 로그인 후 확인할 수 있습니다."
-          action={{ label: "로그인", onPress: () => router?.push?.("/(auth)/login") }}
-        />
-      ) : (
-        <>
-          <View style={styles.sectionTitle}>
-            <AppText variant="heading" weight="800">
-              계정
+    <PageScaffold
+      title="내 정보"
+      backgroundColor={cBg}
+      contentStyle={styles.pageContent}
+      headerRight={
+        <AppButton
+          size="icon"
+          variant="secondary"
+          accessibilityLabel="설정"
+          onPress={() => Alert.alert("설정")}
+        >
+          <Ionicons name="settings-outline" size={18} color={cTextMain} />
+        </AppButton>
+      }
+    >
+      <AppCard outlined style={styles.profileCard}>
+        <View style={styles.profileRow}>
+          <Image source={{ uri: avatarUrl }} style={styles.avatar} />
+
+          <View style={styles.profileInfo}>
+            <View style={styles.nameRow}>
+              <AppText variant="heading" weight="800" numberOfLines={1} style={styles.textMain}>
+                {profileName}
+              </AppText>
+              <View style={styles.bizBadge}>
+                <AppText variant="caption" weight="800" style={styles.textDanger}>
+                  BIZ
+                </AppText>
+              </View>
+            </View>
+            <AppText variant="caption" style={styles.textSub} numberOfLines={1}>
+              {email}
             </AppText>
           </View>
 
-          <View style={styles.cardOuter}>
-            <AppCard>
-              <View style={styles.cardInner}>
-                <View style={styles.row}>
-                  <View style={styles.topLeft}>
-                    <View style={styles.avatar} accessibilityLabel="프로필 아바타">
-                      <Ionicons name="person" size={18} color={subtleText} />
-                    </View>
-                    <View>
-                      <AppText variant="body" weight="900">
-                        {name}
-                      </AppText>
-                      <View style={{ height: 4 }} />
-                      <AppText variant="caption" weight="800" color={subtleText}>
-                        {company}
-                      </AppText>
-                    </View>
-                  </View>
-
-                  <View style={[styles.pill, { backgroundColor: tint(cPrimary, 0.12, "rgba(255,106,0,0.12)") }]}>
-                    <AppText variant="caption" weight="900" style={{ color: cPrimary }}>
-                      {role ? `role: ${role}` : "role: -"}
-                    </AppText>
-                  </View>
-                </View>
-
-                <View style={styles.item} />
-
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="프로필 수정"
-                  onPress={() => {}}
-                  style={({ pressed }) => [styles.row, styles.item, pressed ? VIEW_PRESSED : undefined]}
-                >
-                  <AppText variant="body" weight="800">
-                    프로필 수정
-                  </AppText>
-                  <Ionicons name="chevron-forward" size={18} color={subtleText} />
-                </Pressable>
-
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="결제 수단/예치금"
-                  onPress={() => {}}
-                  style={({ pressed }) => [styles.row, styles.item, pressed ? VIEW_PRESSED : undefined]}
-                >
-                  <AppText variant="body" weight="800">
-                    결제 수단/예치금
-                  </AppText>
-                  <Ionicons name="chevron-forward" size={18} color={subtleText} />
-                </Pressable>
-
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="알림 설정"
-                  onPress={() => {}}
-                  style={({ pressed }) => [styles.row, styles.item, pressed ? VIEW_PRESSED : undefined]}
-                >
-                  <AppText variant="body" weight="800">
-                    알림 설정
-                  </AppText>
-                  <Ionicons name="chevron-forward" size={18} color={subtleText} />
-                </Pressable>
-              </View>
-            </AppCard>
-          </View>
-
-          <View style={styles.sectionTitle}>
-            <AppText variant="heading" weight="800">
-              지원
-            </AppText>
-          </View>
-
-          <View style={styles.cardOuter}>
-            <AppCard>
-              <View style={styles.cardInner}>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="고객센터"
-                  onPress={() => {}}
-                  style={({ pressed }) => [styles.row, pressed ? VIEW_PRESSED : undefined]}
-                >
-                  <AppText variant="body" weight="800">
-                    고객센터
-                  </AppText>
-                  <Ionicons name="chatbubble-ellipses-outline" size={18} color={subtleText} />
-                </Pressable>
-
-                <View style={styles.item} />
-
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="이용약관"
-                  onPress={() => {}}
-                  style={({ pressed }) => [styles.row, styles.item, pressed ? VIEW_PRESSED : undefined]}
-                >
-                  <AppText variant="body" weight="800">
-                    이용약관
-                  </AppText>
-                  <Ionicons name="chevron-forward" size={18} color={subtleText} />
-                </Pressable>
-              </View>
-            </AppCard>
-          </View>
-
-          <View style={{ height: 8 }} />
           <AppButton
-            title={auth.isBusy ? "로그아웃 중..." : "로그아웃"}
+            title="편집"
+            size="sm"
             variant="secondary"
-            disabled={auth.isBusy}
-            loading={auth.isBusy}
-            onPress={() => auth.logout()}
+            style={styles.profileEditBtn}
+            onPress={() => Alert.alert("프로필 편집")}
           />
-          <View style={{ height: 120 }} />
-        </>
-      )}
+        </View>
+      </AppCard>
+
+      <AppCard outlined style={styles.statsCard}>
+        <View style={styles.statsRow}>
+          <Pressable style={({ pressed }) => [styles.statItem, pressed && styles.statPressed]} onPress={() => Alert.alert("쿠폰함")}>
+            <AppText variant="heading" style={styles.statNum}>
+              2
+            </AppText>
+            <AppText variant="caption" style={styles.textSub}>
+              쿠폰함
+            </AppText>
+          </Pressable>
+
+          <View style={styles.statDivider} />
+
+          <Pressable style={({ pressed }) => [styles.statItem, pressed && styles.statPressed]} onPress={() => Alert.alert("포인트")}>
+            <AppText variant="heading" style={styles.statNum}>
+              2.5M
+            </AppText>
+            <AppText variant="caption" style={styles.textSub}>
+              포인트
+            </AppText>
+          </Pressable>
+
+          <View style={styles.statDivider} />
+
+          <Pressable style={({ pressed }) => [styles.statItem, pressed && styles.statPressed]} onPress={() => router.push("/(shipper)/quotes")}>
+            <AppText variant="heading" style={styles.statNum}>
+              15
+            </AppText>
+            <AppText variant="caption" style={styles.textSub}>
+              이용내역
+            </AppText>
+          </Pressable>
+        </View>
+      </AppCard>
+
+      <View style={styles.sectionGap}>
+        <AppText variant="caption" style={styles.sectionLabel}>
+          비즈니스 관리
+        </AppText>
+        <AppCard outlined style={styles.menuCard}>
+          {businessMenus.map((item, index) => (
+            <MenuRow
+              key={item.id}
+              title={item.title}
+              onPress={item.onPress}
+              isLast={index === businessMenus.length - 1}
+              styles={styles}
+            />
+          ))}
+        </AppCard>
+      </View>
+
+      <View style={styles.sectionGap}>
+        <AppText variant="caption" style={styles.sectionLabel}>
+          고객 지원
+        </AppText>
+        <AppCard outlined style={styles.menuCard}>
+          {supportMenus.map((item, index) => (
+            <MenuRow
+              key={item.id}
+              title={item.title}
+              onPress={item.onPress}
+              isLast={index === supportMenus.length - 1}
+              styles={styles}
+            />
+          ))}
+        </AppCard>
+      </View>
+
+      <View style={styles.footerActions}>
+        <AppCard outlined style={styles.menuCard}>
+          {accountMenus.map((item, index) => (
+            <MenuRow
+              key={item.id}
+              title={item.title}
+              onPress={item.onPress}
+              danger={item.danger}
+              isLast={index === accountMenus.length - 1}
+              styles={styles}
+            />
+          ))}
+        </AppCard>
+        <AppText variant="caption" style={styles.versionText}>
+          현재 버전 v1.2.0
+        </AppText>
+      </View>
     </PageScaffold>
   );
 }
 
 export default ShipperProfilePage;
-
-/*
-요약(3줄)
-- 화주 내정보는 “계정 카드 + 설정/지원 항목” 형태의 기본 뼈대를 제공합니다.
-- 실제 사용자 데이터(auth.user) 연결을 고려해 안전한 기본값 처리로 크래시를 방지했습니다.
-- 상세 화면/액션은 이후 features/entities로 연결할 수 있도록 버튼/행 구성만 잡았습니다.
-*/
