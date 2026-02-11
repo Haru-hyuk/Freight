@@ -49,4 +49,7 @@ public interface MatchRepository extends JpaRepository<Match, Long> {
      */
     @Query("SELECT m FROM Match m WHERE m.quoteId IN (SELECT q.quoteId FROM Quote q WHERE q.shipperId = :shipperId) AND m.status <> 'CANCELLED'")
     List<Match> findByShipperIdAndStatusNotCancelled(@Param("shipperId") Long shipperId);
+
+    /** 해당 견적들에 대한 모든 매칭 ID 조회 (정산/결제 목록 등용) */
+    List<Match> findByQuoteIdIn(List<Long> quoteIds);
 }
