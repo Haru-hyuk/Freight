@@ -1,5 +1,5 @@
 // apps/mobile/app/(shipper)/_layout.tsx
-import React, { useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import { Redirect, Stack, useRouter, useSegments } from "expo-router";
 import { ActivityIndicator, StyleSheet, View, type ViewStyle } from "react-native";
 
@@ -48,6 +48,8 @@ export default function ShipperLayout() {
   const router = useRouter();
   const segments = useSegments();
   const auth = useAuth();
+  const tabNavLockedRef = useRef(false);
+  const tabNavUnlockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const cBgBase = safeString(theme?.colors?.bgSurfaceAlt, "#F3F4F6");
   const cCard = safeString(theme?.colors?.bgMain, "#FFFFFF");
@@ -71,6 +73,34 @@ export default function ShipperLayout() {
 
   const activeKey = useMemo(() => pickActiveKey(segments), [segments]);
   const hideBottomBar = useMemo(() => shouldHideBottomBar(segments), [segments]);
+
+  useEffect(() => {
+    return () => {
+      if (tabNavUnlockTimerRef.current) {
+        clearTimeout(tabNavUnlockTimerRef.current);
+      }
+    };
+  }, []);
+
+  const onChangeTab = useCallback(
+    (key: BottomTabKey) => {
+      if (key === activeKey) return;
+      if (tabNavLockedRef.current) return;
+
+      tabNavLockedRef.current = true;
+      const next = hrefForKey(key);
+      router?.replace?.(next);
+
+      if (tabNavUnlockTimerRef.current) {
+        clearTimeout(tabNavUnlockTimerRef.current);
+      }
+      tabNavUnlockTimerRef.current = setTimeout(() => {
+        tabNavLockedRef.current = false;
+        tabNavUnlockTimerRef.current = null;
+      }, 550);
+    },
+    [activeKey, router]
+  );
 
   if (auth.status === "checking") {
     return (
@@ -112,10 +142,7 @@ export default function ShipperLayout() {
       <View style={styles.bottomWrap}>
         <BottomTabBar
           activeKey={activeKey}
-          onChange={(key) => {
-            const next = hrefForKey(key);
-            router?.push?.(next);
-          }}
+          onChange={onChangeTab}
           items={[
             { key: "home", label: "홈", iconActive: "home", iconInactive: "home-outline" },
             { key: "quotes", label: "이용내역", iconActive: "clipboard", iconInactive: "clipboard-outline" },
