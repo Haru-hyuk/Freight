@@ -9,6 +9,7 @@ import lombok.Setter;
 @Setter
 public class TruckUpdateRequest {
     private String vehicleType;
+    private String vehicleBodyType;
     private BigDecimal tonnage;
     private BigDecimal maxWeight;
     private BigDecimal maxVolume;

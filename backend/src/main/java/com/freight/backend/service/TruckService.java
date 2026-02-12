@@ -30,6 +30,7 @@ public class TruckService {
         Truck truck = Truck.builder()
                 .driverId(driverId)
                 .vehicleType(req.getVehicleType())
+                .vehicleBodyType(req.getVehicleBodyType())
                 .tonnage(req.getTonnage())
                 .maxWeight(req.getMaxWeight())
                 .maxVolume(req.getMaxVolume())
@@ -66,6 +67,7 @@ public class TruckService {
         Truck truck = getOwnedTruck(truckId, driverId);
         truck.updateFrom(
                 req.getVehicleType(),
+                req.getVehicleBodyType(),
                 req.getTonnage(),
                 req.getMaxWeight(),
                 req.getMaxVolume(),
@@ -100,6 +102,7 @@ public class TruckService {
                 truck.getTruckId(),
                 truck.getDriverId(),
                 truck.getVehicleType(),
+                truck.getVehicleBodyType(),
                 truck.getTonnage(),
                 truck.getMaxWeight(),
                 truck.getMaxVolume(),
