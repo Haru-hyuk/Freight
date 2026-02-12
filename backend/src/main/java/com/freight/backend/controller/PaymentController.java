@@ -1,7 +1,6 @@
 package com.freight.backend.controller;
 
 import com.freight.backend.dto.payment.PaymentConfirmRequest;
-import com.freight.backend.dto.payment.PaymentCreateRequest;
 import com.freight.backend.dto.payment.PaymentPrepareRequest;
 import com.freight.backend.dto.payment.PaymentPrepareResponse;
 import com.freight.backend.dto.payment.PaymentResponse;
@@ -26,7 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 화주용 결제 API
  * - 토스페이먼츠 연동: prepare(준비) → 결제창 → confirm(승인)
- * - 수동 결제 생성, 단건/매칭별 조회, 토스 결제 준비/승인.
+ * - 단건/매칭별 조회, 토스 결제 준비/승인.
  * Base path: /api/shipper/payments (화주 ROLE_SHIPPER만 해당 매칭 견적 소유 시 결제 가능).
  */
 @RestController
@@ -41,16 +40,6 @@ public class PaymentController {
             throw new CustomException(ErrorCode.AUTH_FORBIDDEN);
         }
         return Long.parseLong(userDetails.getUsername());
-    }
-
-    /** 수동 결제 생성 (토스 연동 없이 DB에만 저장). 해당 매칭의 견적 소유 화주만 가능. */
-    @PostMapping
-    public ResponseEntity<PaymentResponse> create(
-            @AuthenticationPrincipal UserDetails userDetails,
-            @Valid @RequestBody PaymentCreateRequest req
-    ) {
-        Long shipperId = requireShipperId(userDetails);
-        return ResponseEntity.ok(paymentService.create(req, shipperId));
     }
 
     /** 토스 결제 준비: orderId 발급 + DB에 PENDING 결제 저장. 해당 매칭의 견적 소유 화주만 가능. */
@@ -82,15 +71,23 @@ public class PaymentController {
         return ResponseEntity.ok(paymentService.getShipperPayments(shipperId));
     }
 
-    /** 결제 단건 조회 */
+    /** 결제 단건 조회 (본인 매칭 결제만) */
     @GetMapping("/{paymentId}")
-    public ResponseEntity<PaymentResponse> getById(@PathVariable Long paymentId) {
-        return ResponseEntity.ok(paymentService.getById(paymentId));
+    public ResponseEntity<PaymentResponse> getById(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable Long paymentId
+    ) {
+        Long shipperId = requireShipperId(userDetails);
+        return ResponseEntity.ok(paymentService.getById(paymentId, shipperId));
     }
 
-    /** 매칭별 결제 목록 조회 (query: ?matchId=) */
+    /** 매칭별 결제 목록 조회 (query: ?matchId=, 본인 매칭만) */
     @GetMapping
-    public ResponseEntity<List<PaymentResponse>> getByMatchId(@RequestParam Long matchId) {
-        return ResponseEntity.ok(paymentService.getByMatchId(matchId));
+    public ResponseEntity<List<PaymentResponse>> getByMatchId(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestParam Long matchId
+    ) {
+        Long shipperId = requireShipperId(userDetails);
+        return ResponseEntity.ok(paymentService.getByMatchId(matchId, shipperId));
     }
 }

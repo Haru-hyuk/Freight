@@ -1,7 +1,6 @@
 package com.freight.backend.service;
 
 import com.freight.backend.dto.payment.PaymentConfirmRequest;
-import com.freight.backend.dto.payment.PaymentCreateRequest;
 import com.freight.backend.dto.payment.PaymentPrepareRequest;
 import com.freight.backend.dto.payment.PaymentPrepareResponse;
 import com.freight.backend.dto.payment.PaymentResponse;
@@ -27,7 +26,7 @@ import org.springframework.stereotype.Service;
 
 /**
  * 결제 서비스
- * - 수동 결제 생성, 토스 결제 준비/승인, 조회, 테스트용 완료/실패
+ * - 토스 결제 준비/승인, 조회
  */
 @Service
 @RequiredArgsConstructor
@@ -55,39 +54,19 @@ public class PaymentService {
         }
     }
 
-    /** 수동 결제 생성 (orderNo 미입력 시 자동 생성). 해당 매칭의 견적 소유 화주만 가능. */
+    /** 결제 단건 조회 (해당 결제의 매칭 견적 소유 화주만 가능) */
     @Transactional
-    public PaymentResponse create(PaymentCreateRequest req, Long shipperId) {
-        ensureShipperOwnsMatch(req.getMatchId(), shipperId);
-        PaymentMethod method = req.getMethod() != null ? req.getMethod() : PaymentMethod.CARD;
-        String orderNo = req.getOrderNo() != null && !req.getOrderNo().isBlank()
-                ? req.getOrderNo()
-                : "ORD-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
-
-        Payment payment = Payment.builder()
-                .matchId(req.getMatchId())
-                .orderNo(orderNo)
-                .method(method)
-                .status(Payment.PaymentStatus.PENDING)
-                .amountType(req.getAmountType())
-                .pgRef(req.getPgRef())
-                .build();
-
-        Payment saved = paymentRepository.save(payment);
-        return PaymentResponse.from(saved);
-    }
-
-    /** 결제 단건 조회 */
-    @Transactional
-    public PaymentResponse getById(Long paymentId) {
+    public PaymentResponse getById(Long paymentId, Long shipperId) {
         Payment payment = paymentRepository.findById(paymentId)
                 .orElseThrow(() -> new CustomException(ErrorCode.INVALID_REQUEST));
+        ensureShipperOwnsMatch(payment.getMatchId(), shipperId);
         return PaymentResponse.from(payment);
     }
 
-    /** 매칭 ID로 결제 목록 조회 */
+    /** 매칭 ID로 결제 목록 조회 (해당 매칭 견적 소유 화주만 가능) */
     @Transactional
-    public List<PaymentResponse> getByMatchId(Long matchId) {
+    public List<PaymentResponse> getByMatchId(Long matchId, Long shipperId) {
+        ensureShipperOwnsMatch(matchId, shipperId);
         return paymentRepository.findByMatchId(matchId).stream()
                 .map(PaymentResponse::from)
                 .collect(Collectors.toList());
@@ -128,7 +107,7 @@ public class PaymentService {
         String orderId = "FRT-" + UUID.randomUUID().toString().replace("-", "").substring(0, 16).toUpperCase();
         String orderName = req.getOrderName() != null && !req.getOrderName().isBlank()
                 ? req.getOrderName()
-                : "화물운송 결제";
+                : "화물운송 견적 결제";
 
         Payment payment = Payment.builder()
                 .matchId(req.getMatchId())
