@@ -1,4 +1,4 @@
-﻿package com.freight.backend.pricing;
+package com.freight.backend.pricing;
 
 import java.math.BigDecimal;
 import java.util.Map;

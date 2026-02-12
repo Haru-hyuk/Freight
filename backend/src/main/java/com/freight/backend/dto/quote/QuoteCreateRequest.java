@@ -29,4 +29,5 @@ public class QuoteCreateRequest {
     private String loadMethod;
     private String unloadMethod;
     private List<QuoteChecklistItemRequest> checklistItems;
+    private List<QuoteStopRequest> stops;
 }

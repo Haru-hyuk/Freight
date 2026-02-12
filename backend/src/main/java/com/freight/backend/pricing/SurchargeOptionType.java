@@ -1,4 +1,4 @@
-﻿package com.freight.backend.pricing;
+package com.freight.backend.pricing;
 
 public enum SurchargeOptionType {
     ADD,

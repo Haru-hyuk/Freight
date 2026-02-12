@@ -37,4 +37,5 @@ public class QuoteDetailResponse {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private List<QuoteChecklistItemResponse> checklistItems;
+    private List<QuoteStopResponse> stops;
 }

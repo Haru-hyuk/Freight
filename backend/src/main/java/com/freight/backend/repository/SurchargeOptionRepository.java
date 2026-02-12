@@ -1,4 +1,4 @@
-﻿package com.freight.backend.repository;
+package com.freight.backend.repository;
 
 import com.freight.backend.pricing.SurchargeOptionEntity;
 import java.util.Collection;

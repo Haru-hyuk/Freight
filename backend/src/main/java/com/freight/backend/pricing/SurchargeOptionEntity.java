@@ -1,4 +1,4 @@
-﻿package com.freight.backend.pricing;
+package com.freight.backend.pricing;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

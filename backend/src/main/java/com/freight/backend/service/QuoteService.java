@@ -1,18 +1,21 @@
 package com.freight.backend.service;
 
+import com.freight.backend.ai.DeepSeekClient;
 import com.freight.backend.dto.quote.QuoteChecklistItemRequest;
 import com.freight.backend.dto.quote.QuoteChecklistItemResponse;
 import com.freight.backend.dto.quote.QuoteCreateRequest;
 import com.freight.backend.dto.quote.QuoteCreateResponse;
 import com.freight.backend.dto.quote.QuoteDetailResponse;
 import com.freight.backend.dto.quote.QuoteListResponse;
+import com.freight.backend.dto.quote.QuoteStopRequest;
+import com.freight.backend.dto.quote.QuoteStopResponse;
 import com.freight.backend.dto.quote.QuoteUpdateRequest;
 import com.freight.backend.dto.quote.QuoteValidationResponse;
 import com.freight.backend.entity.Quote;
 import com.freight.backend.entity.QuoteChecklistItem;
+import com.freight.backend.entity.QuoteStop;
 import com.freight.backend.exception.CustomException;
 import com.freight.backend.exception.ErrorCode;
-import com.freight.backend.ai.DeepSeekClient;
 import com.freight.backend.pricing.LoadHandlingMethod;
 import com.freight.backend.pricing.PricingCalculator;
 import com.freight.backend.pricing.PricingResult;
@@ -21,7 +24,7 @@ import com.freight.backend.pricing.SurchargeOptionRule;
 import com.freight.backend.pricing.SurchargeOptionService;
 import com.freight.backend.repository.QuoteChecklistItemRepository;
 import com.freight.backend.repository.QuoteRepository;
-import org.springframework.transaction.annotation.Transactional;
+import com.freight.backend.repository.QuoteStopRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
@@ -34,6 +37,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -41,6 +45,7 @@ public class QuoteService {
 
     private final QuoteRepository quoteRepository;
     private final QuoteChecklistItemRepository quoteChecklistItemRepository;
+    private final QuoteStopRepository quoteStopRepository;
     private final PricingCalculator pricingCalculator;
     private final SurchargeOptionService surchargeOptionService;
     private final DeepSeekClient deepSeekClient;
@@ -57,11 +62,11 @@ public class QuoteService {
                 req.getUnloadMethod(),
                 Boolean.TRUE.equals(req.getAllowCombine())
         );
-        int basePrice = pricing.rateWon().setScale(0, java.math.RoundingMode.HALF_UP).intValue();
-        int weighted = pricing.weightedWon().setScale(0, java.math.RoundingMode.HALF_UP).intValue();
+        int basePrice = pricing.rateWon().setScale(0, RoundingMode.HALF_UP).intValue();
+        int weighted = pricing.weightedWon().setScale(0, RoundingMode.HALF_UP).intValue();
         int extraPrice = Math.max(0, weighted - basePrice);
         int finalPrice = pricing.finalChargeAfterDiscountWon()
-                .setScale(0, java.math.RoundingMode.HALF_UP)
+                .setScale(0, RoundingMode.HALF_UP)
                 .intValue();
         int desiredPrice = req.getDesiredPrice() != null ? req.getDesiredPrice() : finalPrice;
 
@@ -95,19 +100,8 @@ public class QuoteService {
 
         Quote saved = quoteRepository.save(quote);
 
-        List<QuoteChecklistItemRequest> items = req.getChecklistItems();
-        if (items != null) {
-            for (QuoteChecklistItemRequest item : items) {
-                BigDecimal fee = item.getExtraFee() == null ? BigDecimal.ZERO : item.getExtraFee();
-                QuoteChecklistItem entity = QuoteChecklistItem.builder()
-                        .quoteId(saved.getQuoteId())
-                        .checklistItemId(item.getChecklistItemId())
-                        .extraInput(item.getExtraInput())
-                        .extraFee(fee)
-                        .build();
-                quoteChecklistItemRepository.save(entity);
-            }
-        }
+        saveChecklistItems(saved.getQuoteId(), req.getChecklistItems());
+        saveStops(saved.getQuoteId(), req.getStops());
 
         return new QuoteCreateResponse(saved.getQuoteId());
     }
@@ -127,7 +121,10 @@ public class QuoteService {
         List<QuoteChecklistItemResponse> items = quoteChecklistItemRepository.findByQuoteId(quoteId).stream()
                 .map(this::toItemResponse)
                 .collect(Collectors.toList());
-        return toDetailResponse(quote, items);
+        List<QuoteStopResponse> stops = quoteStopRepository.findByQuoteIdOrderBySeqAsc(quoteId).stream()
+                .map(this::toStopResponse)
+                .collect(Collectors.toList());
+        return toDetailResponse(quote, items, stops);
     }
 
     @Transactional
@@ -143,11 +140,11 @@ public class QuoteService {
                 req.getUnloadMethod(),
                 Boolean.TRUE.equals(req.getAllowCombine())
         );
-        int basePrice = pricing.rateWon().setScale(0, java.math.RoundingMode.HALF_UP).intValue();
-        int weighted = pricing.weightedWon().setScale(0, java.math.RoundingMode.HALF_UP).intValue();
+        int basePrice = pricing.rateWon().setScale(0, RoundingMode.HALF_UP).intValue();
+        int weighted = pricing.weightedWon().setScale(0, RoundingMode.HALF_UP).intValue();
         int extraPrice = Math.max(0, weighted - basePrice);
         int finalPrice = pricing.finalChargeAfterDiscountWon()
-                .setScale(0, java.math.RoundingMode.HALF_UP)
+                .setScale(0, RoundingMode.HALF_UP)
                 .intValue();
         int desiredPrice = req.getDesiredPrice() != null ? req.getDesiredPrice() : finalPrice;
 
@@ -178,30 +175,24 @@ public class QuoteService {
         );
 
         quoteChecklistItemRepository.deleteByQuoteId(quoteId);
-        List<QuoteChecklistItemRequest> items = req.getChecklistItems();
-        if (items != null) {
-            for (QuoteChecklistItemRequest item : items) {
-                BigDecimal fee = item.getExtraFee() == null ? BigDecimal.ZERO : item.getExtraFee();
-                QuoteChecklistItem entity = QuoteChecklistItem.builder()
-                        .quoteId(quoteId)
-                        .checklistItemId(item.getChecklistItemId())
-                        .extraInput(item.getExtraInput())
-                        .extraFee(fee)
-                        .build();
-                quoteChecklistItemRepository.save(entity);
-            }
-        }
+        saveChecklistItems(quoteId, req.getChecklistItems());
 
-        List<QuoteChecklistItemResponse> responses = items == null
+        quoteStopRepository.deleteByQuoteId(quoteId);
+        saveStops(quoteId, req.getStops());
+
+        List<QuoteChecklistItemResponse> responses = req.getChecklistItems() == null
                 ? Collections.emptyList()
-                : items.stream()
-                .map(item -> new QuoteChecklistItemResponse(
-                        item.getChecklistItemId(),
-                        item.getExtraInput(),
-                        item.getExtraFee() == null ? BigDecimal.ZERO : item.getExtraFee()
-                ))
+                : req.getChecklistItems().stream()
+                        .map(item -> new QuoteChecklistItemResponse(
+                                item.getChecklistItemId(),
+                                item.getExtraInput(),
+                                item.getExtraFee() == null ? BigDecimal.ZERO : item.getExtraFee()
+                        ))
+                        .collect(Collectors.toList());
+        List<QuoteStopResponse> stops = quoteStopRepository.findByQuoteIdOrderBySeqAsc(quoteId).stream()
+                .map(this::toStopResponse)
                 .collect(Collectors.toList());
-        return toDetailResponse(quote, responses);
+        return toDetailResponse(quote, responses, stops);
     }
 
     @Transactional
@@ -209,6 +200,7 @@ public class QuoteService {
         Long shipperId = getCurrentShipperId();
         Quote quote = getOwnedQuote(quoteId, shipperId);
         quoteChecklistItemRepository.deleteByQuoteId(quoteId);
+        quoteStopRepository.deleteByQuoteId(quoteId);
         quoteRepository.delete(quote);
     }
 
@@ -279,10 +271,6 @@ public class QuoteService {
         );
     }
 
-    private int safeInt(Integer value) {
-        return value == null ? 0 : value;
-    }
-
     private Quote getOwnedQuote(Long quoteId, Long shipperId) {
         Quote quote = quoteRepository.findById(quoteId)
                 .orElseThrow(() -> new CustomException(ErrorCode.INVALID_REQUEST));
@@ -317,12 +305,29 @@ public class QuoteService {
         );
     }
 
+    private QuoteStopResponse toStopResponse(QuoteStop stop) {
+        return new QuoteStopResponse(
+                stop.getQuoteStopId(),
+                stop.getSeq(),
+                stop.getAddress(),
+                stop.getLat(),
+                stop.getLng(),
+                stop.getContactName(),
+                stop.getContactPhone(),
+                stop.getDeptName(),
+                stop.getManagerName()
+        );
+    }
+
     private QuoteDetailResponse toDetailResponse(
             Quote quote,
-            List<QuoteChecklistItemResponse> items
+            List<QuoteChecklistItemResponse> items,
+            List<QuoteStopResponse> stops
     ) {
         List<QuoteChecklistItemResponse> safeItems =
                 items == null ? Collections.emptyList() : items;
+        List<QuoteStopResponse> safeStops =
+                stops == null ? Collections.emptyList() : stops;
         return new QuoteDetailResponse(
                 quote.getQuoteId(),
                 quote.getShipperId(),
@@ -352,7 +357,8 @@ public class QuoteService {
                 quote.getStatus(),
                 quote.getCreatedAt(),
                 quote.getUpdatedAt(),
-                safeItems
+                safeItems,
+                safeStops
         );
     }
 
@@ -415,6 +421,7 @@ public class QuoteService {
         sb.append("입력 요약:\n");
         sb.append("- 거리(km): ").append(req.getDistanceKm()).append('\n');
         sb.append("- 차량: ").append(req.getVehicleType()).append('\n');
+        sb.append("- 차량 옵션: ").append(req.getVehicleBodyType()).append('\n');
         sb.append("- 화물명: ").append(req.getCargoName()).append('\n');
         sb.append("- 화물설명: ").append(req.getCargoDesc()).append('\n');
         sb.append("- 화물중량(kg): ").append(req.getWeightKg()).append('\n');
@@ -430,6 +437,45 @@ public class QuoteService {
             }
         }
         return sb.toString();
+    }
+
+    private void saveChecklistItems(Long quoteId, List<QuoteChecklistItemRequest> items) {
+        if (items == null) {
+            return;
+        }
+        for (QuoteChecklistItemRequest item : items) {
+            BigDecimal fee = item.getExtraFee() == null ? BigDecimal.ZERO : item.getExtraFee();
+            QuoteChecklistItem entity = QuoteChecklistItem.builder()
+                    .quoteId(quoteId)
+                    .checklistItemId(item.getChecklistItemId())
+                    .extraInput(item.getExtraInput())
+                    .extraFee(fee)
+                    .build();
+            quoteChecklistItemRepository.save(entity);
+        }
+    }
+
+    private void saveStops(Long quoteId, List<QuoteStopRequest> stops) {
+        if (stops == null || stops.isEmpty()) {
+            return;
+        }
+        for (QuoteStopRequest stop : stops) {
+            if (stop == null || stop.getAddress() == null || stop.getAddress().isBlank()) {
+                continue;
+            }
+            QuoteStop entity = QuoteStop.builder()
+                    .quoteId(quoteId)
+                    .seq(stop.getSeq() == null ? 0 : stop.getSeq())
+                    .address(stop.getAddress())
+                    .lat(stop.getLat())
+                    .lng(stop.getLng())
+                    .contactName(stop.getContactName())
+                    .contactPhone(stop.getContactPhone())
+                    .deptName(stop.getDeptName())
+                    .managerName(stop.getManagerName())
+                    .build();
+            quoteStopRepository.save(entity);
+        }
     }
 
     private Long getCurrentShipperId() {

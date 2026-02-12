@@ -1,4 +1,4 @@
-﻿package com.freight.backend.pricing;
+package com.freight.backend.pricing;
 
 import com.freight.backend.repository.SurchargeOptionRepository;
 import com.freight.backend.repository.SurchargeOptionVehicleRateRepository;
