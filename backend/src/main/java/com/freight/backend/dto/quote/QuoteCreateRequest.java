@@ -17,6 +17,9 @@ public class QuoteCreateRequest {
     private Integer distanceKm;
     private Integer weightKg;
     private Integer volumeCbm;
+    private String vehicleType;
+    private String vehicleBodyType;
+    private String cargoName;
     private String cargoType;
     private String cargoDesc;
     private Integer basePrice;
@@ -26,4 +29,5 @@ public class QuoteCreateRequest {
     private String loadMethod;
     private String unloadMethod;
     private List<QuoteChecklistItemRequest> checklistItems;
+    private List<QuoteStopRequest> stops;
 }

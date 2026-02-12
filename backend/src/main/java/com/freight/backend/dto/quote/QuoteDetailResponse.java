@@ -20,6 +20,9 @@ public class QuoteDetailResponse {
     private Integer distanceKm;
     private Integer weightKg;
     private Integer volumeCbm;
+    private String vehicleType;
+    private String vehicleBodyType;
+    private String cargoName;
     private String cargoType;
     private String cargoDesc;
     private Integer basePrice;
@@ -34,4 +37,5 @@ public class QuoteDetailResponse {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private List<QuoteChecklistItemResponse> checklistItems;
+    private List<QuoteStopResponse> stops;
 }
