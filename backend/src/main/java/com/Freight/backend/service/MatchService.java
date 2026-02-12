@@ -2,6 +2,7 @@ package com.freight.backend.service;
 
 import com.freight.backend.dto.match.MatchResponse;
 import com.freight.backend.entity.Match;
+import com.freight.backend.entity.Notification;
 import com.freight.backend.entity.Quote;
 import com.freight.backend.exception.CustomException;
 import com.freight.backend.exception.ErrorCode;
@@ -23,6 +24,7 @@ public class MatchService {
 
     private final MatchRepository matchRepository;
     private final QuoteRepository quoteRepository;
+    private final NotificationService notificationService;
 
     /**
      * 매칭 생성 (화주)
@@ -57,6 +59,12 @@ public class MatchService {
                 .build();
 
         Match saved = matchRepository.save(match);
+        notificationService.createNotification(
+                shipperId,
+                saved.getMatchId(),
+                Notification.Type.MATCH_CREATED,
+                "견적에 대한 매칭이 생성되었습니다."
+        );
         return MatchResponse.from(saved);
     }
 
@@ -97,6 +105,12 @@ public class MatchService {
         quoteRepository.save(quote);
 
         Match saved = matchRepository.save(match);
+        notificationService.createNotification(
+                quote.getShipperId(),
+                saved.getMatchId(),
+                Notification.Type.MATCH_ACCEPTED,
+                "기사님이 매칭을 수락했습니다."
+        );
         return MatchResponse.from(saved);
     }
 
@@ -128,6 +142,24 @@ public class MatchService {
 
         matchRepository.save(match);
         quoteRepository.save(quote);
+
+        Long driverId = match.getDriverId();
+        if ("ROLE_SHIPPER".equals(role) && driverId != null) {
+            notificationService.createNotification(
+                    driverId,
+                    match.getMatchId(),
+                    Notification.Type.MATCH_CANCELLED,
+                    "화주가 매칭을 취소했습니다."
+            );
+        }
+        if ("ROLE_DRIVER".equals(role)) {
+            notificationService.createNotification(
+                    quote.getShipperId(),
+                    match.getMatchId(),
+                    Notification.Type.MATCH_CANCELLED,
+                    "기사님이 매칭을 취소했습니다."
+            );
+        }
     }
 
     /**

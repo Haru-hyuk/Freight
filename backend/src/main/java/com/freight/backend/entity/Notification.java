@@ -30,6 +30,7 @@ public class Notification {
         COUNTER_OFFER_REJECTED
     }
 
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "notification_id")
