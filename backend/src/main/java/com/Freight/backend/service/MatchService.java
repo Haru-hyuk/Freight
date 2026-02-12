@@ -27,7 +27,7 @@ public class MatchService {
     /**
      * 매칭 생성 (화주)
      * - 견적이 본인 소유이고 상태가 OPEN일 때만 생성 가능
-     * - 생성 시 driverId=0, accepted=false
+     * - 생성 시 driverId=null, accepted=false
      */
     @Transactional
     public MatchResponse createMatch(Long shipperId, Long quoteId) {
@@ -44,10 +44,14 @@ public class MatchService {
             throw new CustomException(ErrorCode.QUOTE_NOT_OPEN);
         }
 
-        // 견적 1 : 매칭 N (동일 견적에 여러 매칭 생성 가능)
+        // 동일 견적에 이미 매칭이 있으면 생성 불가 (견적 1 : 매칭 1)
+        if (matchRepository.existsByQuoteIdAndStatusNot(quoteId, Match.Status.CANCELLED)) {
+            throw new CustomException(ErrorCode.MATCH_ALREADY_EXISTS);
+        }
+
         Match match = Match.builder()
                 .quoteId(quoteId)
-                .driverId(0L)
+                .driverId(null)
                 .accepted(false)
                 .status(Match.Status.READY)
                 .build();
@@ -110,7 +114,7 @@ public class MatchService {
         Quote quote = quoteRepository.findById(match.getQuoteId())
                 .orElseThrow(() -> new CustomException(ErrorCode.INVALID_REQUEST));
 
-        // 권한 확인 (driverId는 미수락 시 0L, null일 수 있음)
+        // 권한 확인 (미수락 시 driverId=null)
         boolean isShipperOwner = "ROLE_SHIPPER".equals(role) && quote.getShipperId().equals(userId);
         boolean isMatchedDriver = "ROLE_DRIVER".equals(role) && match.getDriverId() != null && match.getDriverId().equals(userId);
 

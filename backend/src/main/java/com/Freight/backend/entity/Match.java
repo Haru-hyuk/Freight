@@ -21,7 +21,7 @@ import lombok.Setter;
 /**
  * 매칭 엔티티
  * - 견적(Quote)과 기사(Driver)를 연결하는 핵심 엔티티
- * - 매칭 생성 시 driverId=0, accepted=false로 시작
+ * - 매칭 생성 시 driverId=null, accepted=false로 시작
  * - 기사가 수락하면 driverId 설정, accepted=true
  */
 @Entity
