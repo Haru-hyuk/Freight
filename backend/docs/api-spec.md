@@ -598,3 +598,78 @@
 - Method: `PATCH`
 - Path: `/api/notifications/{notificationId}/read`
 - Response: `204 No Content`
+
+
+## Quote Validate
+
+### Quote Validate
+- Method: `POST`
+- Path: `/api/shipper/quotes/validate`
+- Request: Quote Create? ??
+- Response
+```json
+{
+  "status": "OK",
+  "comments": "????? ?? ???? 85% ?????. ??? ??? ? ???."
+}
+```
+
+## Match
+
+### Shipper Match Create
+- Method: `POST`
+- Path: `/api/shipper/matches`
+- Request
+```json
+{
+  "quoteId": 1
+}
+```
+- Response
+```json
+{
+  "matchId": 1,
+  "quoteId": 1,
+  "driverId": null,
+  "accepted": false,
+  "status": "READY"
+}
+```
+
+### Shipper Match List (Me)
+- Method: `GET`
+- Path: `/api/shipper/matches/me`
+
+### Shipper Match Detail
+- Method: `GET`
+- Path: `/api/shipper/matches/{matchId}`
+
+### Shipper Match Cancel
+- Method: `DELETE`
+- Path: `/api/shipper/matches/{matchId}`
+- Response: `204 No Content`
+
+### Driver Open Match List
+- Method: `GET`
+- Path: `/api/driver/matches/open`
+
+### Driver Match Accept
+- Method: `POST`
+- Path: `/api/driver/matches/{matchId}/accept`
+
+### Driver Match List (Me)
+- Method: `GET`
+- Path: `/api/driver/matches/me`
+
+### Driver Match Detail
+- Method: `GET`
+- Path: `/api/driver/matches/{matchId}`
+
+### Driver Match Cancel
+- Method: `DELETE`
+- Path: `/api/driver/matches/{matchId}`
+- Response: `204 No Content`
+
+## Notes
+- Quote List ???? `stops`? ???? ????. (Detail?? ??)
+- `unreadCount`? ?? ?? ?? ?????.
