@@ -328,6 +328,49 @@
       <button class="secondary" onclick="listQuotes()">GET /api/shipper/quotes</button>
       <div id="resp_quote" class="response"></div>
     </section>
+
+    <section class="card">
+      <h2>기사 역제안</h2>
+      <label>quoteId</label>
+      <input id="co_quote_id" value="1" />
+      <label>요청 JSON</label>
+      <textarea id="co_payload">{
+  "proposedPrice": 240000,
+  "message": "상차지 골목 진입이 어려워 수작업 비용 포함 제안드립니다."
+}</textarea>
+      <button onclick="createCounterOffer()">POST /api/driver/quotes/{quoteId}/counter-offers</button>
+      <button class="secondary" onclick="listMyCounterOffers()">GET /api/driver/counter-offers/me</button>
+      <div id="resp_counter_driver" class="response"></div>
+    </section>
+
+    <section class="card">
+      <h2>화주 역제안 관리</h2>
+      <label>quoteId</label>
+      <input id="co_shipper_quote_id" value="1" />
+      <label>offerId</label>
+      <input id="co_offer_id" value="1" />
+      <button class="secondary" onclick="listCounterOffers()">GET /api/shipper/quotes/{quoteId}/counter-offers</button>
+      <button onclick="acceptCounterOffer()">PATCH /api/shipper/counter-offers/{offerId}/accept</button>
+      <button class="secondary" onclick="rejectCounterOffer()">PATCH /api/shipper/counter-offers/{offerId}/reject</button>
+      <div id="resp_counter_shipper" class="response"></div>
+    </section>
+
+    <section class="card">
+      <h2>알림</h2>
+      <button class="secondary" onclick="listNotifications()">GET /api/notifications/me</button>
+      <div class="row">
+        <div>
+          <label>notificationId</label>
+          <input id="noti_id" value="1" />
+        </div>
+        <div>
+          <label>읽음 처리</label>
+          <button onclick="markNotificationRead()">PATCH /api/notifications/{id}/read</button>
+        </div>
+      </div>
+      <button class="secondary" onclick="getUnreadCount()">GET /api/notifications/me/unread-count</button>
+      <div id="resp_notifications" class="response"></div>
+    </section>
   </div>
 
   
@@ -539,6 +582,61 @@
         document.getElementById('resp_quote').textContent = `HTTP 0\nInvalid stops JSON: ${e.message}`;
         return null;
       }
+    }
+
+    async function createCounterOffer() {
+      const quoteId = document.getElementById('co_quote_id').value;
+      const payload = document.getElementById('co_payload').value;
+      const resp = await apiFetch(`/api/driver/quotes/${quoteId}/counter-offers`, {
+        method: 'POST',
+        body: payload
+      });
+      document.getElementById('resp_counter_driver').textContent = resp;
+    }
+
+    async function listMyCounterOffers() {
+      const resp = await apiFetch('/api/driver/counter-offers/me');
+      document.getElementById('resp_counter_driver').textContent = resp;
+    }
+
+    async function listCounterOffers() {
+      const quoteId = document.getElementById('co_shipper_quote_id').value;
+      const resp = await apiFetch(`/api/shipper/quotes/${quoteId}/counter-offers`);
+      document.getElementById('resp_counter_shipper').textContent = resp;
+    }
+
+    async function acceptCounterOffer() {
+      const offerId = document.getElementById('co_offer_id').value;
+      const resp = await apiFetch(`/api/shipper/counter-offers/${offerId}/accept`, {
+        method: 'PATCH'
+      });
+      document.getElementById('resp_counter_shipper').textContent = resp;
+    }
+
+    async function rejectCounterOffer() {
+      const offerId = document.getElementById('co_offer_id').value;
+      const resp = await apiFetch(`/api/shipper/counter-offers/${offerId}/reject`, {
+        method: 'PATCH'
+      });
+      document.getElementById('resp_counter_shipper').textContent = resp;
+    }
+
+    async function listNotifications() {
+      const resp = await apiFetch('/api/notifications/me');
+      document.getElementById('resp_notifications').textContent = resp;
+    }
+
+    async function getUnreadCount() {
+      const resp = await apiFetch('/api/notifications/me/unread-count');
+      document.getElementById('resp_notifications').textContent = resp;
+    }
+
+    async function markNotificationRead() {
+      const notiId = document.getElementById('noti_id').value;
+      const resp = await apiFetch(`/api/notifications/${notiId}/read`, {
+        method: 'PATCH'
+      });
+      document.getElementById('resp_notifications').textContent = resp;
     }
   </script>
 
