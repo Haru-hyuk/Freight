@@ -24,8 +24,12 @@ public class Notification {
     public enum Type {
         MATCH_CREATED,
         MATCH_ACCEPTED,
-        MATCH_CANCELLED
+        MATCH_CANCELLED,
+        COUNTER_OFFER_CREATED,
+        COUNTER_OFFER_ACCEPTED,
+        COUNTER_OFFER_REJECTED
     }
+
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
