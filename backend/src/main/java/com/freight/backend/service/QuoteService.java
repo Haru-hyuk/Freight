@@ -8,7 +8,6 @@ import com.freight.backend.dto.quote.QuoteDetailResponse;
 import com.freight.backend.dto.quote.QuoteListResponse;
 import com.freight.backend.dto.quote.QuoteUpdateRequest;
 import com.freight.backend.dto.quote.QuoteValidationResponse;
-import com.freight.backend.entity.ChecklistItem;
 import com.freight.backend.entity.Quote;
 import com.freight.backend.entity.QuoteChecklistItem;
 import com.freight.backend.exception.CustomException;
@@ -20,7 +19,6 @@ import com.freight.backend.pricing.PricingResult;
 import com.freight.backend.pricing.PricingVehicleType;
 import com.freight.backend.pricing.SurchargeOptionRule;
 import com.freight.backend.pricing.SurchargeOptionService;
-import com.freight.backend.repository.ChecklistItemRepository;
 import com.freight.backend.repository.QuoteChecklistItemRepository;
 import com.freight.backend.repository.QuoteRepository;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,7 +41,6 @@ public class QuoteService {
 
     private final QuoteRepository quoteRepository;
     private final QuoteChecklistItemRepository quoteChecklistItemRepository;
-    private final ChecklistItemRepository checklistItemRepository;
     private final PricingCalculator pricingCalculator;
     private final SurchargeOptionService surchargeOptionService;
     private final DeepSeekClient deepSeekClient;
@@ -55,7 +52,7 @@ public class QuoteService {
         PricingResult pricing = calculatePricing(
                 req.getDistanceKm(),
                 req.getVehicleType(),
-                req.getChecklistItems(),
+                req.getVehicleBodyType(),
                 req.getLoadMethod(),
                 req.getUnloadMethod(),
                 Boolean.TRUE.equals(req.getAllowCombine())
@@ -81,6 +78,7 @@ public class QuoteService {
                 .weightKg(req.getWeightKg())
                 .volumeCbm(req.getVolumeCbm())
                 .vehicleType(req.getVehicleType())
+                .vehicleBodyType(req.getVehicleBodyType())
                 .cargoName(req.getCargoName())
                 .cargoType(req.getCargoType())
                 .cargoDesc(req.getCargoDesc())
@@ -140,7 +138,7 @@ public class QuoteService {
         PricingResult pricing = calculatePricing(
                 req.getDistanceKm(),
                 req.getVehicleType(),
-                req.getChecklistItems(),
+                req.getVehicleBodyType(),
                 req.getLoadMethod(),
                 req.getUnloadMethod(),
                 Boolean.TRUE.equals(req.getAllowCombine())
@@ -165,6 +163,7 @@ public class QuoteService {
                 req.getWeightKg(),
                 req.getVolumeCbm(),
                 req.getVehicleType(),
+                req.getVehicleBodyType(),
                 req.getCargoName(),
                 req.getCargoType(),
                 req.getCargoDesc(),
@@ -218,7 +217,7 @@ public class QuoteService {
         PricingResult pricing = calculatePricing(
                 req.getDistanceKm(),
                 req.getVehicleType(),
-                req.getChecklistItems(),
+                req.getVehicleBodyType(),
                 req.getLoadMethod(),
                 req.getUnloadMethod(),
                 Boolean.TRUE.equals(req.getAllowCombine())
@@ -301,6 +300,7 @@ public class QuoteService {
                 quote.getDestinationAddress(),
                 quote.getDistanceKm(),
                 quote.getVehicleType(),
+                quote.getVehicleBodyType(),
                 quote.getCargoName(),
                 quote.getDesiredPrice(),
                 quote.getFinalPrice(),
@@ -337,6 +337,7 @@ public class QuoteService {
                 quote.getWeightKg(),
                 quote.getVolumeCbm(),
                 quote.getVehicleType(),
+                quote.getVehicleBodyType(),
                 quote.getCargoName(),
                 quote.getCargoType(),
                 quote.getCargoDesc(),
@@ -358,7 +359,7 @@ public class QuoteService {
     private PricingResult calculatePricing(
             Integer distanceKm,
             String vehicleType,
-            List<QuoteChecklistItemRequest> items,
+            String vehicleBodyType,
             String loadMethod,
             String unloadMethod,
             boolean combinedShipment
@@ -370,7 +371,7 @@ public class QuoteService {
         if (type == null) {
             throw new CustomException(ErrorCode.INVALID_REQUEST);
         }
-        Set<SurchargeOptionRule> options = resolveOptions(items);
+        Set<SurchargeOptionRule> options = resolveOptionsByBodyType(vehicleBodyType);
         LoadHandlingMethod load = LoadHandlingMethod.from(loadMethod);
         LoadHandlingMethod unload = LoadHandlingMethod.from(unloadMethod);
         if (load == null || unload == null) {
@@ -379,25 +380,31 @@ public class QuoteService {
         return pricingCalculator.estimate(distanceKm, type, options, load, unload, combinedShipment);
     }
 
-    private Set<SurchargeOptionRule> resolveOptions(List<QuoteChecklistItemRequest> items) {
-        if (items == null || items.isEmpty()) {
+    private Set<SurchargeOptionRule> resolveOptionsByBodyType(String vehicleBodyType) {
+        if (vehicleBodyType == null || vehicleBodyType.isBlank()) {
             return Set.of();
         }
-        List<Long> ids = items.stream()
-                .map(QuoteChecklistItemRequest::getChecklistItemId)
-                .collect(Collectors.toList());
-        List<ChecklistItem> checklistItems = checklistItemRepository.findAllById(ids);
-        if (checklistItems.size() != ids.size()) {
-            throw new CustomException(ErrorCode.INVALID_REQUEST);
+        String normalized = vehicleBodyType.trim().toUpperCase();
+        String code = mapBodyTypeToOptionCode(normalized);
+        if (code == null) {
+            return Set.of();
         }
         try {
-            Set<String> codes = checklistItems.stream()
-                    .map(ChecklistItem::getName)
-                    .collect(Collectors.toSet());
-            return surchargeOptionService.resolveOptionsByCodes(codes);
+            return surchargeOptionService.resolveOptionsByCodes(Set.of(code));
         } catch (IllegalArgumentException e) {
             throw new CustomException(ErrorCode.INVALID_REQUEST);
         }
+    }
+
+    private String mapBodyTypeToOptionCode(String bodyType) {
+        return switch (bodyType) {
+            case "LIFT" -> "LIFT";
+            case "LIFT_WINGBODY" -> "LIFT_WINGBODY";
+            case "TOP" -> "WINGBODY_TOP";
+            case "WINGBODY" -> null;
+            case "CARGO" -> null;
+            default -> null;
+        };
     }
 
     private String buildAiPrompt(QuoteCreateRequest req, PricingResult pricing, List<String> existingComments) {

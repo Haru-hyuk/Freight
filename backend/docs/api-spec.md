@@ -259,6 +259,8 @@
   "weightKg": 1200,
   "volumeCbm": 10,
   "vehicleType": "TON_1",
+  "vehicleBodyType": "CARGO",
+  "cargoName": "냉동 해산물",
   "cargoType": "FROZEN",
   "cargoDesc": "Frozen seafood",
   "desiredPrice": 170000,
@@ -270,11 +272,6 @@
       "checklistItemId": 3,
       "extraInput": "Forklift needed",
       "extraFee": 20000.0
-    },
-    {
-      "checklistItemId": 8,
-      "extraInput": null,
-      "extraFee": 0.0
     }
   ]
 }
@@ -299,6 +296,8 @@
     "destinationAddress": "Busan, KR",
   "distanceKm": 325,
   "vehicleType": "TON_1",
+  "vehicleBodyType": "CARGO",
+  "cargoName": "냉동 해산물",
   "desiredPrice": 170000,
     "finalPrice": 170000,
     "status": "OPEN",
@@ -326,6 +325,8 @@
   "weightKg": 1200,
   "volumeCbm": 10,
   "vehicleType": "TON_1",
+  "vehicleBodyType": "CARGO",
+  "cargoName": "냉동 해산물",
   "cargoType": "FROZEN",
   "cargoDesc": "Frozen seafood",
   "basePrice": 100000,
@@ -366,6 +367,8 @@
   "weightKg": 1200,
   "volumeCbm": 10,
   "vehicleType": "TON_1",
+  "vehicleBodyType": "CARGO",
+  "cargoName": "냉동 해산물",
   "cargoType": "FROZEN",
   "cargoDesc": "Frozen seafood",
   "desiredPrice": 170000,
@@ -397,6 +400,8 @@
   "weightKg": 1200,
   "volumeCbm": 10,
   "vehicleType": "TON_1",
+  "vehicleBodyType": "CARGO",
+  "cargoName": "냉동 해산물",
   "cargoType": "FROZEN",
   "cargoDesc": "Frozen seafood",
   "basePrice": 100000,

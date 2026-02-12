@@ -18,6 +18,7 @@ public class QuoteUpdateRequest {
     private Integer weightKg;
     private Integer volumeCbm;
     private String vehicleType;
+    private String vehicleBodyType;
     private String cargoName;
     private String cargoType;
     private String cargoDesc;

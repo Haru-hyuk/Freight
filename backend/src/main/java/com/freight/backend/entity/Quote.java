@@ -64,6 +64,9 @@ public class Quote {
     @Column(name = "vehicle_type")
     private String vehicleType;
 
+    @Column(name = "vehicle_body_type")
+    private String vehicleBodyType;
+
     @Column(name = "cargo_name")
     private String cargoName;
 
@@ -132,6 +135,7 @@ public class Quote {
             Integer weightKg,
             Integer volumeCbm,
             String vehicleType,
+            String vehicleBodyType,
             String cargoName,
             String cargoType,
             String cargoDesc,
@@ -155,6 +159,7 @@ public class Quote {
         this.weightKg = weightKg;
         this.volumeCbm = volumeCbm;
         this.vehicleType = vehicleType;
+        this.vehicleBodyType = vehicleBodyType;
         this.cargoName = cargoName;
         this.cargoType = cargoType;
         this.cargoDesc = cargoDesc;
