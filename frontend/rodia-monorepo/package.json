@@ -4,7 +4,12 @@
   "packageManager": "pnpm@9.0.0",
   "scripts": {
     "tokens:build": "pnpm -C packages/design-tokens build:tokens",
-    "dev:mobile": "pnpm -C apps/mobile start",
-    "dev:mobile:full": "pnpm -w tokens:build && pnpm -C apps/mobile start"
+    "dev:w": "pnpm -w tokens:build && pnpm -C apps/web dev",
+    "dev:m": "pnpm -C apps/mobile start",
+    "dev:mf": "pnpm -w tokens:build && pnpm -C apps/mobile start",
+    "dev:all": "pnpm tokens:build && concurrently \"pnpm -C apps/web dev\" \"pnpm -C apps/mobile start\" --names \"WEB,MOBILE\" --prefix-colors \"blue,magenta\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
   }
 }

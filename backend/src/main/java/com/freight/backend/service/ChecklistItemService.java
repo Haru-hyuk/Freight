@@ -16,6 +16,7 @@ public class ChecklistItemService {
 
     public List<ChecklistItemResponse> listEnabledItems() {
         return checklistItemRepository.findByEnabledTrueOrderBySortOrderAsc().stream()
+                .filter(item -> "REQUEST".equals(item.getCategory()))
                 .map(this::toResponse)
                 .collect(Collectors.toList());
     }

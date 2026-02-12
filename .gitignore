@@ -179,3 +179,5 @@ build/Release
 # End of .gitignore
 # =====================================================
 backend/build.gradle
+_local/
+backend/src/main/resources/application.yml

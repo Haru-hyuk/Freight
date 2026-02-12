@@ -1,3 +1,4 @@
+// packages/design-tokens/scripts/build-tokens.ts
 import fs from "node:fs";
 import path from "node:path";
 import { parseTokens, type RodiaTokens } from "../src/schema";
@@ -55,6 +56,71 @@ function requireHex(tokensRaw: unknown, p: RodiaPath) {
   return s;
 }
 
+type CssColorVar = {
+  varName: string;
+  value: string;
+  tokenPath: string;
+};
+
+function toCssSegment(input: string) {
+  return input
+    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+    .replace(/[^a-zA-Z0-9-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .toLowerCase();
+}
+
+function collectThemeColorVars(themeColors: unknown) {
+  const out: CssColorVar[] = [];
+
+  const walk = (node: unknown, rawPath: string[], cssPath: string[]) => {
+    if (!node || typeof node !== "object" || Array.isArray(node)) return;
+    const record = node as Record<string, unknown>;
+
+    const maybeValue = record?.value;
+    if (typeof maybeValue === "string" && isHexColor(maybeValue) && cssPath.length > 0) {
+      out.push({
+        varName: `--rd-color-${cssPath.join("-")}`,
+        value: maybeValue,
+        tokenPath: rawPath.join("."),
+      });
+    }
+
+    for (const [key, value] of Object.entries(record)) {
+      if (key === "value") continue;
+      walk(value, [...rawPath, key], [...cssPath, toCssSegment(key)]);
+    }
+  };
+
+  walk(themeColors, [], []);
+  return out.sort((a, b) => a.varName.localeCompare(b.varName));
+}
+
+function collectHexVars(node: unknown, prefix: string, basePath: string[]) {
+  const out: CssColorVar[] = [];
+
+  const walk = (input: unknown, rawPath: string[], cssPath: string[]) => {
+    if (typeof input === "string") {
+      if (!isHexColor(input) || cssPath.length === 0) return;
+      out.push({
+        varName: `--${prefix}-${cssPath.join("-")}`,
+        value: input,
+        tokenPath: rawPath.join("."),
+      });
+      return;
+    }
+
+    if (!input || typeof input !== "object" || Array.isArray(input)) return;
+    for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+      walk(value, [...rawPath, key], [...cssPath, toCssSegment(key)]);
+    }
+  };
+
+  walk(node, [...basePath], []);
+  return out.sort((a, b) => a.varName.localeCompare(b.varName));
+}
+
 function emitCss(tokensRaw: unknown) {
   const lightLines: string[] = [];
   const darkLines: string[] = [];
@@ -84,11 +150,20 @@ function emitCss(tokensRaw: unknown) {
   const rawPrimaryLight = requireHex(tokensRaw, "themes.light.colors.brand.primary.value");
   const rawPrimaryDark = requireHex(tokensRaw, "themes.dark.colors.brand.primary.value");
 
+  const rawOnPrimaryLight = requireHex(tokensRaw, "themes.light.colors.brand.onPrimary.value");
+  const rawOnPrimaryDark = requireHex(tokensRaw, "themes.dark.colors.brand.onPrimary.value");
+
   const primaryHslLight = hexToHslTriplet(rawPrimaryLight);
   const primaryHslDark = hexToHslTriplet(rawPrimaryDark);
 
+  const onPrimaryHslLight = hexToHslTriplet(rawOnPrimaryLight);
+  const onPrimaryHslDark = hexToHslTriplet(rawOnPrimaryDark);
+
   if (!primaryHslLight || !primaryHslDark) {
     throw new Error(`[tokens] failed to convert hex→hsl for "rd-brand-primary"`);
+  }
+  if (!onPrimaryHslLight || !onPrimaryHslDark) {
+    throw new Error(`[tokens] failed to convert hex→hsl for "rd-brand-on-primary"`);
   }
 
   const cardRadius = getByPath(tokensRaw, "layout.radii.card.value");
@@ -98,14 +173,45 @@ function emitCss(tokensRaw: unknown) {
   lightLines.push("  /* Rodia Raw Tokens (helpers) */");
   lightLines.push(`  --rd-brand-primary-hex: ${rawPrimaryLight};`);
   lightLines.push(`  --rd-brand-primary-hsl: ${primaryHslLight};`);
+  lightLines.push(`  --rd-brand-on-primary-hex: ${rawOnPrimaryLight};`);
+  lightLines.push(`  --rd-brand-on-primary-hsl: ${onPrimaryHslLight};`);
   lightLines.push(`  --rd-radius-card: ${radiusPx};`);
+
+  const lightColorVars = collectThemeColorVars(getByPath(tokensRaw, "themes.light.colors"));
+  if (lightColorVars.length > 0) {
+    lightLines.push("");
+    lightLines.push("  /* Rodia Theme Color Tokens (raw hex) */");
+    for (const item of lightColorVars) {
+      lightLines.push(`  ${item.varName}: ${item.value}; /* ${item.tokenPath} */`);
+    }
+  }
+
+  const paletteVars = collectHexVars(getByPath(tokensRaw, "palette"), "rd-palette", ["palette"]);
+  if (paletteVars.length > 0) {
+    lightLines.push("");
+    lightLines.push("  /* Rodia Palette Tokens (raw hex) */");
+    for (const item of paletteVars) {
+      lightLines.push(`  ${item.varName}: ${item.value}; /* ${item.tokenPath} */`);
+    }
+  }
   lightLines.push("}");
 
   darkLines.push("");
   darkLines.push("  /* Rodia Raw Tokens (helpers) */");
   darkLines.push(`  --rd-brand-primary-hex: ${rawPrimaryDark};`);
   darkLines.push(`  --rd-brand-primary-hsl: ${primaryHslDark};`);
+  darkLines.push(`  --rd-brand-on-primary-hex: ${rawOnPrimaryDark};`);
+  darkLines.push(`  --rd-brand-on-primary-hsl: ${onPrimaryHslDark};`);
   darkLines.push(`  --rd-radius-card: ${radiusPx};`);
+
+  const darkColorVars = collectThemeColorVars(getByPath(tokensRaw, "themes.dark.colors"));
+  if (darkColorVars.length > 0) {
+    darkLines.push("");
+    darkLines.push("  /* Rodia Theme Color Tokens (raw hex) */");
+    for (const item of darkColorVars) {
+      darkLines.push(`  ${item.varName}: ${item.value}; /* ${item.tokenPath} */`);
+    }
+  }
   darkLines.push("}");
 
   return `${lightLines.join("\n")}\n\n${darkLines.join("\n")}\n`;
@@ -141,6 +247,7 @@ export type ThemeColors = {
     readonly primary: ColorToken;
     readonly secondary: ColorToken;
     readonly accent: ColorToken;
+    readonly onPrimary: ColorToken;
     readonly [k: string]: unknown;
   };
   readonly border: {
@@ -202,11 +309,36 @@ export const shadcnColors = {
   border: "hsl(var(--border) / <alpha-value>)",
   background: "hsl(var(--background) / <alpha-value>)",
   foreground: "hsl(var(--foreground) / <alpha-value>)",
-  primary: { DEFAULT: "hsl(var(--primary) / <alpha-value>)" },
-  secondary: { DEFAULT: "hsl(var(--secondary) / <alpha-value>)" },
-  accent: { DEFAULT: "hsl(var(--accent) / <alpha-value>)" },
-  destructive: { DEFAULT: "hsl(var(--destructive) / <alpha-value>)" },
-  muted: { DEFAULT: "hsl(var(--muted) / <alpha-value>)" }
+  primary: {
+    DEFAULT: "hsl(var(--primary) / <alpha-value>)",
+    foreground: "hsl(var(--primary-foreground) / <alpha-value>)"
+  },
+  secondary: {
+    DEFAULT: "hsl(var(--secondary) / <alpha-value>)",
+    foreground: "hsl(var(--secondary-foreground) / <alpha-value>)"
+  },
+  accent: {
+    DEFAULT: "hsl(var(--accent) / <alpha-value>)",
+    foreground: "hsl(var(--accent-foreground) / <alpha-value>)"
+  },
+  destructive: {
+    DEFAULT: "hsl(var(--destructive) / <alpha-value>)",
+    foreground: "hsl(var(--destructive-foreground) / <alpha-value>)"
+  },
+  muted: {
+    DEFAULT: "hsl(var(--muted) / <alpha-value>)",
+    foreground: "hsl(var(--muted-foreground) / <alpha-value>)"
+  },
+  card: {
+    DEFAULT: "hsl(var(--card) / <alpha-value>)",
+    foreground: "hsl(var(--card-foreground) / <alpha-value>)"
+  },
+  popover: {
+    DEFAULT: "hsl(var(--popover) / <alpha-value>)",
+    foreground: "hsl(var(--popover-foreground) / <alpha-value>)"
+  },
+  input: "hsl(var(--input) / <alpha-value>)",
+  ring: "hsl(var(--ring) / <alpha-value>)"
 };
 
 `;
@@ -220,11 +352,15 @@ export declare const shadcnColors: {
   readonly border: string;
   readonly background: string;
   readonly foreground: string;
-  readonly primary: { readonly DEFAULT: string };
-  readonly secondary: { readonly DEFAULT: string };
-  readonly accent: { readonly DEFAULT: string };
-  readonly destructive: { readonly DEFAULT: string };
-  readonly muted: { readonly DEFAULT: string };
+  readonly primary: { readonly DEFAULT: string; readonly foreground: string };
+  readonly secondary: { readonly DEFAULT: string; readonly foreground: string };
+  readonly accent: { readonly DEFAULT: string; readonly foreground: string };
+  readonly destructive: { readonly DEFAULT: string; readonly foreground: string };
+  readonly muted: { readonly DEFAULT: string; readonly foreground: string };
+  readonly card: { readonly DEFAULT: string; readonly foreground: string };
+  readonly popover: { readonly DEFAULT: string; readonly foreground: string };
+  readonly input: string;
+  readonly ring: string;
 };
 
 `;
@@ -256,3 +392,9 @@ function main() {
 }
 
 main();
+
+/*
+- brand.onPrimary를 HSL helper(--rd-brand-on-primary-hsl)로 생성하고, shadcn primary-foreground까지 SoT에서 출력합니다.
+- web에서 하드코딩 없이 버튼 텍스트(white 등)를 tokens로만 결정할 수 있어 모바일(AppButton)과 일치합니다.
+- theme.d.ts에 onPrimary를 추가해 RN 테마 코드가 any 없이도 안전하게 접근 가능해집니다.
+*/

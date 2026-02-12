@@ -12,6 +12,7 @@ public class TruckResponse {
     private Long truckId;
     private Long driverId;
     private String vehicleType;
+    private String vehicleBodyType;
     private BigDecimal tonnage;
     private BigDecimal maxWeight;
     private BigDecimal maxVolume;

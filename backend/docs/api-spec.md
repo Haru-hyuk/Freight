@@ -2,6 +2,31 @@
 
 ## Auth
 
+### Driver Signup
+- Method: `POST`
+- Path: `/api/auth/driver/signup`
+- Request
+```json
+{
+  "email": "driver@test.com",
+  "password": "1234",
+  "name": "홍길동",
+  "phone": "010-0000-0000",
+  "address": "서울시 강남구",
+  "addressDetail": "101호",
+  "bankName": "국민",
+  "bankAccount": "123-456-7890"
+}
+```
+- Response
+```json
+{
+  "driverId": 1
+}
+```
+- Errors
+- `400 INVALID_INPUT_VALUE`: 이메일 중복
+
 ### Driver Login
 - Method: `POST`
 - Path: `/api/auth/driver/login`
@@ -59,6 +84,44 @@
 }
 ```
 
+### Shipper Signup
+- Method: `POST`
+- Path: `/api/auth/shipper/signup`
+- Request
+```json
+{
+  "email": "shipper@test.com",
+  "password": "1234",
+  "name": "홍길동",
+  "companyName": "테스트상사",
+  "phone": "010-1234-5678",
+  "address": "서울시 강남구",
+  "addressDetail": "101호",
+  "bizRegNo": "1234567890",
+  "bizPhone": "02-123-4567",
+  "openDate": "20200101",
+  "ownerName": "홍길동"
+}
+```
+- Response
+```json
+{
+  "shipperId": 1
+}
+```
+- Notes
+- 회원가입 시 국세청 사업자 진위확인 수행
+- 진위확인 결과 `valid != "01"`이면 가입 실패
+- Errors
+- `400 INVALID_INPUT_VALUE`: 이메일 중복 또는 사업자 진위확인 실패
+
+### Logout
+- Method: `POST`
+- Path: `/api/auth/logout`
+- Headers: `Authorization: Bearer {accessToken}`
+- Response: `204 No Content`
+
+
 ## Driver
 
 ### Truck Create
@@ -68,6 +131,7 @@
 ```json
 {
   "vehicleType": "CARGO",
+  "vehicleBodyType": "WINGBODY",
   "tonnage": 1.0,
   "maxWeight": 1000.0,
   "maxVolume": 12.5,
@@ -96,6 +160,7 @@
     "truckId": 1,
     "driverId": 10,
     "vehicleType": "CARGO",
+    "vehicleBodyType": "WINGBODY",
     "tonnage": 1.0,
     "maxWeight": 1000.0,
     "maxVolume": 12.5,
@@ -120,6 +185,7 @@
   "truckId": 1,
   "driverId": 10,
   "vehicleType": "CARGO",
+  "vehicleBodyType": "WINGBODY",
   "tonnage": 1.0,
   "maxWeight": 1000.0,
   "maxVolume": 12.5,
@@ -141,6 +207,7 @@
 ```json
 {
   "vehicleType": "CARGO",
+  "vehicleBodyType": "WINGBODY",
   "tonnage": 1.5,
   "maxWeight": 1200.0,
   "maxVolume": 13.0,
@@ -158,6 +225,7 @@
   "truckId": 1,
   "driverId": 10,
   "vehicleType": "CARGO",
+  "vehicleBodyType": "WINGBODY",
   "tonnage": 1.5,
   "maxWeight": 1200.0,
   "maxVolume": 13.0,
@@ -195,10 +263,11 @@
   "distanceKm": 325,
   "weightKg": 1200,
   "volumeCbm": 10,
+  "vehicleType": "TON_1",
+  "vehicleBodyType": "CARGO",
+  "cargoName": "냉동 해산물",
   "cargoType": "FROZEN",
   "cargoDesc": "Frozen seafood",
-  "basePrice": 100000,
-  "distancePrice": 50000,
   "desiredPrice": 170000,
   "allowCombine": true,
   "loadMethod": "SHIPPER",
@@ -208,11 +277,6 @@
       "checklistItemId": 3,
       "extraInput": "Forklift needed",
       "extraFee": 20000.0
-    },
-    {
-      "checklistItemId": 8,
-      "extraInput": null,
-      "extraFee": 0.0
     }
   ]
 }
@@ -235,8 +299,11 @@
     "truckId": 1,
     "originAddress": "Seoul, KR",
     "destinationAddress": "Busan, KR",
-    "distanceKm": 325,
-    "desiredPrice": 170000,
+  "distanceKm": 325,
+  "vehicleType": "TON_1",
+  "vehicleBodyType": "CARGO",
+  "cargoName": "냉동 해산물",
+  "desiredPrice": 170000,
     "finalPrice": 170000,
     "status": "OPEN",
     "createdAt": "2025-01-01T10:00:00"
@@ -262,6 +329,9 @@
   "distanceKm": 325,
   "weightKg": 1200,
   "volumeCbm": 10,
+  "vehicleType": "TON_1",
+  "vehicleBodyType": "CARGO",
+  "cargoName": "냉동 해산물",
   "cargoType": "FROZEN",
   "cargoDesc": "Frozen seafood",
   "basePrice": 100000,
@@ -301,10 +371,11 @@
   "distanceKm": 325,
   "weightKg": 1200,
   "volumeCbm": 10,
+  "vehicleType": "TON_1",
+  "vehicleBodyType": "CARGO",
+  "cargoName": "냉동 해산물",
   "cargoType": "FROZEN",
   "cargoDesc": "Frozen seafood",
-  "basePrice": 100000,
-  "distancePrice": 50000,
   "desiredPrice": 170000,
   "allowCombine": true,
   "loadMethod": "SHIPPER",
@@ -333,6 +404,9 @@
   "distanceKm": 325,
   "weightKg": 1200,
   "volumeCbm": 10,
+  "vehicleType": "TON_1",
+  "vehicleBodyType": "CARGO",
+  "cargoName": "냉동 해산물",
   "cargoType": "FROZEN",
   "cargoDesc": "Frozen seafood",
   "basePrice": 100000,
@@ -371,14 +445,47 @@
 [
   {
     "checklistItemId": 1,
-    "category": "VEHICLE",
-    "name": "LIFT_WINGBODY",
-    "icon": "lift_wing",
+    "category": "REQUEST",
+    "name": "FRAGILE",
+    "icon": "fragile",
     "hasExtraFee": true,
-    "baseExtraFee": 30000.0,
+    "baseExtraFee": 5000.0,
     "requiresExtraInput": false,
-    "extraInputLabel": null,
+    "extraInputLabel": "취급 주의 요망",
     "sortOrder": 1
+  },
+  {
+    "checklistItemId": 2,
+    "category": "REQUEST",
+    "name": "UPRIGHT",
+    "icon": "upright",
+    "hasExtraFee": true,
+    "baseExtraFee": 3000.0,
+    "requiresExtraInput": false,
+    "extraInputLabel": "눕힘 금지",
+    "sortOrder": 2
+  },
+  {
+    "checklistItemId": 3,
+    "category": "REQUEST",
+    "name": "KEEP_DRY",
+    "icon": "umbrella",
+    "hasExtraFee": true,
+    "baseExtraFee": 5000.0,
+    "requiresExtraInput": false,
+    "extraInputLabel": "비/물기 주의",
+    "sortOrder": 3
+  },
+  {
+    "checklistItemId": 5,
+    "category": "REQUEST",
+    "name": "EASY_BREAK",
+    "icon": "shock",
+    "hasExtraFee": true,
+    "baseExtraFee": 5000.0,
+    "requiresExtraInput": false,
+    "extraInputLabel": "충격 최소화",
+    "sortOrder": 4
   }
 ]
 ```

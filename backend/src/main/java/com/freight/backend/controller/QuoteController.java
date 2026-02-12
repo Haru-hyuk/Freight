@@ -5,6 +5,7 @@ import com.freight.backend.dto.quote.QuoteCreateResponse;
 import com.freight.backend.dto.quote.QuoteDetailResponse;
 import com.freight.backend.dto.quote.QuoteListResponse;
 import com.freight.backend.dto.quote.QuoteUpdateRequest;
+import com.freight.backend.dto.quote.QuoteValidationResponse;
 import com.freight.backend.service.QuoteService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +29,11 @@ public class QuoteController {
     @PostMapping
     public ResponseEntity<QuoteCreateResponse> createQuote(@RequestBody QuoteCreateRequest req) {
         return ResponseEntity.ok(quoteService.createQuote(req));
+    }
+
+    @PostMapping("/validate")
+    public ResponseEntity<QuoteValidationResponse> validateQuote(@RequestBody QuoteCreateRequest req) {
+        return ResponseEntity.ok(quoteService.validateQuote(req));
     }
 
     @GetMapping
