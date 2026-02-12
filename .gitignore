@@ -181,3 +181,4 @@ build/Release
 backend/build.gradle
 _local/
 backend/src/main/resources/application.yml
+_local/test-client/index.html
