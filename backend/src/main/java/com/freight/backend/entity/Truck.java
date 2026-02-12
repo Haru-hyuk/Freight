@@ -36,6 +36,9 @@ public class Truck {
     @Column(name = "vehicle_type")
     private String vehicleType;
 
+    @Column(name = "vehicle_body_type")
+    private String vehicleBodyType;
+
     @Column(name = "tonnage")
     private BigDecimal tonnage;
 
@@ -85,6 +88,7 @@ public class Truck {
 
     public void updateFrom(
             String vehicleType,
+            String vehicleBodyType,
             BigDecimal tonnage,
             BigDecimal maxWeight,
             BigDecimal maxVolume,
@@ -96,6 +100,7 @@ public class Truck {
             LocalDate lastInspectionDate
     ) {
         this.vehicleType = vehicleType;
+        this.vehicleBodyType = vehicleBodyType;
         this.tonnage = tonnage;
         this.maxWeight = maxWeight;
         this.maxVolume = maxVolume;

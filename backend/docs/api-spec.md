@@ -131,6 +131,7 @@
 ```json
 {
   "vehicleType": "CARGO",
+  "vehicleBodyType": "WINGBODY",
   "tonnage": 1.0,
   "maxWeight": 1000.0,
   "maxVolume": 12.5,
@@ -159,6 +160,7 @@
     "truckId": 1,
     "driverId": 10,
     "vehicleType": "CARGO",
+    "vehicleBodyType": "WINGBODY",
     "tonnage": 1.0,
     "maxWeight": 1000.0,
     "maxVolume": 12.5,
@@ -183,6 +185,7 @@
   "truckId": 1,
   "driverId": 10,
   "vehicleType": "CARGO",
+  "vehicleBodyType": "WINGBODY",
   "tonnage": 1.0,
   "maxWeight": 1000.0,
   "maxVolume": 12.5,
@@ -204,6 +207,7 @@
 ```json
 {
   "vehicleType": "CARGO",
+  "vehicleBodyType": "WINGBODY",
   "tonnage": 1.5,
   "maxWeight": 1200.0,
   "maxVolume": 13.0,
@@ -221,6 +225,7 @@
   "truckId": 1,
   "driverId": 10,
   "vehicleType": "CARGO",
+  "vehicleBodyType": "WINGBODY",
   "tonnage": 1.5,
   "maxWeight": 1200.0,
   "maxVolume": 13.0,
