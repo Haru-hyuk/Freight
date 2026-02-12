@@ -499,3 +499,102 @@
   "status": 401
 }
 ```
+
+
+## Quote Stops
+
+- Quote Create/Update ??? `stops` ??? ??? ? ????.
+- Quote Detail ??? `stops` ??? ?????.
+
+```json
+"stops": [
+  {
+    "seq": 1,
+    "address": "Incheon, KR",
+    "lat": 37.4563,
+    "lng": 126.7052,
+    "contactName": "???A",
+    "contactPhone": "010-0000-0000",
+    "deptName": "???",
+    "managerName": "???"
+  }
+]
+```
+
+## Counter Offer (Driver/ Shipper)
+
+### Driver Counter Offer Create
+- Method: `POST`
+- Path: `/api/driver/quotes/{quoteId}/counter-offers`
+- Request
+```json
+{
+  "proposedPrice": 240000,
+  "message": "??? ?? ??? ??? ??? ?? ?? ??????."
+}
+```
+- Response
+```json
+{
+  "counterOfferId": 1,
+  "quoteId": 10,
+  "driverId": 7,
+  "proposedPrice": 240000,
+  "message": "??? ?? ??? ??? ??? ?? ?? ??????.",
+  "status": "PENDING",
+  "createdAt": "2025-01-01T10:00:00",
+  "respondedAt": null
+}
+```
+
+### Driver Counter Offer List (Me)
+- Method: `GET`
+- Path: `/api/driver/counter-offers/me`
+
+### Shipper Counter Offer List
+- Method: `GET`
+- Path: `/api/shipper/quotes/{quoteId}/counter-offers`
+
+### Shipper Counter Offer Accept
+- Method: `PATCH`
+- Path: `/api/shipper/counter-offers/{offerId}/accept`
+- Response: `204 No Content`
+
+### Shipper Counter Offer Reject
+- Method: `PATCH`
+- Path: `/api/shipper/counter-offers/{offerId}/reject`
+- Response: `204 No Content`
+
+## Notifications
+
+### Notification List (Me)
+- Method: `GET`
+- Path: `/api/notifications/me`
+- Response
+```json
+[
+  {
+    "notificationId": 1,
+    "matchId": 10,
+    "type": "COUNTER_OFFER_CREATED",
+    "message": "???? ??? ??? ??????.",
+    "isRead": false,
+    "createdAt": "2025-01-01T10:00:00"
+  }
+]
+```
+
+### Notification Unread Count
+- Method: `GET`
+- Path: `/api/notifications/me/unread-count`
+- Response
+```json
+{
+  "unreadCount": 3
+}
+```
+
+### Notification Mark Read
+- Method: `PATCH`
+- Path: `/api/notifications/{notificationId}/read`
+- Response: `204 No Content`
