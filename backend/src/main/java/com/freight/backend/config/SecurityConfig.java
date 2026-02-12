@@ -53,7 +53,11 @@ public class SecurityConfig {
                                 "/api/auth/driver/signup",
                                 "/api/auth/shipper/login",
                                 "/api/auth/admin/login",
-                                "/api/auth/shipper/signup"
+                                "/api/auth/shipper/signup",
+                                "/swagger-ui/**",
+                                "/swagger-ui.html",
+                                "/api-docs/**",
+                                "/v3/api-docs/**"
                         ).permitAll()
                         .requestMatchers("/api/**").authenticated()
                         .anyRequest().permitAll()

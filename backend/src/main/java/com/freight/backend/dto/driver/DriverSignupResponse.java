@@ -1,4 +1,4 @@
-﻿package com.freight.backend.dto.driver;
+package com.freight.backend.dto.driver;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
