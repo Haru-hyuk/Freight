@@ -10,7 +10,7 @@
     },
     "dependencies": {
         "@expo/metro-runtime": "~6.1.2",
-        "@react-native-community/datetimepicker": "^8.6.0",
+        "@react-native-community/datetimepicker": "8.4.4",
         "@rodia/tokens": "workspace:*",
         "axios": "^1.13.4",
         "expo": "~54.0.33",
