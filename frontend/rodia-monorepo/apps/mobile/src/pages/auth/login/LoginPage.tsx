@@ -1,53 +1,100 @@
 // apps/mobile/src/pages/auth/login/LoginPage.tsx
-import React, { useCallback } from "react";
-import { StyleSheet, View } from "react-native";
+import React, { useCallback, useRef } from "react";
+import { findNodeHandle, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TextInput, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { createThemedStyles } from "@/shared/theme/useAppTheme";
 import { AppContainer } from "@/shared/ui/kit/AppContainer";
+import { AppCard } from "@/shared/ui/kit/AppCard";
 import { AppText } from "@/shared/ui/kit/AppText";
-import { LoginForm } from "@/features/auth/ui/LoginForm";
+import { AuthForm } from "@/features/auth/ui/AuthForm";
 
 const useStyles = createThemedStyles((t) =>
   StyleSheet.create({
-    root: { flex: 1, justifyContent: "center", gap: 16 },
-    header: { gap: 6, alignItems: "center" },
-    subtitle: { textAlign: "center", opacity: 0.75 },
-    cardWrap: {
-      borderRadius: t.layout.radii.card,
-      borderWidth: 1,
-      borderColor: t.colors.borderDefault,
+    root: {
+      flex: 1,
+      justifyContent: "center",
+      paddingVertical: t.layout.spacing.base * 10,
+      paddingHorizontal: t.layout.spacing.base * 5,
+    },
+    content: {
+      width: "100%",
+      maxWidth: 560,
+      alignSelf: "center",
+    },
+    header: {
+      alignItems: "center",
+      marginBottom: t.layout.spacing.base * 8,
+      gap: t.layout.spacing.base,
+    },
+    subtitle: {
+      textAlign: "center",
+      paddingHorizontal: t.layout.spacing.base * 3,
+    },
+    formCard: {
+      padding: t.components.card.paddingMd,
+      borderRadius: t.components.card.radius,
+    },
+    scroll: {
       backgroundColor: t.colors.bgSurfaceAlt,
-      padding: 16,
+    },
+    scrollContent: {
+      flexGrow: 1,
+      justifyContent: "center",
     },
   })
 );
 
 export default function LoginPage() {
   const s = useStyles();
+  const insets = useSafeAreaInsets();
+  const scrollRef = useRef<ScrollView>(null);
 
   const onSuccess = useCallback(() => {
-    // Gatekeeper(app/_layout.tsx)가 status/user.role 변경을 감지해 자동 분기합니다.
+    // keep empty: gate logic handles next route
   }, []);
 
-  return (
-    <AppContainer scroll padding={16} backgroundColor="bgMain">
-      <View style={s.root}>
-        <View style={s.header}>
-          <AppText variant="heading">Rodia</AppText>
-          <AppText variant="caption" color="borderDefault" style={s.subtitle}>
-            로그인 후 역할에 따라 자동으로 화면이 분기됩니다.
-          </AppText>
-        </View>
+  const handleFocusInput = useCallback((input: TextInput | null) => {
+    if (!input) return;
+    const target = findNodeHandle(input);
+    if (!target) return;
 
-        <View style={s.cardWrap}>
-          <LoginForm onSuccess={onSuccess} layout="plain" showHeader={false} />
-        </View>
-      </View>
+    requestAnimationFrame(() => {
+      (scrollRef.current as any)?.scrollResponderScrollNativeHandleToKeyboard?.(target, 96, true);
+    });
+  }, []);
+
+  const keyboardOffset = Platform.OS === "ios" ? insets.top : insets.bottom;
+  const behavior = Platform.OS === "ios" ? "padding" : "height";
+  const extraBottomPad = insets.bottom + 48;
+
+  return (
+    <AppContainer backgroundColor="bgSurfaceAlt">
+      <KeyboardAvoidingView behavior={behavior} keyboardVerticalOffset={keyboardOffset} style={{ flex: 1 }}>
+        <ScrollView
+          ref={scrollRef}
+          style={s.scroll}
+          contentContainerStyle={[s.scrollContent, { paddingBottom: extraBottomPad }]}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+        >
+          <View style={s.root}>
+            <View style={s.content}>
+              <View style={s.header}>
+                <AppText variant="display" weight="800" color="brandPrimary" align="center">
+                  Rodia
+                </AppText>
+                <AppText variant="body" color="textSub" style={s.subtitle}>
+                  로디아 운송을 더 빠르게, 더 쉽게 시작해보세요.
+                </AppText>
+              </View>
+
+              <AppCard outlined style={s.formCard}>
+                <AuthForm onSuccess={onSuccess} onFocusInput={handleFocusInput} />
+              </AppCard>
+            </View>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </AppContainer>
   );
 }
-
-/**
- * 1) 페이지는 레이아웃(센터링/카드)만 담당하고, LoginForm은 폼 로직만 담당합니다.
- * 2) 중첩 카드/헤더 문제를 제거해 모달/바텀시트에서도 LoginForm 재사용이 쉽습니다.
- * 3) 성공 후 이동은 Gatekeeper가 처리하므로 페이지는 onSuccess를 비워도 동작합니다.
- */

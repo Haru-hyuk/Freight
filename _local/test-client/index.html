@@ -1,0 +1,644 @@
+﻿<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Freight API 테스트 클라이언트 (로컬 전용)</title>
+  <style>
+    :root {
+      --bg: #f3f1eb;
+      --ink: #1b1b1b;
+      --muted: #5a5a5a;
+      --accent: #2f5d62;
+      --accent-2: #c9a227;
+      --card: #fffdf7;
+      --border: #d9d2c2;
+      --shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
+      --mono: "SFMono-Regular", ui-monospace, "Cascadia Code", "JetBrains Mono", monospace;
+      --sans: "SUIT", "Pretendard", "Noto Sans KR", "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: var(--sans);
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 20% 20%, #f7f0d9 0%, transparent 55%),
+        radial-gradient(circle at 80% 10%, #dfe8e1 0%, transparent 50%),
+        var(--bg);
+    }
+    header {
+      padding: 24px 20px 12px;
+    }
+    .title {
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+    }
+    .subtitle {
+      color: var(--muted);
+      margin-top: 6px;
+      font-size: 14px;
+    }
+    .container {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 18px;
+      padding: 16px 20px 40px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      box-shadow: var(--shadow);
+    }
+    .card h2 {
+      margin: 0 0 10px;
+      font-size: 18px;
+    }
+    label {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      margin: 10px 0 6px;
+    }
+    input, textarea, select {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 13px;
+      background: white;
+    }
+    textarea { min-height: 90px; font-family: var(--mono); }
+    button {
+      border: none;
+      background: var(--accent);
+      color: white;
+      padding: 10px 12px;
+      border-radius: 10px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 12px;
+    }
+    button.secondary {
+      background: var(--accent-2);
+      color: #2b2305;
+    }
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .mono { font-family: var(--mono); }
+    .response {
+      margin-top: 12px;
+      padding: 10px;
+      background: #111;
+      color: #e6f1ff;
+      border-radius: 10px;
+      font-size: 12px;
+      overflow: auto;
+      max-height: 240px;
+      white-space: pre-wrap;
+      font-family: var(--mono);
+    }
+    .note {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="title">Freight API 테스트 클라이언트 (로컬 전용)</div>
+    <div class="subtitle">이 폴더는 `_local/`이며 `.gitignore`에 제외됨. 필요하면 자유롭게 수정하세요.</div>
+  </header>
+
+  <div class="container">
+    <section class="card">
+      <h2>기본 설정</h2>
+      <label>API Base URL</label>
+      <input id="baseUrl" value="http://localhost:8080" />
+
+      <label>Access Token (Bearer)</label>
+      <input id="token" placeholder="eyJhbGciOi..." />
+
+      <div class="note">CORS 오류가 나면 로컬 서버로 열어주세요. 예: `python -m http.server`</div>
+    </section>
+
+    <section class="card">
+      <h2>화주 회원가입</h2>
+      <div class="row">
+        <div>
+          <label>email</label>
+          <input id="su_email" value="shipper@test.com" />
+        </div>
+        <div>
+          <label>password</label>
+          <input id="su_password" value="1234" />
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>name</label>
+          <input id="su_name" value="홍길동" />
+        </div>
+        <div>
+          <label>companyName</label>
+          <input id="su_company" value="테스트상사" />
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>phone</label>
+          <input id="su_phone" value="010-1234-5678" />
+        </div>
+        <div>
+          <label>bizPhone</label>
+          <input id="su_biz_phone" value="02-123-4567" />
+        </div>
+      </div>
+      <label>address</label>
+      <input id="su_address" value="서울시 강남구" />
+      <label>addressDetail</label>
+      <input id="su_address_detail" value="101호" />
+      <div class="row">
+        <div>
+          <label>bizRegNo</label>
+          <input id="su_biz_reg" value="1234567890" />
+        </div>
+        <div>
+          <label>openDate (yyyyMMdd)</label>
+          <input id="su_open_date" value="20200101" />
+        </div>
+      </div>
+      <label>ownerName</label>
+      <input id="su_owner" value="홍길동" />
+      <button onclick="shipperSignup()">회원가입 요청</button>
+      <div id="resp_signup" class="response"></div>
+    </section>
+
+    <section class="card">
+      <h2>화주 로그인</h2>
+      <label>email</label>
+      <input id="sl_email" value="shipper@test.com" />
+      <label>password</label>
+      <input id="sl_password" value="1234" />
+      <button onclick="shipperLogin()">로그인 요청</button>
+      <div id="resp_login" class="response"></div>
+    </section>
+
+    <section class="card">
+      <h2>기사 회원가입</h2>
+      <div class="row">
+        <div>
+          <label>email</label>
+          <input id="dsu_email" value="driver@test.com" />
+        </div>
+        <div>
+          <label>password</label>
+          <input id="dsu_password" value="1234" />
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>name</label>
+          <input id="dsu_name" value="홍길동" />
+        </div>
+        <div>
+          <label>phone</label>
+          <input id="dsu_phone" value="010-0000-0000" />
+        </div>
+      </div>
+      <label>address</label>
+      <input id="dsu_address" value="서울시 강남구" />
+      <label>addressDetail</label>
+      <input id="dsu_address_detail" value="101호" />
+      <div class="row">
+        <div>
+          <label>bankName</label>
+          <input id="dsu_bank_name" value="국민" />
+        </div>
+        <div>
+          <label>bankAccount</label>
+          <input id="dsu_bank_account" value="123-456-7890" />
+        </div>
+      </div>
+      <button onclick="driverSignup()">회원가입 요청</button>
+      <div id="resp_driver_signup" class="response"></div>
+    </section>
+
+    <section class="card">
+      <h2>기사 로그인</h2>
+      <label>email</label>
+      <input id="dl_email" value="driver@test.com" />
+      <label>password</label>
+      <input id="dl_password" value="1234" />
+      <button onclick="driverLogin()">로그인 요청</button>
+      <div id="resp_driver_login" class="response"></div>
+    </section>
+
+    <section class="card">
+      <h2>로그아웃</h2>
+      <div class="note">Authorization 토큰이 필요합니다.</div>
+      <button class="secondary" onclick="logout()">POST /api/auth/logout</button>
+      <div id="resp_logout" class="response"></div>
+    </section>
+
+    <section class="card">
+      <h2>체크리스트 조회</h2>
+      <button class="secondary" onclick="listChecklistItems()">GET /api/checklist-items</button>
+      <div class="note">선택한 항목 ID가 견적 등록에 자동 반영됩니다.</div>
+      <div id="checklist_box" class="mono"></div>
+      <div id="resp_checklist" class="response"></div>
+    </section>
+
+    <section class="card">
+      <h2>기사 차량 등록</h2>
+      <label>요청 JSON</label>
+      <textarea id="truck_payload">{
+  "vehicleType": "CARGO",
+  "vehicleBodyType": "WINGBODY",
+  "tonnage": 1.0,
+  "maxWeight": 1000.0,
+  "maxVolume": 12.5,
+  "name": "My Truck",
+  "imageUrl": "https://example.com/truck.png",
+  "approved": false,
+  "insurance": "ACME-1234",
+  "odometerKm": 12034.5,
+  "lastInspectionDate": "2025-01-15"
+}</textarea>
+      <button onclick="createTruck()">POST /api/driver/trucks</button>
+      <button class="secondary" onclick="listTrucks()">GET /api/driver/trucks</button>
+      <div id="resp_truck" class="response"></div>
+    </section>
+
+    <section class="card">
+      <h2>화주 견적 등록</h2>
+      <label>요청 JSON</label>
+      <textarea id="quote_payload">{
+  "truckId": 1,
+  "originAddress": "Seoul, KR",
+  "destinationAddress": "Busan, KR",
+  "originLat": 37.5665,
+  "originLng": 126.9780,
+  "destinationLat": 35.1796,
+  "destinationLng": 129.0756,
+  "distanceKm": 325,
+  "weightKg": 1200,
+  "volumeCbm": 10,
+  "vehicleType": "TON_1",
+  "vehicleBodyType": "CARGO",
+  "cargoName": "냉동 해산물",
+  "cargoType": "FROZEN",
+  "cargoDesc": "Frozen seafood",
+  "basePrice": 100000,
+  "distancePrice": 50000,
+  "desiredPrice": 170000,
+  "allowCombine": true,
+  "loadMethod": "SHIPPER",
+  "unloadMethod": "DRIVER",
+  "checklistItems": [
+    {
+      "checklistItemId": 3,
+      "extraInput": "Forklift needed",
+      "extraFee": 20000.0
+    }
+  ]
+}</textarea>
+      <label>경유지(stops) JSON (선택)</label>
+      <textarea id="quote_stops">[
+  {
+    "seq": 1,
+    "address": "Incheon, KR",
+    "lat": 37.4563,
+    "lng": 126.7052,
+    "contactName": "담당자A",
+    "contactPhone": "010-0000-0000",
+    "deptName": "물류팀",
+    "managerName": "김담당"
+  }
+]</textarea>
+      <button class="secondary" onclick="validateQuote()">POST /api/shipper/quotes/validate</button>
+      <button onclick="createQuote()">POST /api/shipper/quotes</button>
+      <button class="secondary" onclick="listQuotes()">GET /api/shipper/quotes</button>
+      <div id="resp_quote" class="response"></div>
+    </section>
+
+    <section class="card">
+      <h2>기사 역제안</h2>
+      <label>quoteId</label>
+      <input id="co_quote_id" value="1" />
+      <label>요청 JSON</label>
+      <textarea id="co_payload">{
+  "proposedPrice": 240000,
+  "message": "상차지 골목 진입이 어려워 수작업 비용 포함 제안드립니다."
+}</textarea>
+      <button onclick="createCounterOffer()">POST /api/driver/quotes/{quoteId}/counter-offers</button>
+      <button class="secondary" onclick="listMyCounterOffers()">GET /api/driver/counter-offers/me</button>
+      <div id="resp_counter_driver" class="response"></div>
+    </section>
+
+    <section class="card">
+      <h2>화주 역제안 관리</h2>
+      <label>quoteId</label>
+      <input id="co_shipper_quote_id" value="1" />
+      <label>offerId</label>
+      <input id="co_offer_id" value="1" />
+      <button class="secondary" onclick="listCounterOffers()">GET /api/shipper/quotes/{quoteId}/counter-offers</button>
+      <button onclick="acceptCounterOffer()">PATCH /api/shipper/counter-offers/{offerId}/accept</button>
+      <button class="secondary" onclick="rejectCounterOffer()">PATCH /api/shipper/counter-offers/{offerId}/reject</button>
+      <div id="resp_counter_shipper" class="response"></div>
+    </section>
+
+    <section class="card">
+      <h2>알림</h2>
+      <button class="secondary" onclick="listNotifications()">GET /api/notifications/me</button>
+      <div class="row">
+        <div>
+          <label>notificationId</label>
+          <input id="noti_id" value="1" />
+        </div>
+        <div>
+          <label>읽음 처리</label>
+          <button onclick="markNotificationRead()">PATCH /api/notifications/{id}/read</button>
+        </div>
+      </div>
+      <button class="secondary" onclick="getUnreadCount()">GET /api/notifications/me/unread-count</button>
+      <div id="resp_notifications" class="response"></div>
+    </section>
+  </div>
+
+  
+  <script>
+    function getBaseUrl() {
+      return document.getElementById('baseUrl').value.replace(/\/$/, '');
+    }
+
+    function getToken() {
+      const t = document.getElementById('token').value.trim();
+      return t ? `Bearer ${t}` : '';
+    }
+
+    async function apiFetch(path, options = {}) {
+      try {
+        const headers = options.headers || {};
+        const token = getToken();
+        if (token) headers['Authorization'] = token;
+        if (options.body && !headers['Content-Type']) {
+          headers['Content-Type'] = 'application/json';
+        }
+        const res = await fetch(getBaseUrl() + path, { ...options, headers });
+        let text = await res.text();
+        try { text = JSON.stringify(JSON.parse(text), null, 2); } catch (_) {}
+        return `HTTP ${res.status}\n${text}`;
+      } catch (e) {
+        return `HTTP 0\n${e && e.message ? e.message : 'Network error'}`;
+      }
+    }
+
+
+    function setTokenFromResponse(text) {
+      try {
+        const json = text.split('\n').slice(1).join('\n');
+        const data = JSON.parse(json);
+        if (data && data.accessToken) {
+          document.getElementById('token').value = data.accessToken;
+        }
+      } catch (_) {}
+    }
+
+    async function shipperSignup() {
+      const payload = {
+        email: document.getElementById('su_email').value,
+        password: document.getElementById('su_password').value,
+        name: document.getElementById('su_name').value,
+        companyName: document.getElementById('su_company').value,
+        phone: document.getElementById('su_phone').value,
+        address: document.getElementById('su_address').value,
+        addressDetail: document.getElementById('su_address_detail').value,
+        bizRegNo: document.getElementById('su_biz_reg').value,
+        bizPhone: document.getElementById('su_biz_phone').value,
+        openDate: document.getElementById('su_open_date').value,
+        ownerName: document.getElementById('su_owner').value
+      };
+      const resp = await apiFetch('/api/auth/shipper/signup', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      document.getElementById('resp_signup').textContent = resp;
+    }
+
+    async function shipperLogin() {
+      const payload = {
+        email: document.getElementById('sl_email').value,
+        password: document.getElementById('sl_password').value
+      };
+      const resp = await apiFetch('/api/auth/shipper/login', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      document.getElementById('resp_login').textContent = resp;
+      setTokenFromResponse(resp);
+    }
+
+    async function driverSignup() {
+      const payload = {
+        email: document.getElementById('dsu_email').value,
+        password: document.getElementById('dsu_password').value,
+        name: document.getElementById('dsu_name').value,
+        phone: document.getElementById('dsu_phone').value,
+        address: document.getElementById('dsu_address').value,
+        addressDetail: document.getElementById('dsu_address_detail').value,
+        bankName: document.getElementById('dsu_bank_name').value,
+        bankAccount: document.getElementById('dsu_bank_account').value
+      };
+      const resp = await apiFetch('/api/auth/driver/signup', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      document.getElementById('resp_driver_signup').textContent = resp;
+    }
+
+    async function driverLogin() {
+      const payload = {
+        email: document.getElementById('dl_email').value,
+        password: document.getElementById('dl_password').value
+      };
+      const resp = await apiFetch('/api/auth/driver/login', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      document.getElementById('resp_driver_login').textContent = resp;
+      setTokenFromResponse(resp);
+    }
+
+    async function logout() {
+      const resp = await apiFetch('/api/auth/logout', {
+        method: 'POST'
+      });
+      document.getElementById('resp_logout').textContent = resp;
+      document.getElementById('token').value = '';
+    }
+
+    function renderChecklist(list) {
+      const box = document.getElementById('checklist_box');
+      if (!Array.isArray(list) || list.length === 0) {
+        box.textContent = '';
+        return;
+      }
+      const rows = list.map(item => {
+        const fee = item.hasExtraFee ? ` (+${Number(item.baseExtraFee).toLocaleString()}원)` : '';
+        const label = item.extraInputLabel ? ` - ${item.extraInputLabel}` : '';
+        return `
+          <label style="display:flex;gap:8px;align-items:center;margin:6px 0;">
+            <input type="checkbox" data-id="${item.checklistItemId}" data-code="${item.name}" />
+            <span>${item.name}${fee}${label}</span>
+          </label>
+        `;
+      }).join('');
+      box.innerHTML = rows;
+    }
+
+    function getSelectedChecklistIds() {
+      return Array.from(document.querySelectorAll('#checklist_box input[type=checkbox]:checked'))
+        .map(el => Number(el.getAttribute('data-id')))
+        .filter(n => !Number.isNaN(n));
+    }
+
+    async function listChecklistItems() {
+      const resp = await apiFetch('/api/checklist-items');
+      document.getElementById('resp_checklist').textContent = resp;
+      try {
+        const json = JSON.parse(resp.split('\n').slice(1).join('\n'));
+        renderChecklist(json);
+      } catch (_) {}
+    }
+
+    async function createTruck() {
+      const payload = document.getElementById('truck_payload').value;
+      const resp = await apiFetch('/api/driver/trucks', {
+        method: 'POST',
+        body: payload
+      });
+      document.getElementById('resp_truck').textContent = resp;
+    }
+
+    async function listTrucks() {
+      const resp = await apiFetch('/api/driver/trucks');
+      document.getElementById('resp_truck').textContent = resp;
+    }
+
+    async function createQuote() {
+      const payloadText = document.getElementById('quote_payload').value;
+      let payload = JSON.parse(payloadText);
+      const ids = getSelectedChecklistIds();
+      if (ids.length > 0) {
+        payload.checklistItems = ids.map(id => ({ checklistItemId: id, extraInput: null, extraFee: 0 }));
+      }
+      const stopResult = parseQuoteStops();
+      if (stopResult === null) return;
+      if (stopResult) payload.stops = stopResult;
+      const resp = await apiFetch('/api/shipper/quotes', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      document.getElementById('resp_quote').textContent = resp;
+    }
+
+    async function validateQuote() {
+      const payloadText = document.getElementById('quote_payload').value;
+      let payload = JSON.parse(payloadText);
+      const ids = getSelectedChecklistIds();
+      if (ids.length > 0) {
+        payload.checklistItems = ids.map(id => ({ checklistItemId: id, extraInput: null, extraFee: 0 }));
+      }
+      const stopResult = parseQuoteStops();
+      if (stopResult === null) return;
+      if (stopResult) payload.stops = stopResult;
+      const resp = await apiFetch('/api/shipper/quotes/validate', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      document.getElementById('resp_quote').textContent = resp;
+    }
+
+    async function listQuotes() {
+      const resp = await apiFetch('/api/shipper/quotes');
+      document.getElementById('resp_quote').textContent = resp;
+    }
+
+    function parseQuoteStops() {
+      const raw = document.getElementById('quote_stops').value.trim();
+      if (!raw) return false;
+      try {
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : null;
+      } catch (e) {
+        document.getElementById('resp_quote').textContent = `HTTP 0\nInvalid stops JSON: ${e.message}`;
+        return null;
+      }
+    }
+
+    async function createCounterOffer() {
+      const quoteId = document.getElementById('co_quote_id').value;
+      const payload = document.getElementById('co_payload').value;
+      const resp = await apiFetch(`/api/driver/quotes/${quoteId}/counter-offers`, {
+        method: 'POST',
+        body: payload
+      });
+      document.getElementById('resp_counter_driver').textContent = resp;
+    }
+
+    async function listMyCounterOffers() {
+      const resp = await apiFetch('/api/driver/counter-offers/me');
+      document.getElementById('resp_counter_driver').textContent = resp;
+    }
+
+    async function listCounterOffers() {
+      const quoteId = document.getElementById('co_shipper_quote_id').value;
+      const resp = await apiFetch(`/api/shipper/quotes/${quoteId}/counter-offers`);
+      document.getElementById('resp_counter_shipper').textContent = resp;
+    }
+
+    async function acceptCounterOffer() {
+      const offerId = document.getElementById('co_offer_id').value;
+      const resp = await apiFetch(`/api/shipper/counter-offers/${offerId}/accept`, {
+        method: 'PATCH'
+      });
+      document.getElementById('resp_counter_shipper').textContent = resp;
+    }
+
+    async function rejectCounterOffer() {
+      const offerId = document.getElementById('co_offer_id').value;
+      const resp = await apiFetch(`/api/shipper/counter-offers/${offerId}/reject`, {
+        method: 'PATCH'
+      });
+      document.getElementById('resp_counter_shipper').textContent = resp;
+    }
+
+    async function listNotifications() {
+      const resp = await apiFetch('/api/notifications/me');
+      document.getElementById('resp_notifications').textContent = resp;
+    }
+
+    async function getUnreadCount() {
+      const resp = await apiFetch('/api/notifications/me/unread-count');
+      document.getElementById('resp_notifications').textContent = resp;
+    }
+
+    async function markNotificationRead() {
+      const notiId = document.getElementById('noti_id').value;
+      const resp = await apiFetch(`/api/notifications/${notiId}/read`, {
+        method: 'PATCH'
+      });
+      document.getElementById('resp_notifications').textContent = resp;
+    }
+  </script>
+
+</body>
+</html>

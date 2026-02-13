@@ -1,9 +1,9 @@
 import React, { useMemo } from "react";
-import { StyleSheet, Text, type TextProps, type TextStyle } from "react-native";
+import { StyleSheet, Text, type StyleProp, type TextProps, type TextStyle } from "react-native";
 import { useAppTheme } from "../../theme/useAppTheme";
 import type { AppThemeColors } from "../../theme/types";
 
-type AppTextVariant = "heading" | "body" | "caption";
+type AppTextVariant = "display" | "title" | "heading" | "body" | "detail" | "caption";
 
 export type AppTextProps = Omit<TextProps, "style"> & {
   variant?: AppTextVariant;
@@ -11,7 +11,32 @@ export type AppTextProps = Omit<TextProps, "style"> & {
   weight?: TextStyle["fontWeight"] | string | number;
   color?: keyof AppThemeColors | string;
   align?: TextStyle["textAlign"];
-  style?: TextStyle;
+  style?: StyleProp<TextStyle>;
+};
+
+const FALLBACK_COLORS: AppThemeColors = {
+  bgMain: "#F8FAFC",
+  bgSurface: "#FFFFFF",
+  bgSurfaceAlt: "#F1F5F9",
+  textMain: "#111827",
+  textSub: "#334155",
+  textMuted: "#475569",
+  textInverse: "#FFFFFF",
+  textOnBrand: "#FFFFFF",
+  brandPrimary: "#FF6A00",
+  brandSecondary: "#111827",
+  brandAccent: "#00E5A8",
+  borderDefault: "#E2E8F0",
+  borderStrong: "#CBD5E1",
+  stateBrandPressed: "#CC5500",
+  stateOverlayPressed: "#ECEDEE",
+  stateDisabledBg: "#E2E8F0",
+  stateDisabledText: "#94A3B8",
+  stateDisabledBorder: "#E2E8F0",
+  semanticDanger: "#EF4444",
+  semanticSuccess: "#059669",
+  semanticWarning: "#D97706",
+  semanticInfo: "#CC5500",
 };
 
 function resolveColor(themeColors: AppThemeColors, color?: keyof AppThemeColors | string) {
@@ -32,13 +57,11 @@ function normalizeFontWeight(input: unknown): TextStyle["fontWeight"] {
   const raw = String(input).trim();
   if (!raw) return undefined;
 
-  // numeric string
   if (/^\d{3}$/.test(raw)) {
     const n = Number(raw);
     if (n >= 100 && n <= 900 && n % 100 === 0) return n as TextStyle["fontWeight"];
   }
 
-  // RN fontWeight keywords (subset + 확장 대응)
   const keywords = [
     "normal",
     "bold",
@@ -79,63 +102,40 @@ export function AppText({
   const theme = useAppTheme();
 
   const computed = useMemo<TextStyle>(() => {
-    const headingSize = theme?.typography?.headingSize ?? 18;
-    const bodySize = theme?.typography?.bodySize ?? 14;
+    const scale = theme?.typography?.scale;
+    const fontFamily = theme?.typography?.fontFamilyPrimary || undefined;
+    const variantScale =
+      scale?.[variant] ??
+      ({
+        display: { size: 28, lineHeight: 36, weight: "700", letterSpacing: -0.2 },
+        title: { size: 22, lineHeight: 30, weight: "700", letterSpacing: -0.1 },
+        heading: { size: 18, lineHeight: 26, weight: "600", letterSpacing: -0.1 },
+        body: { size: 16, lineHeight: 24, weight: "400", letterSpacing: 0 },
+        detail: { size: 14, lineHeight: 20, weight: "400", letterSpacing: 0 },
+        caption: { size: 12, lineHeight: 16, weight: "500", letterSpacing: 0.1 },
+      } satisfies Record<AppTextVariant, { size: number; lineHeight: number; weight: string; letterSpacing: number }>)[
+        variant
+      ];
 
-    const defaultHeadingWeight = normalizeFontWeight(theme?.typography?.headingWeight) ?? "700";
-    const defaultBodyWeight = normalizeFontWeight(theme?.typography?.bodyWeight) ?? "400";
+    const fontSize = typeof size === "number" ? size : variantScale.size;
+    const lineHeight =
+      typeof size === "number" ? Math.max(size + 4, Math.round(size * 1.35)) : variantScale.lineHeight;
+    const letterSpacing = variantScale.letterSpacing;
 
-    const fontSize =
-      typeof size === "number"
-        ? size
-        : variant === "heading"
-          ? headingSize
-          : variant === "caption"
-            ? Math.max(10, bodySize - 2)
-            : bodySize;
-
-    const candidateWeight =
-      weight != null
-        ? weight
-        : variant === "heading"
-          ? theme?.typography?.headingWeight
-          : theme?.typography?.bodyWeight;
-
-    const fontWeight =
-      normalizeFontWeight(candidateWeight) ?? (variant === "heading" ? defaultHeadingWeight : defaultBodyWeight);
-
-    const themeColors = (theme?.colors ?? {
-      bgMain: "#F8FAFC",
-      bgSurfaceAlt: "#F1F5F9",
-      textMain: "#0F172A",
-      textOnBrand: "#FFFFFF",
-      brandPrimary: "#FF6A00",
-      brandSecondary: "#0F172A",
-      brandAccent: "#00E5A8",
-      borderDefault: "#E2E8F0",
-      semanticDanger: "#EF4444",
-    }) as AppThemeColors;
-
+    const fontWeight = normalizeFontWeight(weight ?? variantScale.weight) ?? "400";
+    const themeColors = (theme?.colors ?? FALLBACK_COLORS) as AppThemeColors;
     const textColor = resolveColor(themeColors, color);
 
     return {
       fontSize,
+      lineHeight,
+      letterSpacing,
       fontWeight,
+      fontFamily,
       color: textColor,
       textAlign: align,
     };
-  }, [
-    theme?.typography?.headingSize,
-    theme?.typography?.bodySize,
-    theme?.typography?.headingWeight,
-    theme?.typography?.bodyWeight,
-    theme?.colors,
-    variant,
-    size,
-    weight,
-    color,
-    align,
-  ]);
+  }, [theme, variant, size, weight, color, align]);
 
   return (
     <Text {...props} style={[styles.baseText, computed, style]}>
