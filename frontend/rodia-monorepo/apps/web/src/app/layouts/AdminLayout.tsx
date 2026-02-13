@@ -24,12 +24,10 @@ const NAV_GROUPS: NavGroup[] = [
   {
     title: "배송",
     items: [
-      // 실시간 GPS/이상징후 관제
+      // 수정: 배송 실시간/이력은 아직 페이지 없으니 disabled 유지
       { label: "배송 실시간 모니터링", to: "/delivery/live", disabled: true },
-      // 과거 운행/배송 루트 이력
       { label: "배송 이력", to: "/delivery/history", disabled: true },
 
-      // 견적/배차/매칭(배송 도메인 하위로 묶기)
       { label: "견적 관리", to: "/quotes" },
       { label: "배차 관리", to: "/dispatch", disabled: true },
       { label: "매칭 관리", to: "/matchings" },
@@ -38,14 +36,12 @@ const NAV_GROUPS: NavGroup[] = [
   {
     title: "사용자",
     items: [
-      // 전체 사용자 통합 조회 (필터로 화주/차주 나누는 형태 예상)
       { label: "전체 사용자 조회", to: "/users" },
 
-      // 화주/차주 개별 관리 페이지 (추후 테이블/필터/제재 액션 포함)
-      { label: "화주 조회", to: "/users/shippers", disabled: true },
-      { label: "차주 조회", to: "/users/drivers", disabled: true },
+      // 수정: 화주/차주 조회 페이지 라우트가 생겼으므로 활성화
+      { label: "화주 조회", to: "/users/shippers" },
+      { label: "차주 조회", to: "/users/drivers" },
 
-      // 차주(기사) 승인: 서류(PDF/PNG/JPG) 검토 후 승인/반려
       { label: "차주(기사) 승인", to: "/drivers/approvals" },
     ],
   },
@@ -61,7 +57,9 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: "시스템 설정", to: "/settings" },
       { label: "고객지원", to: "/support", disabled: true },
-      { label: "제재 내역 로그", to: "/ops/sanctions", disabled: true },
+
+      // 수정: 제재 로그 페이지 라우트 연결 (disabled 해제)
+      { label: "제재 내역 로그", to: "/ops/sanctions/logs" },
     ],
   },
 ];
@@ -76,6 +74,9 @@ function getPageName(pathname: string): string {
   if (pathname.startsWith("/dispatch")) return "배차 관리";
   if (pathname.startsWith("/matchings")) return "매칭 관리";
 
+  // 수정: 사용자 상세 라우트 우선 매칭 ("/users" 보다 먼저)
+  if (pathname.startsWith("/users/") && pathname.split("/").length >= 3) return "사용자 상세";
+
   if (pathname.startsWith("/users/shippers")) return "화주 조회";
   if (pathname.startsWith("/users/drivers")) return "차주 조회";
   if (pathname.startsWith("/users")) return "전체 사용자 조회";
@@ -87,7 +88,9 @@ function getPageName(pathname: string): string {
 
   if (pathname.startsWith("/settings")) return "시스템 설정";
   if (pathname.startsWith("/support")) return "고객지원";
-  if (pathname.startsWith("/ops/sanctions")) return "제재 내역 로그";
+
+  // 수정: 운영 > 제재 로그 경로 반영
+  if (pathname.startsWith("/ops/sanctions/logs")) return "제재 내역 로그";
 
   return "페이지";
 }
@@ -141,6 +144,7 @@ export default function AdminLayout() {
         <aside className="w-64 shrink-0 border-r border-border bg-muted">
           <div className="flex h-16 items-center px-6">
             <div className="flex items-center gap-2">
+              {/* 수정: 색은 semantic(primary)만 사용 */}
               <span className="inline-flex h-2 w-2 rounded-full bg-primary" />
               <span className="text-sm font-semibold">Rodia Admin</span>
             </div>

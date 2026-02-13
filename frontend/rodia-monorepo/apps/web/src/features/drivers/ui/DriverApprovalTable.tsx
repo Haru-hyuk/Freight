@@ -4,7 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/shared/ui/shadcn/button";
 
 import type { DriverApprovalRow } from "../model/types";
-import { LicenseBadge, ApprovalBadge } from "./badges";
+import { LicenseBadge, ApprovalBadge } from "./DriverApprovalBadges";
 import { DriverApprovalDialog } from "./DriverApprovalDialog";
 
 const MOCK_ROWS: DriverApprovalRow[] = [
