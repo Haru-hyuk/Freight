@@ -1,3 +1,4 @@
+// src/app/layouts/AdminLayout.tsx
 import * as React from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 
@@ -7,27 +8,123 @@ import { Separator } from "@/shared/ui/shadcn/separator";
 type NavItem = {
   label: string;
   to: string;
+  disabled?: boolean;
 };
 
-const NAV_ITEMS: NavItem[] = [
-  { label: "대시보드", to: "/dashboard" },
-  { label: "기사 승인 관리", to: "/drivers/approvals" },
-  { label: "오더 및 관제", to: "/orders/monitoring" },
-  { label: "정산 관리", to: "/settlement" },
-  { label: "견적", to: "/quotes" },
-  { label: "매칭", to: "/matchings" },
-  { label: "사용자", to: "/users" },
+type NavGroup = {
+  title: string;
+  items: NavItem[];
+};
+
+const NAV_GROUPS: NavGroup[] = [
+  {
+    title: "메인",
+    items: [{ label: "대시보드", to: "/dashboard" }],
+  },
+  {
+    title: "배송",
+    items: [
+      // 수정: 배송 실시간/이력은 아직 페이지 없으니 disabled 유지
+      { label: "배송 실시간 모니터링", to: "/delivery/live", disabled: true },
+      { label: "배송 이력", to: "/delivery/history", disabled: true },
+
+      { label: "견적 관리", to: "/quotes" },
+      { label: "배차 관리", to: "/dispatch", disabled: true },
+      { label: "매칭 관리", to: "/matchings" },
+    ],
+  },
+  {
+    title: "사용자",
+    items: [
+      { label: "전체 사용자 조회", to: "/users" },
+
+      // 수정: 화주/차주 조회 페이지 라우트가 생겼으므로 활성화
+      { label: "화주 조회", to: "/users/shippers" },
+      { label: "차주 조회", to: "/users/drivers" },
+
+      { label: "차주(기사) 승인", to: "/drivers/approvals" },
+    ],
+  },
+  {
+    title: "정산/결제",
+    items: [
+      { label: "정산 승인 관리", to: "/settlement/approvals", disabled: true },
+      { label: "정산 내역", to: "/settlement" },
+    ],
+  },
+  {
+    title: "운영",
+    items: [
+      { label: "시스템 설정", to: "/settings" },
+      { label: "고객지원", to: "/support", disabled: true },
+
+      // 수정: 제재 로그 페이지 라우트 연결 (disabled 해제)
+      { label: "제재 내역 로그", to: "/ops/sanctions/logs" },
+    ],
+  },
 ];
 
 function getPageName(pathname: string): string {
   if (pathname.startsWith("/dashboard")) return "대시보드";
-  if (pathname.startsWith("/drivers")) return "기사 승인 관리";
-  if (pathname.startsWith("/orders")) return "오더 및 관제";
-  if (pathname.startsWith("/settlement")) return "정산 관리";
-  if (pathname.startsWith("/quotes")) return "견적";
-  if (pathname.startsWith("/matchings")) return "매칭";
-  if (pathname.startsWith("/users")) return "사용자";
+
+  if (pathname.startsWith("/delivery/live")) return "배송 실시간 모니터링";
+  if (pathname.startsWith("/delivery/history")) return "배송 이력";
+
+  if (pathname.startsWith("/quotes")) return "견적 관리";
+  if (pathname.startsWith("/dispatch")) return "배차 관리";
+  if (pathname.startsWith("/matchings")) return "매칭 관리";
+
+  // 수정: 사용자 상세 라우트 우선 매칭 ("/users" 보다 먼저)
+  if (pathname.startsWith("/users/") && pathname.split("/").length >= 3) return "사용자 상세";
+
+  if (pathname.startsWith("/users/shippers")) return "화주 조회";
+  if (pathname.startsWith("/users/drivers")) return "차주 조회";
+  if (pathname.startsWith("/users")) return "전체 사용자 조회";
+
+  if (pathname.startsWith("/drivers/approvals")) return "차주(기사) 승인";
+
+  if (pathname.startsWith("/settlement/approvals")) return "정산 승인 관리";
+  if (pathname.startsWith("/settlement")) return "정산 내역";
+
+  if (pathname.startsWith("/settings")) return "시스템 설정";
+  if (pathname.startsWith("/support")) return "고객지원";
+
+  // 수정: 운영 > 제재 로그 경로 반영
+  if (pathname.startsWith("/ops/sanctions/logs")) return "제재 내역 로그";
+
   return "페이지";
+}
+
+function NavItemLink({ item }: { item: NavItem }) {
+  if (item.disabled) {
+    return (
+      <div
+        className={[
+          "flex items-center rounded-lg px-3 py-2 text-sm font-medium",
+          "border border-border bg-muted",
+          "opacity-60",
+          "cursor-not-allowed",
+        ].join(" ")}
+      >
+        {item.label}
+      </div>
+    );
+  }
+
+  return (
+    <NavLink
+      to={item.to}
+      className={({ isActive }) =>
+        [
+          "flex items-center rounded-lg px-3 py-2 text-sm font-medium",
+          "border border-transparent",
+          isActive ? "bg-background border-border" : "bg-muted hover:bg-background",
+        ].join(" ")
+      }
+    >
+      {item.label}
+    </NavLink>
+  );
 }
 
 export default function AdminLayout() {
@@ -47,6 +144,7 @@ export default function AdminLayout() {
         <aside className="w-64 shrink-0 border-r border-border bg-muted">
           <div className="flex h-16 items-center px-6">
             <div className="flex items-center gap-2">
+              {/* 수정: 색은 semantic(primary)만 사용 */}
               <span className="inline-flex h-2 w-2 rounded-full bg-primary" />
               <span className="text-sm font-semibold">Rodia Admin</span>
             </div>
@@ -54,25 +152,21 @@ export default function AdminLayout() {
 
           <Separator />
 
-          <nav className="px-2 py-3">
-            <ul className="space-y-1">
-              {NAV_ITEMS.map((item) => (
-                <li key={item.to}>
-                  <NavLink
-                    to={item.to}
-                    className={({ isActive }) =>
-                      [
-                        "flex items-center rounded-lg px-3 py-2 text-sm font-medium",
-                        "border border-transparent",
-                        isActive ? "bg-background border-border" : "hover:bg-background/50",
-                      ].join(" ")
-                    }
-                  >
-                    {item.label}
-                  </NavLink>
-                </li>
+          <nav className="px-3 py-4">
+            <div className="space-y-4">
+              {NAV_GROUPS.map((group) => (
+                <section key={group.title} className="space-y-2">
+                  <div className="px-2 text-xs font-semibold opacity-70">{group.title}</div>
+                  <ul className="space-y-1">
+                    {group.items.map((item) => (
+                      <li key={item.to}>
+                        <NavItemLink item={item} />
+                      </li>
+                    ))}
+                  </ul>
+                </section>
               ))}
-            </ul>
+            </div>
           </nav>
 
           <div className="mt-auto px-4 pb-4">

@@ -1,81 +1,70 @@
-import * as React from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+// src/pages/dashboard/DashboardPage.tsx
+import { useEffect, useState } from "react";
 
-import { Button } from "@/shared/ui/shadcn/button";
-import { Input } from "@/shared/ui/shadcn/input";
-import { Label } from "@/shared/ui/shadcn/label";
+import { Separator } from "@/shared/ui/shadcn/separator";
+import { Tabs, TabsList, TabsTrigger } from "@/shared/ui/shadcn/tabs";
 
-type LocationState = {
-  from?: string;
-};
+import { fetchDashboard } from "@/features/dashboard/api/dashboardApi";
+import type { DashboardResponse, TimeRange } from "@/features/dashboard/model/types";
+import { DashboardKpiGrid } from "@/features/dashboard/ui/DashboardKpiGrid";
+import { DeviationFeed } from "@/features/dashboard/ui/DeviationFeed";
+import { DashboardQuickActions } from "@/features/dashboard/ui/DashboardQuickActions";
 
-export default function LoginPage() {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const state = (location.state ?? {}) as LocationState;
+export default function DashboardPage() {
+  const [range, setRange] = useState<TimeRange>("today");
+  const [data, setData] = useState<DashboardResponse | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const [email, setEmail] = React.useState("admin@rodia.com");
-  const [password, setPassword] = React.useState("password");
-  const [error, setError] = React.useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+    (async () => {
+      setLoading(true);
+      try {
+        const res = await fetchDashboard(range);
+        if (!cancelled) {
+          setData(res);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    })();
 
-    // UI-only: 실제 API 연동 전까지 목업 인증 처리
-    if (!email.trim() || !password.trim()) {
-      setError("이메일/비밀번호를 입력해줘.");
-      return;
-    }
-
-    localStorage.setItem("rodia_admin_token", "mock-token");
-    localStorage.setItem("rodia_admin_role", "super");
-
-    navigate(state.from ?? "/dashboard", { replace: true });
-  };
+    return () => {
+      cancelled = true;
+    };
+  }, [range]);
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-2">
-        <div className="inline-flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-          <span className="text-sm font-semibold">R</span>
+    <div className="min-h-screen bg-background text-foreground">
+      <div className="mx-auto w-full max-w-6xl px-4 py-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-1">
+            <h1 className="text-xl font-bold">운영 현황</h1>
+            <p className="text-sm opacity-70">KPI + 이상 징후를 한 화면에서</p>
+          </div>
+
+          <Tabs value={range} onValueChange={(v) => setRange(v as TimeRange)}>
+            <TabsList className="border border-border bg-muted">
+              <TabsTrigger value="today">오늘</TabsTrigger>
+              <TabsTrigger value="week">이번 주</TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
-        <h1 className="text-xl font-semibold">Rodia Admin</h1>
-        <p className="text-sm opacity-70">관리자 계정으로 로그인해줘.</p>
+
+        <Separator className="my-6" />
+
+        <DashboardKpiGrid loading={loading} kpi={data?.kpi ?? null} range={range} />
+
+        <Separator className="my-6" />
+
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <DeviationFeed loading={loading} items={data?.deviations ?? []} />
+          <DashboardQuickActions loading={loading} kpi={data?.kpi ?? null} items={data?.deviations ?? []} />
+        </div>
       </div>
-
-      <form className="space-y-4" onSubmit={handleSubmit}>
-        <div className="space-y-2">
-          <Label htmlFor="email">이메일</Label>
-          <Input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="border border-border bg-background text-foreground focus:ring-2 focus:ring-primary"
-            placeholder="admin@rodia.com"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="password">비밀번호</Label>
-          <Input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="border border-border bg-background text-foreground focus:ring-2 focus:ring-primary"
-            placeholder="비밀번호"
-          />
-        </div>
-
-        {error ? (
-          <div className="rounded-lg border border-border bg-muted px-3 py-2 text-sm">{error}</div>
-        ) : null}
-
-        <Button type="submit" className="w-full">
-          대시보드 접속
-        </Button>
-      </form>
     </div>
   );
 }
