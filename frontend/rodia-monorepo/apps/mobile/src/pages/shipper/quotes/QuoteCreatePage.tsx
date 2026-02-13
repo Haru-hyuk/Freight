@@ -1,5 +1,5 @@
 ﻿import React, { useMemo, useState } from "react";
-import { Modal, Platform, Pressable, StyleSheet, View } from "react-native";
+import { Alert, Modal, Pressable, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, type NavigationProp, type ParamListBase } from "@react-navigation/native";
 import { useRouter } from "expo-router";
@@ -18,6 +18,8 @@ import {
   QuoteCreateDraftProvider,
   useQuoteCreateDraft,
 } from "@/features/quote/model/quoteCreateDraft";
+import { createShipperQuote } from "@/features/quote/api/quote-api";
+import { buildQuoteCreateRequest } from "@/features/quote/model/quoteCreateRequestMapper";
 import QuoteCreateStep1 from "@/features/quote/ui/QuoteCreateStep1";
 import QuoteCreateStep2 from "@/features/quote/ui/QuoteCreateStep2";
 import QuoteCreateStep3 from "@/features/quote/ui/QuoteCreateStep3";
@@ -145,6 +147,7 @@ function QuoteCreatePageInner() {
   const [bottomBarHeight, setBottomBarHeight] = useState(100);
   const [isSubmitDoneOpen, setIsSubmitDoneOpen] = useState(false);
   const [submittedAt, setSubmittedAt] = useState<Date | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const pricing = useMemo(() => computeQuotePricing(draft), [draft]);
 
@@ -182,17 +185,48 @@ function QuoteCreatePageInner() {
     else router.replace("/(shipper)/quotes");
   };
 
-  const handleNext = () => {
+  const readErrorMessage = (error: unknown) => {
+    const fallback = "네트워크 또는 요청 값을 확인해주세요.";
+    if (!error || typeof error !== "object") return fallback;
+
+    const e = error as {
+      response?: { data?: { message?: string; error?: string } };
+      message?: string;
+    };
+
+    const serverMessage = e.response?.data?.message ?? e.response?.data?.error;
+    if (typeof serverMessage === "string" && serverMessage.trim()) return serverMessage.trim();
+    if (typeof e.message === "string" && e.message.trim()) return e.message.trim();
+    return fallback;
+  };
+
+  const handleNext = async () => {
       if (step === 1 && !isStep1Ready) return alert("출발지와 도착지, 연락처를 입력해주세요.");
       if (step === 2 && !isStep2Ready) return alert("화물 정보를 입력해주세요.");
       
-      if (step < 3) setStep((prev) => (prev + 1) as 2 | 3);
-      else submitQuoteRequest();
+      if (step < 3) {
+        setStep((prev) => (prev + 1) as 2 | 3);
+        return;
+      }
+
+      await submitQuoteRequest();
   };
 
-  const submitQuoteRequest = () => {
-    setSubmittedAt(new Date());
-    setIsSubmitDoneOpen(true);
+  const submitQuoteRequest = async () => {
+    if (isSubmitting) return;
+
+    try {
+      setIsSubmitting(true);
+      const payload = buildQuoteCreateRequest(draft);
+      await createShipperQuote(payload);
+
+      setSubmittedAt(new Date());
+      setIsSubmitDoneOpen(true);
+    } catch (error) {
+      Alert.alert("견적 요청 실패", readErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const applyDevAutoFill = () => {
@@ -247,6 +281,12 @@ function QuoteCreatePageInner() {
       selectedOpts: ["caution"],
       budget: "180000",
       noteToDriver: "개발용 자동 입력 데이터입니다.",
+      truckId: 1,
+      originLat: 37.5066,
+      originLng: 127.0543,
+      destinationLat: 37.3944,
+      destinationLng: 127.1112,
+      distanceKm: 23,
     });
 
     setStep(3);
@@ -300,7 +340,9 @@ function QuoteCreatePageInner() {
             size="lg"
             style={styles.btnNext}
             onPress={handleNext}
-            right={step < 3 ? <Ionicons name="arrow-forward" size={18} color={theme.colors.textOnBrand} /> : undefined}
+            disabled={isSubmitting}
+            loading={step === 3 && isSubmitting}
+            right={step < 3 && !isSubmitting ? <Ionicons name="arrow-forward" size={18} color={theme.colors.textOnBrand} /> : undefined}
           />
         </View>
       </View>

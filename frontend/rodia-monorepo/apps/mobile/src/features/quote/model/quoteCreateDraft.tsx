@@ -94,6 +94,12 @@ export type QuoteCreateDraft = {
 
   date: Date;
   time: Date;
+  truckId?: number;
+  originLat?: number;
+  originLng?: number;
+  destinationLat?: number;
+  destinationLng?: number;
+  distanceKm?: number;
 
   // Step 2: Cargo
   cargoList: CargoItem[];
@@ -192,6 +198,12 @@ function createInitialDraft(): QuoteCreateDraft {
 
     date: new Date(),
     time: createDefaultTime(),
+    truckId: 1,
+    originLat: 0,
+    originLng: 0,
+    destinationLat: 0,
+    destinationLng: 0,
+    distanceKm: 0,
 
     cargoList: [createEmptyCargoItem(1)],
 
