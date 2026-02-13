@@ -55,16 +55,7 @@ function normalizeRole(v: unknown): UserRole | null {
 function extractTokens(data: unknown): AuthTokens | null {
   const d = (data ?? {}) as AnyObj;
 
-  const accessToken =
-    d?.accessToken ??
-    d?.access_token ??
-    d?.token ??
-    d?.data?.accessToken ??
-    d?.data?.access_token ??
-    d?.data?.token ??
-    d?.tokens?.accessToken ??
-    d?.tokens?.access_token ??
-    d?.tokens?.token;
+  const accessToken = d?.accessToken;
 
   const refreshToken =
     d?.refreshToken ??

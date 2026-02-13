@@ -50,6 +50,14 @@ function isEnvTrue(v: string | undefined): boolean {
   return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
 }
 
+function readBooleanEnv(keys: string[], defaultValue: boolean): boolean {
+  for (const key of keys) {
+    const raw = readEnvString(key);
+    if (typeof raw === "string") return isEnvTrue(raw);
+  }
+  return defaultValue;
+}
+
 function normalizeUrl(input: string): string {
   const v = input.trim();
   if (!v) return v;
@@ -117,6 +125,27 @@ export function isMockAuthEnabled(): boolean {
     isEnvTrue(readEnvString("MOCK_AUTH")) ||
     isEnvTrue(readEnvString("VITE_MOCK_AUTH"))
   );
+}
+
+export function getShipperQuoteCreatePath(): string {
+  const envPath =
+    readEnvString("EXPO_PUBLIC_SHIPPER_QUOTE_CREATE_PATH") ??
+    readEnvString("SHIPPER_QUOTE_CREATE_PATH") ??
+    readEnvString("VITE_SHIPPER_QUOTE_CREATE_PATH") ??
+    readEnvString("shipperQuoteCreatePath");
+
+  if (isTruthyString(envPath)) return envPath.trim();
+  return "/api/shipper/quotes";
+}
+
+export function isMockQuoteEnabled(): boolean {
+  const useRealQuoteApi = readBooleanEnv(
+    ["EXPO_PUBLIC_USE_REAL_QUOTE_API", "USE_REAL_QUOTE_API", "VITE_USE_REAL_QUOTE_API"],
+    false
+  );
+  if (useRealQuoteApi) return false;
+
+  return readBooleanEnv(["EXPO_PUBLIC_MOCK_QUOTE", "MOCK_QUOTE", "VITE_MOCK_QUOTE"], true);
 }
 
 /**
