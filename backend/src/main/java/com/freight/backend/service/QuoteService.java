@@ -206,9 +206,7 @@ public class QuoteService {
         quoteChecklistItemRepository.deleteByQuoteId(quoteId);
         quoteStopRepository.deleteByQuoteId(quoteId);
         quoteRepository.delete(quote);
-    }
-
-    @Transactional(readOnly = true)
+    }    @Transactional(readOnly = true)
     public QuoteValidationResponse validateQuote(QuoteCreateRequest req) {
         PricingResult pricing = calculatePricing(
                 req.getDistanceKm(),
@@ -224,58 +222,169 @@ public class QuoteService {
         int estimatedWeighted = pricing.weightedWon().setScale(0, RoundingMode.HALF_UP).intValue();
 
         List<String> comments = new ArrayList<>();
+        List<String> reasons = new ArrayList<>();
+        List<String> actions = new ArrayList<>();
+
         Integer desired = req.getDesiredPrice();
+        QuoteValidationResponse.PriceFit priceFit = QuoteValidationResponse.PriceFit.NORMAL;
+        String priceLabel = "PRICE_OK";
         if (desired != null && desired > 0) {
             BigDecimal threshold = pricing.totalMinWon()
                     .multiply(new BigDecimal("0.85"))
                     .setScale(0, RoundingMode.HALF_UP);
             if (new BigDecimal(desired).compareTo(threshold) < 0) {
-                comments.add("희망금액이 예상 최저가의 85% 미만입니다. 매칭이 어려울 수 있어요.");
+                comments.add("Desired price is lower than recommended minimum.");
+                reasons.add("Desired price is lower than market minimum.");
+                actions.add("USE_AVERAGE_PRICE");
+                priceFit = QuoteValidationResponse.PriceFit.LOW;
+                priceLabel = "PRICE_LOW";
+            } else if (desired > estimatedMax) {
+                comments.add("Desired price is above recommended range.");
+                reasons.add("Desired price is above upper estimated range.");
+                actions.add("USE_MIN_PRICE");
+                priceFit = QuoteValidationResponse.PriceFit.HIGH;
+                priceLabel = "PRICE_HIGH";
+            } else {
+                reasons.add("Desired price is within estimated range.");
             }
+        } else {
+            reasons.add("Desired price is missing.");
+            actions.add("USE_AVERAGE_PRICE");
         }
 
         Integer weightKg = req.getWeightKg();
         PricingVehicleType vehicleType = PricingVehicleType.from(req.getVehicleType());
+        int capacityKg = vehicleType == null ? 0 : vehicleType.getDefaultCapacityKg();
+        int usagePercent = 0;
+        QuoteValidationResponse.LoadSafety loadSafety = QuoteValidationResponse.LoadSafety.SAFE;
+        String loadLabel = "LOAD_SAFE";
+
         if (weightKg != null && weightKg > 0 && vehicleType != null) {
-            int capacityKg = vehicleType.getDefaultCapacityKg();
+            usagePercent = Math.min(100, (int) Math.round((weightKg * 100.0) / capacityKg));
             if (weightKg > capacityKg) {
-                PricingVehicleType nextType = PricingVehicleType.nextHigher(vehicleType);
-                if (nextType != null) {
-                    comments.add(String.format(
-                            "화물 중량이 선택 차량 적재한도(%dkg)를 초과합니다. %s 이상 차량을 선택해 주세요.",
-                            capacityKg,
-                            nextType.name()
-                    ));
-                } else {
-                    comments.add(String.format(
-                            "화물 중량이 선택 차량 적재한도(%dkg)를 초과합니다. 상위 차량을 선택해 주세요.",
-                            capacityKg
-                    ));
-                }
+                comments.add("Cargo weight exceeds selected vehicle capacity.");
+                reasons.add("Cargo weight exceeds selected vehicle capacity.");
+                actions.add("SELECT_HIGHER_VEHICLE");
+                loadSafety = QuoteValidationResponse.LoadSafety.RISK;
+                loadLabel = "LOAD_RISK";
             } else if (weightKg > capacityKg * 0.9) {
-                PricingVehicleType nextType = PricingVehicleType.nextHigher(vehicleType);
-                if (nextType != null) {
-                    comments.add(String.format(
-                            "화물 중량이 적재한도(%dkg)의 90%% 이상입니다. 여유를 위해 %s 차량을 검토해 주세요.",
-                            capacityKg,
-                            nextType.name()
-                    ));
-                }
+                comments.add("Cargo weight is near capacity limit.");
+                reasons.add("Cargo weight is near capacity limit.");
+                actions.add("CHECK_LOAD_PLAN");
+                loadSafety = QuoteValidationResponse.LoadSafety.WARN;
+                loadLabel = "LOAD_WARN";
+            } else {
+                reasons.add("Load ratio is within safe range.");
             }
         }
 
         String prompt = buildAiPrompt(req, pricing, comments);
-        deepSeekClient.generateAdvice(prompt).ifPresent(comments::add);
+        String aiSummary = deepSeekClient.generateAdvice(prompt)
+                .map(s -> {
+                    comments.add(s);
+                    return s;
+                })
+                .orElse("No additional AI advice.");
 
-        return new QuoteValidationResponse(
-                estimatedMin,
-                estimatedMax,
-                estimatedWeighted,
-                comments
+        if (actions.isEmpty()) {
+            actions.add("USE_AVERAGE_PRICE");
+        }
+
+        QuoteValidationResponse.DispatchSpeed dispatchSpeed = determineDispatchSpeed(
+                desired, estimatedMin, estimatedWeighted
         );
+        QuoteValidationResponse.OverallStatus overallStatus = determineOverallStatus(
+                loadSafety, priceFit, dispatchSpeed
+        );
+        String badge = switch (overallStatus) {
+            case GOOD -> "GOOD";
+            case NORMAL -> "NORMAL";
+            case RISKY -> "RISKY";
+        };
+
+        return QuoteValidationResponse.builder()
+                .estimatedMinPrice(estimatedMin)
+                .estimatedMaxPrice(estimatedMax)
+                .estimatedWeightedPrice(estimatedWeighted)
+                .comments(comments)
+                .overallStatus(overallStatus)
+                .dispatchSpeed(dispatchSpeed)
+                .badge(badge)
+                .loadAnalysis(QuoteValidationResponse.LoadAnalysis.builder()
+                        .currentKg(weightKg)
+                        .capacityKg(capacityKg == 0 ? null : capacityKg)
+                        .usagePercent(usagePercent)
+                        .safety(loadSafety)
+                        .label(loadLabel)
+                        .build())
+                .priceAnalysis(QuoteValidationResponse.PriceAnalysis.builder()
+                        .userDesiredPrice(desired)
+                        .minPrice(estimatedMin)
+                        .maxPrice(estimatedMax)
+                        .weightedPrice(estimatedWeighted)
+                        .suggestedPrice(estimatedWeighted)
+                        .fit(priceFit)
+                        .label(priceLabel)
+                        .build())
+                .confidence(calculateConfidence(req))
+                .aiSummary(aiSummary)
+                .reasons(reasons)
+                .actions(actions)
+                .build();
     }
 
-    private Quote getOwnedQuoteByIdentifier(String quoteIdentifier, Long shipperId) {
+    private QuoteValidationResponse.DispatchSpeed determineDispatchSpeed(
+            Integer desired, int estimatedMin, int estimatedWeighted
+    ) {
+        if (desired == null || desired <= 0) {
+            return QuoteValidationResponse.DispatchSpeed.NORMAL;
+        }
+        if (desired >= estimatedWeighted) {
+            return QuoteValidationResponse.DispatchSpeed.FAST;
+        }
+        if (desired >= estimatedMin) {
+            return QuoteValidationResponse.DispatchSpeed.NORMAL;
+        }
+        return QuoteValidationResponse.DispatchSpeed.SLOW;
+    }
+
+    private QuoteValidationResponse.OverallStatus determineOverallStatus(
+            QuoteValidationResponse.LoadSafety loadSafety,
+            QuoteValidationResponse.PriceFit priceFit,
+            QuoteValidationResponse.DispatchSpeed dispatchSpeed
+    ) {
+        if (loadSafety == QuoteValidationResponse.LoadSafety.RISK
+                || priceFit == QuoteValidationResponse.PriceFit.LOW
+                || dispatchSpeed == QuoteValidationResponse.DispatchSpeed.SLOW) {
+            return QuoteValidationResponse.OverallStatus.RISKY;
+        }
+        if (loadSafety == QuoteValidationResponse.LoadSafety.SAFE
+                && priceFit == QuoteValidationResponse.PriceFit.NORMAL
+                && dispatchSpeed == QuoteValidationResponse.DispatchSpeed.FAST) {
+            return QuoteValidationResponse.OverallStatus.GOOD;
+        }
+        return QuoteValidationResponse.OverallStatus.NORMAL;
+    }
+
+    private double calculateConfidence(QuoteCreateRequest req) {
+        int score = 0;
+        if (req.getDistanceKm() != null && req.getDistanceKm() > 0) {
+            score += 20;
+        }
+        if (req.getVehicleType() != null && !req.getVehicleType().isBlank()) {
+            score += 20;
+        }
+        if (req.getWeightKg() != null && req.getWeightKg() > 0) {
+            score += 20;
+        }
+        if (req.getDesiredPrice() != null && req.getDesiredPrice() > 0) {
+            score += 20;
+        }
+        if (req.getCargoName() != null && !req.getCargoName().isBlank()) {
+            score += 20;
+        }
+        return score / 100.0;
+    }private Quote getOwnedQuoteByIdentifier(String quoteIdentifier, Long shipperId) {
         Quote quote = findQuoteByIdentifier(quoteIdentifier);
         if (!shipperId.equals(quote.getShipperId())) {
             throw new CustomException(ErrorCode.AUTH_FORBIDDEN);
@@ -444,27 +553,29 @@ public class QuoteService {
 
     private String buildAiPrompt(QuoteCreateRequest req, PricingResult pricing, List<String> existingComments) {
         StringBuilder sb = new StringBuilder();
-        sb.append("화주 견적 검증 조언을 1~2문장으로 작성해줘. ");
-        sb.append("과도한 확정 표현은 피하고, 간결하게. ");
-        sb.append("화물 이름/설명을 보고 필요한 체크리스트(예: 파손주의, 습기주의, 세워서 적재) 추천이 있으면 포함해줘.\n");
-        sb.append("입력 요약:\n");
-        sb.append("- 거리(km): ").append(req.getDistanceKm()).append('\n');
-        sb.append("- 차량: ").append(req.getVehicleType()).append('\n');
-        sb.append("- 차량 옵션: ").append(req.getVehicleBodyType()).append('\n');
-        sb.append("- 화물명: ").append(req.getCargoName()).append('\n');
-        sb.append("- 화물설명: ").append(req.getCargoDesc()).append('\n');
-        sb.append("- 화물중량(kg): ").append(req.getWeightKg()).append('\n');
-        sb.append("- 희망금액: ").append(req.getDesiredPrice()).append('\n');
-        sb.append("- 상/하차: ").append(req.getLoadMethod()).append(" / ").append(req.getUnloadMethod()).append('\n');
-        sb.append("예상 요금 범위:\n");
-        sb.append("- 최소: ").append(pricing.totalMinWon()).append('\n');
-        sb.append("- 최대: ").append(pricing.totalMaxWon()).append('\n');
+        sb.append("Task: write Korean shipper-facing advice for freight quote validation. ");
+        sb.append("Output must be plain text in Korean, 1-2 sentences only, no markdown. ");
+        sb.append("Mention dispatch speed likelihood, load safety, and price adequacy in one concise flow. ");
+        sb.append("Avoid absolute guarantees and avoid repeating the same number too many times.\n");
+        sb.append("Input summary:\n");
+        sb.append("- Distance (km): ").append(req.getDistanceKm()).append('\n');
+        sb.append("- Vehicle type: ").append(req.getVehicleType()).append('\n');
+        sb.append("- Vehicle option: ").append(req.getVehicleBodyType()).append('\n');
+        sb.append("- Cargo name: ").append(req.getCargoName()).append('\n');
+        sb.append("- Cargo description: ").append(req.getCargoDesc()).append('\n');
+        sb.append("- Cargo weight (kg): ").append(req.getWeightKg()).append('\n');
+        sb.append("- Desired price: ").append(req.getDesiredPrice()).append('\n');
+        sb.append("- Load/Unload: ").append(req.getLoadMethod()).append(" / ").append(req.getUnloadMethod()).append('\n');
+        sb.append("Estimated price range:\n");
+        sb.append("- Min: ").append(pricing.totalMinWon()).append('\n');
+        sb.append("- Max: ").append(pricing.totalMaxWon()).append('\n');
         if (existingComments != null && !existingComments.isEmpty()) {
-            sb.append("이미 생성된 경고:\n");
+            sb.append("Existing warnings:\n");
             for (String c : existingComments) {
                 sb.append("- ").append(c).append('\n');
             }
         }
+        sb.append("Writing style: practical, confident but not absolute, suitable for an in-app AI diagnosis card.\n");
         return sb.toString();
     }
 
@@ -522,3 +633,4 @@ public class QuoteService {
         return Long.valueOf(principal);
     }
 }
+

@@ -86,6 +86,22 @@
 - Path: `/api/shipper/quotes/validate`
 - Request DTO: `QuoteCreateRequest`
 - Response DTO: `QuoteValidationResponse`
+- Response fields (major):
+  - `estimatedMinPrice`, `estimatedMaxPrice`, `estimatedWeightedPrice`
+  - `overallStatus`: `GOOD | NORMAL | RISKY`
+  - `dispatchSpeed`: `FAST | NORMAL | SLOW`
+  - `badge`
+  - `loadAnalysis`:
+    - `currentKg`, `capacityKg`, `usagePercent`
+    - `safety`: `SAFE | WARN | RISK`
+    - `label`
+  - `priceAnalysis`:
+    - `userDesiredPrice`, `minPrice`, `maxPrice`, `weightedPrice`, `suggestedPrice`
+    - `fit`: `LOW | NORMAL | HIGH`
+    - `label`
+  - `confidence` (0.0 ~ 1.0)
+  - `aiSummary`
+  - `reasons[]`, `actions[]`, `comments[]`
 
 ### Quote List
 - Method: `GET`
