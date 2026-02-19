@@ -284,7 +284,8 @@
 - Response
 ```json
 {
-  "quoteId": 1
+  "quoteId": 1,
+  "quotePublicId": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```
 
@@ -296,6 +297,7 @@
 [
   {
     "quoteId": 1,
+    "quotePublicId": "550e8400-e29b-41d4-a716-446655440000",
     "truckId": 1,
     "originAddress": "Seoul, KR",
     "destinationAddress": "Busan, KR",
@@ -313,11 +315,12 @@
 
 ### Quote Detail
 - Method: `GET`
-- Path: `/api/shipper/quotes/{quoteId}`
+- Path: `/api/shipper/quotes/{quoteIdentifier}`
 - Response
 ```json
 {
   "quoteId": 1,
+  "quotePublicId": "550e8400-e29b-41d4-a716-446655440000",
   "shipperId": 20,
   "truckId": 1,
   "originAddress": "Seoul, KR",
@@ -357,7 +360,7 @@
 
 ### Quote Update
 - Method: `PUT`
-- Path: `/api/shipper/quotes/{quoteId}`
+- Path: `/api/shipper/quotes/{quoteIdentifier}`
 - Request
 ```json
 {
@@ -393,6 +396,7 @@
 ```json
 {
   "quoteId": 1,
+  "quotePublicId": "550e8400-e29b-41d4-a716-446655440000",
   "shipperId": 20,
   "truckId": 1,
   "originAddress": "Seoul, KR",
@@ -432,7 +436,7 @@
 
 ### Quote Delete
 - Method: `DELETE`
-- Path: `/api/shipper/quotes/{quoteId}`
+- Path: `/api/shipper/quotes/{quoteIdentifier}`
 - Response: `204 No Content`
 
 ## Checklist

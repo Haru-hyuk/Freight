@@ -35,3 +35,7 @@ out/
 
 ### VS Code ###
 .vscode/
+
+### Secrets ###
+src/main/resources/firebase/*
+!src/main/resources/firebase/.gitkeep
