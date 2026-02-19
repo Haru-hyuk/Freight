@@ -213,6 +213,39 @@
 - Path: `/api/shipper/matches/{matchId}`
 - Response DTO: `MatchResponse`
 
+## Delivery Photos
+
+### Upload Delivery Photo (Driver)
+- Method: `POST`
+- Path: `/api/driver/matches/{matchId}/photos`
+- Content-Type: `multipart/form-data`
+- Auth role: `ROLE_DRIVER` (accepted driver only)
+- Request fields:
+  - `type`: `PICKUP | DELIVERY`
+  - `file`: image file
+  - `takenAt`: optional ISO datetime
+  - `lat`: optional decimal
+  - `lng`: optional decimal
+- Response DTO: `DeliveryPhotoResponse`
+
+### Delivery Photo List (Driver)
+- Method: `GET`
+- Path: `/api/driver/matches/{matchId}/photos`
+- Auth role: `ROLE_DRIVER` (accepted driver only)
+- Response DTO: `List<DeliveryPhotoResponse>`
+
+### Delivery Photo List (Shipper)
+- Method: `GET`
+- Path: `/api/shipper/matches/{matchId}/photos`
+- Auth role: `ROLE_SHIPPER` (quote owner only)
+- Response DTO: `List<DeliveryPhotoResponse>`
+
+### Delivery Photo File Download
+- Method: `GET`
+- Path: `/api/delivery-photos/{photoId}/file`
+- Auth role: `ROLE_DRIVER | ROLE_SHIPPER` (match participant only)
+- Response: binary file stream
+
 ## Notifications
 
 ### Notification List
