@@ -44,6 +44,9 @@ fcm:
   enabled: ${FCM_ENABLED:false}
   service-account-path: ${FCM_SERVICE_ACCOUNT_PATH:classpath:firebase/service-account.json}
 
+delivery-photo:
+  storage-dir: ${DELIVERY_PHOTO_STORAGE_DIR:uploads/delivery-photos}
+
 springdoc:
   api-docs:
     path: /api-docs
