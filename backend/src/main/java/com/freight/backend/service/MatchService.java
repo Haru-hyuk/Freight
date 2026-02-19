@@ -1,6 +1,7 @@
 package com.freight.backend.service;
 
 import com.freight.backend.dto.match.MatchResponse;
+import com.freight.backend.entity.FcmToken;
 import com.freight.backend.entity.Match;
 import com.freight.backend.entity.Notification;
 import com.freight.backend.entity.Quote;
@@ -60,6 +61,7 @@ public class MatchService {
 
         Match saved = matchRepository.save(match);
         notificationService.createNotification(
+                FcmToken.UserType.SHIPPER,
                 shipperId,
                 saved.getMatchId(),
                 Notification.Type.MATCH_CREATED,
@@ -106,6 +108,7 @@ public class MatchService {
 
         Match saved = matchRepository.save(match);
         notificationService.createNotification(
+                FcmToken.UserType.SHIPPER,
                 quote.getShipperId(),
                 saved.getMatchId(),
                 Notification.Type.MATCH_ACCEPTED,
@@ -146,6 +149,7 @@ public class MatchService {
         Long driverId = match.getDriverId();
         if ("ROLE_SHIPPER".equals(role) && driverId != null) {
             notificationService.createNotification(
+                    FcmToken.UserType.DRIVER,
                     driverId,
                     match.getMatchId(),
                     Notification.Type.MATCH_CANCELLED,
@@ -154,6 +158,7 @@ public class MatchService {
         }
         if ("ROLE_DRIVER".equals(role)) {
             notificationService.createNotification(
+                    FcmToken.UserType.SHIPPER,
                     quote.getShipperId(),
                     match.getMatchId(),
                     Notification.Type.MATCH_CANCELLED,

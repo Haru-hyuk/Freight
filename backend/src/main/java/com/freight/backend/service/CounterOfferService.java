@@ -3,6 +3,7 @@ package com.freight.backend.service;
 import com.freight.backend.dto.counter.CounterOfferCreateRequest;
 import com.freight.backend.dto.counter.CounterOfferResponse;
 import com.freight.backend.entity.CounterOffer;
+import com.freight.backend.entity.FcmToken;
 import com.freight.backend.entity.Quote;
 import com.freight.backend.exception.CustomException;
 import com.freight.backend.exception.ErrorCode;
@@ -47,6 +48,7 @@ public class CounterOfferService {
         CounterOffer saved = counterOfferRepository.save(offer);
 
         notificationService.createNotification(
+                FcmToken.UserType.SHIPPER,
                 quote.getShipperId(),
                 null,
                 com.freight.backend.entity.Notification.Type.COUNTER_OFFER_CREATED,
@@ -95,6 +97,7 @@ public class CounterOfferService {
         counterOfferRepository.save(offer);
 
         notificationService.createNotification(
+                FcmToken.UserType.DRIVER,
                 offer.getDriverId(),
                 null,
                 com.freight.backend.entity.Notification.Type.COUNTER_OFFER_ACCEPTED,
@@ -120,6 +123,7 @@ public class CounterOfferService {
         counterOfferRepository.save(offer);
 
         notificationService.createNotification(
+                FcmToken.UserType.DRIVER,
                 offer.getDriverId(),
                 null,
                 com.freight.backend.entity.Notification.Type.COUNTER_OFFER_REJECTED,
