@@ -14,7 +14,8 @@ function shouldHideBottomBar(segments: readonly string[] | undefined | null): bo
   const segs = Array.isArray(segments) ? segments : [];
   const isQuotesCreate = segs.includes("quotes") && segs.includes("create");
   const isQuotesDetail = segs.includes("quotes") && (segs.includes("[id]") || segs.includes("detail"));
-  return isQuotesCreate || isQuotesDetail;
+  const isVerification = segs.includes("verification");
+  return isQuotesCreate || isQuotesDetail || isVerification;
 }
 
 function pickActiveKey(segments: readonly string[] | undefined | null): BottomTabKey {
@@ -72,7 +73,8 @@ export default function ShipperLayout() {
   );
 
   const activeKey = useMemo(() => pickActiveKey(segments), [segments]);
-  const hideBottomBar = useMemo(() => shouldHideBottomBar(segments), [segments]);
+  const requiresVerification = auth.pendingVerificationRole === "shipper";
+  const hideBottomBar = useMemo(() => shouldHideBottomBar(segments) || requiresVerification, [requiresVerification, segments]);
 
   useEffect(() => {
     return () => {
@@ -125,6 +127,12 @@ export default function ShipperLayout() {
 
   if (auth.user.role !== "shipper") {
     return <Redirect href="/(driver)/home" />;
+  }
+
+  const isVerificationRoute = segments.includes("verification");
+  const isHomeRoute = segments.includes("home");
+  if (requiresVerification && !isVerificationRoute && !isHomeRoute) {
+    return <Redirect href="/(shipper)/verification" />;
   }
 
   return (

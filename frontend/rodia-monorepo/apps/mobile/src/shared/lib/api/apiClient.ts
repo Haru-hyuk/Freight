@@ -1,4 +1,5 @@
 // apps/mobile/src/shared/lib/api/apiClient.ts
+
 import axios, {
   AxiosError,
   type AxiosInstance,
@@ -17,24 +18,9 @@ function isTruthyString(v: unknown): v is string {
 function extractTokens(data: unknown): Partial<AuthTokens> | null {
   const d = (data ?? {}) as AnyObj;
 
-  const accessToken =
-    d?.accessToken ??
-    d?.access_token ??
-    d?.token ??
-    d?.data?.accessToken ??
-    d?.data?.access_token ??
-    d?.data?.token ??
-    d?.tokens?.accessToken ??
-    d?.tokens?.access_token ??
-    d?.tokens?.token;
+  const accessToken = d?.accessToken;
 
-  const refreshToken =
-    d?.refreshToken ??
-    d?.refresh_token ??
-    d?.data?.refreshToken ??
-    d?.data?.refresh_token ??
-    d?.tokens?.refreshToken ??
-    d?.tokens?.refresh_token;
+  const refreshToken = d?.refreshToken;
 
   const a = isTruthyString(accessToken) ? accessToken.trim() : "";
   const r = isTruthyString(refreshToken) ? refreshToken.trim() : "";
@@ -51,11 +37,51 @@ type InternalConfig = InternalAxiosRequestConfig & { _retry?: boolean };
 
 let refreshInFlight: Promise<string | null> | null = null;
 
+function safeGetRefreshPath(): string {
+  try {
+    const p = getAuthRefreshPath?.();
+    return isTruthyString(p) ? p.trim() : "";
+  } catch {
+    return "";
+  }
+}
+
+function normalizePathFromUrl(url?: string): string {
+  const u = (url ?? "").trim();
+  if (!u) return "";
+  if (u.startsWith("http://") || u.startsWith("https://")) {
+    try {
+      return new URL(u).pathname;
+    } catch {
+      return u;
+    }
+  }
+  return u;
+}
+
+function isPublicAuthEndpoint(url?: string): boolean {
+  const path = normalizePathFromUrl(url);
+
+  // 회원가입/로그인은 토큰이 없어야 정상(붙어있어도 서버에서 무시되도록 주입 자체를 건너뜀)
+  if (path === "/api/auth/driver/login") return true;
+  if (path === "/api/auth/driver/signup") return true;
+  if (path === "/api/auth/shipper/login") return true;
+  if (path === "/api/auth/shipper/signup") return true;
+
+  return false;
+}
+
 async function refreshAccessToken(baseURL: string): Promise<string | null> {
+  const refreshPath = safeGetRefreshPath();
+  if (!refreshPath) return null;
+
   const refreshToken = await tokenStorage.getRefreshToken();
+  const accessToken = await tokenStorage.getAccessToken();
+
   if (!isTruthyString(refreshToken)) return null;
 
-  const refreshPath = getAuthRefreshPath();
+  // refreshToken이 accessToken과 동일한 경우(클라 fallback 저장) refresh 시도 자체를 막음
+  if (isTruthyString(accessToken) && refreshToken.trim() === accessToken.trim()) return null;
 
   const refreshClient = axios.create({
     baseURL,
@@ -64,7 +90,7 @@ async function refreshAccessToken(baseURL: string): Promise<string | null> {
   });
 
   try {
-    const res = await refreshClient.post(refreshPath, { refreshToken });
+    const res = await refreshClient.post(refreshPath, { refreshToken: refreshToken.trim() });
     const tokens = extractTokens((res as AxiosResponse)?.data);
 
     const nextAccess = (tokens?.accessToken ?? "").trim();
@@ -74,7 +100,7 @@ async function refreshAccessToken(baseURL: string): Promise<string | null> {
 
     await tokenStorage.setTokens({
       accessToken: nextAccess,
-      refreshToken: nextRefresh || refreshToken,
+      refreshToken: nextRefresh || refreshToken.trim(),
     });
 
     return nextAccess;
@@ -97,7 +123,14 @@ function setAuthHeader(config: InternalAxiosRequestConfig, accessToken: string, 
 }
 
 export function createApiClient(): AxiosInstance {
-  const baseURL = getApiBaseUrl();
+  const baseURL = (() => {
+    try {
+      const v = getApiBaseUrl?.();
+      return isTruthyString(v) ? v.trim() : "";
+    } catch {
+      return "";
+    }
+  })();
 
   const client = axios.create({
     baseURL,
@@ -106,6 +139,8 @@ export function createApiClient(): AxiosInstance {
   });
 
   client.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
+    if (isPublicAuthEndpoint(config?.url)) return config;
+
     const accessToken = await tokenStorage.getAccessToken();
     if (isTruthyString(accessToken)) {
       setAuthHeader(config, accessToken, false);
@@ -122,11 +157,28 @@ export function createApiClient(): AxiosInstance {
       if (!status || !original) return Promise.reject(error);
       if (status !== 401) return Promise.reject(error);
 
+      // 로그인/회원가입은 refresh 대상이 아님
+      if (isPublicAuthEndpoint(original?.url)) return Promise.reject(error);
+
       if (original._retry) return Promise.reject(error);
       original._retry = true;
 
-      const existingRefresh = await tokenStorage.getRefreshToken();
-      if (!isTruthyString(existingRefresh)) {
+      const refreshPath = safeGetRefreshPath();
+      if (!refreshPath) {
+        await tokenStorage.clearTokens();
+        return Promise.reject(error);
+      }
+
+      const refreshToken = await tokenStorage.getRefreshToken();
+      const accessToken = await tokenStorage.getAccessToken();
+
+      if (!isTruthyString(refreshToken)) {
+        await tokenStorage.clearTokens();
+        return Promise.reject(error);
+      }
+
+      // refreshToken이 accessToken과 같으면 refresh 미지원 모드로 보고 세션 정리
+      if (isTruthyString(accessToken) && refreshToken.trim() === accessToken.trim()) {
         await tokenStorage.clearTokens();
         return Promise.reject(error);
       }
@@ -155,7 +207,7 @@ export function createApiClient(): AxiosInstance {
 export const apiClient = createApiClient();
 
 /**
- * 1) baseURL/refreshPath는 shared/lib/config/env 단일 소스에서만 가져옵니다.
- * 2) 401 → refresh 단일 비행 + 원요청 1회 재시도로 안정화합니다.
- * 3) headers 런타임 빈 값 대비를 포함해 Authorization 주입이 안전하게 동작합니다.
+ * 1) /api/auth/* (login/signup)는 Authorization 주입을 건너뛰어 경로 혼동/오작동 리스크를 줄임.
+ * 2) refreshToken==accessToken(클라 fallback 저장)이면 refresh 시도를 막아 불필요한 401 루프를 방지.
+ * 3) 나머지 요청은 기존처럼 401 → refresh 단일 비행 + 1회 재시도로 동작.
  */

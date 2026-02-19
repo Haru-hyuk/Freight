@@ -1,6 +1,7 @@
 ﻿// src/pages/shipper/ShipperHomePage.tsx
 import React, { useRef } from "react";
 import {
+  Modal,
   Pressable,
   StyleSheet,
   View,
@@ -11,6 +12,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useAuth } from "@/features/auth/model/useAuth";
 
 import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
@@ -250,6 +252,26 @@ const useStyles = createThemedStyles((theme) => {
     bottomSpacer: {
       minHeight: spacing * 5,
     },
+    verificationModalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.45)",
+      justifyContent: "center",
+      alignItems: "center",
+      paddingHorizontal: spacing * 5,
+    },
+    verificationModalCard: {
+      width: "100%",
+      maxWidth: 380,
+      borderRadius: radiusCard,
+      padding: safeNumber(theme?.components?.card?.paddingMd, 20),
+      gap: spacing * 3,
+      backgroundColor: cSurface,
+      borderWidth: 1,
+      borderColor: cBorder,
+    },
+    verificationModalActions: {
+      gap: spacing * 2,
+    },
     fab: {
       width: 56,
       height: 56,
@@ -261,11 +283,13 @@ const useStyles = createThemedStyles((theme) => {
 });
 
 export function ShipperHomePage() {
+  const auth = useAuth();
   const theme = useAppTheme();
   const styles = useStyles();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const isNavigating = useRef(false);
+  const isVerificationBlocked = auth.pendingVerificationRole === "shipper";
 
   // Colors
   const cText = safeString(theme?.colors?.textMain, "#111827");
@@ -503,6 +527,22 @@ export function ShipperHomePage() {
       </View>
 
       <View style={styles.bottomSpacer} />
+
+      <Modal visible={isVerificationBlocked} transparent animationType="fade" onRequestClose={() => {}}>
+        <View style={styles.verificationModalOverlay}>
+          <View style={styles.verificationModalCard}>
+            <AppText variant="heading" weight="800" color={cText}>
+              계정 인증이 필요합니다
+            </AppText>
+            <AppText variant="detail" color={cSub}>
+              화주 인증이 완료되어야 견적 생성과 주요 기능을 사용할 수 있습니다.
+            </AppText>
+            <View style={styles.verificationModalActions}>
+              <AppButton title="인증하러 가기" size="lg" onPress={() => router.push("/(shipper)/verification")} />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </PageScaffold>
   );
 }

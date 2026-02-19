@@ -15,6 +15,9 @@ export default function AuthLayout() {
   }
 
   if (auth.status === "authenticated" && auth.user?.role) {
+    if (auth.pendingVerificationRole === auth.user.role) {
+      return <Redirect href={auth.user.role === "driver" ? "/(driver)/verification" : "/(shipper)/verification"} />;
+    }
     return <Redirect href={auth.user.role === "driver" ? "/(driver)/home" : "/(shipper)/home"} />;
   }
 
