@@ -1,438 +1,109 @@
-# API Spec
+# API Spec (Controller-Accurate)
+
+## Common
+- Base URL: server host + port
+- Auth: `Authorization: Bearer {accessToken}`
 
 ## Auth
 
 ### Driver Signup
 - Method: `POST`
 - Path: `/api/auth/driver/signup`
-- Request
-```json
-{
-  "email": "driver@test.com",
-  "password": "1234",
-  "name": "홍길동",
-  "phone": "010-0000-0000",
-  "address": "서울시 강남구",
-  "addressDetail": "101호",
-  "bankName": "국민",
-  "bankAccount": "123-456-7890"
-}
-```
-- Response
-```json
-{
-  "driverId": 1
-}
-```
-- Errors
-- `400 INVALID_INPUT_VALUE`: 이메일 중복
-
-### Driver Login
-- Method: `POST`
-- Path: `/api/auth/driver/login`
-- Request
-```json
-{
-  "email": "driver@test.com",
-  "password": "1234"
-}
-```
-- Response
-```json
-{
-  "accessToken": "eyJhbGciOiJIUzI1NiJ9...",
-  "tokenType": "Bearer",
-  "expiresIn": 3600
-}
-```
-
-### Shipper Login
-- Method: `POST`
-- Path: `/api/auth/shipper/login`
-- Request
-```json
-{
-  "email": "shipper@test.com",
-  "password": "1234"
-}
-```
-- Response
-```json
-{
-  "accessToken": "eyJhbGciOiJIUzI1NiJ9...",
-  "tokenType": "Bearer",
-  "expiresIn": 3600
-}
-```
-
-### Admin Login
-- Method: `POST`
-- Path: `/api/auth/admin/login`
-- Request
-```json
-{
-  "email": "admin@test.com",
-  "password": "1234"
-}
-```
-- Response
-```json
-{
-  "accessToken": "eyJhbGciOiJIUzI1NiJ9...",
-  "tokenType": "Bearer",
-  "expiresIn": 3600
-}
-```
+- Request DTO: `DriverSignupRequest`
+- Response DTO: `DriverSignupResponse`
 
 ### Shipper Signup
 - Method: `POST`
 - Path: `/api/auth/shipper/signup`
-- Request
-```json
-{
-  "email": "shipper@test.com",
-  "password": "1234",
-  "name": "홍길동",
-  "companyName": "테스트상사",
-  "phone": "010-1234-5678",
-  "address": "서울시 강남구",
-  "addressDetail": "101호",
-  "bizRegNo": "1234567890",
-  "bizPhone": "02-123-4567",
-  "openDate": "20200101",
-  "ownerName": "홍길동"
-}
-```
-- Response
-```json
-{
-  "shipperId": 1
-}
-```
-- Notes
-- 회원가입 시 국세청 사업자 진위확인 수행
-- 진위확인 결과 `valid != "01"`이면 가입 실패
-- Errors
-- `400 INVALID_INPUT_VALUE`: 이메일 중복 또는 사업자 진위확인 실패
+- Request DTO: `ShipperSignupRequest`
+- Response DTO: `ShipperSignupResponse`
+
+### Driver Login
+- Method: `POST`
+- Path: `/api/auth/driver/login`
+- Request DTO: `LoginRequest`
+- Response DTO: `TokenResponse`
+
+### Shipper Login
+- Method: `POST`
+- Path: `/api/auth/shipper/login`
+- Request DTO: `LoginRequest`
+- Response DTO: `TokenResponse`
+
+### Admin Login
+- Method: `POST`
+- Path: `/api/auth/admin/login`
+- Request DTO: `LoginRequest`
+- Response DTO: `TokenResponse`
 
 ### Logout
 - Method: `POST`
 - Path: `/api/auth/logout`
-- Headers: `Authorization: Bearer {accessToken}`
 - Response: `204 No Content`
 
-
-## Driver
+## Driver Trucks
 
 ### Truck Create
 - Method: `POST`
 - Path: `/api/driver/trucks`
-- Request
-```json
-{
-  "vehicleType": "CARGO",
-  "vehicleBodyType": "WINGBODY",
-  "tonnage": 1.0,
-  "maxWeight": 1000.0,
-  "maxVolume": 12.5,
-  "name": "My Truck",
-  "imageUrl": "https://example.com/truck.png",
-  "approved": false,
-  "insurance": "ACME-1234",
-  "odometerKm": 12034.5,
-  "lastInspectionDate": "2025-01-15"
-}
-```
-- Response
-```json
-{
-  "truckId": 1
-}
-```
+- Request DTO: `TruckCreateRequest`
+- Response DTO: `TruckCreateResponse`
 
 ### Truck List
 - Method: `GET`
 - Path: `/api/driver/trucks`
-- Response
-```json
-[
-  {
-    "truckId": 1,
-    "driverId": 10,
-    "vehicleType": "CARGO",
-    "vehicleBodyType": "WINGBODY",
-    "tonnage": 1.0,
-    "maxWeight": 1000.0,
-    "maxVolume": 12.5,
-    "name": "My Truck",
-    "imageUrl": "https://example.com/truck.png",
-    "approved": false,
-    "insurance": "ACME-1234",
-    "odometerKm": 12034.5,
-    "lastInspectionDate": "2025-01-15",
-    "createdAt": "2025-01-01T10:00:00",
-    "updatedAt": "2025-01-01T10:00:00"
-  }
-]
-```
+- Response DTO: `List<TruckResponse>`
 
 ### Truck Detail
 - Method: `GET`
 - Path: `/api/driver/trucks/{truckId}`
-- Response
-```json
-{
-  "truckId": 1,
-  "driverId": 10,
-  "vehicleType": "CARGO",
-  "vehicleBodyType": "WINGBODY",
-  "tonnage": 1.0,
-  "maxWeight": 1000.0,
-  "maxVolume": 12.5,
-  "name": "My Truck",
-  "imageUrl": "https://example.com/truck.png",
-  "approved": false,
-  "insurance": "ACME-1234",
-  "odometerKm": 12034.5,
-  "lastInspectionDate": "2025-01-15",
-  "createdAt": "2025-01-01T10:00:00",
-  "updatedAt": "2025-01-01T10:00:00"
-}
-```
+- Response DTO: `TruckResponse`
 
 ### Truck Update
 - Method: `PUT`
 - Path: `/api/driver/trucks/{truckId}`
-- Request
-```json
-{
-  "vehicleType": "CARGO",
-  "vehicleBodyType": "WINGBODY",
-  "tonnage": 1.5,
-  "maxWeight": 1200.0,
-  "maxVolume": 13.0,
-  "name": "Updated Truck",
-  "imageUrl": "https://example.com/truck2.png",
-  "approved": true,
-  "insurance": "ACME-5678",
-  "odometerKm": 13000.0,
-  "lastInspectionDate": "2025-02-01"
-}
-```
-- Response
-```json
-{
-  "truckId": 1,
-  "driverId": 10,
-  "vehicleType": "CARGO",
-  "vehicleBodyType": "WINGBODY",
-  "tonnage": 1.5,
-  "maxWeight": 1200.0,
-  "maxVolume": 13.0,
-  "name": "Updated Truck",
-  "imageUrl": "https://example.com/truck2.png",
-  "approved": true,
-  "insurance": "ACME-5678",
-  "odometerKm": 13000.0,
-  "lastInspectionDate": "2025-02-01",
-  "createdAt": "2025-01-01T10:00:00",
-  "updatedAt": "2025-01-02T10:00:00"
-}
-```
+- Request DTO: `TruckUpdateRequest`
+- Response DTO: `TruckResponse`
 
 ### Truck Delete
 - Method: `DELETE`
 - Path: `/api/driver/trucks/{truckId}`
 - Response: `204 No Content`
 
-## Shipper
+## Shipper Quotes
 
 ### Quote Create
 - Method: `POST`
 - Path: `/api/shipper/quotes`
-- Request
-```json
-{
-  "truckId": 1,
-  "originAddress": "Seoul, KR",
-  "destinationAddress": "Busan, KR",
-  "originLat": 37.5665,
-  "originLng": 126.9780,
-  "destinationLat": 35.1796,
-  "destinationLng": 129.0756,
-  "distanceKm": 325,
-  "weightKg": 1200,
-  "volumeCbm": 10,
-  "vehicleType": "TON_1",
-  "vehicleBodyType": "CARGO",
-  "cargoName": "냉동 해산물",
-  "cargoType": "FROZEN",
-  "cargoDesc": "Frozen seafood",
-  "desiredPrice": 170000,
-  "allowCombine": true,
-  "loadMethod": "SHIPPER",
-  "unloadMethod": "DRIVER",
-  "checklistItems": [
-    {
-      "checklistItemId": 3,
-      "extraInput": "Forklift needed",
-      "extraFee": 20000.0
-    }
-  ]
-}
-```
-- Response
-```json
-{
-  "quoteId": 1,
-  "quotePublicId": "550e8400-e29b-41d4-a716-446655440000"
-}
-```
+- Request DTO: `QuoteCreateRequest`
+- Response DTO: `QuoteCreateResponse`
+- Response fields:
+  - `quoteId` (internal bigint)
+  - `quotePublicId` (public UUID)
+
+### Quote Validate
+- Method: `POST`
+- Path: `/api/shipper/quotes/validate`
+- Request DTO: `QuoteCreateRequest`
+- Response DTO: `QuoteValidationResponse`
 
 ### Quote List
 - Method: `GET`
 - Path: `/api/shipper/quotes`
-- Response
-```json
-[
-  {
-    "quoteId": 1,
-    "quotePublicId": "550e8400-e29b-41d4-a716-446655440000",
-    "truckId": 1,
-    "originAddress": "Seoul, KR",
-    "destinationAddress": "Busan, KR",
-  "distanceKm": 325,
-  "vehicleType": "TON_1",
-  "vehicleBodyType": "CARGO",
-  "cargoName": "냉동 해산물",
-  "desiredPrice": 170000,
-    "finalPrice": 170000,
-    "status": "OPEN",
-    "createdAt": "2025-01-01T10:00:00"
-  }
-]
-```
+- Response DTO: `List<QuoteListResponse>`
+- Response includes both `quoteId` and `quotePublicId`
 
 ### Quote Detail
 - Method: `GET`
 - Path: `/api/shipper/quotes/{quoteIdentifier}`
-- Response
-```json
-{
-  "quoteId": 1,
-  "quotePublicId": "550e8400-e29b-41d4-a716-446655440000",
-  "shipperId": 20,
-  "truckId": 1,
-  "originAddress": "Seoul, KR",
-  "destinationAddress": "Busan, KR",
-  "originLat": 37.5665,
-  "originLng": 126.9780,
-  "destinationLat": 35.1796,
-  "destinationLng": 129.0756,
-  "distanceKm": 325,
-  "weightKg": 1200,
-  "volumeCbm": 10,
-  "vehicleType": "TON_1",
-  "vehicleBodyType": "CARGO",
-  "cargoName": "냉동 해산물",
-  "cargoType": "FROZEN",
-  "cargoDesc": "Frozen seafood",
-  "basePrice": 100000,
-  "distancePrice": 50000,
-  "extraPrice": 20000,
-  "desiredPrice": 170000,
-  "finalPrice": 170000,
-  "allowCombine": true,
-  "loadMethod": "SHIPPER",
-  "unloadMethod": "DRIVER",
-  "status": "OPEN",
-  "createdAt": "2025-01-01T10:00:00",
-  "updatedAt": "2025-01-01T10:00:00",
-  "checklistItems": [
-    {
-      "checklistItemId": 3,
-      "extraInput": "Forklift needed",
-      "extraFee": 20000.0
-    }
-  ]
-}
-```
+- Response DTO: `QuoteDetailResponse`
+- `quoteIdentifier` supports UUID `quotePublicId` (preferred) and `quoteId` (fallback)
 
 ### Quote Update
 - Method: `PUT`
 - Path: `/api/shipper/quotes/{quoteIdentifier}`
-- Request
-```json
-{
-  "truckId": 1,
-  "originAddress": "Seoul, KR",
-  "destinationAddress": "Busan, KR",
-  "originLat": 37.5665,
-  "originLng": 126.9780,
-  "destinationLat": 35.1796,
-  "destinationLng": 129.0756,
-  "distanceKm": 325,
-  "weightKg": 1200,
-  "volumeCbm": 10,
-  "vehicleType": "TON_1",
-  "vehicleBodyType": "CARGO",
-  "cargoName": "냉동 해산물",
-  "cargoType": "FROZEN",
-  "cargoDesc": "Frozen seafood",
-  "desiredPrice": 170000,
-  "allowCombine": true,
-  "loadMethod": "SHIPPER",
-  "unloadMethod": "DRIVER",
-  "checklistItems": [
-    {
-      "checklistItemId": 3,
-      "extraInput": "Forklift needed",
-      "extraFee": 20000.0
-    }
-  ]
-}
-```
-- Response
-```json
-{
-  "quoteId": 1,
-  "quotePublicId": "550e8400-e29b-41d4-a716-446655440000",
-  "shipperId": 20,
-  "truckId": 1,
-  "originAddress": "Seoul, KR",
-  "destinationAddress": "Busan, KR",
-  "originLat": 37.5665,
-  "originLng": 126.9780,
-  "destinationLat": 35.1796,
-  "destinationLng": 129.0756,
-  "distanceKm": 325,
-  "weightKg": 1200,
-  "volumeCbm": 10,
-  "vehicleType": "TON_1",
-  "vehicleBodyType": "CARGO",
-  "cargoName": "냉동 해산물",
-  "cargoType": "FROZEN",
-  "cargoDesc": "Frozen seafood",
-  "basePrice": 100000,
-  "distancePrice": 50000,
-  "extraPrice": 20000,
-  "desiredPrice": 170000,
-  "finalPrice": 170000,
-  "allowCombine": true,
-  "loadMethod": "SHIPPER",
-  "unloadMethod": "DRIVER",
-  "status": "OPEN",
-  "createdAt": "2025-01-01T10:00:00",
-  "updatedAt": "2025-01-02T10:00:00",
-  "checklistItems": [
-    {
-      "checklistItemId": 3,
-      "extraInput": "Forklift needed",
-      "extraFee": 20000.0
-    }
-  ]
-}
-```
+- Request DTO: `QuoteUpdateRequest`
+- Response DTO: `QuoteDetailResponse`
 
 ### Quote Delete
 - Method: `DELETE`
@@ -444,258 +115,202 @@
 ### Checklist Items
 - Method: `GET`
 - Path: `/api/checklist-items`
-- Response
-```json
-[
-  {
-    "checklistItemId": 1,
-    "category": "REQUEST",
-    "name": "FRAGILE",
-    "icon": "fragile",
-    "hasExtraFee": true,
-    "baseExtraFee": 5000.0,
-    "requiresExtraInput": false,
-    "extraInputLabel": "취급 주의 요망",
-    "sortOrder": 1
-  },
-  {
-    "checklistItemId": 2,
-    "category": "REQUEST",
-    "name": "UPRIGHT",
-    "icon": "upright",
-    "hasExtraFee": true,
-    "baseExtraFee": 3000.0,
-    "requiresExtraInput": false,
-    "extraInputLabel": "눕힘 금지",
-    "sortOrder": 2
-  },
-  {
-    "checklistItemId": 3,
-    "category": "REQUEST",
-    "name": "KEEP_DRY",
-    "icon": "umbrella",
-    "hasExtraFee": true,
-    "baseExtraFee": 5000.0,
-    "requiresExtraInput": false,
-    "extraInputLabel": "비/물기 주의",
-    "sortOrder": 3
-  },
-  {
-    "checklistItemId": 5,
-    "category": "REQUEST",
-    "name": "EASY_BREAK",
-    "icon": "shock",
-    "hasExtraFee": true,
-    "baseExtraFee": 5000.0,
-    "requiresExtraInput": false,
-    "extraInputLabel": "충격 최소화",
-    "sortOrder": 4
-  }
-]
-```
+- Response DTO: `List<ChecklistItemResponse>`
 
-## Error Response
+## Driver Counter Offers
 
-```json
-{
-  "success": false,
-  "message": "Authentication required.",
-  "status": 401
-}
-```
-
-
-## Quote Stops
-
-- Quote Create/Update ??? `stops` ??? ??? ? ????.
-- Quote Detail ??? `stops` ??? ?????.
-
-```json
-"stops": [
-  {
-    "seq": 1,
-    "address": "Incheon, KR",
-    "lat": 37.4563,
-    "lng": 126.7052,
-    "contactName": "???A",
-    "contactPhone": "010-0000-0000",
-    "deptName": "???",
-    "managerName": "???"
-  }
-]
-```
-
-## Counter Offer (Driver/ Shipper)
-
-### Driver Counter Offer Create
+### Counter Offer Create
 - Method: `POST`
 - Path: `/api/driver/quotes/{quoteId}/counter-offers`
-- Request
-```json
-{
-  "proposedPrice": 240000,
-  "message": "??? ?? ??? ??? ??? ?? ?? ??????."
-}
-```
-- Response
-```json
-{
-  "counterOfferId": 1,
-  "quoteId": 10,
-  "driverId": 7,
-  "proposedPrice": 240000,
-  "message": "??? ?? ??? ??? ??? ?? ?? ??????.",
-  "status": "PENDING",
-  "createdAt": "2025-01-01T10:00:00",
-  "respondedAt": null
-}
-```
+- Request DTO: `CounterOfferCreateRequest`
+- Response DTO: `CounterOfferResponse`
 
-### Driver Counter Offer List (Me)
+### My Counter Offers
 - Method: `GET`
 - Path: `/api/driver/counter-offers/me`
+- Response DTO: `List<CounterOfferResponse>`
 
-### Shipper Counter Offer List
+## Shipper Counter Offers
+
+### Counter Offer List By Quote
 - Method: `GET`
 - Path: `/api/shipper/quotes/{quoteId}/counter-offers`
+- Response DTO: `List<CounterOfferResponse>`
 
-### Shipper Counter Offer Accept
+### Counter Offer Accept
 - Method: `PATCH`
 - Path: `/api/shipper/counter-offers/{offerId}/accept`
 - Response: `204 No Content`
 
-### Shipper Counter Offer Reject
+### Counter Offer Reject
 - Method: `PATCH`
 - Path: `/api/shipper/counter-offers/{offerId}/reject`
 - Response: `204 No Content`
 
+## Driver Matches
+
+### Open Matches
+- Method: `GET`
+- Path: `/api/driver/matches`
+- Response DTO: `List<MatchResponse>`
+
+### My Matches (Driver)
+- Method: `GET`
+- Path: `/api/driver/matches/me`
+- Response DTO: `List<MatchResponse>`
+
+### Match Accept (Driver)
+- Method: `POST`
+- Path: `/api/driver/matches/{matchId}/accept`
+- Response DTO: `MatchResponse`
+
+### Match Cancel (Driver)
+- Method: `DELETE`
+- Path: `/api/driver/matches/{matchId}`
+- Response: `204 No Content`
+
+### Match Detail (Driver)
+- Method: `GET`
+- Path: `/api/driver/matches/{matchId}`
+- Response DTO: `MatchResponse`
+
+## Shipper Matches
+
+### Match Create (Shipper)
+- Method: `POST`
+- Path: `/api/shipper/matches`
+- Request DTO: `MatchCreateRequest`
+- Response DTO: `MatchResponse`
+
+### My Matches (Shipper)
+- Method: `GET`
+- Path: `/api/shipper/matches/me`
+- Response DTO: `List<MatchResponse>`
+
+### Match Cancel (Shipper)
+- Method: `DELETE`
+- Path: `/api/shipper/matches/{matchId}`
+- Response: `204 No Content`
+
+### Match Detail (Shipper)
+- Method: `GET`
+- Path: `/api/shipper/matches/{matchId}`
+- Response DTO: `MatchResponse`
+
 ## Notifications
 
-### Notification List (Me)
+### Notification List
 - Method: `GET`
 - Path: `/api/notifications/me`
-- Response
-```json
-[
-  {
-    "notificationId": 1,
-    "matchId": 10,
-    "type": "COUNTER_OFFER_CREATED",
-    "message": "???? ??? ??? ??????.",
-    "isRead": false,
-    "createdAt": "2025-01-01T10:00:00"
-  }
-]
-```
+- Response DTO: `List<NotificationResponse>`
 
 ### Notification Unread Count
 - Method: `GET`
 - Path: `/api/notifications/me/unread-count`
-- Response
-```json
-{
-  "unreadCount": 3
-}
-```
+- Response DTO: `UnreadCountResponse`
 
 ### Notification Mark Read
 - Method: `PATCH`
 - Path: `/api/notifications/{notificationId}/read`
 - Response: `204 No Content`
 
-## Push Tokens
+## Push Tokens (FCM)
 
-### Push Token Upsert (Me)
+### Push Token Upsert
 - Method: `POST`
 - Path: `/api/push-tokens/me`
-- Request
+- Request DTO: `FcmTokenUpsertRequest`
+- Request example:
 ```json
 {
   "deviceType": "ANDROID",
   "fcmToken": "fcm_device_token_value"
 }
 ```
+- `deviceType`: `ANDROID | IOS | WEB`
 - Response: `204 No Content`
 
-### Push Token Deactivate (Me)
+### Push Token Deactivate
 - Method: `DELETE`
 - Path: `/api/push-tokens/me?fcmToken={fcmToken}`
 - Response: `204 No Content`
 
-### Enums
-- `deviceType`: `ANDROID`, `IOS`, `WEB`
+## Announcements (Public)
 
-
-## Quote Validate
-
-### Quote Validate
-- Method: `POST`
-- Path: `/api/shipper/quotes/validate`
-- Request: Quote Create? ??
-- Response
-```json
-{
-  "status": "OK",
-  "comments": "????? ?? ???? 85% ?????. ??? ??? ? ???."
-}
-```
-
-## Match
-
-### Shipper Match Create
-- Method: `POST`
-- Path: `/api/shipper/matches`
-- Request
-```json
-{
-  "quoteId": 1
-}
-```
-- Response
-```json
-{
-  "matchId": 1,
-  "quoteId": 1,
-  "driverId": null,
-  "accepted": false,
-  "status": "READY"
-}
-```
-
-### Shipper Match List (Me)
+### Announcement List
 - Method: `GET`
-- Path: `/api/shipper/matches/me`
+- Path: `/api/announcements`
+- Response DTO: `List<AnnouncementResponse>`
 
-### Shipper Match Detail
+### Announcement Detail
 - Method: `GET`
-- Path: `/api/shipper/matches/{matchId}`
+- Path: `/api/announcements/{announcementId}`
+- Response DTO: `AnnouncementResponse`
 
-### Shipper Match Cancel
+## Announcements (Admin)
+
+### Admin Announcement Create
+- Method: `POST`
+- Path: `/api/admin/announcements`
+- Request DTO: `AnnouncementCreateRequest`
+- Response DTO: `AnnouncementResponse`
+- Auth role: `ROLE_ADMIN | ROLE_SUPER | ROLE_OPERATOR | ROLE_CS`
+
+### Admin Announcement Update
+- Method: `PUT`
+- Path: `/api/admin/announcements/{announcementId}`
+- Request DTO: `AnnouncementUpdateRequest`
+- Response DTO: `AnnouncementResponse`
+- Auth role: `ROLE_ADMIN | ROLE_SUPER | ROLE_OPERATOR | ROLE_CS`
+
+### Admin Announcement Delete
 - Method: `DELETE`
-- Path: `/api/shipper/matches/{matchId}`
+- Path: `/api/admin/announcements/{announcementId}`
 - Response: `204 No Content`
+- Auth role: `ROLE_ADMIN | ROLE_SUPER | ROLE_OPERATOR | ROLE_CS`
 
-### Driver Open Match List
+### Admin Announcement List
 - Method: `GET`
-- Path: `/api/driver/matches/open`
+- Path: `/api/admin/announcements`
+- Response DTO: `List<AnnouncementResponse>`
+- Auth role: `ROLE_ADMIN | ROLE_SUPER | ROLE_OPERATOR | ROLE_CS`
 
-### Driver Match Accept
+### Admin Announcement Detail
+- Method: `GET`
+- Path: `/api/admin/announcements/{announcementId}`
+- Response DTO: `AnnouncementResponse`
+- Auth role: `ROLE_ADMIN | ROLE_SUPER | ROLE_OPERATOR | ROLE_CS`
+
+## Shipper Payments
+
+### Payment Prepare
 - Method: `POST`
-- Path: `/api/driver/matches/{matchId}/accept`
+- Path: `/api/shipper/payments/prepare`
+- Request DTO: `PaymentPrepareRequest`
+- Response DTO: `PaymentPrepareResponse`
+- Auth role: `ROLE_SHIPPER`
 
-### Driver Match List (Me)
+### Payment Confirm
+- Method: `POST`
+- Path: `/api/shipper/payments/confirm`
+- Request DTO: `PaymentConfirmRequest`
+- Response DTO: `PaymentResponse`
+- Auth role: `ROLE_SHIPPER`
+
+### My Payments
 - Method: `GET`
-- Path: `/api/driver/matches/me`
+- Path: `/api/shipper/payments/me`
+- Response DTO: `List<PaymentResponse>`
+- Auth role: `ROLE_SHIPPER`
 
-### Driver Match Detail
+### Payment Detail
 - Method: `GET`
-- Path: `/api/driver/matches/{matchId}`
+- Path: `/api/shipper/payments/{paymentId}`
+- Response DTO: `PaymentResponse`
+- Auth role: `ROLE_SHIPPER`
 
-### Driver Match Cancel
-- Method: `DELETE`
-- Path: `/api/driver/matches/{matchId}`
-- Response: `204 No Content`
-
-## Notes
-- Quote List ???? `stops`? ???? ????. (Detail?? ??)
-- `unreadCount`? ?? ?? ?? ?????.
+### Payments By Match
+- Method: `GET`
+- Path: `/api/shipper/payments?matchId={matchId}`
+- Response DTO: `List<PaymentResponse>`
+- Auth role: `ROLE_SHIPPER`
