@@ -31,6 +31,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
@@ -103,7 +104,7 @@ public class QuoteService {
         saveChecklistItems(saved.getQuoteId(), req.getChecklistItems());
         saveStops(saved.getQuoteId(), req.getStops());
 
-        return new QuoteCreateResponse(saved.getQuoteId());
+        return new QuoteCreateResponse(saved.getQuoteId(), saved.getPublicId());
     }
 
     @Transactional
@@ -115,9 +116,10 @@ public class QuoteService {
     }
 
     @Transactional
-    public QuoteDetailResponse getQuote(Long quoteId) {
+    public QuoteDetailResponse getQuote(String quoteIdentifier) {
         Long shipperId = getCurrentShipperId();
-        Quote quote = getOwnedQuote(quoteId, shipperId);
+        Quote quote = getOwnedQuoteByIdentifier(quoteIdentifier, shipperId);
+        Long quoteId = quote.getQuoteId();
         List<QuoteChecklistItemResponse> items = quoteChecklistItemRepository.findByQuoteId(quoteId).stream()
                 .map(this::toItemResponse)
                 .collect(Collectors.toList());
@@ -128,9 +130,10 @@ public class QuoteService {
     }
 
     @Transactional
-    public QuoteDetailResponse updateQuote(Long quoteId, QuoteUpdateRequest req) {
+    public QuoteDetailResponse updateQuote(String quoteIdentifier, QuoteUpdateRequest req) {
         Long shipperId = getCurrentShipperId();
-        Quote quote = getOwnedQuote(quoteId, shipperId);
+        Quote quote = getOwnedQuoteByIdentifier(quoteIdentifier, shipperId);
+        Long quoteId = quote.getQuoteId();
 
         PricingResult pricing = calculatePricing(
                 req.getDistanceKm(),
@@ -196,9 +199,10 @@ public class QuoteService {
     }
 
     @Transactional
-    public void deleteQuote(Long quoteId) {
+    public void deleteQuote(String quoteIdentifier) {
         Long shipperId = getCurrentShipperId();
-        Quote quote = getOwnedQuote(quoteId, shipperId);
+        Quote quote = getOwnedQuoteByIdentifier(quoteIdentifier, shipperId);
+        Long quoteId = quote.getQuoteId();
         quoteChecklistItemRepository.deleteByQuoteId(quoteId);
         quoteStopRepository.deleteByQuoteId(quoteId);
         quoteRepository.delete(quote);
@@ -271,9 +275,8 @@ public class QuoteService {
         );
     }
 
-    private Quote getOwnedQuote(Long quoteId, Long shipperId) {
-        Quote quote = quoteRepository.findById(quoteId)
-                .orElseThrow(() -> new CustomException(ErrorCode.INVALID_REQUEST));
+    private Quote getOwnedQuoteByIdentifier(String quoteIdentifier, Long shipperId) {
+        Quote quote = findQuoteByIdentifier(quoteIdentifier);
         if (!shipperId.equals(quote.getShipperId())) {
             throw new CustomException(ErrorCode.AUTH_FORBIDDEN);
         }
@@ -283,6 +286,7 @@ public class QuoteService {
     private QuoteListResponse toListResponse(Quote quote) {
         return new QuoteListResponse(
                 quote.getQuoteId(),
+                quote.getPublicId(),
                 quote.getTruckId(),
                 quote.getOriginAddress(),
                 quote.getDestinationAddress(),
@@ -330,6 +334,7 @@ public class QuoteService {
                 stops == null ? Collections.emptyList() : stops;
         return new QuoteDetailResponse(
                 quote.getQuoteId(),
+                quote.getPublicId(),
                 quote.getShipperId(),
                 quote.getTruckId(),
                 quote.getOriginAddress(),
@@ -360,6 +365,30 @@ public class QuoteService {
                 safeItems,
                 safeStops
         );
+    }
+
+    private Quote findQuoteByIdentifier(String quoteIdentifier) {
+        UUID publicId = parsePublicIdOrNull(quoteIdentifier);
+        if (publicId != null) {
+            return quoteRepository.findByPublicId(publicId)
+                    .orElseThrow(() -> new CustomException(ErrorCode.INVALID_REQUEST));
+        }
+
+        try {
+            Long quoteId = Long.valueOf(quoteIdentifier);
+            return quoteRepository.findById(quoteId)
+                    .orElseThrow(() -> new CustomException(ErrorCode.INVALID_REQUEST));
+        } catch (NumberFormatException e) {
+            throw new CustomException(ErrorCode.INVALID_REQUEST);
+        }
+    }
+
+    private UUID parsePublicIdOrNull(String quoteIdentifier) {
+        try {
+            return UUID.fromString(quoteIdentifier);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     private PricingResult calculatePricing(

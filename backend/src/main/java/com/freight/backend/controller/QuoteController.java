@@ -41,22 +41,22 @@ public class QuoteController {
         return ResponseEntity.ok(quoteService.listQuotes());
     }
 
-    @GetMapping("/{quoteId}")
-    public ResponseEntity<QuoteDetailResponse> getQuote(@PathVariable Long quoteId) {
-        return ResponseEntity.ok(quoteService.getQuote(quoteId));
+    @GetMapping("/{quoteIdentifier}")
+    public ResponseEntity<QuoteDetailResponse> getQuote(@PathVariable String quoteIdentifier) {
+        return ResponseEntity.ok(quoteService.getQuote(quoteIdentifier));
     }
 
-    @PutMapping("/{quoteId}")
+    @PutMapping("/{quoteIdentifier}")
     public ResponseEntity<QuoteDetailResponse> updateQuote(
-            @PathVariable Long quoteId,
+            @PathVariable String quoteIdentifier,
             @RequestBody QuoteUpdateRequest req
     ) {
-        return ResponseEntity.ok(quoteService.updateQuote(quoteId, req));
+        return ResponseEntity.ok(quoteService.updateQuote(quoteIdentifier, req));
     }
 
-    @DeleteMapping("/{quoteId}")
-    public ResponseEntity<Void> deleteQuote(@PathVariable Long quoteId) {
-        quoteService.deleteQuote(quoteId);
+    @DeleteMapping("/{quoteIdentifier}")
+    public ResponseEntity<Void> deleteQuote(@PathVariable String quoteIdentifier) {
+        quoteService.deleteQuote(quoteIdentifier);
         return ResponseEntity.noContent().build();
     }
 }
