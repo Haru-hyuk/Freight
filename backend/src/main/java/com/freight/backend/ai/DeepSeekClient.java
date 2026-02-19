@@ -46,7 +46,12 @@ public class DeepSeekClient {
         ChatCompletionRequest body = new ChatCompletionRequest(
                 model,
                 List.of(
-                        new Message("system", "당신은 화물 운송 견적 검증을 돕는 조언가입니다."),
+                        new Message("system",
+                                "You are an expert freight dispatch analyst. " +
+                                "Return concise Korean advice for shippers. " +
+                                "Output plain text only, no markdown, no bullets, no emojis. " +
+                                "Keep it to 1-2 sentences with practical wording. " +
+                                "Focus on dispatch speed likelihood, load safety, and price fitness."),
                         new Message("user", prompt)
                 ),
                 0.2,
@@ -123,3 +128,4 @@ public class DeepSeekClient {
         }
     }
 }
+
