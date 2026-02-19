@@ -599,6 +599,28 @@
 - Path: `/api/notifications/{notificationId}/read`
 - Response: `204 No Content`
 
+## Push Tokens
+
+### Push Token Upsert (Me)
+- Method: `POST`
+- Path: `/api/push-tokens/me`
+- Request
+```json
+{
+  "deviceType": "ANDROID",
+  "fcmToken": "fcm_device_token_value"
+}
+```
+- Response: `204 No Content`
+
+### Push Token Deactivate (Me)
+- Method: `DELETE`
+- Path: `/api/push-tokens/me?fcmToken={fcmToken}`
+- Response: `204 No Content`
+
+### Enums
+- `deviceType`: `ANDROID`, `IOS`, `WEB`
+
 
 ## Quote Validate
 
