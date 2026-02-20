@@ -1,646 +1,564 @@
-import React, { useMemo } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+// app/quote/[id].tsx (or wherever QuoteDetailPage lives)
+import React from "react";
+import { Alert, LayoutAnimation, Pressable, StyleSheet, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 
-import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
+import { resolveTonePalette, type BottomActionId } from "@/features/quote/model/quoteActionMatrix";
+import { useQuoteDetail } from "@/features/quote/model/useQuoteDetail";
+import { BottomActionRouter } from "@/features/quote/ui/actions/BottomActionRouter";
+import { initLayoutAnimationForAndroid } from "@/shared/lib/ui/layoutAnimationInit";
+import { safeNumber, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppButton } from "@/shared/ui/kit/AppButton";
 import { AppCard } from "@/shared/ui/kit/AppCard";
 import { AppText } from "@/shared/ui/kit/AppText";
 import { PageScaffold } from "@/widgets/layout/PageScaffold";
 
-type QuoteStatus = "received" | "dispatching" | "negotiating" | "assigned" | "pickup" | "transit" | "dropoff";
-type DetailUiState = "dispatching" | "negotiating" | "payment" | "moving" | "completed";
-
-type StatusPresentation = {
-  badgeLabel: string;
-  title: string;
-  description: string;
-  badgeBg: string;
-  badgeText: string;
-};
-
-const KNOWN_STATUSES: readonly QuoteStatus[] = [
-  "received",
-  "dispatching",
-  "negotiating",
-  "assigned",
-  "pickup",
-  "transit",
-  "dropoff",
-];
-
-function isQuoteStatus(value: unknown): value is QuoteStatus {
-  return typeof value === "string" && KNOWN_STATUSES.includes(value as QuoteStatus);
-}
-
-function mapStatusToUiState(status: QuoteStatus): DetailUiState {
-  if (status === "assigned") return "payment";
-  if (status === "pickup" || status === "transit") return "moving";
-  if (status === "dropoff") return "completed";
-  if (status === "negotiating") return "negotiating";
-  return "dispatching";
-}
+type QuoteDetailView = ReturnType<typeof useQuoteDetail>;
 
 const useStyles = createThemedStyles((theme) => {
-  const colors = theme?.colors;
-  const spacing = safeNumber(theme?.layout?.spacing?.base, 4);
-
-  const cBgMain = safeString(colors?.bgMain, safeString(colors?.bgSurfaceAlt, safeString(colors?.bgSurface, "")));
-  const cBgAlt = safeString(colors?.bgSurfaceAlt, cBgMain);
-  const cSurface = safeString(colors?.bgSurface, cBgMain);
-  const cTextMain = safeString(colors?.textMain, safeString(colors?.textSub, safeString(colors?.textMuted, "")));
-  const cTextSub = safeString(colors?.textSub, cTextMain);
-  const cTextMuted = safeString(colors?.textMuted, cTextSub);
-  const cBorder = safeString(colors?.borderDefault, safeString(colors?.borderStrong, cBgAlt));
-  const cPrimary = safeString(colors?.brandPrimary, cTextMain);
-  const cSecondary = safeString(colors?.brandSecondary, cTextMain);
-  const cAccent = safeString(colors?.brandAccent, cPrimary);
-  const cDanger = safeString(colors?.semanticDanger, cPrimary);
-  const cOnBrand = safeString(colors?.textOnBrand, safeString(colors?.textInverse, cSurface));
-
-  const cDivider = tint(cBorder, 0.6, cBorder);
-  const cCardBorder = tint(cBorder, 0.78, cBorder);
-  const cMapBg = tint(cBorder, 0.35, cBgAlt);
-  const cCallChip = tint(cTextMain, 0.06, cBgAlt);
-  const cPillBg = tint(cSurface, 0.95, cSurface);
-
-  const radiusCard = safeNumber(theme?.components?.card?.radius, safeNumber(theme?.layout?.radii?.card, 16));
-  const radiusControl = safeNumber(theme?.layout?.radii?.control, 12);
-  const cardPadding = safeNumber(theme?.components?.card?.paddingMd, 20);
+  const c = theme.colors;
+  const spacing = safeNumber(theme.layout.spacing.base, 4);
 
   return StyleSheet.create({
     pageContent: {
-      paddingTop: spacing * 4,
-      paddingBottom: spacing * 22,
+      paddingTop: spacing * 2,
       paddingHorizontal: spacing * 5,
-      backgroundColor: cBgMain,
+      paddingBottom: spacing * 28,
+      backgroundColor: c.bgMain,
     },
-    sectionTitle: {
-      marginBottom: spacing * 2 + 2,
-      color: cTextSub,
-      fontWeight: "700",
+
+    commandCenter: {
+      marginTop: spacing,
+      marginBottom: spacing * 3,
+      gap: spacing,
     },
-    statusHeader: {
-      marginBottom: spacing * 5,
+    statusRow: {
+      minHeight: 44,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: spacing * 2,
+    },
+    statusLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing,
+      flex: 1,
     },
     statusBadge: {
-      alignSelf: "flex-start",
-      paddingVertical: spacing,
-      paddingHorizontal: spacing * 2 + 2,
-      borderRadius: radiusControl - 4,
-      marginBottom: spacing * 3,
-    },
-    statusTitle: {
-      color: cTextMain,
-      fontWeight: "800",
-      marginBottom: spacing * 2,
-      lineHeight: safeNumber(theme?.typography?.scale?.title?.lineHeight, 30),
-    },
-    statusDescription: {
-      color: cTextSub,
-      lineHeight: safeNumber(theme?.typography?.scale?.detail?.lineHeight, 20),
-    },
-
-    cardOuter: {
-      marginBottom: spacing * 4,
-      borderRadius: radiusCard,
-      overflow: "hidden",
-    },
-    card: {
-      borderRadius: radiusCard,
-      padding: cardPadding,
+      borderRadius: 999,
       borderWidth: 1,
-      borderColor: cCardBorder,
-    },
-    cardAccent: {
-      borderLeftWidth: 4,
-      borderLeftColor: cPrimary,
-    },
-
-    rowBetween: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-    },
-    infoRow: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      marginBottom: spacing * 3,
-      gap: spacing * 2,
-    },
-    labelText: {
-      color: cTextSub,
-      fontSize: safeNumber(theme?.typography?.scale?.detail?.size, 14),
-    },
-    valueText: {
-      color: cTextMain,
-      fontWeight: "700",
-      textAlign: "right",
-      fontSize: safeNumber(theme?.typography?.scale?.detail?.size, 14),
-    },
-    divider: {
-      height: 1,
-      backgroundColor: cDivider,
-      marginVertical: spacing * 3 + 2,
-    },
-
-    quoteOfferCard: {
-      borderColor: cPrimary,
-      backgroundColor: tint(cPrimary, 0.05, cSurface),
-    },
-    priceOld: {
-      color: cTextMuted,
-      textDecorationLine: "line-through",
-      fontWeight: "600",
-    },
-    priceMain: {
-      color: cPrimary,
-      fontWeight: "900",
-      fontSize: safeNumber(theme?.typography?.scale?.title?.size, 22),
-    },
-    noteText: {
-      color: cTextSub,
-      lineHeight: safeNumber(theme?.typography?.scale?.detail?.lineHeight, 20),
-    },
-
-    routeWrap: {
-      position: "relative",
-      paddingLeft: spacing * 4,
-    },
-    routeLine: {
-      position: "absolute",
-      left: spacing + 1,
-      top: spacing + 2,
-      bottom: spacing * 6,
-      width: 1,
-      borderLeftWidth: 1,
-      borderLeftColor: cDivider,
-      borderStyle: "dashed",
-    },
-    routeRow: {
-      marginBottom: spacing * 6,
-    },
-    routeRowLast: {
-      marginBottom: 0,
-    },
-    routeDot: {
-      position: "absolute",
-      left: -spacing * 4,
-      top: spacing + 1,
-      width: spacing * 3,
-      height: spacing * 3,
-      borderRadius: spacing * 1.5,
-      borderWidth: 3,
-      borderColor: cTextMain,
-      backgroundColor: cSurface,
-    },
-    routeDotEnd: {
-      borderColor: cPrimary,
-    },
-    routeAddress: {
-      color: cTextMain,
-      fontWeight: "700",
-      marginBottom: spacing,
-    },
-    routeMeta: {
-      color: cTextSub,
-    },
-
-    mapCard: {
-      padding: spacing * 3,
-      backgroundColor: cMapBg,
-      borderColor: cDivider,
-    },
-    mapMock: {
-      borderRadius: radiusControl,
-      backgroundColor: tint(cTextMain, 0.06, cSurface),
-      height: 172,
-      alignItems: "center",
-      justifyContent: "center",
-      overflow: "hidden",
-      marginBottom: spacing * 3,
-      gap: spacing,
-    },
-    livePill: {
-      position: "absolute",
-      right: spacing * 3,
-      bottom: spacing * 3,
-      borderRadius: radiusControl - 4,
-      backgroundColor: cPillBg,
-      borderWidth: 1,
-      borderColor: cDivider,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing,
       paddingHorizontal: spacing * 2,
       paddingVertical: spacing,
+      maxWidth: "60%",
     },
-    liveDot: {
-      width: spacing + 2,
-      height: spacing + 2,
-      borderRadius: (spacing + 2) / 2,
-      backgroundColor: cDanger,
+    statusText: {
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
+      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
+      fontWeight: "900",
+      letterSpacing: -0.2,
+    },
+    metaText: {
+      color: c.textMuted,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
+      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
+      fontWeight: "700",
     },
 
-    driverRow: {
+    overviewCard: {
+      marginBottom: spacing * 3,
+      borderWidth: 1,
+    },
+    overviewInner: {
+      padding: spacing * 4,
+      gap: spacing * 2,
+    },
+    overviewTop: {
+      minHeight: 24,
       flexDirection: "row",
       alignItems: "center",
-      gap: spacing * 3,
+      gap: spacing + 2,
     },
-    avatarCircle: {
-      width: spacing * 12,
-      height: spacing * 12,
-      borderRadius: spacing * 6,
+    iconChip: {
+      width: 24,
+      height: 24,
+      borderRadius: 12,
+      borderWidth: 1,
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: tint(cSecondary, 0.12, cBgAlt),
     },
-    iconRow: {
+    icon: {
+      fontSize: 14,
+    },
+    eyebrow: {
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
+      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
+      fontWeight: "900",
+    },
+    overviewTitle: {
+      color: c.textMain,
+      fontSize: safeNumber(theme.typography.scale.heading.size, 18),
+      lineHeight: safeNumber(theme.typography.scale.heading.lineHeight, 24),
+      fontWeight: "900",
+      letterSpacing: -0.3,
+    },
+
+    routeRow: {
+      minHeight: 44,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing + 2,
+    },
+    routeAddress: {
+      flex: 1,
+      color: c.textMain,
+      fontSize: safeNumber(theme.typography.scale.detail.size, 14) + 1,
+      lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20) + 1,
+      fontWeight: "900",
+      letterSpacing: -0.2,
+    },
+    routeArrow: {
+      color: c.borderStrong,
+      fontSize: 14,
+    },
+    waypointRow: {
+      minHeight: 24,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing,
+    },
+    waypointIcon: {
+      color: c.textSub,
+      fontSize: 14,
+    },
+    waypointText: {
+      flex: 1,
+      color: c.textSub,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
+      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
+      fontWeight: "700",
+    },
+
+    divider: {
+      height: 1,
+      backgroundColor: tint(c.textMain, 0.06, c.borderDefault),
+    },
+
+    metricRow: {
+      minHeight: 40,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: spacing,
+    },
+    metricLabel: {
+      color: c.textMain,
+      fontSize: safeNumber(theme.typography.scale.detail.size, 14),
+      lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20),
+      fontWeight: "900",
+    },
+    metricValue: {
+      color: c.textSub,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
+      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
+      fontWeight: "700",
+    },
+    priceValue: {
+      color: c.textMain,
+      fontSize: safeNumber(theme.typography.scale.display.size, 30),
+      lineHeight: safeNumber(theme.typography.scale.display.lineHeight, 38),
+      fontWeight: "900",
+      marginTop: spacing,
+      letterSpacing: -0.7,
+    },
+    note: {
+      color: c.textMuted,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
+      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
+      fontWeight: "600",
+      marginTop: spacing,
+    },
+
+    highlightLine: {
+      color: c.textMain,
+      fontSize: safeNumber(theme.typography.scale.detail.size, 14),
+      lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20),
+      fontWeight: "700",
+    },
+
+    quickActionsRow: {
+      marginTop: spacing,
       flexDirection: "row",
       gap: spacing * 2,
     },
-    iconChip: {
-      width: spacing * 9,
-      height: spacing * 9,
-      borderRadius: spacing * 4.5,
-      alignItems: "center",
-      justifyContent: "center",
-      borderWidth: 1,
-      borderColor: cDivider,
-      backgroundColor: cCallChip,
+    actionButton: {
+      flex: 1,
+    },
+    footnote: {
+      color: c.textSub,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
+      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
+      fontWeight: "600",
+      marginTop: spacing,
     },
 
-    bottomBar: {
-      backgroundColor: cSurface,
-      borderTopWidth: 1,
-      borderTopColor: cDivider,
-      paddingHorizontal: spacing * 5,
-      paddingTop: spacing * 3 + 2,
+    accordionHeader: {
+      minHeight: 44,
       flexDirection: "row",
-      gap: spacing * 2 + 2,
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingVertical: spacing * 3,
+      borderTopWidth: 1,
+      borderTopColor: c.borderDefault,
     },
-    flex1: { flex: 1 },
-    flex2: { flex: 2 },
-    withBottomSpace: {
-      minHeight: spacing * 8,
+    accordionTitle: {
+      color: c.textMain,
+      fontSize: safeNumber(theme.typography.scale.detail.size, 14),
+      lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20),
+      fontWeight: "900",
+    },
+    accordionRight: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing / 2,
+    },
+    accordionState: {
+      color: c.textMuted,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
+      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
+      fontWeight: "700",
+    },
+    accordionChevron: {
+      color: c.textMuted,
+      fontSize: 16,
+    },
+    accordionBody: {
+      paddingBottom: spacing * 4,
+      gap: spacing * 2,
     },
 
-    textPrimary: { color: cPrimary },
-    textSecondary: { color: cSecondary },
-    textAccent: { color: cAccent },
-    textMuted: { color: cTextSub },
-    badgePrimaryBg: { backgroundColor: tint(cPrimary, 0.12, cBgAlt) },
-    badgeSecondaryBg: { backgroundColor: tint(cSecondary, 0.12, cBgAlt) },
-    badgeAccentBg: { backgroundColor: tint(cAccent, 0.12, cBgAlt) },
-    badgeNeutralBg: { backgroundColor: tint(cTextMain, 0.06, cBgAlt) },
-
-    emphasisText: {
-      color: cTextMain,
-      fontWeight: "800",
-      fontSize: safeNumber(theme?.typography?.scale?.heading?.size, 18),
+    archiveCardInner: {
+      padding: spacing * 4,
     },
-    helperMuted: {
-      color: cTextSub,
+    archiveTitle: {
+      color: c.textMain,
+      fontSize: safeNumber(theme.typography.scale.detail.size, 14),
+      lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20),
+      fontWeight: "900",
+      marginBottom: spacing,
     },
-    buttonOnBrand: { color: cOnBrand },
+    archiveRow: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      justifyContent: "space-between",
+      gap: spacing * 2,
+      paddingVertical: spacing,
+      borderBottomWidth: 1,
+      borderBottomColor: tint(c.textMain, 0.06, c.borderDefault),
+    },
+    archiveRowLast: {
+      borderBottomWidth: 0,
+    },
+    archiveLabel: {
+      width: "35%",
+      color: c.textMuted,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
+      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
+      fontWeight: "700",
+    },
+    archiveValue: {
+      flex: 1,
+      color: c.textMain,
+      fontSize: safeNumber(theme.typography.scale.detail.size, 14),
+      lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20),
+      fontWeight: "700",
+      textAlign: "right",
+    },
   });
 });
+
+function parseQuoteId(value: string | string[] | undefined): number {
+  const raw = Array.isArray(value) ? value[0] : value;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 301;
+}
+
+function resolveSpotlightIconName(type: QuoteDetailView["highlight"]["type"]): keyof typeof Ionicons.glyphMap {
+  if (type === "priceCompare") return "pricetag-outline";
+  if (type === "driverProfile") return "person-circle-outline";
+  if (type === "miniMap") return "navigate-outline";
+  if (type === "progressInfo") return "time-outline";
+  if (type === "proof") return "checkmark-circle-outline";
+  return "information-circle-outline";
+}
+
+function resolveQuickActionLabel(action: BottomActionId): string {
+  if (action === "callDriver") return "기사님 연락";
+  if (action === "viewPickupPhotos") return "상차 사진";
+  if (action === "viewLiveLocation") return "실시간 위치";
+  if (action === "viewPOD") return "인수증 보기";
+  return "확인";
+}
+
+function runQuickAction(action: BottomActionId, view: QuoteDetailView) {
+  const origin = view.actionsContext?.originAddress ?? "출발지";
+  const dest = view.actionsContext?.destinationAddress ?? "도착지";
+
+  if (action === "callDriver") {
+    Alert.alert("기사님 연락", "기사님에게 연락을 시도합니다.");
+    return;
+  }
+
+  if (action === "viewPickupPhotos") {
+    Alert.alert("상차 사진", "상차 사진을 불러옵니다.");
+    return;
+  }
+
+  if (action === "viewLiveLocation") {
+    Alert.alert("실시간 위치", `${origin}에서 ${dest}까지 운송 위치를 확인합니다.`);
+    return;
+  }
+
+  if (action === "viewPOD") {
+    Alert.alert("인수증", "인수증을 확인합니다.");
+    return;
+  }
+
+  Alert.alert("안내", "준비 중인 기능입니다.");
+}
+
+function buildWaypointText(waypoints: string[]): string {
+  const list = Array.isArray(waypoints) ? waypoints.filter(Boolean) : [];
+  if (list.length === 0) return "";
+  if (list.length === 1) return `경유지 1곳: ${list[0]}`;
+  return `경유지 ${list.length}곳: ${list[0]} 외 ${list.length - 1}곳`;
+}
+
+function resolvePriceLabel(view: QuoteDetailView): string {
+  const status = view.quote?.status ?? "";
+  const type = view.highlight?.type ?? "none";
+
+  if (type === "driverProfile") return "결제 금액";
+  if (type === "proof") return "최종 운임";
+  if (status === "CANCELED") return "운임";
+  return "운임";
+}
+
+function OverviewCard({ view }: { view: QuoteDetailView }) {
+  const styles = useStyles();
+  const theme = useAppTheme();
+  const palette = resolveTonePalette(theme, view.policy);
+  const iconName = resolveSpotlightIconName(view.highlight?.type ?? "none");
+
+  const quickActions = view.highlight?.quickActions ?? [];
+  const waypoints = view.coreSummary?.waypointAddresses ?? [];
+  const waypointText = buildWaypointText(waypoints);
+
+  const origin = view.coreSummary?.originAddress ?? "";
+  const dest = view.coreSummary?.destinationAddress ?? "";
+  const distanceText = view.coreSummary?.distanceText ?? "거리 정보 없음";
+
+  const isPriceCompare = (view.highlight?.type ?? "none") === "priceCompare";
+  const isCanceled = (view.quote?.status ?? "") === "CANCELED";
+  const hasPriceText = Boolean((view.coreSummary?.totalPriceText ?? "").trim());
+  const showPriceSummary = !isPriceCompare && !isCanceled && hasPriceText;
+
+  const highlightLines = Array.isArray(view.highlight?.lines) ? view.highlight.lines.filter(Boolean) : [];
+  const title = (view.highlight?.title ?? "").trim();
+  const eyebrow = (view.highlight?.eyebrow ?? "").trim() || "운송 요약";
+  const footnote = (view.highlight?.footnote ?? "").trim();
+  const note = (view.coreSummary?.totalPriceNote ?? "").trim();
+
+  return (
+    <AppCard
+      outlined
+      elevated={false}
+      style={[
+        styles.overviewCard,
+        {
+          borderColor: palette.spotlightBorder,
+          backgroundColor: palette.spotlightBg,
+        },
+      ]}
+    >
+      <View style={styles.overviewInner}>
+        <View style={styles.overviewTop}>
+          <View
+            style={[
+              styles.iconChip,
+              {
+                backgroundColor: palette.iconChipBg,
+                borderColor: palette.iconChipBorder,
+              },
+            ]}
+          >
+            <Ionicons name={iconName} style={[styles.icon, { color: palette.iconColor }]} />
+          </View>
+          <AppText style={[styles.eyebrow, { color: palette.badgeText }]}>{eyebrow}</AppText>
+        </View>
+
+        {title ? <AppText style={styles.overviewTitle}>{title}</AppText> : null}
+
+        <View style={styles.routeRow}>
+          <AppText style={styles.routeAddress} numberOfLines={1}>
+            {origin || "출발지 정보 없음"}
+          </AppText>
+          <Ionicons name="arrow-forward" style={styles.routeArrow} />
+          <AppText style={styles.routeAddress} numberOfLines={1}>
+            {dest || "도착지 정보 없음"}
+          </AppText>
+        </View>
+
+        {waypointText ? (
+          <View style={styles.waypointRow}>
+            <Ionicons name="navigate-outline" style={styles.waypointIcon} />
+            <AppText style={styles.waypointText} numberOfLines={1}>
+              {waypointText}
+            </AppText>
+          </View>
+        ) : null}
+
+        <View style={styles.divider} />
+
+        <View style={styles.metricRow}>
+          <AppText style={styles.metricLabel}>운송 거리</AppText>
+          <AppText style={styles.metricValue}>{distanceText}</AppText>
+        </View>
+
+        {showPriceSummary ? (
+          <View>
+            <View style={styles.metricRow}>
+              <AppText style={styles.metricLabel}>{resolvePriceLabel(view)}</AppText>
+              <AppText style={styles.metricValue}>{note || "세부 요금은 아래에서 확인할 수 있습니다."}</AppText>
+            </View>
+            <AppText style={[styles.priceValue, { color: palette.emphasisText }]}>{view.coreSummary?.totalPriceText ?? ""}</AppText>
+          </View>
+        ) : null}
+
+        {highlightLines.length > 0
+          ? highlightLines.slice(0, 4).map((line, index) => (
+              <AppText key={`${line}-${index}`} style={styles.highlightLine}>
+                {line}
+              </AppText>
+            ))
+          : null}
+
+        {quickActions.length > 0 ? (
+          <View style={styles.quickActionsRow}>
+            {quickActions.map((action) => (
+              <AppButton
+                key={action}
+                title={resolveQuickActionLabel(action)}
+                variant="secondary"
+                style={styles.actionButton}
+                onPress={() => runQuickAction(action, view)}
+              />
+            ))}
+          </View>
+        ) : null}
+
+        {footnote ? <AppText style={styles.footnote}>{footnote}</AppText> : null}
+      </View>
+    </AppCard>
+  );
+}
+
+function SpecificationArchive({ view }: { view: QuoteDetailView }) {
+  const styles = useStyles();
+  const [open, setOpen] = React.useState(false);
+
+  const toggle = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setOpen((prev) => !prev);
+  };
+
+  const sections = Array.isArray(view.specificationArchive) ? view.specificationArchive : [];
+
+  return (
+    <View>
+      <Pressable onPress={toggle} style={styles.accordionHeader}>
+        <AppText style={styles.accordionTitle}>요청 상세 정보 보기</AppText>
+        <View style={styles.accordionRight}>
+          <AppText style={styles.accordionState}>{open ? "접기" : "보기"}</AppText>
+          <Ionicons name={open ? "chevron-up" : "chevron-down"} style={styles.accordionChevron} />
+        </View>
+      </Pressable>
+
+      {open ? (
+        <View style={styles.accordionBody}>
+          {sections.map((section, sectionIndex) => (
+            <AppCard key={`${section.title}-${sectionIndex}`} outlined elevated={false}>
+              <View style={styles.archiveCardInner}>
+                <AppText style={styles.archiveTitle}>{section.title}</AppText>
+                {section.rows.map((row, rowIndex) => (
+                  <View
+                    key={`${section.title}-${row.label}-${rowIndex}`}
+                    style={[styles.archiveRow, rowIndex === section.rows.length - 1 && styles.archiveRowLast]}
+                  >
+                    <AppText style={styles.archiveLabel}>{row.label}</AppText>
+                    <AppText style={styles.archiveValue}>{row.value}</AppText>
+                  </View>
+                ))}
+              </View>
+            </AppCard>
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
 
 export default function QuoteDetailPage() {
   const styles = useStyles();
   const theme = useAppTheme();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ id?: string | string[]; quoteId?: string | string[]; status?: string | string[] }>();
+  const params = useLocalSearchParams<{ id?: string | string[] }>();
 
-  const pageBg = safeString(theme?.colors?.bgMain, safeString(theme?.colors?.bgSurfaceAlt, ""));
-  const cTextMain = safeString(theme?.colors?.textMain, "");
-  const cTextSub = safeString(theme?.colors?.textSub, cTextMain);
-  const cBgAlt = safeString(theme?.colors?.bgSurfaceAlt, pageBg);
-  const cPrimary = safeString(theme?.colors?.brandPrimary, cTextMain);
-  const cSecondary = safeString(theme?.colors?.brandSecondary, cTextMain);
-  const cAccent = safeString(theme?.colors?.brandAccent, cPrimary);
+  const quoteId = parseQuoteId(params?.id);
+  const view = useQuoteDetail(quoteId);
+  const palette = resolveTonePalette(theme, view.policy);
 
-  const statusRaw = Array.isArray(params.status) ? params.status[0] : params.status;
-  const status: QuoteStatus = isQuoteStatus(statusRaw) ? statusRaw : "negotiating";
-  const uiState = mapStatusToUiState(status);
-  const idParam = Array.isArray(params.id) ? params.id[0] : params.id;
-  const quoteIdParam = Array.isArray(params.quoteId) ? params.quoteId[0] : params.quoteId;
-  const quoteId = idParam ?? quoteIdParam;
-
-  const statusPresentation = useMemo<StatusPresentation>(() => {
-    if (uiState === "negotiating") {
-      return {
-        badgeLabel: "제안 도착",
-        title: "새로운 금액 제안이 도착했습니다",
-        description: "기사님 제안 금액과 메모를 확인하고 수락 여부를 선택해 주세요.",
-        badgeBg: tint(cPrimary, 0.12, cBgAlt),
-        badgeText: cPrimary,
-      };
-    }
-
-    if (uiState === "payment") {
-      return {
-        badgeLabel: "배차 확정",
-        title: "운송료 결제를 진행해주세요",
-        description: "결제 완료 시 배차가 최종 확정되고 운송이 시작됩니다.",
-        badgeBg: tint(cSecondary, 0.12, cBgAlt),
-        badgeText: cSecondary,
-      };
-    }
-
-    if (uiState === "moving") {
-      return {
-        badgeLabel: "이동 중",
-        title: "화물이 목적지로 이동 중입니다",
-        description: "기사님의 현재 위치와 도착 예정 시간을 확인할 수 있습니다.",
-        badgeBg: tint(cAccent, 0.12, cBgAlt),
-        badgeText: cAccent,
-      };
-    }
-
-    if (uiState === "completed") {
-      return {
-        badgeLabel: "운송 완료",
-        title: "운송이 안전하게 완료되었습니다",
-        description: "인수증과 결제 내역을 확인하고 동일 경로를 재주문할 수 있습니다.",
-        badgeBg: tint(cTextMain, 0.06, cBgAlt),
-        badgeText: cTextSub,
-      };
-    }
-
-    return {
-      badgeLabel: "배차 중",
-      title: "주변 기사님을 찾고 있습니다",
-      description: "평균 5분 내에 배차가 완료됩니다. 잠시만 기다려주세요.",
-      badgeBg: tint(cTextMain, 0.06, cBgAlt),
-      badgeText: cTextSub,
-    };
-  }, [cAccent, cBgAlt, cPrimary, cSecondary, cTextMain, cTextSub, uiState]);
-
-  const bottomBar = (
-    <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom + 12, 18) }]}>
-      {uiState === "negotiating" ? (
-        <>
-          <AppButton title="거절" variant="secondary" style={styles.flex1} onPress={() => {}} />
-          <AppButton title="제안 수락하기" style={styles.flex2} onPress={() => {}} />
-        </>
-      ) : null}
-
-      {uiState === "payment" ? <AppButton title="240,000원 결제하기" style={styles.flex1} onPress={() => {}} /> : null}
-
-      {uiState === "moving" ? (
-        <>
-          <AppButton title="위치 상세" variant="secondary" style={styles.flex1} onPress={() => {}} />
-          <AppButton title="상차 사진 보기" style={styles.flex1} onPress={() => {}} />
-        </>
-      ) : null}
-
-      {uiState === "completed" ? (
-        <>
-          <AppButton title="인수증 보기" variant="secondary" style={styles.flex1} onPress={() => {}} />
-          <AppButton title="재주문 하기" style={styles.flex1} onPress={() => {}} />
-        </>
-      ) : null}
-
-      {uiState === "dispatching" ? (
-        <>
-          <AppButton title="요청 취소" variant="destructive" style={styles.flex1} onPress={() => {}} />
-          <AppButton title="목록으로" variant="secondary" style={styles.flex1} onPress={() => router.back()} />
-        </>
-      ) : null}
-    </View>
-  );
+  React.useEffect(() => {
+    initLayoutAnimationForAndroid();
+  }, []);
 
   return (
     <PageScaffold
-      title="상세 내역"
-      subtitle={quoteId ? `요청 ID ${quoteId}` : undefined}
-      backgroundColor={pageBg}
+      title="견적 상세"
+      backgroundColor={theme.colors.bgMain}
       contentStyle={styles.pageContent}
-      bottomBar={bottomBar}
+      bottomBar={<BottomActionRouter ctx={view.actionsContext} bottomBar={view.policy.bottomBar} guards={view.policy.guards} />}
       onPressBack={() => router.back()}
-      backLabel="뒤로"
+      backLabel="이전"
     >
-      <View style={styles.statusHeader}>
-        <View style={[styles.statusBadge, { backgroundColor: statusPresentation.badgeBg }]}>
-          <AppText variant="caption" weight="700" color={statusPresentation.badgeText}>
-            {statusPresentation.badgeLabel}
+      <View style={styles.commandCenter}>
+        <View style={styles.statusRow}>
+          <View style={styles.statusLeft}>
+            <View
+              style={[
+                styles.statusBadge,
+                {
+                  backgroundColor: palette.badgeBg,
+                  borderColor: palette.badgeBorder,
+                },
+              ]}
+            >
+              <AppText style={[styles.statusText, { color: palette.badgeText }]} numberOfLines={1}>
+                {view.commandCenter?.statusLabel ?? "진행 상태"}
+              </AppText>
+            </View>
+          </View>
+
+          <AppText style={styles.metaText} numberOfLines={1}>
+            {view.commandCenter?.metaText ?? `#${view.quote?.quoteId ?? quoteId}`}
           </AppText>
         </View>
-        <AppText variant="title" style={styles.statusTitle}>
-          {statusPresentation.title}
-        </AppText>
-        <AppText variant="detail" style={styles.statusDescription}>
-          {statusPresentation.description}
-        </AppText>
       </View>
 
-      {uiState === "negotiating" ? (
-        <View style={styles.cardOuter}>
-          <AppCard outlined style={[styles.card, styles.quoteOfferCard, styles.cardAccent]}>
-            <View style={styles.infoRow}>
-              <AppText variant="detail" style={styles.labelText}>
-                내 희망가
-              </AppText>
-              <AppText variant="detail" style={styles.priceOld}>
-                220,000원
-              </AppText>
-            </View>
-            <View style={[styles.infoRow, { marginBottom: 0 }]}>
-              <AppText variant="detail" style={styles.emphasisText}>
-                기사님 제안가
-              </AppText>
-              <AppText variant="title" style={styles.priceMain}>
-                240,000원
-              </AppText>
-            </View>
-            <View style={styles.divider} />
-            <AppText variant="detail" style={styles.noteText}>
-              상차지 골목 진입이 어려워 수작업 비용 포함하여 제안드립니다.
-            </AppText>
-          </AppCard>
-        </View>
-      ) : null}
-
-      {uiState === "moving" ? (
-        <View style={styles.cardOuter}>
-          <AppCard outlined style={[styles.card, styles.mapCard]}>
-            <View style={styles.mapMock}>
-              <Ionicons name="map-outline" size={32} color={cTextSub} />
-              <AppText variant="detail" color={cTextSub}>
-                실시간 위치를 불러오는 중입니다
-              </AppText>
-              <View style={styles.livePill}>
-                <View style={styles.liveDot} />
-                <AppText variant="caption" weight="700" color={cTextMain}>
-                  실시간 위치
-                </AppText>
-              </View>
-            </View>
-            <View style={styles.rowBetween}>
-              <AppText variant="detail" color={cTextSub}>
-                현재 위치: 천안 JC 인근
-              </AppText>
-              <AppText variant="detail" weight="700" color={cTextMain}>
-                도착 예정 14:30
-              </AppText>
-            </View>
-          </AppCard>
-        </View>
-      ) : null}
-
-      {(uiState === "payment" || uiState === "moving" || uiState === "completed") ? (
-        <View style={styles.cardOuter}>
-          <AppCard outlined style={styles.card}>
-            <View style={styles.driverRow}>
-              <View style={styles.avatarCircle}>
-                <AppText variant="detail" weight="800" color={cTextMain}>
-                  김
-                </AppText>
-              </View>
-
-              <View style={styles.flex1}>
-                <AppText variant="body" weight="800" color={cTextMain}>
-                  김기사 파트너
-                </AppText>
-                <AppText variant="caption" style={styles.helperMuted}>
-                  현대 파비스 5톤 · 평점 4.9
-                </AppText>
-              </View>
-
-              <View style={styles.iconRow}>
-                <Pressable accessibilityRole="button" style={styles.iconChip}>
-                  <Ionicons name="call-outline" size={16} color={cTextSub} />
-                </Pressable>
-                <Pressable accessibilityRole="button" style={styles.iconChip}>
-                  <Ionicons name="chatbubble-outline" size={16} color={cTextSub} />
-                </Pressable>
-              </View>
-            </View>
-          </AppCard>
-        </View>
-      ) : null}
-
-      <AppText variant="caption" style={styles.sectionTitle}>
-        운송 경로
-      </AppText>
-      <View style={styles.cardOuter}>
-        <AppCard outlined style={styles.card}>
-          <View style={styles.routeWrap}>
-            <View style={styles.routeLine} />
-
-            <View style={styles.routeRow}>
-              <View style={styles.routeDot} />
-              <AppText variant="body" style={styles.routeAddress}>
-                경기 성남시 분당구 판교역로
-              </AppText>
-              <AppText variant="caption" style={styles.routeMeta}>
-                2월 9일 (월) 10:30 상차
-              </AppText>
-            </View>
-
-            <View style={[styles.routeRow, styles.routeRowLast]}>
-              <View style={[styles.routeDot, styles.routeDotEnd]} />
-              <AppText variant="body" style={styles.routeAddress}>
-                충북 청주시 흥덕구 직지대로
-              </AppText>
-              <AppText variant="caption" style={styles.routeMeta}>
-                2월 9일 (월) 14:30 하차 예정
-              </AppText>
-            </View>
-          </View>
-        </AppCard>
-      </View>
-
-      <AppText variant="caption" style={styles.sectionTitle}>
-        화물 상세
-      </AppText>
-      <View style={styles.cardOuter}>
-        <AppCard outlined style={styles.card}>
-          <View style={styles.infoRow}>
-            <AppText variant="detail" style={styles.labelText}>
-              차량 종류
-            </AppText>
-            <AppText variant="detail" style={styles.valueText}>
-              5톤 윙바디
-            </AppText>
-          </View>
-
-          <View style={styles.infoRow}>
-            <AppText variant="detail" style={styles.labelText}>
-              화물 품목
-            </AppText>
-            <AppText variant="detail" style={styles.valueText}>
-              파렛트 12개, 박스짐
-            </AppText>
-          </View>
-
-          <View style={styles.infoRow}>
-            <AppText variant="detail" style={styles.labelText}>
-              옵션
-            </AppText>
-            <AppText variant="detail" style={styles.valueText}>
-              독차, 수작업 지원 (+20,000원)
-            </AppText>
-          </View>
-
-          <View style={styles.divider} />
-          <View style={[styles.infoRow, { marginBottom: 0, alignItems: "flex-start" }]}>
-            <AppText variant="detail" style={styles.labelText}>
-              기사님 요청사항
-            </AppText>
-            <AppText variant="detail" style={[styles.valueText, { fontWeight: "400", lineHeight: 20 }]}>
-              도착 30분 전 연락주세요.{"\n"}지게차 대기 중입니다.
-            </AppText>
-          </View>
-        </AppCard>
-      </View>
-
-      {(uiState === "payment" || uiState === "moving" || uiState === "completed") ? (
-        <>
-          <AppText variant="caption" style={styles.sectionTitle}>
-            결제 정보
-          </AppText>
-          <View style={styles.cardOuter}>
-            <AppCard outlined style={styles.card}>
-              <View style={styles.infoRow}>
-                <AppText variant="detail" style={styles.labelText}>
-                  기본 운송료
-                </AppText>
-                <AppText variant="detail" style={styles.valueText}>
-                  220,000원
-                </AppText>
-              </View>
-
-              <View style={styles.infoRow}>
-                <AppText variant="detail" style={styles.labelText}>
-                  추가 옵션비
-                </AppText>
-                <AppText variant="detail" style={styles.valueText}>
-                  +20,000원
-                </AppText>
-              </View>
-
-              <View style={styles.divider} />
-              <View style={[styles.infoRow, { marginBottom: 0 }]}>
-                <AppText variant="body" style={styles.valueText}>
-                  총 결제 금액
-                </AppText>
-                <AppText variant="title" style={styles.emphasisText}>
-                  240,000원
-                </AppText>
-              </View>
-            </AppCard>
-          </View>
-        </>
-      ) : null}
-
-      <View style={styles.withBottomSpace} />
+      <OverviewCard view={view} />
+      <SpecificationArchive view={view} />
     </PageScaffold>
   );
 }

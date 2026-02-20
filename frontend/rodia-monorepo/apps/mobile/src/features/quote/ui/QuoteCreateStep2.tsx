@@ -7,7 +7,11 @@ import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
 import type { AppTheme } from "@/shared/theme/types";
 import { AppButton } from "@/shared/ui/kit/AppButton";
 import { AppText } from "@/shared/ui/kit/AppText";
-import { QUOTE_PRESS_EFFECT } from "@/features/quote/ui/QuoteCreateUiPrimitives";
+import {
+  getQuoteFlatCardStyle,
+  QUOTE_PRESS_EFFECT,
+  QUOTE_SCROLL_VIEW_PROPS,
+} from "@/features/quote/ui/QuoteCreateUiPrimitives";
 import {
   CARGO_ITEM_CATEGORIES,
   getDropOffTargets,
@@ -55,15 +59,16 @@ const useStyles = createThemedStyles((theme: AppTheme) => {
   const c = theme.colors;
   const spacing = safeNumber(theme.layout.spacing.base, 4);
   const radiusControl = safeNumber(theme.layout.radii.control, 12);
+  const flatCard = getQuoteFlatCardStyle(theme);
 
   return StyleSheet.create({
     container: { gap: spacing * 2, paddingBottom: spacing * 6 },
     
     // Cargo Card
     cargoCard: {
-      backgroundColor: c.bgSurface, borderRadius: 16,
-      borderWidth: 1, borderColor: c.borderDefault, overflow: "hidden", marginBottom: 4,
-      shadowColor: "#000", shadowOpacity: 0.03, shadowRadius: 8, elevation: 2,
+      ...flatCard,
+      overflow: "hidden",
+      marginBottom: 4,
     },
     cargoHeader: {
       flexDirection: "row", alignItems: "center", padding: 16, backgroundColor: c.bgSurface,
@@ -96,7 +101,7 @@ const useStyles = createThemedStyles((theme: AppTheme) => {
     tabItem: {
       flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 8, borderRadius: 8,
     },
-    tabItemActive: { backgroundColor: c.bgSurface, shadowColor: "#000", shadowOpacity: 0.08, shadowRadius: 2, elevation: 1 },
+    tabItemActive: { backgroundColor: c.bgSurface, borderWidth: 1, borderColor: c.borderDefault },
     tabText: { fontSize: 13, fontWeight: '600', color: c.textMuted },
     tabTextActive: { color: c.brandPrimary, fontWeight: '700' },
 
@@ -172,7 +177,7 @@ const useStyles = createThemedStyles((theme: AppTheme) => {
     },
     dropoffChipActive: { backgroundColor: c.brandPrimary, borderColor: c.brandPrimary },
     dropoffText: { fontSize: 12, fontWeight: '600', color: c.textSub },
-    dropoffTextActive: { color: '#fff' },
+    dropoffTextActive: { color: c.textOnBrand },
 
     // Add Button
     addBtn: {
@@ -189,15 +194,40 @@ export function QuoteCreateStep2() {
   const styles = useStyles();
   const { draft, addCargo, removeCargo, updateCargo } = useQuoteCreateDraft();
   
-  const [expandedId, setExpandedId] = useState<number | null>(draft?.cargoList?.[0]?.id ?? 1);
+  // 💡 단일 ID 대신, 여러 개의 열린 아코디언 ID를 저장하는 Set 사용
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(() => {
+    const initialId = draft?.cargoList?.[0]?.id;
+    return initialId ? new Set([initialId]) : new Set();
+  });
   const [manualModeIds, setManualModeIds] = useState<Set<number>>(new Set());
 
   const dropOffTargets = useMemo(() => getDropOffTargets(draft), [draft?.waypoints, draft?.endAddr]);
 
+  // 화물이 새로 추가되면 해당 화물을 자동으로 열어줌
   useEffect(() => {
     const lastId = draft?.cargoList?.[draft.cargoList.length - 1]?.id;
-    if (lastId) setExpandedId(lastId);
+    if (lastId) {
+      setExpandedIds(prev => {
+        const next = new Set(prev);
+        next.add(lastId);
+        return next;
+      });
+    }
   }, [draft?.cargoList?.length]);
+
+  // 아코디언 토글 함수
+  const toggleExpanded = (id: number) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setExpandedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id); // 이미 열려있으면 닫기
+      } else {
+        next.add(id); // 닫혀있으면 열기
+      }
+      return next;
+    });
+  };
 
   const toggleManualMode = (id: number) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -245,11 +275,11 @@ export function QuoteCreateStep2() {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView {...QUOTE_SCROLL_VIEW_PROPS} contentContainerStyle={styles.container}>
       {(draft?.cargoList ?? []).map((cargo, index) => {
-        const isOpen = expandedId === cargo.id;
+        // 💡 Set에 해당 화물의 ID가 포함되어 있는지 확인하여 열림/닫힘 결정
+        const isOpen = expandedIds.has(cargo.id);
         const category = cargo.itemCategory as CargoItemCategory;
-        // 가구는 항상 수동 편집 가능 모드
         const isManual = manualModeIds.has(cargo.id) || category === "FURNITURE";
         
         const cbmValue = calculateCBM(cargo.lengthCm, cargo.widthCm, cargo.heightCm, cargo.quantity);
@@ -261,10 +291,7 @@ export function QuoteCreateStep2() {
             {/* Header (Summary) */}
             <Pressable 
               style={styles.cargoHeader}
-              onPress={() => {
-                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-                setExpandedId(isOpen ? null : cargo.id);
-              }}
+              onPress={() => toggleExpanded(cargo.id)}
             >
               <Ionicons name={CATEGORY_ICONS[category]} size={22} color={theme.colors.brandPrimary} />
               <View style={styles.cargoHeaderContent}>
@@ -276,7 +303,15 @@ export function QuoteCreateStep2() {
               <Ionicons name={isOpen ? "chevron-up" : "chevron-down"} size={18} color={theme.colors.textMuted} />
               {index > 0 && (
                 <Pressable
-                  onPress={() => removeCargo(cargo.id)}
+                  onPress={() => {
+                    removeCargo(cargo.id);
+                    // 삭제 시 expandedIds에서도 안전하게 제거
+                    setExpandedIds(prev => {
+                      const next = new Set(prev);
+                      next.delete(cargo.id);
+                      return next;
+                    });
+                  }}
                   style={({ pressed }) => [styles.deleteBtn, pressed && QUOTE_PRESS_EFFECT]}
                 >
                   <Ionicons name="close" size={16} color={theme.colors.semanticDanger} />
@@ -287,14 +322,13 @@ export function QuoteCreateStep2() {
             {/* Body */}
             {isOpen && (
               <View style={styles.cargoBody}>
-                
                 {/* 1. Category Tabs */}
                 <View style={styles.tabContainer}>
                     {CARGO_ITEM_CATEGORIES.map(cat => {
                         const active = category === cat.id;
                         return (
                             <Pressable key={cat.id} style={[styles.tabItem, active && styles.tabItemActive]} onPress={() => handleTypeSelect(cargo.id, cat.id)}>
-                                <AppText style={active ? styles.tabTextActive : styles.tabText}>{cat.label}</AppText>
+                                <AppText style={[styles.tabText, active && styles.tabTextActive]}>{cat.label}</AppText>
                             </Pressable>
                         )
                     })}
@@ -308,7 +342,7 @@ export function QuoteCreateStep2() {
                             const active = cargo.type === fItem.label;
                             return (
                                 <Pressable key={fItem.id} style={[styles.chip, active && styles.chipActive]} onPress={() => handleFurniturePreset(cargo.id, fItem)}>
-                                    <AppText style={active ? styles.chipTextActive : styles.chipText}>{fItem.label}</AppText>
+                                    <AppText style={[styles.chipText, active && styles.chipTextActive]}>{fItem.label}</AppText>
                                 </Pressable>
                             )
                         })}
@@ -393,8 +427,8 @@ export function QuoteCreateStep2() {
                                 onPress={() => updateCargo(cargo.id, "dropOffKey", target.key as string)}
                                 style={[styles.dropoffChip, isActive && styles.dropoffChipActive]}
                             >
-                                <Ionicons name={iconName} size={14} color={isActive ? "white" : theme.colors.textMuted} />
-                                <AppText style={isActive ? styles.dropoffTextActive : styles.dropoffText}>{target.label}</AppText>
+                                <Ionicons name={iconName} size={14} color={isActive ? theme.colors.textOnBrand : theme.colors.textMuted} />
+                                <AppText style={[styles.dropoffText, isActive && styles.dropoffTextActive]}>{target.label}</AppText>
                             </Pressable>
                         );
                     })}

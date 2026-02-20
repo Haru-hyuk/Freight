@@ -1,9 +1,16 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, StyleSheet, View, type TextStyle, type ViewStyle } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import React, { useCallback, useMemo, useState } from "react";
+import { Pressable, StyleSheet, View } from "react-native";
 import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 
-import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
+import type { QuoteListItem, QuoteStatusApi } from "@/entities/quote/model/quote.types";
+import {
+  getQuoteActionPolicy,
+  resolveTonePalette,
+  type QuoteActionPolicy,
+  type QuoteTonePaletteKey,
+} from "@/features/quote/model/quoteActionMatrix";
+import { safeNumber, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppCard } from "@/shared/ui/kit/AppCard";
 import { AppEmptyState } from "@/shared/ui/kit/AppEmptyState";
@@ -11,483 +18,1042 @@ import { AppText } from "@/shared/ui/kit/AppText";
 import { PageScaffold } from "@/widgets/layout/PageScaffold";
 import { RequestQuoteFab } from "@/widgets/shipper/RequestQuoteFab";
 
-type QuoteStatus = "received" | "dispatching" | "negotiating" | "assigned" | "pickup" | "transit" | "dropoff";
-type TabType = "ongoing" | "completed";
-type CardVariant = "urgent" | "payment" | "moving" | "default";
+type QuoteListTab = "ongoing" | "completed";
+type QuoteListFilter = "ALL" | "ACTION_REQUIRED" | "IN_PROGRESS";
+type QuoteListSort = "LATEST" | "PRICE";
 
-type QuoteItem = {
-  id: string;
-  requestId?: string;
-  updatedAt?: string;
-  fromLabel: string;
-  toLabel: string;
-  cargoHint?: string;
-  rightHint?: string;
-  ctaLabel?: string;
-  price?: string;
-  status: QuoteStatus;
+type QuoteListControls = {
+  activeFilter: QuoteListFilter;
+  activeSort: QuoteListSort;
 };
 
-const SAMPLE_QUOTES: QuoteItem[] = [
+type QuoteListViewItem = {
+  quote: QuoteListItem;
+  policy: QuoteActionPolicy;
+  statusLabel: string;
+  ctaText: string;
+  isPriceCta: boolean;
+  priceText: string;
+  createdAtLabel: string;
+  cargoText: string;
+  waypointText?: string;
+  priceValue: number;
+  recencyValue: number;
+};
+
+type QuoteListResult = {
+  actionRequiredList: QuoteListViewItem[];
+  inProgressList: QuoteListViewItem[];
+  closedList: QuoteListViewItem[];
+  counts: {
+    ongoing: number;
+    completed: number;
+    actionRequired: number;
+    inProgress: number;
+    closed: number;
+  };
+};
+
+type QuoteListMockItem = QuoteListItem & {
+  waypointAddresses?: string[];
+};
+
+type ToneStyleGroup = {
+  badge: object;
+  badgeText: object;
+  ctaText: object;
+  ctaChip: object;
+  ctaIcon: object;
+};
+
+type SectionHeaderProps = {
+  iconName: keyof typeof Ionicons.glyphMap;
+  title: string;
+  count: number;
+  tone: QuoteTonePaletteKey;
+};
+
+type QuoteListCardProps = {
+  item: QuoteListViewItem;
+  onPress: (quoteId: number, status: QuoteStatusApi) => void;
+};
+
+const KRW = new Intl.NumberFormat("ko-KR");
+
+const MOCK_QUOTES: QuoteListMockItem[] = [
   {
-    id: "q-1",
-    updatedAt: "2026-02-10T15:20:00Z",
-    fromLabel: "경기 성남",
-    toLabel: "충북 청주",
-    cargoHint: "5톤 윙바디 · 독차",
-    rightHint: "방금 전",
-    ctaLabel: "제안 확인하기 >",
-    status: "negotiating",
+    quoteId: 301,
+    truckId: 12,
+    originAddress: "서울특별시 금천구 가산동 123-4",
+    destinationAddress: "경기도 성남시 분당구 정자동 12-9",
+    distanceKm: 32.4,
+    vehicleType: "5톤",
+    vehicleBodyType: "윙바디",
+    cargoName: "전자부품",
+    desiredPrice: 180000,
+    finalPrice: 195000,
+    status: "NEGOTIATING",
+    createdAt: "2026-02-20T08:20:00Z",
   },
   {
-    id: "q-2",
-    updatedAt: "2026-02-10T14:00:00Z",
-    fromLabel: "인천 남동구",
-    toLabel: "대전 유성",
-    cargoHint: "5톤 윙 · 합짐",
-    rightHint: "결제 대기",
-    ctaLabel: "결제하기 >",
-    status: "assigned",
+    quoteId: 302,
+    truckId: 4,
+    originAddress: "인천광역시 남동구 고잔동 511",
+    destinationAddress: "대전광역시 유성구 관평동 901",
+    distanceKm: 153.8,
+    vehicleType: "11톤",
+    vehicleBodyType: "탑차",
+    cargoName: "냉장식품",
+    desiredPrice: 420000,
+    finalPrice: 430000,
+    status: "ASSIGNED",
+    createdAt: "2026-02-20T06:45:00Z",
   },
   {
-    id: "q-3",
-    updatedAt: "2026-02-10T11:00:00Z",
-    fromLabel: "서울 강남",
-    toLabel: "부산 해운대",
-    cargoHint: "11톤 윙바디",
-    rightHint: "14:00 도착 예정",
-    ctaLabel: "위치 보기 >",
-    status: "transit",
+    quoteId: 303,
+    truckId: 9,
+    originAddress: "경기도 하남시 미사강변동로 85",
+    destinationAddress: "충청남도 천안시 서북구 성거읍 331",
+    distanceKm: 95.3,
+    vehicleType: "2.5톤",
+    vehicleBodyType: "카고",
+    cargoName: "생활용품",
+    desiredPrice: 210000,
+    finalPrice: 210000,
+    status: "OPEN",
+    createdAt: "2026-02-20T05:55:00Z",
   },
   {
-    id: "q-4",
-    updatedAt: "2026-02-05T09:00:00Z",
-    fromLabel: "강원 원주",
-    toLabel: "서울 송파",
-    cargoHint: "5톤 플러스",
-    rightHint: "2월 5일",
-    price: "220,000원",
-    status: "dropoff",
+    quoteId: 304,
+    truckId: 15,
+    originAddress: "부산광역시 사하구 장림동 220",
+    destinationAddress: "경상남도 창원시 의창구 팔용동 88",
+    distanceKm: 46.2,
+    vehicleType: "5톤",
+    vehicleBodyType: "카고",
+    cargoName: "건축 자재",
+    desiredPrice: 170000,
+    finalPrice: 170000,
+    status: "PICKUP",
+    createdAt: "2026-02-20T04:20:00Z",
+    waypointAddresses: ["부산광역시 강서구 대저동 33-5"],
   },
   {
-    id: "q-5",
-    updatedAt: "2026-01-28T18:00:00Z",
-    fromLabel: "경기 평택",
-    toLabel: "전남 여수",
-    cargoHint: "컨테이너 40ft",
-    rightHint: "1월 28일",
-    price: "450,000원",
-    status: "dropoff",
+    quoteId: 305,
+    truckId: 6,
+    originAddress: "서울특별시 강남구 역삼동 721",
+    destinationAddress: "부산광역시 해운대구 우동 1408",
+    distanceKm: 402.6,
+    vehicleType: "11톤",
+    vehicleBodyType: "윙바디",
+    cargoName: "사무기기",
+    desiredPrice: 690000,
+    finalPrice: 710000,
+    status: "TRANSIT",
+    createdAt: "2026-02-20T03:10:00Z",
+    waypointAddresses: ["대전광역시 대덕구 문평동 211", "경상북도 칠곡군 지천면 92"],
+  },
+  {
+    quoteId: 306,
+    truckId: 3,
+    originAddress: "강원특별자치도 원주시 지정면 72",
+    destinationAddress: "서울특별시 송파구 문정동 640",
+    distanceKm: 114.5,
+    vehicleType: "5톤",
+    vehicleBodyType: "윙바디",
+    cargoName: "공산품",
+    desiredPrice: 230000,
+    finalPrice: 220000,
+    status: "DROPOFF",
+    createdAt: "2026-02-18T09:40:00Z",
+  },
+  {
+    quoteId: 307,
+    truckId: 17,
+    originAddress: "경기도 평택시 포승읍 만호리 12",
+    destinationAddress: "전라남도 여수시 중흥동 44",
+    distanceKm: 268.9,
+    vehicleType: "25톤",
+    vehicleBodyType: "컨테이너",
+    cargoName: "수출 화물",
+    desiredPrice: 980000,
+    finalPrice: 0,
+    status: "CANCELED",
+    createdAt: "2026-02-17T14:15:00Z",
   },
 ];
 
-const CARD_PRESS: ViewStyle = { opacity: 0.85, transform: [{ scale: 0.98 }] };
+const FILTER_OPTIONS: Array<{ key: QuoteListFilter; label: string }> = [
+  { key: "ALL", label: "전체" },
+  { key: "ACTION_REQUIRED", label: "확인 필요" },
+  { key: "IN_PROGRESS", label: "운송 현황" },
+];
 
-function getCardVariant(status: QuoteStatus, isCompletedTab: boolean): CardVariant {
-  if (isCompletedTab) return "default";
-  if (status === "negotiating") return "urgent";
-  if (status === "assigned") return "payment";
-  if (status === "pickup" || status === "transit") return "moving";
-  return "default";
-}
-
-function getBadgeLabel(status: QuoteStatus, isCompletedTab: boolean): string {
-  if (isCompletedTab) return "운송 완료";
-  if (status === "negotiating") return "금액 제안 도착";
-  if (status === "assigned") return "배차 확정";
-  if (status === "transit") return "이동 중";
-  if (status === "pickup") return "상차 중";
-  return "접수";
-}
+const SORT_OPTIONS: Array<{ key: QuoteListSort; label: string }> = [
+  { key: "LATEST", label: "최신순" },
+  { key: "PRICE", label: "금액순" },
+];
 
 const useStyles = createThemedStyles((theme) => {
-  const colors = theme?.colors;
-  const spacing = safeNumber(theme?.layout?.spacing?.base, 4);
-
-  const cBgMain = safeString(colors?.bgMain, safeString(colors?.bgSurfaceAlt, safeString(colors?.bgSurface, "")));
-  const cBgAlt = safeString(colors?.bgSurfaceAlt, cBgMain);
-  const cSurface = safeString(colors?.bgSurface, cBgMain);
-  const cTextMain = safeString(colors?.textMain, safeString(colors?.textSub, safeString(colors?.textMuted, "")));
-  const cTextSub = safeString(colors?.textSub, cTextMain);
-  const cTextMuted = safeString(colors?.textMuted, cTextSub);
-  const cBorder = safeString(colors?.borderDefault, safeString(colors?.borderStrong, cBgAlt));
-  const cPrimary = safeString(colors?.brandPrimary, cTextMain);
-  const cSecondary = safeString(colors?.brandSecondary, cTextMain);
-  const cAccent = safeString(colors?.brandAccent, cPrimary);
-  const cOnBrand = safeString(colors?.textOnBrand, safeString(colors?.textInverse, cSurface));
-
-  const cTrack = tint(cTextMain, 0.08, cBgAlt);
-  const cTabCount = tint(cTextMain, 0.08, cBgAlt);
-  const cCardBorder = tint(cBorder, 0.75, cBorder);
-  const cCardDivider = tint(cBorder, 0.5, cBorder);
-  const cArrow = tint(cTextMuted, 0.9, cTextMuted);
-  const cBadgeUrgentBg = tint(cPrimary, 0.12, cBgAlt);
-  const cBadgePaymentBg = tint(cSecondary, 0.1, cBgAlt);
-  const cBadgeMovingBg = tint(cAccent, 0.12, cBgAlt);
-  const cBadgeDoneBg = tint(cTextMain, 0.06, cBgAlt);
-
-  const radiusCard = safeNumber(theme?.components?.card?.radius, safeNumber(theme?.layout?.radii?.card, 16));
-  const radiusControl = safeNumber(theme?.layout?.radii?.control, 12);
-  const cardPadding = safeNumber(theme?.components?.card?.paddingMd, 20);
+  const c = theme.colors;
+  const spacing = safeNumber(theme.layout.spacing.base, 4);
+  const controlRadius = safeNumber(theme.layout.radii.control, 10);
+  const radiusCard = safeNumber(theme.layout.radii.card, 16);
 
   return StyleSheet.create({
     pageContent: {
       paddingTop: 0,
       paddingHorizontal: 0,
-      paddingBottom: spacing * 20,
+      paddingBottom: spacing * 26,
+      backgroundColor: c.bgMain,
     },
     tabContainer: {
-      paddingHorizontal: spacing * 5,
-      paddingTop: spacing * 2,
-      paddingBottom: spacing * 2,
-      backgroundColor: cBgMain,
-    },
-    tabTrack: {
       flexDirection: "row",
-      backgroundColor: cTrack,
-      borderRadius: radiusControl,
-      padding: spacing,
-      gap: spacing,
+      backgroundColor: c.bgMain,
+      borderBottomWidth: 1,
+      borderBottomColor: tint(c.textMain, 0.05, c.borderDefault),
     },
-    tabItem: {
+    tabButton: {
+      minHeight: 44,
       flex: 1,
-      minHeight: safeNumber(theme?.components?.button?.sizes?.sm?.minHeight, 36),
-      borderRadius: radiusControl - Math.max(2, spacing / 2),
-      flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
-      gap: spacing + 2,
-    },
-    tabItemActive: {
-      backgroundColor: cSurface,
-      borderWidth: 1,
-      borderColor: cCardBorder,
+      paddingVertical: spacing * 2,
+      position: "relative",
     },
     tabText: {
-      fontSize: safeNumber(theme?.typography?.scale?.detail?.size, 14),
-      fontWeight: "600",
-      color: cTextSub,
+      color: c.textMuted,
+      fontSize: safeNumber(theme.typography.scale.detail.size, 14) + 1,
+      lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20),
+      fontWeight: "700",
     },
     tabTextActive: {
-      fontWeight: "700",
-      color: cTextMain,
+      color: c.textMain,
+      fontWeight: "900",
     },
-    tabCount: {
-      backgroundColor: cTabCount,
-      minWidth: spacing * 6,
-      height: spacing * 6,
-      paddingHorizontal: spacing + 2,
-      borderRadius: (spacing * 6) / 2,
-      alignItems: "center",
-      justifyContent: "center",
-      borderWidth: 1,
-      borderColor: cCardBorder,
-      overflow: "hidden",
-    },
-    tabCountActive: {
-      backgroundColor: cPrimary,
-      borderColor: cPrimary,
+    tabIndicator: {
+      position: "absolute",
+      bottom: -1,
+      left: "25%",
+      width: "50%",
+      height: 3,
+      borderRadius: 2,
+      backgroundColor: c.textMain,
     },
     tabCountText: {
-      fontSize: safeNumber(theme?.typography?.scale?.caption?.size, 12) - 1,
+      color: c.textMuted,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
+      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
       fontWeight: "700",
-      color: cTextSub,
-      lineHeight: safeNumber(theme?.typography?.scale?.caption?.lineHeight, 16),
-    },
-    tabCountTextActive: {
-      color: cOnBrand,
+      marginTop: spacing / 2,
     },
 
-    sectionList: {
+    controlRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: spacing * 2,
+      paddingHorizontal: spacing * 5,
+      paddingTop: spacing * 3,
+      paddingBottom: spacing * 2,
+    },
+    filterGroup: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing,
+      flex: 1,
+      minHeight: 44,
+    },
+    filterChipBase: {
+      minHeight: 36,
+      paddingHorizontal: spacing * 2,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: c.borderDefault,
+      backgroundColor: c.bgSurface,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    filterChipActive: {
+      borderColor: tint(c.brandPrimary, 0.3, c.borderDefault),
+      backgroundColor: tint(c.brandPrimary, 0.08, c.bgSurfaceAlt),
+    },
+    filterChipText: {
+      color: c.textSub,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
+      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
+      fontWeight: "700",
+    },
+    filterChipTextActive: {
+      color: c.brandPrimary,
+      fontWeight: "900",
+    },
+
+    sortSegment: {
+      minHeight: 36,
+      borderRadius: controlRadius,
+      borderWidth: 1,
+      borderColor: c.borderDefault,
+      backgroundColor: c.bgSurface,
+      flexDirection: "row",
+      overflow: "hidden",
+      alignSelf: "flex-end",
+    },
+    sortButtonBase: {
+      minWidth: 62,
+      minHeight: 36,
+      paddingHorizontal: spacing * 2,
+      alignItems: "center",
+      justifyContent: "center",
+      flexDirection: "row",
+      gap: spacing / 2,
+    },
+    sortButtonActive: {
+      backgroundColor: tint(c.textMain, 0.06, c.bgSurfaceAlt),
+    },
+    sortButtonText: {
+      color: c.textSub,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
+      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
+      fontWeight: "700",
+    },
+    sortButtonTextActive: {
+      color: c.textMain,
+      fontWeight: "900",
+    },
+    sortIcon: {
+      color: c.textSub,
+      fontSize: 12,
+    },
+    sortIconActive: {
+      color: c.textMain,
+    },
+
+    listContainer: {
       paddingHorizontal: spacing * 5,
       paddingTop: spacing * 2,
     },
-    sectionLabelRow: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      marginBottom: spacing * 3,
-      marginTop: spacing * 5,
+    section: {
+      marginBottom: spacing * 7,
     },
-    sectionLabel: {
-      fontSize: safeNumber(theme?.typography?.scale?.detail?.size, 14),
-      fontWeight: "700",
-      color: cTextMain,
+    sectionHead: {
+      minHeight: 44,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: spacing * 3,
+    },
+    sectionLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing + 2,
+      flex: 1,
+    },
+    sectionIconChipBase: {
+      width: 24,
+      height: 24,
+      borderRadius: 12,
+      borderWidth: 1,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    sectionIcon: {
+      fontSize: 14,
+    },
+    sectionTitle: {
+      color: c.textMain,
+      fontSize: safeNumber(theme.typography.scale.heading.size, 18),
+      lineHeight: safeNumber(theme.typography.scale.heading.lineHeight, 24),
+      fontWeight: "900",
+      letterSpacing: -0.3,
     },
     sectionCount: {
-      fontSize: safeNumber(theme?.typography?.scale?.detail?.size, 14),
+      color: c.textMuted,
+      fontSize: safeNumber(theme.typography.scale.detail.size, 14),
+      lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20),
       fontWeight: "700",
-      color: cPrimary,
     },
-
-    cardPressable: {
-      borderRadius: radiusCard,
-      overflow: "hidden",
+    cardWrapper: {
       marginBottom: spacing * 3,
     },
-    card: {
-      borderRadius: radiusCard,
-      padding: cardPadding,
-      borderWidth: 1,
-      borderColor: cCardBorder,
-    },
-    cardUrgent: { borderLeftWidth: 4, borderLeftColor: cPrimary },
-    cardPayment: { borderLeftWidth: 4, borderLeftColor: cSecondary },
-    cardMoving: { borderLeftWidth: 4, borderLeftColor: cAccent },
 
-    cardTop: {
+    toneAttentionChip: {
+      backgroundColor: tint(c.brandPrimary, 0.1, c.bgSurfaceAlt),
+      borderColor: tint(c.brandPrimary, 0.24, c.borderDefault),
+    },
+    toneAttentionIcon: { color: c.brandPrimary },
+
+    toneProgressChip: {
+      backgroundColor: tint(c.brandAccent, 0.14, c.bgSurfaceAlt),
+      borderColor: tint(c.brandAccent, 0.3, c.borderDefault),
+    },
+    toneProgressIcon: { color: c.brandAccent },
+
+    toneClosedChip: {
+      backgroundColor: tint(c.textMain, 0.05, c.bgSurfaceAlt),
+      borderColor: tint(c.textMain, 0.14, c.borderDefault),
+    },
+    toneClosedIcon: { color: c.textSub },
+
+    pressable: {
+      borderRadius: radiusCard,
+      overflow: "hidden",
+    },
+    pressed: {
+      opacity: 0.72,
+    },
+    closedCard: {
+      opacity: 0.78,
+    },
+    cardInner: {
+      padding: spacing * 4,
+    },
+
+    topRow: {
+      minHeight: 44,
       flexDirection: "row",
-      justifyContent: "space-between",
       alignItems: "center",
-      marginBottom: spacing * 3,
+      justifyContent: "space-between",
+      marginBottom: spacing * 2,
+      gap: spacing * 2,
     },
-    badge: {
-      fontSize: safeNumber(theme?.typography?.scale?.caption?.size, 12) - 1,
-      fontWeight: "700",
-      paddingVertical: spacing,
+    badgeBase: {
+      borderWidth: 1,
+      borderRadius: safeNumber(theme.layout.radii.control, 10),
       paddingHorizontal: spacing * 2,
-      borderRadius: radiusControl - 6,
-      overflow: "hidden",
+      paddingVertical: spacing,
     },
-    timeText: {
-      fontSize: safeNumber(theme?.typography?.scale?.caption?.size, 12),
-      fontWeight: "500",
-      color: cTextMuted,
+    badgeTextBase: {
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
+      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
+      fontWeight: "800",
+      letterSpacing: -0.2,
+    },
+    dateWrap: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing,
+      flexShrink: 1,
+    },
+    dateIcon: {
+      color: c.textMuted,
+      fontSize: 13,
+    },
+    dateText: {
+      color: c.textMuted,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
+      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
+      fontWeight: "700",
+      flexShrink: 1,
     },
 
     routeRow: {
       flexDirection: "row",
       alignItems: "center",
-      gap: spacing * 2 + 2,
-      marginBottom: spacing * 3 + 2,
+      marginBottom: spacing,
+      gap: spacing + 2,
     },
-    location: {
-      fontSize: safeNumber(theme?.typography?.scale?.body?.size, 16) + 1,
-      fontWeight: "700",
-      color: cTextMain,
+    routeText: {
+      flex: 1,
+      color: c.textMain,
+      fontSize: safeNumber(theme.typography.scale.detail.size, 14) + 1,
+      lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20) + 1,
+      fontWeight: "900",
+      letterSpacing: -0.2,
     },
-    routeArrowIcon: {
-      color: cArrow,
+    routeArrow: {
+      color: c.borderStrong,
+      fontSize: 14,
     },
 
-    cardBtm: {
+    waypointRow: {
+      minHeight: 24,
       flexDirection: "row",
-      justifyContent: "space-between",
       alignItems: "center",
-      paddingTop: spacing * 3 + 2,
-      borderTopWidth: 1,
-      borderTopColor: cCardDivider,
+      gap: spacing,
+      marginBottom: spacing,
     },
-    infoText: {
-      fontSize: safeNumber(theme?.typography?.scale?.detail?.size, 14) - 1,
-      fontWeight: "500",
-      color: cTextSub,
+    waypointIcon: {
+      color: c.textSub,
+      fontSize: 14,
     },
-    actionLink: {
-      fontSize: safeNumber(theme?.typography?.scale?.detail?.size, 14) - 1,
+    waypointText: {
+      flex: 1,
+      color: c.textSub,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
+      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
       fontWeight: "700",
     },
 
-    textUrgent: { color: cPrimary },
-    textPayment: { color: cTextMain },
-    textMoving: { color: cTextMain, opacity: 0.6 },
-    textCompleted: { color: cTextMain },
+    bottomRow: {
+      minHeight: 44,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: spacing * 2,
+      marginTop: spacing,
+    },
+    cargoWrap: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing,
+      paddingRight: spacing,
+    },
+    cargoIcon: {
+      color: c.textSub,
+      fontSize: 14,
+    },
+    cargoText: {
+      flex: 1,
+      color: c.textSub,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12) + 1,
+      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16) + 2,
+      fontWeight: "700",
+    },
+    ctaWrap: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing,
+      flexShrink: 0,
+    },
+    ctaTextBase: {
+      fontSize: safeNumber(theme.typography.scale.detail.size, 14),
+      lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20),
+      fontWeight: "900",
+      letterSpacing: -0.2,
+    },
+    ctaChipBase: {
+      width: 24,
+      height: 24,
+      borderRadius: 12,
+      borderWidth: 1,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    ctaIconBase: {
+      fontSize: 13,
+    },
+    priceText: {
+      color: c.textMain,
+      fontSize: safeNumber(theme.typography.scale.heading.size, 18),
+      lineHeight: safeNumber(theme.typography.scale.heading.lineHeight, 24),
+      fontWeight: "900",
+      letterSpacing: -0.4,
+    },
 
-    bgUrgent: { backgroundColor: cBadgeUrgentBg, color: cPrimary },
-    bgPayment: { backgroundColor: cBadgePaymentBg, color: cSecondary },
-    bgMoving: { backgroundColor: cBadgeMovingBg, color: cAccent },
-    bgCompleted: { backgroundColor: cBadgeDoneBg, color: cTextSub },
+    badgeAttention: {
+      backgroundColor: tint(c.brandPrimary, 0.1, c.bgSurfaceAlt),
+      borderColor: tint(c.brandPrimary, 0.24, c.borderDefault),
+    },
+    badgeProgress: {
+      backgroundColor: tint(c.brandAccent, 0.14, c.bgSurfaceAlt),
+      borderColor: tint(c.brandAccent, 0.3, c.borderDefault),
+    },
+    badgeClosed: {
+      backgroundColor: tint(c.textMain, 0.05, c.bgSurfaceAlt),
+      borderColor: tint(c.textMain, 0.14, c.borderDefault),
+    },
+    badgeNeutral: {
+      backgroundColor: tint(c.semanticInfo, 0.08, c.bgSurfaceAlt),
+      borderColor: tint(c.semanticInfo, 0.2, c.borderDefault),
+    },
+
+    badgeTextAttention: { color: c.brandPrimary },
+    badgeTextProgress: { color: c.brandAccent },
+    badgeTextClosed: { color: c.textSub },
+    badgeTextNeutral: { color: c.semanticInfo },
+
+    ctaTextAttention: { color: c.brandPrimary },
+    ctaTextProgress: { color: c.textMain },
+    ctaTextClosed: { color: c.textSub },
+    ctaTextNeutral: { color: c.textMain },
+
+    ctaChipAttention: {
+      backgroundColor: tint(c.brandPrimary, 0.1, c.bgSurface),
+      borderColor: tint(c.brandPrimary, 0.2, c.borderDefault),
+    },
+    ctaChipProgress: {
+      backgroundColor: tint(c.brandAccent, 0.1, c.bgSurface),
+      borderColor: tint(c.brandAccent, 0.22, c.borderDefault),
+    },
+    ctaChipClosed: {
+      backgroundColor: tint(c.textMain, 0.04, c.bgSurface),
+      borderColor: tint(c.textMain, 0.12, c.borderDefault),
+    },
+    ctaChipNeutral: {
+      backgroundColor: tint(c.semanticInfo, 0.08, c.bgSurface),
+      borderColor: tint(c.semanticInfo, 0.18, c.borderDefault),
+    },
+
+    ctaIconAttention: { color: c.brandPrimary },
+    ctaIconProgress: { color: c.brandAccent },
+    ctaIconClosed: { color: c.textSub },
+    ctaIconNeutral: { color: c.semanticInfo },
   });
 });
+
+function toSafeNumber(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function formatKrw(value: number): string {
+  const safeValue = Math.max(0, Math.round(toSafeNumber(value)));
+  return `${KRW.format(safeValue)}원`;
+}
+
+function toDateValue(iso: string): number {
+  const value = new Date(iso).getTime();
+  return Number.isFinite(value) ? value : 0;
+}
+
+function formatDateTime(iso: string): string {
+  const date = new Date(iso);
+  if (!Number.isFinite(date.getTime())) return "시간 정보 없음";
+
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  const hour = String(date.getHours()).padStart(2, "0");
+  const minute = String(date.getMinutes()).padStart(2, "0");
+  return `${month}월 ${day}일 ${hour}:${minute}`;
+}
+
+function getPriceValue(quote: QuoteListItem): number {
+  const finalPrice = toSafeNumber(quote.finalPrice);
+  const desiredPrice = toSafeNumber(quote.desiredPrice);
+  return finalPrice > 0 ? finalPrice : desiredPrice;
+}
+
+function formatWaypointText(waypointAddresses?: string[]): string | undefined {
+  if (!waypointAddresses?.length) return undefined;
+  if (waypointAddresses.length === 1) return `경유지 1곳: ${waypointAddresses[0]}`;
+  return `경유지 ${waypointAddresses.length}곳: ${waypointAddresses[0]} 외 ${waypointAddresses.length - 1}곳`;
+}
+
+function toViewItem(quote: QuoteListMockItem): QuoteListViewItem {
+  const policy = getQuoteActionPolicy(quote.status);
+  const priceValue = getPriceValue(quote);
+
+  return {
+    quote,
+    policy,
+    statusLabel: policy.badgeLabel,
+    ctaText: policy.ctaLabel,
+    isPriceCta: policy.listCtaKind === "price",
+    priceText: formatKrw(priceValue),
+    createdAtLabel: formatDateTime(quote.createdAt),
+    cargoText: `${quote.vehicleType} ${quote.vehicleBodyType} · ${quote.cargoName}`,
+    waypointText: formatWaypointText(quote.waypointAddresses),
+    priceValue,
+    recencyValue: toDateValue(quote.createdAt),
+  };
+}
+
+function sortActionRequiredLatest(a: QuoteListViewItem, b: QuoteListViewItem): number {
+  return b.recencyValue - a.recencyValue;
+}
+
+function sortActionRequiredPrice(a: QuoteListViewItem, b: QuoteListViewItem): number {
+  if (b.priceValue !== a.priceValue) return b.priceValue - a.priceValue;
+  return b.recencyValue - a.recencyValue;
+}
+
+function sortInProgressLatest(a: QuoteListViewItem, b: QuoteListViewItem): number {
+  if (a.policy.stageOrder !== b.policy.stageOrder) return a.policy.stageOrder - b.policy.stageOrder;
+  return b.recencyValue - a.recencyValue;
+}
+
+function sortInProgressPrice(a: QuoteListViewItem, b: QuoteListViewItem): number {
+  if (a.policy.stageOrder !== b.policy.stageOrder) return a.policy.stageOrder - b.policy.stageOrder;
+  if (b.priceValue !== a.priceValue) return b.priceValue - a.priceValue;
+  return b.recencyValue - a.recencyValue;
+}
+
+function sortClosedLatest(a: QuoteListViewItem, b: QuoteListViewItem): number {
+  return b.recencyValue - a.recencyValue;
+}
+
+function sortClosedPrice(a: QuoteListViewItem, b: QuoteListViewItem): number {
+  if (b.priceValue !== a.priceValue) return b.priceValue - a.priceValue;
+  return b.recencyValue - a.recencyValue;
+}
+
+function useQuoteList(controls: QuoteListControls): QuoteListResult {
+  const allItems = useMemo(() => MOCK_QUOTES.map(toViewItem), []);
+
+  const groupedSorted = useMemo(() => {
+    const actionRequired = allItems.filter((item) => item.policy.category === "actionRequired");
+    const inProgress = allItems.filter((item) => item.policy.category === "inProgress");
+    const closed = allItems.filter((item) => item.policy.category === "closed");
+
+    if (controls.activeSort === "PRICE") {
+      return {
+        actionRequiredList: [...actionRequired].sort(sortActionRequiredPrice),
+        inProgressList: [...inProgress].sort(sortInProgressPrice),
+        closedList: [...closed].sort(sortClosedPrice),
+      };
+    }
+
+    return {
+      actionRequiredList: [...actionRequired].sort(sortActionRequiredLatest),
+      inProgressList: [...inProgress].sort(sortInProgressLatest),
+      closedList: [...closed].sort(sortClosedLatest),
+    };
+  }, [allItems, controls.activeSort]);
+
+  const filteredOngoing = useMemo(() => {
+    if (controls.activeFilter === "ACTION_REQUIRED") {
+      return {
+        actionRequiredList: groupedSorted.actionRequiredList,
+        inProgressList: [] as QuoteListViewItem[],
+      };
+    }
+
+    if (controls.activeFilter === "IN_PROGRESS") {
+      return {
+        actionRequiredList: [] as QuoteListViewItem[],
+        inProgressList: groupedSorted.inProgressList,
+      };
+    }
+
+    return {
+      actionRequiredList: groupedSorted.actionRequiredList,
+      inProgressList: groupedSorted.inProgressList,
+    };
+  }, [controls.activeFilter, groupedSorted.actionRequiredList, groupedSorted.inProgressList]);
+
+  return {
+    actionRequiredList: filteredOngoing.actionRequiredList,
+    inProgressList: filteredOngoing.inProgressList,
+    closedList: groupedSorted.closedList,
+    counts: {
+      ongoing: groupedSorted.actionRequiredList.length + groupedSorted.inProgressList.length,
+      completed: groupedSorted.closedList.length,
+      actionRequired: groupedSorted.actionRequiredList.length,
+      inProgress: groupedSorted.inProgressList.length,
+      closed: groupedSorted.closedList.length,
+    },
+  };
+}
+
+function resolveSectionToneStyles(
+  tone: QuoteTonePaletteKey,
+  styles: ReturnType<typeof useStyles>
+): { chip: object; icon: object } {
+  if (tone === "attention") return { chip: styles.toneAttentionChip, icon: styles.toneAttentionIcon };
+  if (tone === "progress") return { chip: styles.toneProgressChip, icon: styles.toneProgressIcon };
+  return { chip: styles.toneClosedChip, icon: styles.toneClosedIcon };
+}
+
+function getToneStyles(key: QuoteTonePaletteKey, styles: ReturnType<typeof useStyles>): ToneStyleGroup {
+  if (key === "attention") {
+    return {
+      badge: styles.badgeAttention,
+      badgeText: styles.badgeTextAttention,
+      ctaText: styles.ctaTextAttention,
+      ctaChip: styles.ctaChipAttention,
+      ctaIcon: styles.ctaIconAttention,
+    };
+  }
+
+  if (key === "progress") {
+    return {
+      badge: styles.badgeProgress,
+      badgeText: styles.badgeTextProgress,
+      ctaText: styles.ctaTextProgress,
+      ctaChip: styles.ctaChipProgress,
+      ctaIcon: styles.ctaIconProgress,
+    };
+  }
+
+  if (key === "closed") {
+    return {
+      badge: styles.badgeClosed,
+      badgeText: styles.badgeTextClosed,
+      ctaText: styles.ctaTextClosed,
+      ctaChip: styles.ctaChipClosed,
+      ctaIcon: styles.ctaIconClosed,
+    };
+  }
+
+  return {
+    badge: styles.badgeNeutral,
+    badgeText: styles.badgeTextNeutral,
+    ctaText: styles.ctaTextNeutral,
+    ctaChip: styles.ctaChipNeutral,
+    ctaIcon: styles.ctaIconNeutral,
+  };
+}
+
+function SectionHeader({ iconName, title, count, tone }: SectionHeaderProps) {
+  const styles = useStyles();
+  const toneStyle = resolveSectionToneStyles(tone, styles);
+
+  return (
+    <View style={styles.sectionHead}>
+      <View style={styles.sectionLeft}>
+        <View style={[styles.sectionIconChipBase, toneStyle.chip]}>
+          <Ionicons name={iconName} style={[styles.sectionIcon, toneStyle.icon]} />
+        </View>
+        <AppText style={styles.sectionTitle}>{title}</AppText>
+      </View>
+      <AppText style={styles.sectionCount}>{`${count}건`}</AppText>
+    </View>
+  );
+}
+
+function QuoteListCardBase({ item, onPress }: QuoteListCardProps) {
+  const styles = useStyles();
+  const theme = useAppTheme();
+  const toneKey = resolveTonePalette(theme, item.policy).key;
+  const toneStyles = useMemo(() => getToneStyles(toneKey, styles), [toneKey, styles]);
+  const isClosed = item.policy.category === "closed";
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={() => onPress(item.quote.quoteId, item.quote.status)}
+      style={({ pressed }) => [styles.pressable, isClosed && styles.closedCard, pressed && styles.pressed]}
+    >
+      <AppCard outlined elevated={false}>
+        <View style={styles.cardInner}>
+          <View style={styles.topRow}>
+            <View style={[styles.badgeBase, toneStyles.badge]}>
+              <AppText style={[styles.badgeTextBase, toneStyles.badgeText]}>{item.statusLabel}</AppText>
+            </View>
+            <View style={styles.dateWrap}>
+              <Ionicons name="time-outline" style={styles.dateIcon} />
+              <AppText style={styles.dateText} numberOfLines={1}>
+                {item.createdAtLabel}
+              </AppText>
+            </View>
+          </View>
+
+          <View style={styles.routeRow}>
+            <AppText style={styles.routeText} numberOfLines={1}>
+              {item.quote.originAddress}
+            </AppText>
+            <Ionicons name="arrow-forward" style={styles.routeArrow} />
+            <AppText style={styles.routeText} numberOfLines={1}>
+              {item.quote.destinationAddress}
+            </AppText>
+          </View>
+
+          {item.waypointText ? (
+            <View style={styles.waypointRow}>
+              <Ionicons name="navigate-outline" style={styles.waypointIcon} />
+              <AppText style={styles.waypointText} numberOfLines={1}>
+                {item.waypointText}
+              </AppText>
+            </View>
+          ) : null}
+
+          <View style={styles.bottomRow}>
+            <View style={styles.cargoWrap}>
+              <Ionicons name="cube-outline" style={styles.cargoIcon} />
+              <AppText style={styles.cargoText} numberOfLines={1}>
+                {`${item.cargoText} · ${item.quote.distanceKm.toFixed(1)}km`}
+              </AppText>
+            </View>
+
+            {item.isPriceCta ? (
+              <AppText style={styles.priceText}>{item.priceText}</AppText>
+            ) : (
+              <View style={styles.ctaWrap}>
+                <AppText style={[styles.ctaTextBase, toneStyles.ctaText]} numberOfLines={1}>
+                  {item.ctaText}
+                </AppText>
+                <View style={[styles.ctaChipBase, toneStyles.ctaChip]}>
+                  <Ionicons name="chevron-forward" style={[styles.ctaIconBase, toneStyles.ctaIcon]} />
+                </View>
+              </View>
+            )}
+          </View>
+        </View>
+      </AppCard>
+    </Pressable>
+  );
+}
+
+function areEqual(prev: QuoteListCardProps, next: QuoteListCardProps) {
+  return (
+    prev.onPress === next.onPress &&
+    prev.item.quote.quoteId === next.item.quote.quoteId &&
+    prev.item.quote.status === next.item.quote.status &&
+    prev.item.quote.finalPrice === next.item.quote.finalPrice &&
+    prev.item.createdAtLabel === next.item.createdAtLabel &&
+    prev.item.policy.tone === next.item.policy.tone &&
+    prev.item.waypointText === next.item.waypointText
+  );
+}
+
+const QuoteListCard = React.memo(QuoteListCardBase, areEqual);
 
 export default function QuoteListPage() {
   const styles = useStyles();
   const theme = useAppTheme();
   const router = useRouter();
-  const cardNavLockedRef = useRef(false);
-  const cardNavUnlockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const pageBg = safeString(theme?.colors?.bgMain, safeString(theme?.colors?.bgSurfaceAlt, ""));
+  const [activeTab, setActiveTab] = useState<QuoteListTab>("ongoing");
+  const [activeFilter, setActiveFilter] = useState<QuoteListFilter>("ALL");
+  const [activeSort, setActiveSort] = useState<QuoteListSort>("LATEST");
 
-  const [activeTab, setActiveTab] = useState<TabType>("ongoing");
+  const { actionRequiredList, inProgressList, closedList, counts } = useQuoteList({
+    activeFilter,
+    activeSort,
+  });
 
-  const { ongoingList, completedList, actionRequiredList, movingList } = useMemo(() => {
-    const ongoing = SAMPLE_QUOTES.filter((q) => q.status !== "dropoff");
-    const completed = SAMPLE_QUOTES.filter((q) => q.status === "dropoff");
-    const action = ongoing.filter((q) => ["negotiating", "assigned"].includes(q.status));
-    const moving = ongoing.filter((q) => !["negotiating", "assigned"].includes(q.status));
-    return { ongoingList: ongoing, completedList: completed, actionRequiredList: action, movingList: moving };
+  const isOngoingEmpty = actionRequiredList.length === 0 && inProgressList.length === 0;
+  const isClosedEmpty = closedList.length === 0;
+
+  const ongoingEmptyDescription = useMemo(() => {
+    if (activeFilter === "ACTION_REQUIRED") return "지금 확인이 필요한 견적이 없습니다.";
+    if (activeFilter === "IN_PROGRESS") return "현재 운송 중인 내역이 없습니다.";
+    return "새로운 운송 요청 후 진행 상태를 확인할 수 있습니다.";
+  }, [activeFilter]);
+
+  const handlePressTab = useCallback((tab: QuoteListTab) => {
+    setActiveTab(tab);
+    if (tab === "completed") {
+      setActiveFilter("ALL");
+    }
   }, []);
 
-  useEffect(() => {
-    return () => {
-      if (cardNavUnlockTimerRef.current) {
-        clearTimeout(cardNavUnlockTimerRef.current);
-      }
-    };
-  }, []);
-
-  const onPressCard = useCallback(
-    (item: QuoteItem) => {
-      if (cardNavLockedRef.current) return;
-      cardNavLockedRef.current = true;
-
-      if (cardNavUnlockTimerRef.current) {
-        clearTimeout(cardNavUnlockTimerRef.current);
-      }
-
-      router.push({
-        pathname: "/(shipper)/quotes/[id]",
-        params: {
-          id: item.id,
-          status: item.status,
-        },
-      });
-
-      cardNavUnlockTimerRef.current = setTimeout(() => {
-        cardNavLockedRef.current = false;
-        cardNavUnlockTimerRef.current = null;
-      }, 900);
+  const handlePressCard = useCallback(
+    (quoteId: number, status: QuoteStatusApi) => {
+      router.push({ pathname: "/(shipper)/quotes/[id]", params: { id: String(quoteId), status } });
     },
     [router]
   );
 
-  const onPressCreate = useCallback(() => {
-    router.push("/(shipper)/quotes/create");
-  }, [router]);
-
-  const renderCard = (item: QuoteItem, isCompletedTab: boolean = false) => {
-    const variant = getCardVariant(item.status, isCompletedTab);
-    const badgeLabel = getBadgeLabel(item.status, isCompletedTab);
-
-    let cardStatusStyle: ViewStyle | undefined;
-    let badgeStyle: TextStyle = styles.bgCompleted;
-    let actionTextStyle: TextStyle = styles.textCompleted;
-
-    if (variant === "urgent") {
-      cardStatusStyle = styles.cardUrgent;
-      badgeStyle = styles.bgUrgent;
-      actionTextStyle = styles.textUrgent;
-    } else if (variant === "payment") {
-      cardStatusStyle = styles.cardPayment;
-      badgeStyle = styles.bgPayment;
-      actionTextStyle = styles.textPayment;
-    } else if (variant === "moving") {
-      cardStatusStyle = styles.cardMoving;
-      badgeStyle = styles.bgMoving;
-      actionTextStyle = styles.textMoving;
-    }
-
-    const routeOpacity = isCompletedTab ? 0.5 : 1;
-
-    return (
-      <Pressable
-        key={item.id}
-        onPress={() => onPressCard(item)}
-        style={({ pressed }) => [styles.cardPressable, pressed && CARD_PRESS]}
-      >
-        <AppCard outlined style={[styles.card, cardStatusStyle]}>
-          <View style={styles.cardTop}>
-            <AppText style={[styles.badge, badgeStyle]}>{badgeLabel}</AppText>
-            <AppText style={styles.timeText}>{item.rightHint}</AppText>
-          </View>
-
-          <View style={[styles.routeRow, { opacity: routeOpacity }]}>
-            <AppText style={styles.location}>{item.fromLabel}</AppText>
-            <Ionicons name="arrow-forward" size={16} style={styles.routeArrowIcon} />
-            <AppText style={styles.location}>{item.toLabel}</AppText>
-          </View>
-
-          <View style={styles.cardBtm}>
-            <AppText style={styles.infoText}>{item.cargoHint}</AppText>
-            {isCompletedTab ? (
-              <AppText style={[styles.actionLink, styles.textCompleted]}>{item.price}</AppText>
-            ) : (
-              <AppText style={[styles.actionLink, actionTextStyle]}>{item.ctaLabel}</AppText>
-            )}
-          </View>
-        </AppCard>
-      </Pressable>
-    );
-  };
-
   return (
     <PageScaffold
       title="이용 내역"
-      backgroundColor={pageBg}
+      backgroundColor={theme.colors.bgMain}
       contentStyle={styles.pageContent}
-      floating={<RequestQuoteFab onPress={onPressCreate} accessibilityLabel="견적 요청 생성" />}
+      floating={
+        <RequestQuoteFab
+          onPress={() => router.push("/(shipper)/quotes/create")}
+          accessibilityLabel="견적 요청 생성"
+        />
+      }
     >
       <View style={styles.tabContainer}>
-        <View style={styles.tabTrack}>
-          <Pressable
-            style={[styles.tabItem, activeTab === "ongoing" && styles.tabItemActive]}
-            onPress={() => setActiveTab("ongoing")}
-          >
-            <AppText style={[styles.tabText, activeTab === "ongoing" && styles.tabTextActive]}>진행 중</AppText>
-            <View style={[styles.tabCount, activeTab === "ongoing" && styles.tabCountActive]}>
-              <AppText style={[styles.tabCountText, activeTab === "ongoing" && styles.tabCountTextActive]}>
-                {ongoingList.length}
-              </AppText>
-            </View>
-          </Pressable>
+        <Pressable style={styles.tabButton} onPress={() => handlePressTab("ongoing")}>
+          <AppText style={activeTab === "ongoing" ? styles.tabTextActive : styles.tabText}>진행 중</AppText>
+          <AppText style={styles.tabCountText}>{`${counts.ongoing}건`}</AppText>
+          {activeTab === "ongoing" ? <View style={styles.tabIndicator} /> : null}
+        </Pressable>
 
-          <Pressable
-            style={[styles.tabItem, activeTab === "completed" && styles.tabItemActive]}
-            onPress={() => setActiveTab("completed")}
-          >
-            <AppText style={[styles.tabText, activeTab === "completed" && styles.tabTextActive]}>완료</AppText>
-            <View style={[styles.tabCount, activeTab === "completed" && styles.tabCountActive]}>
-              <AppText style={[styles.tabCountText, activeTab === "completed" && styles.tabCountTextActive]}>
-                {completedList.length}
-              </AppText>
-            </View>
-          </Pressable>
+        <Pressable style={styles.tabButton} onPress={() => handlePressTab("completed")}>
+          <AppText style={activeTab === "completed" ? styles.tabTextActive : styles.tabText}>완료됨</AppText>
+          <AppText style={styles.tabCountText}>{`${counts.completed}건`}</AppText>
+          {activeTab === "completed" ? <View style={styles.tabIndicator} /> : null}
+        </Pressable>
+      </View>
+
+      <View style={styles.controlRow}>
+        <View style={styles.filterGroup}>
+          {FILTER_OPTIONS.map((option) => {
+            const isDisabled = activeTab !== "ongoing";
+            const isActive = activeFilter === option.key && !isDisabled;
+
+            return (
+              <Pressable
+                key={option.key}
+                disabled={isDisabled}
+                onPress={() => setActiveFilter(option.key)}
+                style={[styles.filterChipBase, isActive && styles.filterChipActive]}
+              >
+                <AppText style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>
+                  {option.label}
+                </AppText>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <View style={styles.sortSegment}>
+          {SORT_OPTIONS.map((option) => {
+            const isActive = activeSort === option.key;
+
+            return (
+              <Pressable
+                key={option.key}
+                onPress={() => setActiveSort(option.key)}
+                style={[styles.sortButtonBase, isActive && styles.sortButtonActive]}
+              >
+                <Ionicons name="swap-vertical-outline" style={[styles.sortIcon, isActive && styles.sortIconActive]} />
+                <AppText style={[styles.sortButtonText, isActive && styles.sortButtonTextActive]}>
+                  {option.label}
+                </AppText>
+              </Pressable>
+            );
+          })}
         </View>
       </View>
 
-      <View style={styles.sectionList}>
-        {activeTab === "ongoing" && (
-          <>
-            {actionRequiredList.length > 0 && (
-              <>
-                <View style={[styles.sectionLabelRow, { marginTop: 0 }]}>
-                  <AppText style={styles.sectionLabel}>확인 필요</AppText>
-                  <AppText style={styles.sectionCount}>{actionRequiredList.length}건</AppText>
+      <View style={styles.listContainer}>
+        {activeTab === "ongoing" ? (
+          isOngoingEmpty ? (
+            <AppEmptyState
+              title="조건에 맞는 견적이 없어요"
+              description={ongoingEmptyDescription}
+              action={{ label: "견적 요청하기", onPress: () => router.push("/(shipper)/quotes/create") }}
+            />
+          ) : (
+            <>
+              {actionRequiredList.length > 0 ? (
+                <View style={styles.section}>
+                  <SectionHeader
+                    iconName="alert-circle-outline"
+                    title="확인 필요"
+                    count={actionRequiredList.length}
+                    tone="attention"
+                  />
+                  {actionRequiredList.map((item) => (
+                    <View key={item.quote.quoteId} style={styles.cardWrapper}>
+                      <QuoteListCard item={item} onPress={handlePressCard} />
+                    </View>
+                  ))}
                 </View>
-                {actionRequiredList.map((item) => renderCard(item))}
-              </>
-            )}
+              ) : null}
 
-            {movingList.length > 0 && (
-              <>
-                <View style={[styles.sectionLabelRow, actionRequiredList.length === 0 && { marginTop: 0 }]}>
-                  <AppText style={styles.sectionLabel}>운송 현황</AppText>
+              {inProgressList.length > 0 ? (
+                <View style={styles.section}>
+                  <SectionHeader
+                    iconName="car-outline"
+                    title="운송 현황"
+                    count={inProgressList.length}
+                    tone="progress"
+                  />
+                  {inProgressList.map((item) => (
+                    <View key={item.quote.quoteId} style={styles.cardWrapper}>
+                      <QuoteListCard item={item} onPress={handlePressCard} />
+                    </View>
+                  ))}
                 </View>
-                {movingList.map((item) => renderCard(item))}
-              </>
-            )}
-
-            {ongoingList.length === 0 && (
-              <AppEmptyState title="진행 중인 요청이 없어요" description="새로운 운송을 요청해보세요." />
-            )}
-          </>
-        )}
-
-        {activeTab === "completed" && (
-          <>
-            <View style={[styles.sectionLabelRow, { marginTop: 0 }]}>
-              <AppText style={styles.sectionLabel}>최근 3개월</AppText>
-            </View>
-            {completedList.map((item) => renderCard(item, true))}
-
-            {completedList.length === 0 && (
-              <AppEmptyState title="완료된 내역이 없어요" description="운송이 완료되면 내역이 표시됩니다." />
-            )}
-          </>
+              ) : null}
+            </>
+          )
+        ) : isClosedEmpty ? (
+          <AppEmptyState title="완료된 운송 내역이 없어요" description="완료된 건은 이곳에서 확인할 수 있습니다." />
+        ) : (
+          <View style={styles.section}>
+            <SectionHeader
+              iconName="checkmark-circle-outline"
+              title="완료 내역"
+              count={closedList.length}
+              tone="closed"
+            />
+            {closedList.map((item) => (
+              <View key={item.quote.quoteId} style={styles.cardWrapper}>
+                <QuoteListCard item={item} onPress={handlePressCard} />
+              </View>
+            ))}
+          </View>
         )}
       </View>
     </PageScaffold>
   );
 }
-

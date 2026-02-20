@@ -1,4 +1,6 @@
-﻿import React, { useState } from "react";
+import { Ionicons } from "@expo/vector-icons";
+import DateTimePicker from "@react-native-community/datetimepicker";
+import React, { useState } from "react";
 import {
   LayoutAnimation,
   Modal,
@@ -6,36 +8,44 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  UIManager,
   View,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import DateTimePicker from "@react-native-community/datetimepicker";
 
-import { safeNumber, tint } from "@/shared/theme/colorUtils";
-import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
-import type { AppTheme } from "@/shared/theme/types";
-import { AppButton } from "@/shared/ui/kit/AppButton";
-import { AppInput } from "@/shared/ui/kit/AppInput";
-import { AppText } from "@/shared/ui/kit/AppText";
 import {
   useQuoteCreateDraft,
   WORK_METHODS,
   type Waypoint,
 } from "@/features/quote/model/quoteCreateDraft";
-import { PostcodeModal } from "@/features/quote/ui/PostcodeModal"; 
+import { PostcodeModal } from "@/features/quote/ui/PostcodeModal";
+import {
+  getQuoteFlatCardStyle,
+  QUOTE_PRESS_EFFECT,
+  QUOTE_SCROLL_VIEW_PROPS,
+} from "@/features/quote/ui/QuoteCreateUiPrimitives";
+import { initLayoutAnimationForAndroid } from "@/shared/lib/ui/layoutAnimationInit";
+import { safeNumber, tint } from "@/shared/theme/colorUtils";
+import type { AppTheme } from "@/shared/theme/types";
+import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
+import { AppInput } from "@/shared/ui/kit/AppInput";
+import { AppText } from "@/shared/ui/kit/AppText";
 
-if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
+initLayoutAnimationForAndroid();
 
 const MAX_WAYPOINTS = 3;
+
+function formatPhoneNumber(input: string) {
+  const digits = (input ?? "").replace(/[^\d]/g, "").slice(0, 11);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 7) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+}
 
 const useStyles = createThemedStyles((theme: AppTheme) => {
   const c = theme.colors;
   const spacing = safeNumber(theme.layout.spacing.base, 4);
   const radiusCard = safeNumber(theme.layout.radii.card, 16);
   const radiusControl = safeNumber(theme.layout.radii.control, 12);
+  const flatCard = getQuoteFlatCardStyle(theme);
 
   return StyleSheet.create({
     container: { gap: spacing * 3, paddingBottom: spacing * 8 },
@@ -45,12 +55,11 @@ const useStyles = createThemedStyles((theme: AppTheme) => {
 
     // [카드] 전체 타임라인 컨테이너
     routeCard: {
-      backgroundColor: c.bgSurface, borderRadius: radiusCard, padding: spacing * 4,
-      borderWidth: 1, borderColor: c.borderDefault,
-      shadowColor: "#000", shadowOpacity: 0.02, shadowRadius: 6, elevation: 1,
+      ...flatCard,
+      padding: spacing * 4,
     },
     
-    // 개별 노드 (출발/경유/도착) Row
+    // 개별 노드 (출발/경유/도착/버튼) Row
     routeRow: { flexDirection: "row", minHeight: 60 },
     
     // 왼쪽 타임라인 비주얼
@@ -62,11 +71,12 @@ const useStyles = createThemedStyles((theme: AppTheme) => {
     nodeStart: { backgroundColor: c.textMain },
     nodeVia: { backgroundColor: c.bgSurface, borderWidth: 1.5, borderColor: c.textMuted },
     nodeEnd: { backgroundColor: c.brandPrimary },
-    nodeTextStart: { fontSize: 10, color: "#fff", fontWeight: "700" },
+    nodeTextStart: { fontSize: 10, color: c.textOnBrand, fontWeight: "700" },
     nodeTextVia: { fontSize: 10, color: c.textMuted, fontWeight: "700" },
-    nodeTextEnd: { fontSize: 10, color: "#fff", fontWeight: "700" },
+    nodeTextEnd: { fontSize: 10, color: c.textOnBrand, fontWeight: "700" },
 
-    lineSolid: { width: 2, flex: 1, backgroundColor: c.borderDefault, marginVertical: 4, borderRadius: 1 },
+    lineSolid: { width: 2, flex: 1, backgroundColor: c.borderDefault, marginTop: 4, marginBottom: 0, borderRadius: 1 },
+    lineSolidContinuous: { width: 2, flex: 1, backgroundColor: c.borderDefault, marginTop: 0, marginBottom: 0, borderRadius: 1 },
     
     // 오른쪽 컨텐츠 영역
     contentCol: { flex: 1, paddingBottom: 24 }, // 하단 여백으로 다음 노드와 간격 확보
@@ -94,30 +104,33 @@ const useStyles = createThemedStyles((theme: AppTheme) => {
     },
 
     // 작업 방식 칩
-    workLabel: { fontSize: 11, fontWeight: "600", color: c.textMuted, marginTop: 4, marginBottom: 4 },
+    workLabel: { fontSize: 13, fontWeight: "700", color: c.textSub, marginTop: 4, marginBottom: 8 },
     chipScroll: { flexDirection: 'row', gap: 6 },
     workChip: {
-      paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8,
+      paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8,
       borderWidth: 1, borderColor: c.borderDefault, backgroundColor: c.bgSurface,
     },
     workChipActive: { backgroundColor: tint(c.brandPrimary, 0.1, c.bgSurface), borderColor: c.brandPrimary },
-    workChipText: { fontSize: 11, fontWeight: "600", color: c.textSub },
+    workChipText: { fontSize: 12, fontWeight: "600", color: c.textSub },
     workChipTextActive: { color: c.brandPrimary },
 
-    // 경유지 추가 버튼
-    addViaWrapper: { flexDirection: 'row', alignItems: 'center', marginLeft: 38, marginBottom: 20 },
-    addViaBtn: {
-        flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6,
-        backgroundColor: c.bgSurfaceAlt, borderRadius: 6, borderWidth: 1, borderColor: c.borderDefault, borderStyle: 'dashed'
+    // 경유지 추가 버튼 (화물 추가 버튼과 동일한 스타일)
+    addBtn: {
+      height: 50, borderRadius: 14, borderWidth: 1, borderColor: c.brandPrimary,
+      borderStyle: "dashed", backgroundColor: tint(c.brandPrimary, 0.05, c.bgSurface),
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8
     },
-    addViaText: { fontSize: 12, fontWeight: '600', color: c.textMuted, marginLeft: 4 },
+    addBtnFull: { width: "100%" },
+    addBtnText: { color: c.brandPrimary, fontWeight: "700", fontSize: 15 },
 
     // 일정 카드
     scheduleCard: {
-      backgroundColor: c.bgSurface, borderRadius: radiusCard, padding: spacing * 4,
-      borderWidth: 1, borderColor: c.borderDefault, 
-      flexDirection: "row", alignItems: "center", justifyContent: 'space-between'
+      ...flatCard,
+      padding: spacing * 4,
     },
+    cardHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
+    cardTitle: { fontSize: 16, fontWeight: "700", color: c.textMain },
+    scheduleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
     scheduleItem: { flex: 1 },
     scheduleLabel: { fontSize: 12, color: c.textMuted, fontWeight: '600', marginBottom: 4 },
     scheduleBox: {
@@ -127,8 +140,16 @@ const useStyles = createThemedStyles((theme: AppTheme) => {
     scheduleValue: { fontSize: 14, fontWeight: "700", color: c.textMain },
     divider: { width: 1, height: 32, backgroundColor: c.borderDefault, marginHorizontal: 12 },
 
+    // [추가] 작업 방식 독립 카드
+    workMethodCard: {
+      ...flatCard,
+      padding: spacing * 4,
+    },
+    workMethodContent: { gap: 16 },
+    dividerHorizontal: { height: 1, backgroundColor: c.borderDefault, marginVertical: 4 },
+
     // 모달
-    modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
+    modalOverlay: { flex: 1, backgroundColor: tint(c.textMain, 0.5, c.textMain), justifyContent: "flex-end" },
     iosPickerSheet: {
       backgroundColor: c.bgSurface, borderTopLeftRadius: radiusCard, borderTopRightRadius: radiusCard,
       padding: spacing * 4, paddingBottom: spacing * 8,
@@ -195,7 +216,6 @@ export function QuoteCreateStep1() {
   const addWaypoint = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     const lastId = waypoints.length > 0 ? waypoints[waypoints.length - 1].id : 0;
-    // 경유지는 작업방식 생략 (간소화) - 필요한 경우 추가 가능
     const newWp: Waypoint = { id: lastId + 1, name: "", phone: "", addr: "", detail: "" };
     patchDraft({ waypoints: [...waypoints, newWp] });
   };
@@ -212,9 +232,10 @@ export function QuoteCreateStep1() {
   };
 
   // --- Components ---
-  const WorkMethodSelector = ({ current, onChange }: { current: string, onChange: (v: string) => void }) => (
+  // 💡 title 프롭을 받도록 수정된 컴포넌트
+  const WorkMethodSelector = ({ title, current, onChange }: { title: string, current: string, onChange: (v: string) => void }) => (
     <View>
-      <AppText style={styles.workLabel}>작업 방식</AppText>
+      <AppText style={styles.workLabel}>{title}</AppText>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
         {WORK_METHODS.map((method) => {
           const active = current === method;
@@ -224,7 +245,7 @@ export function QuoteCreateStep1() {
               onPress={() => onChange(method)}
               style={[styles.workChip, active && styles.workChipActive]}
             >
-              <AppText style={active ? styles.workChipTextActive : styles.workChipText}>{method}</AppText>
+              <AppText style={[styles.workChipText, active && styles.workChipTextActive]}>{method}</AppText>
             </Pressable>
           );
         })}
@@ -255,16 +276,14 @@ export function QuoteCreateStep1() {
 
   return (
     <>
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView {...QUOTE_SCROLL_VIEW_PROPS} contentContainerStyle={styles.container}>
         {/* 1. 경로 입력 (타임라인) */}
         <View>
-          <View style={styles.sectionHeader}>
+          <View style={styles.routeCard}>
+               <View style={styles.sectionHeader}>
             <Ionicons name="map-outline" size={18} color={theme.colors.brandPrimary} />
             <AppText style={styles.sectionTitle}>운송 경로</AppText>
           </View>
-
-          <View style={styles.routeCard}>
-              
               {/* [출발지] */}
               <View style={styles.routeRow}>
                   <View style={styles.timelineCol}>
@@ -279,7 +298,7 @@ export function QuoteCreateStep1() {
                       </View>
                       
                       <Pressable onPress={() => openPostcode("start")} style={[styles.addrBtn, draft?.startAddr ? styles.addrBtnFilled : undefined]}>
-                          <AppText style={draft?.startAddr ? styles.addrTextFilled : styles.addrText} numberOfLines={1}>
+                          <AppText style={[styles.addrText, draft?.startAddr && styles.addrTextFilled]} numberOfLines={1}>
                               {draft?.startAddr || "주소 검색"}
                           </AppText>
                           <Ionicons name="search" size={16} color={draft?.startAddr ? theme.colors.brandPrimary : theme.colors.textMuted} />
@@ -287,17 +306,21 @@ export function QuoteCreateStep1() {
 
                       {draft?.startAddr && (
                           <View style={styles.formBox}>
-                              {/* 상세 주소 한 줄 */}
                               <AppInput placeholder="상세 주소 (예: 101동 지하주차장)" value={draft?.startAddrDetail} onChangeText={v => patchDraft({ startAddrDetail: v })} shellStyle={styles.inputShell} />
                               
-                              {/* 담당자 / 연락처 반반 */}
                               <View style={styles.rowHalf}>
                                   <AppInput placeholder="발송인 이름" value={draft?.senderName} onChangeText={v => patchDraft({ senderName: v })} shellStyle={styles.inputShell} containerStyle={{ flex: 1 }} />
-                                  <AppInput placeholder="연락처" keyboardType="phone-pad" value={draft?.senderPhone} onChangeText={v => patchDraft({ senderPhone: v })} shellStyle={styles.inputShell} containerStyle={{ flex: 1 }} />
+                                  <AppInput
+                                    placeholder="연락처"
+                                    keyboardType="phone-pad"
+                                    value={draft?.senderPhone}
+                                    onChangeText={v => patchDraft({ senderPhone: formatPhoneNumber(v) })}
+                                    maxLength={13}
+                                    shellStyle={styles.inputShell}
+                                    containerStyle={{ flex: 1 }}
+                                  />
                               </View>
-                              
-                              {/* 작업 방식 가로 스크롤 */}
-                              <WorkMethodSelector current={draft?.loadMethod} onChange={v => patchDraft({ loadMethod: v as any })} />
+                              {/* 💡 상차 방식 폼 여기서 제거됨 */}
                           </View>
                       )}
                   </View>
@@ -321,7 +344,7 @@ export function QuoteCreateStep1() {
                           </View>
 
                           <Pressable onPress={() => openPostcode(wp.id)} style={[styles.addrBtn, wp.addr ? styles.addrBtnFilled : undefined]}>
-                              <AppText style={wp.addr ? styles.addrTextFilled : styles.addrText} numberOfLines={1}>
+                              <AppText style={[styles.addrText, wp.addr && styles.addrTextFilled]} numberOfLines={1}>
                                   {wp.addr || "경유지 주소 검색"}
                               </AppText>
                               <Ionicons name="search" size={16} color={wp.addr ? theme.colors.brandPrimary : theme.colors.textMuted} />
@@ -332,7 +355,15 @@ export function QuoteCreateStep1() {
                                   <AppInput placeholder="상세 주소" value={wp.detail} onChangeText={v => updateWaypoint(wp.id, { detail: v })} shellStyle={styles.inputShell} />
                                   <View style={styles.rowHalf}>
                                       <AppInput placeholder="담당자" value={wp.name} onChangeText={v => updateWaypoint(wp.id, { name: v })} shellStyle={styles.inputShell} containerStyle={{ flex: 1 }} />
-                                      <AppInput placeholder="연락처" keyboardType="phone-pad" value={wp.phone} onChangeText={v => updateWaypoint(wp.id, { phone: v })} shellStyle={styles.inputShell} containerStyle={{ flex: 1 }} />
+                                      <AppInput
+                                        placeholder="연락처"
+                                        keyboardType="phone-pad"
+                                        value={wp.phone}
+                                        onChangeText={v => updateWaypoint(wp.id, { phone: formatPhoneNumber(v) })}
+                                        maxLength={13}
+                                        shellStyle={styles.inputShell}
+                                        containerStyle={{ flex: 1 }}
+                                      />
                                   </View>
                               </View>
                           )}
@@ -340,14 +371,20 @@ export function QuoteCreateStep1() {
                   </View>
               ))}
 
-              {/* [경유지 추가 버튼] - 타임라인 사이에 배치 */}
+              {/* [경유지 추가 버튼] */}
               {canAddWaypoint && (
-                  <Pressable style={styles.addViaWrapper} onPress={addWaypoint}>
-                      <View style={styles.addViaBtn}>
-                          <Ionicons name="add" size={12} color={theme.colors.textMuted} />
-                          <AppText style={styles.addViaText}>경유지 추가</AppText>
+                  <View style={[styles.routeRow, { minHeight: 0 }]}>
+                      <View style={styles.timelineCol}>
+                          <View style={styles.lineSolidContinuous} />
                       </View>
-                  </Pressable>
+                      
+                      <View style={[styles.contentCol, { paddingBottom: 16 }]}>
+                          <Pressable style={({pressed}) => [styles.addBtn, styles.addBtnFull, pressed && QUOTE_PRESS_EFFECT]} onPress={addWaypoint}>
+                              <Ionicons name="add-circle" size={22} color={theme.colors.brandPrimary} />
+                              <AppText style={styles.addBtnText}>경유지 추가</AppText>
+                          </Pressable>
+                      </View>
+                  </View>
               )}
 
               {/* [도착지] */}
@@ -363,7 +400,7 @@ export function QuoteCreateStep1() {
                       </View>
 
                       <Pressable onPress={() => openPostcode("end")} style={[styles.addrBtn, draft?.endAddr ? styles.addrBtnFilled : undefined]}>
-                          <AppText style={draft?.endAddr ? styles.addrTextFilled : styles.addrText} numberOfLines={1}>
+                          <AppText style={[styles.addrText, draft?.endAddr && styles.addrTextFilled]} numberOfLines={1}>
                               {draft?.endAddr || "주소 검색"}
                           </AppText>
                           <Ionicons name="search" size={16} color={draft?.endAddr ? theme.colors.brandPrimary : theme.colors.textMuted} />
@@ -374,9 +411,17 @@ export function QuoteCreateStep1() {
                               <AppInput placeholder="상세 주소 입력" value={draft?.endAddrDetail} onChangeText={(v) => patchDraft({ endAddrDetail: v })} shellStyle={styles.inputShell} />
                               <View style={styles.rowHalf}>
                                   <AppInput placeholder="수취인 이름" value={draft?.receiverName} onChangeText={(v) => patchDraft({ receiverName: v })} shellStyle={styles.inputShell} containerStyle={{ flex: 1 }} />
-                                  <AppInput placeholder="연락처" keyboardType="phone-pad" value={draft?.receiverPhone} onChangeText={(v) => patchDraft({ receiverPhone: v })} shellStyle={styles.inputShell} containerStyle={{ flex: 1 }} />
+                                  <AppInput
+                                    placeholder="연락처"
+                                    keyboardType="phone-pad"
+                                    value={draft?.receiverPhone}
+                                    onChangeText={(v) => patchDraft({ receiverPhone: formatPhoneNumber(v) })}
+                                    maxLength={13}
+                                    shellStyle={styles.inputShell}
+                                    containerStyle={{ flex: 1 }}
+                                  />
                               </View>
-                              <WorkMethodSelector current={draft?.unloadMethod} onChange={v => patchDraft({ unloadMethod: v as any })} />
+                              {/* 💡 하차 방식 폼 여기서 제거됨 */}
                           </View>
                       )}
                   </View>
@@ -386,13 +431,13 @@ export function QuoteCreateStep1() {
         </View>
 
         {/* 2. 일정 입력 */}
-        <View>
-           <View style={styles.sectionHeader}>
+        <View style={styles.scheduleCard}>
+           <View style={styles.cardHeader}>
               <Ionicons name="calendar-outline" size={18} color={theme.colors.brandPrimary} />
-              <AppText style={styles.sectionTitle}>운송 일정</AppText>
+              <AppText style={styles.cardTitle}>운송 일정</AppText>
            </View>
-           
-           <View style={styles.scheduleCard}>
+
+           <View style={styles.scheduleRow}>
               <Pressable style={styles.scheduleItem} onPress={() => openPicker("date")}>
                  <AppText style={styles.scheduleLabel}>날짜</AppText>
                  <View style={styles.scheduleBox}>
@@ -400,9 +445,9 @@ export function QuoteCreateStep1() {
                      <AppText style={styles.scheduleValue}>{draft?.date?.toLocaleDateString("ko-KR")}</AppText>
                  </View>
               </Pressable>
-              
+
               <View style={styles.divider} />
-              
+
               <Pressable style={styles.scheduleItem} onPress={() => openPicker("time")}>
                  <AppText style={styles.scheduleLabel}>상차 시간</AppText>
                  <View style={styles.scheduleBox}>
@@ -410,6 +455,30 @@ export function QuoteCreateStep1() {
                      <AppText style={styles.scheduleValue}>{draft?.time?.toLocaleTimeString("ko-KR", {hour:'2-digit', minute:'2-digit'})}</AppText>
                  </View>
               </Pressable>
+           </View>
+        </View>
+
+        {/* 3. 상·하차 작업 방식 */}
+        <View style={styles.workMethodCard}>
+           <View style={styles.cardHeader}>
+              <Ionicons name="cube-outline" size={18} color={theme.colors.brandPrimary} />
+              <AppText style={styles.cardTitle}>상·하차 방식</AppText>
+           </View>
+
+           <View style={styles.workMethodContent}>
+              <WorkMethodSelector 
+                title="출발지 (상차) 작업 방식" 
+                current={draft?.loadMethod} 
+                onChange={v => patchDraft({ loadMethod: v as any })} 
+              />
+
+              <View style={styles.dividerHorizontal} />
+
+              <WorkMethodSelector 
+                title="도착지 (하차) 작업 방식" 
+                current={draft?.unloadMethod} 
+                onChange={v => patchDraft({ unloadMethod: v as any })} 
+              />
            </View>
         </View>
 
@@ -431,11 +500,11 @@ export function QuoteCreateStep1() {
       </ScrollView>
 
       {/* [추가] 주소 검색 모달 */}
-     <PostcodeModal
-  visible={isPostcodeOpen}
-  onClose={() => setIsPostcodeOpen(false)}
-  onSelected={handleAddressSelected}
-/>
+      <PostcodeModal
+        visible={isPostcodeOpen}
+        onClose={() => setIsPostcodeOpen(false)}
+        onSelected={handleAddressSelected}
+      />
     </>
   );
 }

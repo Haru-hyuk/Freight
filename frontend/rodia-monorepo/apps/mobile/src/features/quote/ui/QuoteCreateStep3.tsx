@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   LayoutAnimation,
   Modal,
@@ -6,7 +6,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  UIManager,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -16,15 +15,21 @@ import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
 import type { AppTheme } from "@/shared/theme/types";
 import { AppInput } from "@/shared/ui/kit/AppInput";
 import { AppText } from "@/shared/ui/kit/AppText";
-import { QUOTE_PRESS_EFFECT } from "@/features/quote/ui/QuoteCreateUiPrimitives";
+import {
+  getQuoteFlatCardStyle,
+  QUOTE_PRESS_EFFECT,
+  QUOTE_SCROLL_VIEW_PROPS,
+} from "@/features/quote/ui/QuoteCreateUiPrimitives";
 import {
   EXTRA_OPTIONS,
   formatKrw,
   useQuoteCreateDraft,
   VEHICLE_DATA,
+  computeQuotePricing, // 💡 9단계 로직이 적용된 계산 함수
 } from "@/features/quote/model/quoteCreateDraft";
+import { initLayoutAnimationForAndroid } from "@/shared/lib/ui/layoutAnimationInit";
+// import { useSubmitQuoteMutation } from "@/features/quote/model/useSubmitQuoteMutation"; // TODO: 나중에 연결할 제출 훅
 
-// ... (기존 헬퍼 함수 및 아이콘 데이터 유지 - clamp, digitsOnly, OPTION_ICONS 등) ...
 const OPTION_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   caution: "alert-circle-outline",
   upright: "arrow-up-outline",
@@ -32,6 +37,7 @@ const OPTION_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   shock: "flash-outline",
 };
 
+type AiStatus = "loading" | "ok" | "warn" | "danger" | "idle";
 type LoadLevel = "safe" | "warn" | "danger";
 
 function clamp(n: number, min: number, max: number) {
@@ -43,40 +49,44 @@ function digitsOnly(input: string) {
   return (input ?? "").replace(/[^\d]/g, "");
 }
 
+function formatDigitsWithComma(input: string) {
+  const digits = digitsOnly(input);
+  if (!digits) return "";
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+function formatKg(value: number) {
+  return `${Math.max(0, Math.floor(safeNumber(value, 0))).toLocaleString("ko-KR")}kg`;
+}
+
 const useStyles = createThemedStyles((theme: AppTheme) => {
   const c = theme.colors;
   const spacing = safeNumber(theme.layout.spacing.base, 4);
   const radiusCard = safeNumber(theme.layout.radii.card, 16);
   const radiusControl = safeNumber(theme.layout.radii.control, 12);
+  const flatCard = getQuoteFlatCardStyle(theme);
 
   const warn = (c as any)?.semanticWarning ?? c.brandPrimary;
-  const danger = (c as any)?.semanticDanger ?? c.brandPrimary;
-  const success = (c as any)?.semanticSuccess ?? c.brandAccent;
-  
-  // AI panel tone (opaque)
-  const aiPanelBg = c.brandSecondary;
-  const aiPanelBorder = tint(c.textOnBrand, 0.12, c.borderDefault);
-  const aiTextMain = c.textOnBrand;
-  const aiTextSub = tint(c.textOnBrand, 0.72, c.textOnBrand);
-  const aiTextFaint = tint(c.textOnBrand, 0.55, c.textOnBrand);
-  const aiSurface = tint(c.textOnBrand, 0.1, c.bgSurface);
 
   return StyleSheet.create({
-    container: { flex: 1, position: "relative", backgroundColor: c.bgMain },
-    scrollContent: { gap: spacing * 2, paddingHorizontal: spacing, paddingTop: spacing },
+    container: { flex: 1, backgroundColor: c.bgMain },
+    scrollContent: { gap: spacing * 2, paddingHorizontal: spacing, paddingTop: spacing, paddingBottom: spacing * 6 },
 
-    // ... (기존 카드, 차량, 옵션, 예산 스타일 전체 유지) ...
-    card: { backgroundColor: c.bgSurface, borderRadius: radiusCard, borderWidth: 1, borderColor: c.borderDefault, padding: 20 },
+    card: { ...flatCard, padding: 20 },
     cardHeader: { flexDirection: "row", alignItems: "center", marginBottom: 18, gap: 8 },
     sectionLabel: { marginBottom: 8, marginTop: 4 },
+    
+    // 차량 선택
     vehicleRow: { flexDirection: "row", gap: 10, marginBottom: 16 },
     vehicleBtn: { flex: 1, padding: 14, backgroundColor: c.bgSurfaceAlt, borderRadius: radiusControl, borderWidth: 1, borderColor: c.borderDefault, justifyContent: "center", alignItems: "center" },
     vehicleLabel: { marginBottom: 4 },
     vehicleValueRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+    
+    // 세그먼트 (온도, 배송방식)
     segGroup: { marginBottom: 14 },
     segRow: { flexDirection: "row", backgroundColor: c.bgSurfaceAlt, borderRadius: 14, padding: 4, gap: 4 },
-    segItem: { flex: 1, borderRadius: 12, paddingVertical: 12, alignItems: "center", justifyContent: "center", overflow: "hidden" },
-    segItemActive: { backgroundColor: c.bgSurface, shadowColor: c.textMain, shadowOpacity: 0.06, shadowRadius: 4, elevation: 1 },
+    segItem: { flex: 1, borderRadius: 12, paddingVertical: 12, alignItems: "center", justifyContent: "center", overflow: "hidden", borderWidth: 1, borderColor: "transparent" },
+    segItemActive: { backgroundColor: c.bgSurface, borderColor: c.borderDefault },
     segInner: { flexDirection: "row", alignItems: "center", gap: 6 },
     segText: {},
     segTextActive: { color: c.brandPrimary },
@@ -84,6 +94,8 @@ const useStyles = createThemedStyles((theme: AppTheme) => {
     segBadgeActive: { borderColor: tint(c.brandPrimary, 0.35, c.borderDefault), backgroundColor: tint(c.brandPrimary, 0.08, c.bgSurface) },
     segBadgeText: {},
     segBadgeTextActive: { color: c.brandPrimary },
+    
+    // 옵션
     optionContainer: { gap: 10 },
     optionChip: { width: "100%", minHeight: 46, flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 10, borderRadius: 16, borderWidth: 1, borderColor: c.borderDefault, backgroundColor: c.bgSurfaceAlt },
     optionChipActive: { backgroundColor: tint(c.brandPrimary, 0.05, c.bgSurface), borderColor: c.brandPrimary },
@@ -93,6 +105,8 @@ const useStyles = createThemedStyles((theme: AppTheme) => {
     optionRight: { flexDirection: "row", alignItems: "center", gap: 6 },
     optionPrice: {},
     optionPriceActive: { color: c.brandPrimary },
+    
+    // 예산
     budgetRow: { flexDirection: "row", alignItems: "center", gap: 8 },
     budgetBox: { flex: 1, flexDirection: "row", alignItems: "center", backgroundColor: c.bgSurfaceAlt, borderRadius: 14, borderWidth: 1, borderColor: c.borderDefault, height: 54, paddingHorizontal: 14, minWidth: 0 },
     budgetBoxActive: { borderColor: c.brandPrimary, backgroundColor: c.bgSurface },
@@ -106,130 +120,31 @@ const useStyles = createThemedStyles((theme: AppTheme) => {
     suggestionText: {},
     suggestionLabel: {},
     
-    // --- [NEW] 개선된 AI 바텀 시트 스타일 ---
-    aiSheetContainer: {
-      position: "absolute",
-      left: 16,
-      right: 16,
-      zIndex: 100,
-      backgroundColor: aiPanelBg,
-      borderRadius: 24,
-      overflow: "hidden",
-      borderWidth: 1,
-      borderColor: aiPanelBorder,
-      shadowColor: c.textMain,
-      shadowOpacity: 0.18,
-      shadowRadius: 18,
-      shadowOffset: { width: 0, height: 8 },
-      elevation: 10,
+    // 💡 AI 인라인 리포트 카드 최적화
+    aiInlineCard: { 
+      ...flatCard, 
+      padding: 20, 
+      gap: 16,
+      backgroundColor: tint(c.brandSecondary ?? c.brandPrimary, 0.04, c.bgSurface), // 살짝 다른 배경색으로 구분감 부여
+      borderColor: tint(c.brandSecondary ?? c.brandPrimary, 0.2, c.borderDefault)
     },
-    
-    // 헤더바 (닫혀있을 때)
-    aiHeaderBar: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      paddingHorizontal: 20,
-      height: 72, 
-      backgroundColor: aiPanelBg,
-    },
-    aiInfoLeft: {
-      justifyContent: "center",
-      gap: 4,
-      flex: 1,
-    },
-    aiLabelSmall: {
-      fontSize: 11,
-      fontWeight: "700",
-      color: aiTextSub,
-      letterSpacing: 0.5,
-    },
-    aiTitleBig: {
-      fontSize: 17,
-      fontWeight: "800",
-      color: aiTextMain,
-    },
-    aiHeaderRight: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 12,
-    },
-    
-    // 상태 뱃지 (Pill Shape)
+    aiHeaderRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 },
+    aiTitle: { flexShrink: 1 },
+    aiStatusLine: { flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap" },
     aiStatusBadge: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      borderRadius: 20,
-      borderWidth: 1,
-      borderColor: aiPanelBorder,
-      backgroundColor: tint(c.textOnBrand, 0.12, c.bgSurface),
+      flexDirection: "row", alignItems: "center", gap: 6, borderRadius: 999, borderWidth: 1,
+      paddingHorizontal: 12, paddingVertical: 6, backgroundColor: c.bgSurfaceAlt,
     },
+    aiStatusComment: { flex: 1, minWidth: 140, lineHeight: 18, fontSize: 13, fontWeight: "700", color: c.textSub },
     
-    // 확장 영역
-    aiExpandedContent: {
-      paddingHorizontal: 20,
-      paddingBottom: 24,
-      backgroundColor: aiPanelBg,
-    },
-    divider: {
-      height: 1,
-      backgroundColor: tint(c.textOnBrand, 0.12, c.borderDefault),
-      marginBottom: 20,
-      marginTop: 0,
-    },
+    aiBlock: { gap: 6, backgroundColor: c.bgSurface, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: c.borderDefault },
+    aiBlockHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+    aiGaugeTrack: { height: 8, borderRadius: 999, backgroundColor: c.bgSurfaceAlt, overflow: "hidden", marginVertical: 4 },
+    aiGaugeFill: { height: "100%", borderRadius: 999 },
+    aiGaugeText: { color: c.textMuted, textAlign: "right" },
+    aiPriceValue: { marginTop: 2 },
     
-    // 상세 정보 카드 (검은 배경 위 더 밝은 영역)
-    detailCard: {
-      backgroundColor: aiSurface,
-      borderRadius: 16,
-      padding: 16,
-      marginBottom: 12,
-      gap: 12,
-      borderWidth: 1,
-      borderColor: tint(c.textOnBrand, 0.08, c.borderDefault),
-    },
-    detailRow: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-    },
-    
-    // 게이지 UI
-    gaugeTrack: {
-      height: 8,
-      backgroundColor: tint(c.textOnBrand, 0.2, c.bgSurface),
-      borderRadius: 4,
-      overflow: "hidden",
-      marginTop: 8,
-      marginBottom: 4,
-    },
-    gaugeFill: {
-      height: "100%",
-      borderRadius: 4,
-    },
-    
-    // 메시지 박스
-    msgBox: {
-      flexDirection: "row",
-      gap: 12,
-      alignItems: "flex-start",
-    },
-    msgText: {
-      flex: 1,
-      fontSize: 13,
-      fontWeight: "600",
-      color: tint(c.textOnBrand, 0.92, c.textOnBrand),
-      lineHeight: 18,
-    },
-    aiMetaLabel: { color: tint(c.textOnBrand, 0.8, c.textOnBrand) },
-    aiMetaValue: { color: aiTextFaint, textAlign: "right" },
-    aiMarketValue: { color: c.textOnBrand },
-    aiChevron: { color: aiTextFaint },
-
-    // Modal Styles (유지)
+    // Modal Styles
     modalOverlay: { flex: 1, backgroundColor: tint(c.textMain, 0.5, c.textMain), justifyContent: "flex-end" },
     modalContent: { backgroundColor: c.bgSurface, borderTopLeftRadius: radiusCard, borderTopRightRadius: radiusCard, padding: spacing * 4, paddingBottom: spacing * 8 },
     modalItem: { paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: c.borderDefault, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
@@ -249,149 +164,86 @@ export function QuoteCreateStep3() {
 
   const [modalMode, setModalMode] = useState<"TON" | "TYPE" | null>(null);
   const [isBudgetFocused, setIsBudgetFocused] = useState(false);
-  const [isAiExpanded, setIsAiExpanded] = useState(false);
 
   useEffect(() => {
-    if (Platform.OS === "android") {
-      (UIManager as any)?.setLayoutAnimationEnabledExperimental?.(true);
-    }
+    initLayoutAnimationForAndroid();
   }, []);
 
-  // ... (analysis 로직 유지) ...
+  // 💡 1. 요금/상태 산출 로직을 헬퍼 함수로 단순화
   const analysis = useMemo(() => {
-    const cargoList = draft?.cargoList ?? [];
-    const totalWeight = cargoList.reduce((acc, c) => {
-      const w = parseInt((c as any)?.weight ?? "0", 10);
-      return acc + (Number.isFinite(w) ? w : 0);
-    }, 0);
-
+    // computeQuotePricing 내부에서 9단계 로직을 처리하여 반환한다고 가정
+    const pricing = computeQuotePricing(draft);
+    
     const vehicles = VEHICLE_DATA ?? [];
-    const lastIdx = Math.max(vehicles.length - 1, 0);
-    const tonIdx = clamp(draft?.tonIdx ?? 0, 0, lastIdx);
+    const recommendedTonIdxRaw = vehicles.findIndex((v: any) => pricing.totalWeight <= safeNumber(v?.limit, 0));
+    const recommendedTonIdx = recommendedTonIdxRaw >= 0 ? recommendedTonIdxRaw : Math.max(vehicles.length - 1, 0);
 
-    const vehicleInfo = vehicles?.[tonIdx];
-    const types = vehicleInfo?.types ?? [];
-    const typeLastIdx = Math.max(types.length - 1, 0);
-    const typeIdx = clamp(draft?.typeIdx ?? 0, 0, typeLastIdx);
-    const typeInfo = types?.[typeIdx];
-
-    const limit = safeNumber((vehicleInfo as any)?.limit, 0);
-    const loadFactor = limit > 0 ? Math.min((totalWeight / limit) * 100, 100) : 0;
-    const isOverloaded = limit > 0 && totalWeight > limit;
-
-    const recommendedTonIdxRaw = vehicles.findIndex((v: any) => totalWeight <= safeNumber(v?.limit, 0));
-    const recommendedTonIdx = recommendedTonIdxRaw >= 0 ? recommendedTonIdxRaw : lastIdx;
-
-    const basePrice0 = safeNumber((typeInfo as any)?.p, 0);
-    const basePrice = draft?.isPool ? Math.floor(basePrice0 * 0.8) : basePrice0;
-    const frozenPrice = draft?.isFrozen ? 30000 : 0;
-
-    const selectedOpts = draft?.selectedOpts ?? [];
-    const optionCost = selectedOpts.reduce((acc, id) => {
-      const opt = (EXTRA_OPTIONS ?? []).find((o: any) => o?.id === id);
-      return acc + safeNumber((opt as any)?.price, 0);
-    }, 0);
-
-    const total = basePrice + frozenPrice + optionCost;
-    const minPrice = Math.floor(total * 0.9);
-    const avgPrice = total;
-    const maxPrice = Math.floor(total * 1.15);
-
-    const desired = parseInt(digitsOnly(draft?.budget ?? ""), 10) || 0;
-    const hardLimit = Math.floor(minPrice * 0.85);
-    const isLowBudget = desired > 0 && desired < hardLimit;
-
+    const loadFactor = pricing.limit > 0 ? Math.min((pricing.totalWeight / pricing.limit) * 100, 100) : 0;
+    const isOverloaded = pricing.limit > 0 && pricing.totalWeight > pricing.limit;
     const level: LoadLevel = loadFactor >= 90 ? "danger" : loadFactor >= 70 ? "warn" : "safe";
 
+    const desired = parseInt(digitsOnly(draft?.budget ?? ""), 10) || 0;
+    const isLowBudget = desired > 0 && desired < Math.floor(pricing.minPrice * 0.85);
+
     return {
-      tonIdx, typeIdx, totalWeight, limit, loadFactor, level, isOverloaded, recommendedTonIdx,
-      minPrice, avgPrice, maxPrice, desired, isLowBudget,
-      vehicleName: (vehicleInfo as any)?.name ?? "미선택",
-      typeName: (typeInfo as any)?.n ?? "미선택",
+      ...pricing,
+      tonIdx: draft?.tonIdx ?? 0,
+      typeIdx: draft?.typeIdx ?? 0,
+      avgPrice: pricing.finalPrice,
+      loadFactor,
+      level,
+      isOverloaded,
+      recommendedTonIdx,
+      desired,
+      isLowBudget,
       hasVehicleData: vehicles.length > 0,
     };
   }, [draft]);
 
+  // 💡 2. 색상 및 텍스트 매핑 최적화
   const infoColor = (theme.colors as any)?.semanticInfo ?? theme.colors.brandPrimary;
   const warnColor = (theme.colors as any)?.semanticWarning ?? theme.colors.brandPrimary;
   const dangerColor = (theme.colors as any)?.semanticDanger ?? theme.colors.brandPrimary;
   const successColor = (theme.colors as any)?.semanticSuccess ?? theme.colors.brandAccent;
 
-  const loadColor = analysis.level === "danger" ? dangerColor : analysis.level === "warn" ? warnColor : infoColor;
-  const levelLabel = analysis.level === "danger" ? "적재 위험" : analysis.level === "warn" ? "무거움" : "적재 안전";
+  const hasPriceRange = safeNumber(analysis?.minPrice, 0) > 0 && safeNumber(analysis?.maxPrice, 0) > 0;
+  const isAiLoading = !analysis?.hasVehicleData || !hasPriceRange;
 
-  const bottomStatus = analysis.isOverloaded ? "danger" : analysis.isLowBudget ? "warn" : "ok";
-  const statusIcon = bottomStatus === "ok" ? "checkmark-circle" : bottomStatus === "danger" ? "alert-circle" : "warning";
-  const statusColor = bottomStatus === "danger" ? dangerColor : bottomStatus === "warn" ? warnColor : successColor;
-  
-  // 텍스트 로직 개선: 짧은 타이틀 + 긴 설명 분리
+  const loadPercent = clamp(safeNumber(analysis?.loadFactor, 0), 0, 100);
+  const loadColor = isAiLoading ? infoColor : analysis.level === "danger" ? dangerColor : analysis.level === "warn" ? warnColor : infoColor;
+  const levelLabel = isAiLoading ? "분석 중" : analysis.level === "danger" ? "적재 초과" : analysis.level === "warn" ? "무거움" : "적재 안전";
+
   const aiContent = useMemo(() => {
-    // 1) 예산 미입력 상태
-    if (!analysis.desired) {
-      return {
-        label: "AI 예상 시세",
-        title: `${formatKrw(analysis.minPrice)} ~ ${formatKrw(analysis.maxPrice)}`, // 메인 타이틀
-        desc: "희망 운임을 입력하면 적정성을 진단해드립니다.", // 상세 설명
-        statusText: "입력 대기",
-        statusColor: tint(theme.colors.textOnBrand, 0.55, theme.colors.textOnBrand),
-      };
-    }
-
-    // 2) 예산 입력 상태 - 진단 결과
-    if (analysis.isOverloaded) {
-      return {
-        label: "AI 안전 진단",
-        title: "배차 불가 (중량 초과)", // 짧고 강렬하게
-        desc: `현재 차량의 적재 한도(${analysis.limit}kg)를 초과했습니다. 더 큰 톤수의 차량을 선택해주세요.`,
-        statusText: "위험",
-        statusColor: dangerColor,
-      };
-    }
+    if (isAiLoading) return { status: "loading" as AiStatus, statusText: "분석 중", comment: "입력값을 기반으로 요금을 계산합니다." };
+    if (analysis.isOverloaded) return { status: "danger" as AiStatus, statusText: "위험", comment: `차량 한도(${formatKg(analysis.limit)})를 초과했습니다. 큰 차를 선택하세요.` };
+    if (analysis.isLowBudget) return { status: "warn" as AiStatus, statusText: "확률 낮음", comment: "운임이 시세보다 낮아 배차가 늦어질 수 있습니다." };
+    if (!analysis.desired) return { status: "idle" as AiStatus, statusText: "입력 대기", comment: "희망 운임을 입력하면 적정성을 진단해드립니다." };
     
-    if (analysis.isLowBudget) {
-      return {
-        label: "AI 요금 진단",
-        title: "배차 지연 예상",
-        desc: "입력하신 운임이 시장 평균보다 낮아 배차가 늦어질 수 있습니다. '제안가' 기능을 사용해보세요.",
-        statusText: "확률 낮음",
-        statusColor: warnColor,
-      };
-    }
+    return { status: "ok" as AiStatus, statusText: "조건 좋음", comment: "빠른 배차가 예상되는 좋은 조건입니다." };
+  }, [analysis, isAiLoading]);
 
-    // 정상
-    return {
-      label: "AI 종합 진단",
-      title: "빠른 배차 예상",
-      desc: "적재량과 예산이 아주 적절합니다. 기사님들이 선호하는 주문 조건입니다.",
-      statusText: "조건 좋음",
-      statusColor: successColor,
-    };
-  }, [analysis, dangerColor, warnColor, successColor, theme.colors.textOnBrand]);
+  const aiStatusIcon: keyof typeof Ionicons.glyphMap =
+    aiContent.status === "ok" ? "checkmark-circle" : aiContent.status === "danger" ? "alert-circle" : aiContent.status === "warn" ? "warning" : aiContent.status === "idle" ? "pause-circle" : "hourglass-outline";
 
-  const aiDockBottom = safeNumber(theme.layout.spacing.base, 16);
-  
+  const aiStatusColor = aiContent.status === "danger" ? dangerColor : aiContent.status === "warn" ? warnColor : aiContent.status === "ok" ? successColor : theme.colors.textMuted;
+
+  // 액션 핸들러
   const animateAndPatch = (payload: Record<string, any>) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     patchDraft(payload as any);
   };
-
   const handleBudgetChange = (v: string) => patchDraft({ budget: digitsOnly(v) } as any);
   const handleAutoFill = (amount: number) => animateAndPatch({ budget: String(Math.max(0, safeNumber(amount, 0))) });
+  const budgetDisplay = formatDigitsWithComma(draft?.budget ?? "");
 
-  const onPressTon = () => (analysis.hasVehicleData ? setModalMode("TON") : undefined);
-  const onPressType = () => (analysis.hasVehicleData ? setModalMode("TYPE") : undefined);
-
-  const toggleAiSheet = () => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setIsAiExpanded((prev) => !prev);
-  };
-
-  const contentPadBottom = aiDockBottom + (isAiExpanded ? 300 : 100);
+  const isFrozen = draft?.isFrozen === true;
+  const isPool = draft?.isPool === true;
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: contentPadBottom }]}>
-        {/* ... (기존 상단 UI 컴포넌트들: 차량, 옵션, 예산 카드 유지) ... */}
+      <ScrollView {...QUOTE_SCROLL_VIEW_PROPS} contentContainerStyle={styles.scrollContent}>
+        
+        {/* 1. 차량 및 조건 카드 */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <Ionicons name="bus-outline" size={20} color={theme.colors.brandPrimary} />
@@ -399,14 +251,14 @@ export function QuoteCreateStep3() {
           </View>
           <AppText size={13} weight="800" color="textMuted" style={styles.sectionLabel}>차량 선택</AppText>
           <View style={styles.vehicleRow}>
-            <Pressable style={({ pressed }) => [styles.vehicleBtn, pressed && QUOTE_PRESS_EFFECT]} onPress={onPressTon}>
+            <Pressable style={({ pressed }) => [styles.vehicleBtn, pressed && QUOTE_PRESS_EFFECT]} onPress={() => analysis.hasVehicleData && setModalMode("TON")}>
               <AppText size={11} weight="700" color="textMuted" style={styles.vehicleLabel}>톤수</AppText>
               <View style={styles.vehicleValueRow}>
                 <AppText size={15} weight="800" color="textMain">{analysis.vehicleName}</AppText>
                 <Ionicons name="chevron-down" size={14} color={theme.colors.textMuted} />
               </View>
             </Pressable>
-            <Pressable style={({ pressed }) => [styles.vehicleBtn, pressed && QUOTE_PRESS_EFFECT]} onPress={onPressType}>
+            <Pressable style={({ pressed }) => [styles.vehicleBtn, pressed && QUOTE_PRESS_EFFECT]} onPress={() => analysis.hasVehicleData && setModalMode("TYPE")}>
               <AppText size={11} weight="700" color="textMuted" style={styles.vehicleLabel}>차종</AppText>
               <View style={styles.vehicleValueRow}>
                 <AppText size={15} weight="800" color="textMain">{analysis.typeName}</AppText>
@@ -418,13 +270,13 @@ export function QuoteCreateStep3() {
           <AppText size={13} weight="800" color="textMuted" style={styles.sectionLabel}>온도</AppText>
           <View style={styles.segGroup}>
             <View style={styles.segRow}>
-              <Pressable style={({ pressed }) => [styles.segItem, !draft?.isFrozen && styles.segItemActive, pressed && QUOTE_PRESS_EFFECT]} onPress={() => patchDraft({ isFrozen: false } as any)}>
-                 <AppText size={13} weight="800" color={!draft?.isFrozen ? "brandPrimary" : "textMuted"} style={[styles.segText, !draft?.isFrozen && styles.segTextActive]}>상온</AppText>
+              <Pressable style={({ pressed }) => [styles.segItem, !isFrozen && styles.segItemActive, pressed && QUOTE_PRESS_EFFECT]} onPress={() => animateAndPatch({ isFrozen: false })}>
+                 <AppText size={13} weight="800" color={!isFrozen ? "brandPrimary" : "textMuted"} style={[styles.segText, !isFrozen && styles.segTextActive]}>상온</AppText>
               </Pressable>
-              <Pressable style={({ pressed }) => [styles.segItem, !!draft?.isFrozen && styles.segItemActive, pressed && QUOTE_PRESS_EFFECT]} onPress={() => patchDraft({ isFrozen: true } as any)}>
+              <Pressable style={({ pressed }) => [styles.segItem, isFrozen && styles.segItemActive, pressed && QUOTE_PRESS_EFFECT]} onPress={() => animateAndPatch({ isFrozen: true })}>
                 <View style={styles.segInner}>
-                  <AppText size={13} weight="800" color={draft?.isFrozen ? "brandPrimary" : "textMuted"} style={[styles.segText, !!draft?.isFrozen && styles.segTextActive]}>냉장/냉동</AppText>
-                  <View style={[styles.segBadge, !!draft?.isFrozen && styles.segBadgeActive]}><AppText size={10} weight="900" color={draft?.isFrozen ? "brandPrimary" : "textMuted"} style={[styles.segBadgeText, !!draft?.isFrozen && styles.segBadgeTextActive]}>+3만</AppText></View>
+                  <AppText size={13} weight="800" color={isFrozen ? "brandPrimary" : "textMuted"} style={[styles.segText, isFrozen && styles.segTextActive]}>냉장/냉동</AppText>
+                  <View style={[styles.segBadge, isFrozen && styles.segBadgeActive]}><AppText size={10} weight="900" color={isFrozen ? "brandPrimary" : "textMuted"} style={[styles.segBadgeText, isFrozen && styles.segBadgeTextActive]}>+3만</AppText></View>
                 </View>
               </Pressable>
             </View>
@@ -433,19 +285,20 @@ export function QuoteCreateStep3() {
           <AppText size={13} weight="800" color="textMuted" style={styles.sectionLabel}>배송 방식</AppText>
           <View style={styles.segGroup}>
              <View style={styles.segRow}>
-              <Pressable style={({ pressed }) => [styles.segItem, !draft?.isPool && styles.segItemActive, pressed && QUOTE_PRESS_EFFECT]} onPress={() => patchDraft({ isPool: false } as any)}>
-                 <AppText size={13} weight="800" color={!draft?.isPool ? "brandPrimary" : "textMuted"} style={[styles.segText, !draft?.isPool && styles.segTextActive]}>독차</AppText>
+              <Pressable style={({ pressed }) => [styles.segItem, !isPool && styles.segItemActive, pressed && QUOTE_PRESS_EFFECT]} onPress={() => animateAndPatch({ isPool: false })}>
+                 <AppText size={13} weight="800" color={!isPool ? "brandPrimary" : "textMuted"} style={[styles.segText, !isPool && styles.segTextActive]}>독차</AppText>
               </Pressable>
-              <Pressable style={({ pressed }) => [styles.segItem, !!draft?.isPool && styles.segItemActive, pressed && QUOTE_PRESS_EFFECT]} onPress={() => patchDraft({ isPool: true } as any)}>
+              <Pressable style={({ pressed }) => [styles.segItem, isPool && styles.segItemActive, pressed && QUOTE_PRESS_EFFECT]} onPress={() => animateAndPatch({ isPool: true })}>
                 <View style={styles.segInner}>
-                  <AppText size={13} weight="800" color={draft?.isPool ? "brandPrimary" : "textMuted"} style={[styles.segText, !!draft?.isPool && styles.segTextActive]}>알뜰 배송</AppText>
-                  <View style={[styles.segBadge, !!draft?.isPool && styles.segBadgeActive]}><AppText size={10} weight="900" color={draft?.isPool ? "brandPrimary" : "textMuted"} style={[styles.segBadgeText, !!draft?.isPool && styles.segBadgeTextActive]}>-20%</AppText></View>
+                  <AppText size={13} weight="800" color={isPool ? "brandPrimary" : "textMuted"} style={[styles.segText, isPool && styles.segTextActive]}>알뜰 배송</AppText>
+                  <View style={[styles.segBadge, isPool && styles.segBadgeActive]}><AppText size={10} weight="900" color={isPool ? "brandPrimary" : "textMuted"} style={[styles.segBadgeText, isPool && styles.segBadgeTextActive]}>-30%</AppText></View>
                 </View>
               </Pressable>
             </View>
           </View>
         </View>
 
+        {/* 2. 추가 옵션 카드 */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <Ionicons name="shield-checkmark-outline" size={20} color={theme.colors.brandPrimary} />
@@ -454,18 +307,16 @@ export function QuoteCreateStep3() {
           <View style={styles.optionContainer}>
             {(EXTRA_OPTIONS ?? []).map((opt: any) => {
               const id = String(opt?.id ?? "");
-              const title = String(opt?.title ?? "옵션");
-              const price = safeNumber(opt?.price, 0);
               const active = (draft?.selectedOpts ?? []).includes(id);
               const iconName = (OPTION_ICONS[id] ?? "options-outline") as keyof typeof Ionicons.glyphMap;
               return (
                 <Pressable key={id} onPress={() => (id ? toggleOption(id) : undefined)} style={({ pressed }) => [styles.optionChip, active && styles.optionChipActive, pressed && QUOTE_PRESS_EFFECT]}>
                   <View style={styles.optionLeft}>
                     <Ionicons name={iconName} size={14} color={active ? theme.colors.brandPrimary : theme.colors.textMuted} />
-                    <AppText size={12} weight="800" color={active ? "brandPrimary" : "textSub"} style={active ? styles.optionTitleActive : styles.optionTitle} numberOfLines={1}>{title}</AppText>
+                    <AppText size={12} weight="800" color={active ? "brandPrimary" : "textSub"} style={active ? styles.optionTitleActive : styles.optionTitle} numberOfLines={1}>{opt?.title}</AppText>
                   </View>
                   <View style={styles.optionRight}>
-                    <AppText size={10} weight="900" color={active ? "brandPrimary" : "textMuted"} style={active ? styles.optionPriceActive : styles.optionPrice}>+{formatKrw(price)}</AppText>
+                    <AppText size={10} weight="900" color={active ? "brandPrimary" : "textMuted"} style={active ? styles.optionPriceActive : styles.optionPrice}>+{formatKrw(safeNumber(opt?.price, 0))}</AppText>
                     <Ionicons name="checkmark-circle" size={14} color={theme.colors.brandPrimary} style={active ? styles.optionCheck : styles.optionCheckHidden} />
                   </View>
                 </Pressable>
@@ -474,6 +325,7 @@ export function QuoteCreateStep3() {
           </View>
         </View>
 
+        {/* 3. 희망 운임 카드 */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <Ionicons name="wallet-outline" size={20} color={theme.colors.brandPrimary} />
@@ -486,7 +338,7 @@ export function QuoteCreateStep3() {
                 placeholder="금액 입력 (선택)"
                 placeholderTextColor={theme.colors.textMuted}
                 keyboardType="numeric"
-                value={draft?.budget ?? ""}
+                value={budgetDisplay}
                 onChangeText={handleBudgetChange}
                 onFocus={() => setIsBudgetFocused(true)}
                 onBlur={() => setIsBudgetFocused(false)}
@@ -505,7 +357,7 @@ export function QuoteCreateStep3() {
           </View>
           <View style={styles.suggestionRow}>
             <Ionicons name="sparkles-outline" size={12} color={theme.colors.brandPrimary} />
-            <AppText size={11} weight="900" color="textMuted" style={styles.suggestionLabel}>원터치 제안:</AppText>
+            <AppText size={11} weight="900" color="textMuted" style={styles.suggestionLabel}>AI 제안가:</AppText>
             <Pressable style={({ pressed }) => [styles.suggestionChip, pressed && QUOTE_PRESS_EFFECT]} onPress={() => handleAutoFill(analysis.minPrice)}>
               <AppText size={12} weight="900" color="brandPrimary" style={styles.suggestionText}>최저가 입력</AppText>
             </Pressable>
@@ -514,79 +366,48 @@ export function QuoteCreateStep3() {
             </Pressable>
           </View>
         </View>
-      </ScrollView>
 
-      {/* [NEW] 개선된 AI 바텀 시트 */}
-      <View style={[styles.aiSheetContainer, { bottom: aiDockBottom }]}>
-        {/* 헤더: 항상 노출되는 영역 */}
-        <Pressable 
-          onPress={toggleAiSheet} 
-          style={({ pressed }) => [styles.aiHeaderBar, pressed && { opacity: 0.9 }]}
-        >
-          {/* 왼쪽: 타이틀 */}
-          <View style={styles.aiInfoLeft}>
-            <AppText style={styles.aiLabelSmall}>{aiContent.label}</AppText>
-            <AppText style={styles.aiTitleBig} numberOfLines={1}>{aiContent.title}</AppText>
+        {/* 💡 4. AI 인라인 진단 리포트 (스크롤 마지막 자연스러운 배치) */}
+        <View style={styles.aiInlineCard}>
+          <View style={styles.aiHeaderRow}>
+            <Ionicons name="sparkles" size={20} color={theme.colors.brandPrimary} />
+            <AppText size={16} weight="800" color="textMain" style={styles.aiTitle}>AI 종합 진단 리포트</AppText>
           </View>
 
-          {/* 오른쪽: 상태 뱃지 + 화살표 */}
-          <View style={styles.aiHeaderRight}>
-            <View style={styles.aiStatusBadge}>
-              <Ionicons name={statusIcon as any} size={14} color={aiContent.statusColor} />
-              <AppText size={12} weight="800" style={{ color: aiContent.statusColor }}>
-                {aiContent.statusText}
+          <View style={styles.aiStatusLine}>
+            <View style={[styles.aiStatusBadge, { borderColor: tint(aiStatusColor, 0.35, theme.colors.borderDefault), backgroundColor: tint(aiStatusColor, 0.12, theme.colors.bgSurface) }]}>
+              <Ionicons name={aiStatusIcon} size={14} color={aiStatusColor} />
+              <AppText size={12} weight="900" style={{ color: aiStatusColor }}>{aiContent.statusText}</AppText>
+            </View>
+            <AppText style={styles.aiStatusComment}>{aiContent.comment}</AppText>
+          </View>
+
+          <View style={styles.aiBlock}>
+            <View style={styles.aiBlockHeader}>
+              <AppText size={12} weight="800" color="textMuted">적재량 분석</AppText>
+              <AppText size={12} weight="900" style={{ color: loadColor }}>{levelLabel}</AppText>
+            </View>
+            <View style={styles.aiGaugeTrack}>
+              <View style={[styles.aiGaugeFill, { width: `${loadPercent}%`, backgroundColor: loadColor }]} />
+            </View>
+            <AppText size={11} weight="700" style={styles.aiGaugeText}>
+              {isAiLoading ? "계산 중..." : `${formatKg(analysis.totalWeight)} / 한도 ${formatKg(analysis.limit)}`}
+            </AppText>
+          </View>
+
+          <View style={styles.aiBlock}>
+            <View style={styles.aiBlockHeader}>
+              <AppText size={12} weight="800" color="textMuted">AI 예상 적정 시세</AppText>
+              <AppText size={15} weight="900" color="textMain" style={styles.aiPriceValue}>
+                {isAiLoading ? "분석 중" : hasPriceRange ? `${formatKrw(analysis.minPrice)} ~ ${formatKrw(analysis.maxPrice)}` : "-"}
               </AppText>
             </View>
-            <Ionicons name={isAiExpanded ? "chevron-down" : "chevron-up"} size={20} style={styles.aiChevron} />
           </View>
-        </Pressable>
+        </View>
 
-        {/* 확장 영역: 상세 리포트 */}
-        {isAiExpanded && (
-          <View style={styles.aiExpandedContent}>
-            <View style={styles.divider} />
-
-            {/* 상세 정보 카드 */}
-            <View style={styles.detailCard}>
-              {/* 적재율 게이지 */}
-              <View>
-                <View style={styles.detailRow}>
-                   <AppText size={12} weight="800" style={styles.aiMetaLabel}>적재량 분석</AppText>
-                   <AppText size={12} weight="900" style={{ color: loadColor }}>{levelLabel}</AppText>
-                </View>
-
-                <View style={styles.gaugeTrack}>
-                   <View style={[styles.gaugeFill, { width: `${clamp(analysis.loadFactor, 0, 100)}%`, backgroundColor: loadColor }]} />
-                </View>
-                
-                <AppText size={11} weight="600" style={styles.aiMetaValue}>
-                   {analysis.totalWeight}kg / {analysis.limit}kg
-                </AppText>
-              </View>
-
-              {/* 예산 입력 시: 시세 정보 참고용 노출 */}
-              {analysis.desired > 0 && (
-                <View style={[styles.detailRow, { marginTop: 8 }]}>
-                   <AppText size={12} weight="800" style={styles.aiMetaLabel}>AI 예상 시세</AppText>
-                   <AppText size={13} weight="900" style={styles.aiMarketValue}>
-                      {formatKrw(analysis.minPrice)} ~ {formatKrw(analysis.maxPrice)}
-                   </AppText>
-                </View>
-              )}
-            </View>
-
-            {/* AI 코멘트 박스 */}
-            <View style={styles.msgBox}>
-               <Ionicons name="chatbubble-ellipses-outline" size={20} color={aiContent.statusColor} style={{ marginTop: 2 }} />
-               <AppText style={styles.msgText}>
-                 {aiContent.desc}
-               </AppText>
-            </View>
-          </View>
-        )}
-      </View>
+      </ScrollView>
       
-      {/* ... (모달 코드 유지) ... */}
+      {/* --- 차종 선택 모달 --- */}
       <Modal visible={modalMode !== null} transparent animationType="fade" onRequestClose={() => setModalMode(null)}>
         <Pressable style={styles.modalOverlay} onPress={() => setModalMode(null)}>
           <View style={styles.modalContent}>
