@@ -1,24 +1,24 @@
 import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import { Redirect, Stack, useRouter, useSegments } from "expo-router";
-import { View, ActivityIndicator, StyleSheet, type ViewStyle } from "react-native";
+import { ActivityIndicator, StyleSheet, View, type ViewStyle } from "react-native";
+
 import { useAuth } from "@/features/auth/model/useAuth";
 import { safeString } from "@/shared/theme/colorUtils";
 import { useAppTheme } from "@/shared/theme/useAppTheme";
 import { BottomTabBar } from "@/widgets/layout/BottomTabBar";
 
-type BottomTabKey = "home" | "order" | "drive" | "settlement" | "profile";
+type BottomTabKey = "home" | "quotes" | "run" | "settlement" | "profile";
 
 function shouldHideBottomBar(segments: readonly string[] | undefined | null): boolean {
   const segs = Array.isArray(segments) ? segments : [];
-  const isVerification = segs.includes("verification");
-  return isVerification;
+  return segs.includes("verification");
 }
 
 function pickActiveKey(segments: readonly string[] | undefined | null): BottomTabKey {
   const segs = Array.isArray(segments) ? segments : [];
 
-  if (segs.includes("order")) return "order";
-  if (segs.includes("drive")) return "drive";
+  if (segs.includes("quotes")) return "quotes";
+  if (segs.includes("run")) return "run";
   if (segs.includes("settlement")) return "settlement";
   if (segs.includes("profile")) return "profile";
   if (segs.includes("home")) return "home";
@@ -27,8 +27,8 @@ function pickActiveKey(segments: readonly string[] | undefined | null): BottomTa
     .filter((s) => safeString(s).trim() && !safeString(s).startsWith("("))
     .slice(-1)[0];
 
-  if (last === "order") return "order";
-  if (last === "drive") return "drive";
+  if (last === "quotes") return "quotes";
+  if (last === "run") return "run";
   if (last === "settlement") return "settlement";
   if (last === "profile") return "profile";
   return "home";
@@ -36,8 +36,8 @@ function pickActiveKey(segments: readonly string[] | undefined | null): BottomTa
 
 function hrefForKey(key: BottomTabKey): `/(driver)/${string}` {
   if (key === "home") return "/(driver)/home";
-  if (key === "order") return "/(driver)/order";
-  if (key === "drive") return "/(driver)/drive";
+  if (key === "quotes") return "/(driver)/quotes";
+  if (key === "run") return "/(driver)/run/current";
   if (key === "settlement") return "/(driver)/settlement";
   return "/(driver)/profile";
 }
@@ -72,7 +72,10 @@ export default function DriverLayout() {
 
   const activeKey = useMemo(() => pickActiveKey(segments), [segments]);
   const requiresVerification = auth.pendingVerificationRole === "driver";
-  const hideBottomBar = useMemo(() => shouldHideBottomBar(segments) || requiresVerification, [requiresVerification, segments]);
+  const hideBottomBar = useMemo(
+    () => shouldHideBottomBar(segments) || requiresVerification,
+    [requiresVerification, segments]
+  );
 
   useEffect(() => {
     return () => {
@@ -88,8 +91,7 @@ export default function DriverLayout() {
       if (tabNavLockedRef.current) return;
 
       tabNavLockedRef.current = true;
-      const next = hrefForKey(key);
-      router?.replace?.(next);
+      router.replace(hrefForKey(key));
 
       if (tabNavUnlockTimerRef.current) {
         clearTimeout(tabNavUnlockTimerRef.current);
@@ -128,7 +130,6 @@ export default function DriverLayout() {
 
   const isVerificationRoute = segments.includes("verification");
   const isHomeRoute = segments.includes("home");
-
   if (requiresVerification && !isVerificationRoute && !isHomeRoute) {
     return <Redirect href="/(driver)/verification" />;
   }
@@ -145,19 +146,19 @@ export default function DriverLayout() {
       </View>
 
       {!hideBottomBar ? (
-      <View style={styles.bottomWrap}>
-        <BottomTabBar
-          activeKey={activeKey}
-          onChange={onChangeTab}
-          items={[
-            { key: "home", label: "홈", iconActive: "home", iconInactive: "home-outline" },
-            { key: "order", label: "오더", iconActive: "list", iconInactive: "list-outline" },
-            { key: "drive", label: "운행", iconActive: "car", iconInactive: "car-outline" },
-            { key: "settlement", label: "정산", iconActive: "wallet", iconInactive: "wallet-outline" },
-            { key: "profile", label: "내정보", iconActive: "person", iconInactive: "person-outline" },
-          ]}
-        />
-      </View>
+        <View style={styles.bottomWrap}>
+          <BottomTabBar
+            activeKey={activeKey}
+            onChange={onChangeTab}
+            items={[
+              { key: "home", label: "Home", iconActive: "home", iconInactive: "home-outline" },
+              { key: "quotes", label: "Quotes", iconActive: "list", iconInactive: "list-outline" },
+              { key: "run", label: "Run", iconActive: "car", iconInactive: "car-outline" },
+              { key: "settlement", label: "Settlement", iconActive: "wallet", iconInactive: "wallet-outline" },
+              { key: "profile", label: "Profile", iconActive: "person", iconInactive: "person-outline" },
+            ]}
+          />
+        </View>
       ) : null}
     </View>
   );

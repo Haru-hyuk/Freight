@@ -11,7 +11,6 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/features/auth/model/useAuth";
 
 import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
@@ -20,6 +19,7 @@ import { AppButton } from "@/shared/ui/kit/AppButton";
 import { AppCard } from "@/shared/ui/kit/AppCard";
 import { AppText } from "@/shared/ui/kit/AppText";
 import { PageScaffold } from "@/widgets/layout/PageScaffold";
+import { RequestQuoteFab } from "@/widgets/shipper/RequestQuoteFab";
 
 // --- Mock Data ---
 const RECENT_ROUTES = [
@@ -40,7 +40,6 @@ const RECENT_ROUTES = [
 ];
 
 const VIEW_PRESSED: ViewStyle = { opacity: 0.85, transform: [{ scale: 0.98 }] };
-const FAB_PRESSED: ViewStyle = { transform: [{ scale: 0.95 }] };
 
 const useStyles = createThemedStyles((theme) => {
   const spacing = safeNumber(theme?.layout?.spacing?.base, 4);
@@ -53,13 +52,13 @@ const useStyles = createThemedStyles((theme) => {
   const cMuted = safeString(theme?.colors?.textMuted, "#64748B");
   const cBorder = safeString(theme?.colors?.borderDefault, "#E2E8F0");
   const cSurface = safeString(theme?.colors?.bgSurface, "#FFFFFF");
-  const cSurfaceAlt = safeString(theme?.colors?.bgSurfaceAlt, "#F5F7FA");
+  const cSurfaceAlt = safeString(theme?.colors?.bgSurfaceAlt, "#F8FAFC");
   const cPrimary = safeString(theme?.colors?.brandPrimary, "#FF6A00");
-  const cPressed = safeString(theme?.colors?.stateOverlayPressed, tint(cText, 0.06, cSurfaceAlt));
+  const cPressed = safeString(theme?.colors?.stateOverlayPressed, tint(cText, 0.04, cSurface));
 
-  const cInputBg = tint(cBorder, 0.2, cSurfaceAlt);
-  const cGuideDeco = tint(cPrimary, 0.14, cSurfaceAlt);
-  const cConnector = tint(cBorder, 0.95, cBorder);
+  const cInputBg = tint(cText, 0.03, cSurface);
+  const cGuideDeco = tint(cPrimary, 0.09, cSurfaceAlt);
+  const cConnector = tint(cBorder, 0.72, cBorder);
 
   return StyleSheet.create({
     logoText: {
@@ -175,7 +174,7 @@ const useStyles = createThemedStyles((theme) => {
     },
     recentItemPressed: {
       backgroundColor: cPressed,
-      borderColor: cPrimary,
+      borderColor: tint(cPrimary, 0.28, cBorder),
     },
     recentItemContent: {
       flexDirection: "row",
@@ -232,7 +231,7 @@ const useStyles = createThemedStyles((theme) => {
       width: buttonMd - 4,
       height: buttonMd - 4,
       borderRadius: (buttonMd - 4) / 2,
-      backgroundColor: cInputBg,
+      backgroundColor: tint(cPrimary, 0.08, cSurface),
       alignItems: "center",
       justifyContent: "center",
       alignSelf: "flex-end",
@@ -272,13 +271,6 @@ const useStyles = createThemedStyles((theme) => {
     verificationModalActions: {
       gap: spacing * 2,
     },
-    fab: {
-      width: 56,
-      height: 56,
-      borderRadius: 20,
-      alignItems: "center",
-      justifyContent: "center",
-    },
   });
 });
 
@@ -287,7 +279,6 @@ export function ShipperHomePage() {
   const theme = useAppTheme();
   const styles = useStyles();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const isNavigating = useRef(false);
   const isVerificationBlocked = auth.pendingVerificationRole === "shipper";
 
@@ -297,8 +288,9 @@ export function ShipperHomePage() {
   const cMuted = safeString(theme?.colors?.textMuted, "#64748B");
   const cPrimary = safeString(theme?.colors?.brandPrimary, "#FF6A00");
   const cSurface = safeString(theme?.colors?.bgSurface, "#FFFFFF");
-  const cSurfaceAlt = safeString(theme?.colors?.bgSurfaceAlt, "#F5F7FA");
+  const cSurfaceAlt = safeString(theme?.colors?.bgSurfaceAlt, "#F8FAFC");
   const cOnBrand = safeString(theme?.colors?.textOnBrand, "#FFFFFF");
+  const cPrimarySoft = tint(cPrimary, 0.86, cPrimary);
 
   const avatarBg = safeString(theme?.colors?.brandSecondary, cText).replace("#", "");
   const avatarFg = cOnBrand.replace("#", "");
@@ -319,22 +311,6 @@ export function ShipperHomePage() {
     // navigation.navigate('History');
     console.log("Navigate to History");
   };
-
-  const bottomInset = Math.max(0, safeNumber(insets?.bottom, 0));
-  const floating = (
-    <Pressable
-      onPress={goToRequest}
-      accessibilityRole="button"
-      accessibilityLabel="요청 등록"
-      style={({ pressed }) => [
-        styles.fab,
-        { backgroundColor: cPrimary, marginBottom: Math.max(0, bottomInset - 8) },
-        pressed ? FAB_PRESSED : undefined,
-      ]}
-    >
-      <Ionicons name="add" size={26} color={cOnBrand} />
-    </Pressable>
-  );
 
   return (
     <PageScaffold
@@ -357,7 +333,7 @@ export function ShipperHomePage() {
       backgroundColor={cSurfaceAlt}
       scroll={true}
       contentStyle={styles.pageContent}
-      floating={floating}
+      floating={<RequestQuoteFab onPress={goToRequest} accessibilityLabel="요청 등록" />}
     >
       {/* 1. Hero Section */}
       <View style={styles.heroSection}>
@@ -501,7 +477,7 @@ export function ShipperHomePage() {
             </AppText>
           </View>
           <View style={styles.guideIconBox}>
-            <Ionicons name="cube-outline" size={20} color={cPrimary} />
+            <Ionicons name="cube-outline" size={20} color={cPrimarySoft} />
           </View>
           <View style={styles.guideDeco} />
         </Pressable>
@@ -520,7 +496,7 @@ export function ShipperHomePage() {
             </AppText>
           </View>
           <View style={styles.guideIconBox}>
-            <Ionicons name="pricetag-outline" size={20} color={cPrimary} />
+            <Ionicons name="pricetag-outline" size={20} color={cPrimarySoft} />
           </View>
           <View style={styles.guideDeco} />
         </Pressable>

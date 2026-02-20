@@ -1,7 +1,7 @@
 import React from "react";
 
-import AccountVerificationPage from "@/pages/auth/AccountVerificationPage";
+import ShipperVerificationPage from "@/pages/shipper/verification/ShipperVerificationPage";
 
 export default function ShipperVerificationRoute() {
-  return <AccountVerificationPage role="shipper" />;
+  return <ShipperVerificationPage />;
 }

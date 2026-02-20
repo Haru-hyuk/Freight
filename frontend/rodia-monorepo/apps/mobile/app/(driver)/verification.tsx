@@ -1,7 +1,7 @@
 import React from "react";
 
-import AccountVerificationPage from "@/pages/auth/AccountVerificationPage";
+import DriverVerificationPage from "@/pages/driver/verification/DriverVerificationPage";
 
 export default function DriverVerificationRoute() {
-  return <AccountVerificationPage role="driver" />;
+  return <DriverVerificationPage />;
 }

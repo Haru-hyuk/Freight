@@ -65,7 +65,7 @@ const useStyles = createThemedStyles((theme) => {
   });
 });
 
-export function DriverOrderPage() {
+export function DriverQuoteBrowsePage() {
   const theme = useAppTheme();
   const styles = useStyles();
 
@@ -120,4 +120,4 @@ export function DriverOrderPage() {
   );
 }
 
-export default DriverOrderPage;
+export default DriverQuoteBrowsePage;

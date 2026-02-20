@@ -1,6 +1,7 @@
 ﻿import React from "react";
-import DriverOrderPage from "@/pages/driver/order/DriverOrderPage";
+import { Redirect } from "expo-router";
 
-export default function DriverOrderRoute() {
-  return <DriverOrderPage />;
+export default function DriverOrderLegacyRoute() {
+  return <Redirect href="/(driver)/quotes" />;
 }
+

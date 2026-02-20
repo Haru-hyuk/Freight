@@ -2,15 +2,14 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Pressable, StyleSheet, View, type TextStyle, type ViewStyle } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
-import { AppButton } from "@/shared/ui/kit/AppButton";
 import { AppCard } from "@/shared/ui/kit/AppCard";
 import { AppEmptyState } from "@/shared/ui/kit/AppEmptyState";
 import { AppText } from "@/shared/ui/kit/AppText";
 import { PageScaffold } from "@/widgets/layout/PageScaffold";
+import { RequestQuoteFab } from "@/widgets/shipper/RequestQuoteFab";
 
 type QuoteStatus = "received" | "dispatching" | "negotiating" | "assigned" | "pickup" | "transit" | "dropoff";
 type TabType = "ongoing" | "completed";
@@ -130,7 +129,6 @@ const useStyles = createThemedStyles((theme) => {
   const radiusCard = safeNumber(theme?.components?.card?.radius, safeNumber(theme?.layout?.radii?.card, 16));
   const radiusControl = safeNumber(theme?.layout?.radii?.control, 12);
   const cardPadding = safeNumber(theme?.components?.card?.paddingMd, 20);
-  const fabSize = safeNumber(theme?.components?.button?.sizes?.lg?.minHeight, 52) + spacing;
 
   return StyleSheet.create({
     pageContent: {
@@ -299,12 +297,6 @@ const useStyles = createThemedStyles((theme) => {
     bgPayment: { backgroundColor: cBadgePaymentBg, color: cSecondary },
     bgMoving: { backgroundColor: cBadgeMovingBg, color: cAccent },
     bgCompleted: { backgroundColor: cBadgeDoneBg, color: cTextSub },
-
-    fab: {
-      width: fabSize,
-      height: fabSize,
-      borderRadius: radiusControl + spacing,
-    },
   });
 });
 
@@ -312,12 +304,10 @@ export default function QuoteListPage() {
   const styles = useStyles();
   const theme = useAppTheme();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const cardNavLockedRef = useRef(false);
   const cardNavUnlockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const pageBg = safeString(theme?.colors?.bgMain, safeString(theme?.colors?.bgSurfaceAlt, ""));
-  const onBrand = safeString(theme?.colors?.textOnBrand, safeString(theme?.colors?.textInverse, ""));
 
   const [activeTab, setActiveTab] = useState<TabType>("ongoing");
 
@@ -426,16 +416,7 @@ export default function QuoteListPage() {
       title="이용 내역"
       backgroundColor={pageBg}
       contentStyle={styles.pageContent}
-      floating={
-        <AppButton
-          size="icon"
-          style={[styles.fab, { marginBottom: Math.max(0, (insets?.bottom ?? 0) - 10) }]}
-          onPress={onPressCreate}
-          accessibilityLabel="견적 요청 생성"
-        >
-          <Ionicons name="add" size={28} color={onBrand} />
-        </AppButton>
-      }
+      floating={<RequestQuoteFab onPress={onPressCreate} accessibilityLabel="견적 요청 생성" />}
     >
       <View style={styles.tabContainer}>
         <View style={styles.tabTrack}>
@@ -509,3 +490,4 @@ export default function QuoteListPage() {
     </PageScaffold>
   );
 }
+
