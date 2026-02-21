@@ -1,6 +1,7 @@
 import type {
   QuoteCargoType,
   QuoteCreateRequestDto,
+  QuoteStopRequestDto,
   QuoteVehicleBodyType,
   QuoteVehicleType,
   QuoteWorkMethod,
@@ -71,6 +72,28 @@ function summarizeCargoDesc(draft: QuoteCreateDraft) {
   return names.slice(0, 5).join(", ");
 }
 
+function buildStops(draft: QuoteCreateDraft): QuoteStopRequestDto[] {
+  const waypoints = Array.isArray(draft?.waypoints) ? draft.waypoints : [];
+
+  return waypoints
+    .map((waypoint, index) => {
+      const address = joinAddress(waypoint?.addr, waypoint?.detail);
+      if (!address) return null;
+
+      return {
+        seq: index + 1,
+        address,
+        lat: 0,
+        lng: 0,
+        contactName: (waypoint?.name ?? "").trim(),
+        contactPhone: (waypoint?.phone ?? "").trim(),
+        deptName: "",
+        managerName: "",
+      } as QuoteStopRequestDto;
+    })
+    .filter((stop): stop is QuoteStopRequestDto => Boolean(stop));
+}
+
 function calculateVolumeCbm(draft: QuoteCreateDraft) {
   const sum = (draft.cargoList ?? []).reduce((acc, item) => {
     const l = toInt(item?.lengthCm, 0);
@@ -106,7 +129,7 @@ export function buildQuoteCreateRequest(draft: QuoteCreateDraft): QuoteCreateReq
     originLng: toNumber(draft.originLng, 0),
     destinationLat: toNumber(draft.destinationLat, 0),
     destinationLng: toNumber(draft.destinationLng, 0),
-    distanceKm: Math.max(0, toNumber(draft.distanceKm, 0)),
+    distanceKm: Math.max(0, Math.trunc(toNumber(draft.distanceKm, 0))),
     weightKg: calculateWeightKg(draft),
     volumeCbm: calculateVolumeCbm(draft),
     vehicleType: mapVehicleType(draft.tonIdx),
@@ -119,5 +142,6 @@ export function buildQuoteCreateRequest(draft: QuoteCreateDraft): QuoteCreateReq
     loadMethod: mapWorkMethod(draft.loadMethod),
     unloadMethod: mapWorkMethod(draft.unloadMethod),
     checklistItems: [],
+    stops: buildStops(draft),
   };
 }

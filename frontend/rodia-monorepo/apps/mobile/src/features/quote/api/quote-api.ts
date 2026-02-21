@@ -1,9 +1,12 @@
+// rodia-monorepo/apps/mobile/src/features/quote/api/quote-api.ts
 import type {
   QuoteChecklistItemDto,
   QuoteCreateRequestDto,
   QuoteCreateResponseDto,
   QuoteDetailResponseDto,
   QuoteListItemDto,
+  QuoteStopDto,
+  QuoteStopRequestDto,
   QuoteUpdateRequestDto,
 } from "@/entities/quote/dto";
 import type {
@@ -138,6 +141,110 @@ function mapChecklistItems(input: unknown): QuoteDetailResponse["checklistItems"
   });
 }
 
+function mapStops(input: unknown): QuoteDetailResponse["stops"] {
+  if (!Array.isArray(input)) return [];
+
+  const mapped = input.slice(0, 100).map((item, index) => {
+    const source = asObject(item as QuoteStopDto);
+    const quoteStopId = Math.max(0, safeInt(source.quoteStopId, 0));
+    const seq = Math.max(1, safeInt(source.seq, index + 1));
+
+    return {
+      quoteStopId,
+      seq,
+      address: safeString(source.address, ""),
+      lat: safeNumber(source.lat, 0),
+      lng: safeNumber(source.lng, 0),
+      contactName: safeString(source.contactName, ""),
+      contactPhone: safeString(source.contactPhone, ""),
+      deptName: safeString(source.deptName, ""),
+      managerName: safeString(source.managerName, ""),
+    };
+  });
+
+  return mapped
+    .filter((stop) => Boolean(stop.address.trim()))
+    .sort((a, b) => {
+      const bySeq = a.seq - b.seq;
+      if (bySeq !== 0) return bySeq;
+      return a.quoteStopId - b.quoteStopId;
+    });
+}
+
+function sanitizeChecklistItems(input: unknown): QuoteChecklistItemDto[] {
+  if (!Array.isArray(input)) return [];
+
+  return input.slice(0, 100).map((item, index) => {
+    const source = asObject(item as QuoteChecklistItemDto);
+    return {
+      checklistItemId: Math.max(0, safeInt(source.checklistItemId, index + 1)),
+      extraInput: safeString(source.extraInput, ""),
+      extraFee: Math.max(0, safeInt(source.extraFee, 0)),
+    };
+  });
+}
+
+function sanitizeStopsForRequest(input: unknown): QuoteStopRequestDto[] {
+  if (!Array.isArray(input)) return [];
+
+  const mapped = input.slice(0, 100).map((item, index) => {
+    const source = asObject(item as QuoteStopRequestDto);
+    return {
+      seq: Math.max(1, safeInt(source.seq, index + 1)),
+      address: safeString(source.address, ""),
+      lat: safeNumber(source.lat, 0),
+      lng: safeNumber(source.lng, 0),
+      contactName: safeString(source.contactName, ""),
+      contactPhone: safeString(source.contactPhone, ""),
+      deptName: safeString(source.deptName, ""),
+      managerName: safeString(source.managerName, ""),
+    };
+  });
+
+  return mapped
+    .filter((stop) => Boolean(stop.address.trim()))
+    .sort((a, b) => a.seq - b.seq)
+    .map((stop, index) => ({
+      ...stop,
+      seq: index + 1,
+    }));
+}
+
+function sanitizeQuotePayload(payload: QuoteCreateRequestDto, strictDistance: boolean): QuoteCreateRequestDto {
+  const source = asObject(payload as unknown as AnyObj) as Partial<QuoteCreateRequestDto>;
+  const normalizedDistance = safeInt(source.distanceKm, 0);
+
+  if (strictDistance && normalizedDistance < 1) {
+    throw new Error("distanceKm must be >= 1");
+  }
+
+  const distanceKm = strictDistance ? normalizedDistance : Math.max(1, normalizedDistance);
+
+  return {
+    truckId: Math.max(1, safeInt(source.truckId, 1)),
+    originAddress: safeString(source.originAddress, ""),
+    destinationAddress: safeString(source.destinationAddress, ""),
+    originLat: safeNumber(source.originLat, 0),
+    originLng: safeNumber(source.originLng, 0),
+    destinationLat: safeNumber(source.destinationLat, 0),
+    destinationLng: safeNumber(source.destinationLng, 0),
+    distanceKm,
+    weightKg: Math.max(0, safeInt(source.weightKg, 0)),
+    volumeCbm: Math.max(0, Math.trunc(safeNumber(source.volumeCbm, 0))),
+    vehicleType: (safeString(source.vehicleType, "TON_1") || "TON_1") as QuoteCreateRequestDto["vehicleType"],
+    vehicleBodyType: (safeString(source.vehicleBodyType, "CARGO") || "CARGO") as QuoteCreateRequestDto["vehicleBodyType"],
+    cargoName: safeString(source.cargoName, ""),
+    cargoType: (safeString(source.cargoType, "GENERAL") || "GENERAL") as QuoteCreateRequestDto["cargoType"],
+    cargoDesc: safeString(source.cargoDesc, ""),
+    desiredPrice: Math.max(0, safeInt(source.desiredPrice, 0)),
+    allowCombine: Boolean(source.allowCombine),
+    loadMethod: (safeString(source.loadMethod, "DRIVER") || "DRIVER") as QuoteCreateRequestDto["loadMethod"],
+    unloadMethod: (safeString(source.unloadMethod, "DRIVER") || "DRIVER") as QuoteCreateRequestDto["unloadMethod"],
+    checklistItems: sanitizeChecklistItems(source.checklistItems),
+    stops: sanitizeStopsForRequest(source.stops),
+  };
+}
+
 function toQuoteCreateResponse(input: unknown): QuoteCreateResponseDto {
   const payload = asObject(pickPayload(input));
   const quoteId = pickQuoteId(payload, 0);
@@ -176,9 +283,11 @@ function toQuoteDetail(input: unknown, fallbackQuoteId = 0): QuoteDetailResponse
   const quoteId = pickQuoteId(source, fallbackQuoteId);
   const createdAt = safeDateString(source.createdAt, nowIso);
   const updatedAt = safeDateString(source.updatedAt, createdAt);
+  const quotePublicIdRaw = safeString(source.quotePublicId, "");
 
   return {
     quoteId,
+    quotePublicId: quotePublicIdRaw ? quotePublicIdRaw : undefined,
     shipperId: Math.max(0, safeInt(source.shipperId, 0)),
     truckId: Math.max(0, safeInt(source.truckId, 0)),
     originAddress: safeString(source.originAddress, ""),
@@ -207,6 +316,7 @@ function toQuoteDetail(input: unknown, fallbackQuoteId = 0): QuoteDetailResponse
     createdAt,
     updatedAt,
     checklistItems: mapChecklistItems(source.checklistItems),
+    stops: mapStops(source.stops),
   };
 }
 
@@ -236,7 +346,7 @@ function createRealQuoteApi(): QuoteApi {
     },
 
     async createShipperQuote(payload: QuoteCreateRequestDto): Promise<QuoteCreateResponseDto> {
-      const safePayload = (payload ?? {}) as QuoteCreateRequestDto;
+      const safePayload = sanitizeQuotePayload((payload ?? {}) as QuoteCreateRequestDto, true);
       const res = await apiClient.post(SHIPPER_QUOTES_PATH, safePayload);
       return toQuoteCreateResponse((res as { data?: unknown })?.data);
     },
@@ -245,7 +355,7 @@ function createRealQuoteApi(): QuoteApi {
       const safeQuoteId = normalizeQuoteId(quoteId);
       if (safeQuoteId <= 0) return toQuoteDetail({}, 0);
 
-      const safePayload = (payload ?? {}) as QuoteUpdateRequestDto;
+      const safePayload = sanitizeQuotePayload((payload ?? {}) as QuoteUpdateRequestDto, true);
       const res = await apiClient.put(buildQuoteDetailPath(safeQuoteId), safePayload);
       return toQuoteDetail((res as { data?: unknown })?.data, safeQuoteId);
     },
@@ -284,19 +394,49 @@ function buildMockDetail(quoteId: number, payload?: Partial<QuoteCreateRequestDt
   const safeQuoteId = normalizeQuoteId(quoteId) || 1;
   const createdAt = nowIso();
 
+  const originAddress = String(payload?.originAddress ?? "서울특별시 강남구");
+  const destinationAddress = String(payload?.destinationAddress ?? "경기도 성남시 분당구");
+  const payloadStops = sanitizeStopsForRequest(payload?.stops);
+  const mockStops: QuoteDetailResponse["stops"] = payloadStops.length
+    ? payloadStops.map((stop, index) => ({
+        quoteStopId: index + 1,
+        seq: index + 1,
+        address: String(stop.address ?? ""),
+        lat: Number(stop.lat ?? 0),
+        lng: Number(stop.lng ?? 0),
+        contactName: String(stop.contactName ?? ""),
+        contactPhone: String(stop.contactPhone ?? ""),
+        deptName: String(stop.deptName ?? ""),
+        managerName: String(stop.managerName ?? ""),
+      }))
+    : [
+        {
+          quoteStopId: 1,
+          seq: 1,
+          address: "인천광역시 연수구 (목업 경유지)",
+          lat: 37.4563,
+          lng: 126.7052,
+          contactName: "담당자A",
+          contactPhone: "010-0000-0000",
+          deptName: "물류팀",
+          managerName: "매니저A",
+        },
+      ];
+
   return {
     quoteId: safeQuoteId,
+    quotePublicId: undefined,
     shipperId: 1,
     truckId: Math.max(1, normalizeQuoteId(payload?.truckId ?? 1)),
-    originAddress: String(payload?.originAddress ?? "서울특별시 강남구"),
-    destinationAddress: String(payload?.destinationAddress ?? "경기도 성남시 분당구"),
+    originAddress,
+    destinationAddress,
     originLat: Number(payload?.originLat ?? 0),
     originLng: Number(payload?.originLng ?? 0),
     destinationLat: Number(payload?.destinationLat ?? 0),
     destinationLng: Number(payload?.destinationLng ?? 0),
-    distanceKm: Math.max(0, Number(payload?.distanceKm ?? 0)),
+    distanceKm: Math.max(1, Math.trunc(Number(payload?.distanceKm ?? 18))),
     weightKg: Math.max(0, Number(payload?.weightKg ?? 0)),
-    volumeCbm: Math.max(0, Number(payload?.volumeCbm ?? 0)),
+    volumeCbm: Math.max(0, Math.trunc(Number(payload?.volumeCbm ?? 0))),
     vehicleType: String(payload?.vehicleType ?? "TON_1"),
     vehicleBodyType: String(payload?.vehicleBodyType ?? "CARGO"),
     cargoName: String(payload?.cargoName ?? "목업 화물"),
@@ -320,6 +460,7 @@ function buildMockDetail(quoteId: number, payload?: Partial<QuoteCreateRequestDt
           extraFee: Math.max(0, Number(item?.extraFee ?? 0)),
         }))
       : [],
+    stops: mockStops,
   };
 }
 
@@ -334,16 +475,18 @@ function createMockQuoteApi(): QuoteApi {
     },
 
     async createShipperQuote(payload: QuoteCreateRequestDto): Promise<QuoteCreateResponseDto> {
+      const safePayload = sanitizeQuotePayload((payload ?? {}) as QuoteCreateRequestDto, false);
       const seed =
         Date.now() +
-        Math.max(0, Number(payload?.desiredPrice ?? 0)) +
-        Math.max(0, Number(payload?.weightKg ?? 0));
+        Math.max(0, Number(safePayload?.desiredPrice ?? 0)) +
+        Math.max(0, Number(safePayload?.weightKg ?? 0));
       const quoteId = Math.max(1, Math.trunc(seed % 9_000_000));
       return { quoteId };
     },
 
     async updateShipperQuote(quoteId: number, payload: QuoteUpdateRequestDto): Promise<QuoteUpdateResponse> {
-      return buildMockDetail(quoteId, payload);
+      const safePayload = sanitizeQuotePayload((payload ?? {}) as QuoteUpdateRequestDto, false);
+      return buildMockDetail(quoteId, safePayload);
     },
 
     async deleteShipperQuote(_quoteId: number): Promise<void> {

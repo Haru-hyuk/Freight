@@ -1,0 +1,2786 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "OpenAPI definition",
+    "version": "v0"
+  },
+  "servers": [
+    {
+      "url": "http://192.168.0.28:8080",
+      "description": "Generated server url"
+    }
+  ],
+  "paths": {
+    "/api/shipper/quotes/{quoteIdentifier}": {
+      "get": {
+        "tags": [
+          "quote-controller"
+        ],
+        "operationId": "getQuote",
+        "parameters": [
+          {
+            "name": "quoteIdentifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuoteDetailResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "quote-controller"
+        ],
+        "operationId": "updateQuote",
+        "parameters": [
+          {
+            "name": "quoteIdentifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuoteUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuoteDetailResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "quote-controller"
+        ],
+        "operationId": "deleteQuote",
+        "parameters": [
+          {
+            "name": "quoteIdentifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "quoteIdentifier",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    "/api/driver/trucks/{truckId}": {
+      "get": {
+        "tags": [
+          "truck-controller"
+        ],
+        "operationId": "getTruck",
+        "parameters": [
+          {
+            "name": "truckId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/TruckResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "truck-controller"
+        ],
+        "operationId": "updateTruck",
+        "parameters": [
+          {
+            "name": "truckId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TruckUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/TruckResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "truck-controller"
+        ],
+        "operationId": "deleteTruck",
+        "parameters": [
+          {
+            "name": "truckId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "truckId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      ]
+    },
+    "/api/admin/announcements/{announcementId}": {
+      "get": {
+        "tags": [
+          "admin-announcement-controller"
+        ],
+        "operationId": "get_1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnnouncementResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "admin-announcement-controller"
+        ],
+        "operationId": "update",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnnouncementUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnnouncementResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "admin-announcement-controller"
+        ],
+        "operationId": "delete",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "announcementId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      ]
+    },
+    "/api/shipper/quotes": {
+      "get": {
+        "tags": [
+          "quote-controller"
+        ],
+        "operationId": "listQuotes",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/QuoteListResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "quote-controller"
+        ],
+        "operationId": "createQuote",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuoteCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuoteCreateResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/shipper/quotes/validate": {
+      "post": {
+        "tags": [
+          "quote-controller"
+        ],
+        "operationId": "validateQuote",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuoteCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuoteValidationResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/shipper/payments/prepare": {
+      "post": {
+        "tags": [
+          "payment-controller"
+        ],
+        "operationId": "prepare",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentPrepareRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentPrepareResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/shipper/payments/confirm": {
+      "post": {
+        "tags": [
+          "payment-controller"
+        ],
+        "operationId": "confirm",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentConfirmRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/shipper/matches": {
+      "post": {
+        "tags": [
+          "shipper-match-controller"
+        ],
+        "operationId": "createMatch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MatchCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/MatchResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/push-tokens/me": {
+      "post": {
+        "tags": [
+          "fcm-token-controller"
+        ],
+        "operationId": "upsertMyToken",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FcmTokenUpsertRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "fcm-token-controller"
+        ],
+        "operationId": "deactivateMyToken",
+        "parameters": [
+          {
+            "name": "fcmToken",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/driver/trucks": {
+      "get": {
+        "tags": [
+          "truck-controller"
+        ],
+        "operationId": "listTrucks",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TruckResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "truck-controller"
+        ],
+        "operationId": "createTruck",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TruckCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/TruckCreateResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/driver/quotes/{quoteId}/counter-offers": {
+      "post": {
+        "tags": [
+          "driver-counter-offer-controller"
+        ],
+        "operationId": "createCounterOffer",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CounterOfferCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CounterOfferResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "quoteId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      ]
+    },
+    "/api/driver/matches/{matchId}/photos": {
+      "get": {
+        "tags": [
+          "delivery-photo-controller"
+        ],
+        "operationId": "getDriverMatchPhotos",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DeliveryPhotoResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "delivery-photo-controller"
+        ],
+        "operationId": "uploadDriverPhoto",
+        "parameters": [
+          {
+            "name": "type",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "PICKUP",
+                "DELIVERY"
+              ]
+            }
+          },
+          {
+            "name": "takenAt",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "lat",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "lng",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "required": [
+                  "file"
+                ],
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliveryPhotoResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "matchId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      ]
+    },
+    "/api/driver/matches/{matchId}/accept": {
+      "post": {
+        "tags": [
+          "driver-match-controller"
+        ],
+        "operationId": "acceptMatch",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/MatchResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "matchId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      ]
+    },
+    "/api/auth/shipper/signup": {
+      "post": {
+        "tags": [
+          "auth-controller"
+        ],
+        "operationId": "shipperSignup",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShipperSignupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShipperSignupResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/shipper/login": {
+      "post": {
+        "tags": [
+          "auth-controller"
+        ],
+        "operationId": "shipperLogin",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "tags": [
+          "auth-controller"
+        ],
+        "operationId": "logout",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/auth/driver/signup": {
+      "post": {
+        "tags": [
+          "auth-controller"
+        ],
+        "operationId": "driverSignup",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DriverSignupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/DriverSignupResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/driver/login": {
+      "post": {
+        "tags": [
+          "auth-controller"
+        ],
+        "operationId": "driverLogin",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/admin/login": {
+      "post": {
+        "tags": [
+          "auth-controller"
+        ],
+        "operationId": "adminLogin",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/announcements": {
+      "get": {
+        "tags": [
+          "admin-announcement-controller"
+        ],
+        "operationId": "listAll",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AnnouncementResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "admin-announcement-controller"
+        ],
+        "operationId": "create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnnouncementCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnnouncementResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/shipper/counter-offers/{offerId}/reject": {
+      "patch": {
+        "tags": [
+          "shipper-counter-offer-controller"
+        ],
+        "operationId": "rejectCounterOffer",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "offerId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      ]
+    },
+    "/api/shipper/counter-offers/{offerId}/accept": {
+      "patch": {
+        "tags": [
+          "shipper-counter-offer-controller"
+        ],
+        "operationId": "acceptCounterOffer",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "offerId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      ]
+    },
+    "/api/notifications/{notificationId}/read": {
+      "patch": {
+        "tags": [
+          "notification-controller"
+        ],
+        "operationId": "markRead",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "notificationId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      ]
+    },
+    "/api/shipper/quotes/{quoteId}/counter-offers": {
+      "get": {
+        "tags": [
+          "shipper-counter-offer-controller"
+        ],
+        "operationId": "getCounterOffers",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CounterOfferResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "quoteId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      ]
+    },
+    "/api/shipper/payments": {
+      "get": {
+        "tags": [
+          "payment-controller"
+        ],
+        "operationId": "getByMatchId",
+        "parameters": [
+          {
+            "name": "arg1",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PaymentResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/shipper/payments/{paymentId}": {
+      "get": {
+        "tags": [
+          "payment-controller"
+        ],
+        "operationId": "getById",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "paymentId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      ]
+    },
+    "/api/shipper/payments/me": {
+      "get": {
+        "tags": [
+          "payment-controller"
+        ],
+        "operationId": "getMyPayments",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PaymentResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/shipper/matches/{matchId}": {
+      "get": {
+        "tags": [
+          "shipper-match-controller"
+        ],
+        "operationId": "getMatch",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/MatchResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "shipper-match-controller"
+        ],
+        "operationId": "cancelMatch",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "matchId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      ]
+    },
+    "/api/shipper/matches/{matchId}/photos": {
+      "get": {
+        "tags": [
+          "delivery-photo-controller"
+        ],
+        "operationId": "getShipperMatchPhotos",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DeliveryPhotoResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "matchId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      ]
+    },
+    "/api/shipper/matches/me": {
+      "get": {
+        "tags": [
+          "shipper-match-controller"
+        ],
+        "operationId": "getMyMatches",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MatchResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/notifications/me": {
+      "get": {
+        "tags": [
+          "notification-controller"
+        ],
+        "operationId": "getMyNotifications",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/NotificationResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/notifications/me/unread-count": {
+      "get": {
+        "tags": [
+          "notification-controller"
+        ],
+        "operationId": "getUnreadCount",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnreadCountResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/driver/matches": {
+      "get": {
+        "tags": [
+          "driver-match-controller"
+        ],
+        "operationId": "getOpenMatches",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MatchResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/driver/matches/{matchId}": {
+      "get": {
+        "tags": [
+          "driver-match-controller"
+        ],
+        "operationId": "getMatch_1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/MatchResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "driver-match-controller"
+        ],
+        "operationId": "cancelMatch_1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "matchId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      ]
+    },
+    "/api/driver/matches/me": {
+      "get": {
+        "tags": [
+          "driver-match-controller"
+        ],
+        "operationId": "getMyMatches_1",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MatchResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/driver/counter-offers/me": {
+      "get": {
+        "tags": [
+          "driver-counter-offer-controller"
+        ],
+        "operationId": "getMyCounterOffers",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CounterOfferResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/delivery-photos/{photoId}/file": {
+      "get": {
+        "tags": [
+          "delivery-photo-controller"
+        ],
+        "operationId": "downloadPhoto",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "photoId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      ]
+    },
+    "/api/checklist-items": {
+      "get": {
+        "tags": [
+          "checklist-item-controller"
+        ],
+        "operationId": "listChecklistItems",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ChecklistItemResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/announcements": {
+      "get": {
+        "tags": [
+          "announcement-controller"
+        ],
+        "operationId": "listPublished",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AnnouncementResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/announcements/{announcementId}": {
+      "get": {
+        "tags": [
+          "announcement-controller"
+        ],
+        "operationId": "get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnnouncementResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "announcementId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      ]
+    }
+  },
+  "components": {
+    "schemas": {
+      "QuoteChecklistItemRequest": {
+        "type": "object",
+        "properties": {
+          "checklistItemId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "extraInput": {
+            "type": "string"
+          },
+          "extraFee": {
+            "type": "number"
+          }
+        }
+      },
+      "QuoteStopRequest": {
+        "type": "object",
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "address": {
+            "type": "string"
+          },
+          "lat": {
+            "type": "number",
+            "format": "double"
+          },
+          "lng": {
+            "type": "number",
+            "format": "double"
+          },
+          "contactName": {
+            "type": "string"
+          },
+          "contactPhone": {
+            "type": "string"
+          },
+          "deptName": {
+            "type": "string"
+          },
+          "managerName": {
+            "type": "string"
+          }
+        }
+      },
+      "QuoteUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "truckId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "originAddress": {
+            "type": "string"
+          },
+          "destinationAddress": {
+            "type": "string"
+          },
+          "originLat": {
+            "type": "number",
+            "format": "double"
+          },
+          "originLng": {
+            "type": "number",
+            "format": "double"
+          },
+          "destinationLat": {
+            "type": "number",
+            "format": "double"
+          },
+          "destinationLng": {
+            "type": "number",
+            "format": "double"
+          },
+          "distanceKm": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "weightKg": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "volumeCbm": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "vehicleType": {
+            "type": "string"
+          },
+          "vehicleBodyType": {
+            "type": "string"
+          },
+          "cargoName": {
+            "type": "string"
+          },
+          "cargoType": {
+            "type": "string"
+          },
+          "cargoDesc": {
+            "type": "string"
+          },
+          "basePrice": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "distancePrice": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "desiredPrice": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "allowCombine": {
+            "type": "boolean"
+          },
+          "loadMethod": {
+            "type": "string"
+          },
+          "unloadMethod": {
+            "type": "string"
+          },
+          "checklistItems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuoteChecklistItemRequest"
+            }
+          },
+          "stops": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuoteStopRequest"
+            }
+          }
+        }
+      },
+      "QuoteChecklistItemResponse": {
+        "type": "object",
+        "properties": {
+          "checklistItemId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "extraInput": {
+            "type": "string"
+          },
+          "extraFee": {
+            "type": "number"
+          }
+        }
+      },
+      "QuoteDetailResponse": {
+        "type": "object",
+        "properties": {
+          "quoteId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "quotePublicId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "shipperId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "truckId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "originAddress": {
+            "type": "string"
+          },
+          "destinationAddress": {
+            "type": "string"
+          },
+          "originLat": {
+            "type": "number",
+            "format": "double"
+          },
+          "originLng": {
+            "type": "number",
+            "format": "double"
+          },
+          "destinationLat": {
+            "type": "number",
+            "format": "double"
+          },
+          "destinationLng": {
+            "type": "number",
+            "format": "double"
+          },
+          "distanceKm": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "weightKg": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "volumeCbm": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "vehicleType": {
+            "type": "string"
+          },
+          "vehicleBodyType": {
+            "type": "string"
+          },
+          "cargoName": {
+            "type": "string"
+          },
+          "cargoType": {
+            "type": "string"
+          },
+          "cargoDesc": {
+            "type": "string"
+          },
+          "basePrice": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "distancePrice": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "extraPrice": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "desiredPrice": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "finalPrice": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "allowCombine": {
+            "type": "boolean"
+          },
+          "loadMethod": {
+            "type": "string"
+          },
+          "unloadMethod": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "checklistItems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuoteChecklistItemResponse"
+            }
+          },
+          "stops": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuoteStopResponse"
+            }
+          }
+        }
+      },
+      "QuoteStopResponse": {
+        "type": "object",
+        "properties": {
+          "quoteStopId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "seq": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "address": {
+            "type": "string"
+          },
+          "lat": {
+            "type": "number",
+            "format": "double"
+          },
+          "lng": {
+            "type": "number",
+            "format": "double"
+          },
+          "contactName": {
+            "type": "string"
+          },
+          "contactPhone": {
+            "type": "string"
+          },
+          "deptName": {
+            "type": "string"
+          },
+          "managerName": {
+            "type": "string"
+          }
+        }
+      },
+      "TruckUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "vehicleType": {
+            "type": "string"
+          },
+          "vehicleBodyType": {
+            "type": "string"
+          },
+          "tonnage": {
+            "type": "number"
+          },
+          "maxWeight": {
+            "type": "number"
+          },
+          "maxVolume": {
+            "type": "number"
+          },
+          "name": {
+            "type": "string"
+          },
+          "imageUrl": {
+            "type": "string"
+          },
+          "approved": {
+            "type": "boolean"
+          },
+          "insurance": {
+            "type": "string"
+          },
+          "odometerKm": {
+            "type": "number"
+          },
+          "lastInspectionDate": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      },
+      "TruckResponse": {
+        "type": "object",
+        "properties": {
+          "truckId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "driverId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "vehicleType": {
+            "type": "string"
+          },
+          "vehicleBodyType": {
+            "type": "string"
+          },
+          "tonnage": {
+            "type": "number"
+          },
+          "maxWeight": {
+            "type": "number"
+          },
+          "maxVolume": {
+            "type": "number"
+          },
+          "name": {
+            "type": "string"
+          },
+          "imageUrl": {
+            "type": "string"
+          },
+          "approved": {
+            "type": "boolean"
+          },
+          "insurance": {
+            "type": "string"
+          },
+          "odometerKm": {
+            "type": "number"
+          },
+          "lastInspectionDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AnnouncementUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "isPinned": {
+            "type": "boolean"
+          },
+          "publish": {
+            "type": "boolean"
+          }
+        }
+      },
+      "AnnouncementResponse": {
+        "type": "object",
+        "properties": {
+          "announcementId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "adminId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "title": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "isPinned": {
+            "type": "boolean"
+          },
+          "publishedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "QuoteCreateRequest": {
+        "type": "object",
+        "properties": {
+          "truckId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "originAddress": {
+            "type": "string"
+          },
+          "destinationAddress": {
+            "type": "string"
+          },
+          "originLat": {
+            "type": "number",
+            "format": "double"
+          },
+          "originLng": {
+            "type": "number",
+            "format": "double"
+          },
+          "destinationLat": {
+            "type": "number",
+            "format": "double"
+          },
+          "destinationLng": {
+            "type": "number",
+            "format": "double"
+          },
+          "distanceKm": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "weightKg": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "volumeCbm": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "vehicleType": {
+            "type": "string"
+          },
+          "vehicleBodyType": {
+            "type": "string"
+          },
+          "cargoName": {
+            "type": "string"
+          },
+          "cargoType": {
+            "type": "string"
+          },
+          "cargoDesc": {
+            "type": "string"
+          },
+          "basePrice": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "distancePrice": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "desiredPrice": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "allowCombine": {
+            "type": "boolean"
+          },
+          "loadMethod": {
+            "type": "string"
+          },
+          "unloadMethod": {
+            "type": "string"
+          },
+          "checklistItems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuoteChecklistItemRequest"
+            }
+          },
+          "stops": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuoteStopRequest"
+            }
+          }
+        }
+      },
+      "QuoteCreateResponse": {
+        "type": "object",
+        "properties": {
+          "quoteId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "quotePublicId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "LoadAnalysis": {
+        "type": "object",
+        "properties": {
+          "currentKg": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "capacityKg": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "usagePercent": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "safety": {
+            "type": "string",
+            "enum": [
+              "SAFE",
+              "WARN",
+              "RISK"
+            ]
+          },
+          "label": {
+            "type": "string"
+          }
+        }
+      },
+      "PriceAnalysis": {
+        "type": "object",
+        "properties": {
+          "userDesiredPrice": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "minPrice": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxPrice": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "weightedPrice": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "suggestedPrice": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "fit": {
+            "type": "string",
+            "enum": [
+              "LOW",
+              "NORMAL",
+              "HIGH"
+            ]
+          },
+          "label": {
+            "type": "string"
+          }
+        }
+      },
+      "QuoteValidationResponse": {
+        "type": "object",
+        "properties": {
+          "estimatedMinPrice": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "estimatedMaxPrice": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "estimatedWeightedPrice": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "comments": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "overallStatus": {
+            "type": "string",
+            "enum": [
+              "GOOD",
+              "NORMAL",
+              "RISKY"
+            ]
+          },
+          "dispatchSpeed": {
+            "type": "string",
+            "enum": [
+              "FAST",
+              "NORMAL",
+              "SLOW"
+            ]
+          },
+          "badge": {
+            "type": "string"
+          },
+          "loadAnalysis": {
+            "$ref": "#/components/schemas/LoadAnalysis"
+          },
+          "priceAnalysis": {
+            "$ref": "#/components/schemas/PriceAnalysis"
+          },
+          "confidence": {
+            "type": "number",
+            "format": "double"
+          },
+          "aiSummary": {
+            "type": "string"
+          },
+          "reasons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "PaymentPrepareRequest": {
+        "required": [
+          "amount",
+          "matchId"
+        ],
+        "type": "object",
+        "properties": {
+          "matchId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "amount": {
+            "minimum": 100,
+            "type": "integer",
+            "format": "int64"
+          },
+          "orderName": {
+            "type": "string"
+          }
+        }
+      },
+      "PaymentPrepareResponse": {
+        "type": "object",
+        "properties": {
+          "paymentId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "orderId": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "orderName": {
+            "type": "string"
+          },
+          "clientKey": {
+            "type": "string"
+          }
+        }
+      },
+      "PaymentConfirmRequest": {
+        "required": [
+          "amount",
+          "orderId",
+          "paymentKey"
+        ],
+        "type": "object",
+        "properties": {
+          "paymentKey": {
+            "type": "string"
+          },
+          "orderId": {
+            "type": "string"
+          },
+          "amount": {
+            "minimum": 100,
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "PaymentResponse": {
+        "type": "object",
+        "properties": {
+          "paymentId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "matchId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "orderNo": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "CARD",
+              "TRANSFER",
+              "PREPAID"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "COMPLETED",
+              "FAILED",
+              "REFUNDED"
+            ]
+          },
+          "paidAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "attemptId": {
+            "type": "string"
+          },
+          "amountType": {
+            "type": "string"
+          },
+          "pgRef": {
+            "type": "string"
+          },
+          "totalAmount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "MatchCreateRequest": {
+        "type": "object",
+        "properties": {
+          "quoteId": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "MatchResponse": {
+        "type": "object",
+        "properties": {
+          "matchId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "quoteId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "driverId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "accepted": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string"
+          },
+          "acceptedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "FcmTokenUpsertRequest": {
+        "required": [
+          "deviceType",
+          "fcmToken"
+        ],
+        "type": "object",
+        "properties": {
+          "deviceType": {
+            "type": "string",
+            "enum": [
+              "ANDROID",
+              "IOS",
+              "WEB"
+            ]
+          },
+          "fcmToken": {
+            "type": "string"
+          }
+        }
+      },
+      "TruckCreateRequest": {
+        "type": "object",
+        "properties": {
+          "vehicleType": {
+            "type": "string"
+          },
+          "vehicleBodyType": {
+            "type": "string"
+          },
+          "tonnage": {
+            "type": "number"
+          },
+          "maxWeight": {
+            "type": "number"
+          },
+          "maxVolume": {
+            "type": "number"
+          },
+          "name": {
+            "type": "string"
+          },
+          "imageUrl": {
+            "type": "string"
+          },
+          "approved": {
+            "type": "boolean"
+          },
+          "insurance": {
+            "type": "string"
+          },
+          "odometerKm": {
+            "type": "number"
+          },
+          "lastInspectionDate": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      },
+      "TruckCreateResponse": {
+        "type": "object",
+        "properties": {
+          "truckId": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "CounterOfferCreateRequest": {
+        "type": "object",
+        "properties": {
+          "proposedPrice": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "CounterOfferResponse": {
+        "type": "object",
+        "properties": {
+          "counterOfferId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "quoteId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "driverId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "proposedPrice": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "message": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "respondedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "DeliveryPhotoResponse": {
+        "type": "object",
+        "properties": {
+          "photoId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "matchId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "driverId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "type": {
+            "type": "string"
+          },
+          "fileUrl": {
+            "type": "string"
+          },
+          "takenAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lat": {
+            "type": "number"
+          },
+          "lng": {
+            "type": "number"
+          },
+          "fileSize": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "mimeType": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ShipperSignupRequest": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "companyName": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "addressDetail": {
+            "type": "string"
+          },
+          "bizRegNo": {
+            "type": "string"
+          },
+          "bizPhone": {
+            "type": "string"
+          },
+          "openDate": {
+            "type": "string"
+          },
+          "ownerName": {
+            "type": "string"
+          }
+        }
+      },
+      "ShipperSignupResponse": {
+        "type": "object",
+        "properties": {
+          "shipperId": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          }
+        }
+      },
+      "TokenResponse": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string"
+          },
+          "tokenType": {
+            "type": "string"
+          },
+          "expiresIn": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "DriverSignupRequest": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "addressDetail": {
+            "type": "string"
+          },
+          "bankName": {
+            "type": "string"
+          },
+          "bankAccount": {
+            "type": "string"
+          }
+        }
+      },
+      "DriverSignupResponse": {
+        "type": "object",
+        "properties": {
+          "driverId": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "AnnouncementCreateRequest": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "isPinned": {
+            "type": "boolean"
+          },
+          "publish": {
+            "type": "boolean"
+          }
+        }
+      },
+      "QuoteListResponse": {
+        "type": "object",
+        "properties": {
+          "quoteId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "quotePublicId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "truckId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "originAddress": {
+            "type": "string"
+          },
+          "destinationAddress": {
+            "type": "string"
+          },
+          "distanceKm": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "vehicleType": {
+            "type": "string"
+          },
+          "vehicleBodyType": {
+            "type": "string"
+          },
+          "cargoName": {
+            "type": "string"
+          },
+          "desiredPrice": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "finalPrice": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "status": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "NotificationResponse": {
+        "type": "object",
+        "properties": {
+          "notificationId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "matchId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "type": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "isRead": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "UnreadCountResponse": {
+        "type": "object",
+        "properties": {
+          "unreadCount": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "ChecklistItemResponse": {
+        "type": "object",
+        "properties": {
+          "checklistItemId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "category": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "icon": {
+            "type": "string"
+          },
+          "hasExtraFee": {
+            "type": "boolean"
+          },
+          "baseExtraFee": {
+            "type": "number"
+          },
+          "requiresExtraInput": {
+            "type": "boolean"
+          },
+          "extraInputLabel": {
+            "type": "string"
+          },
+          "sortOrder": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      }
+    }
+  }
+}

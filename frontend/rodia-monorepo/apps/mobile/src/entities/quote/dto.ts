@@ -1,3 +1,4 @@
+// rodia-monorepo/apps/mobile/src/entities/quote/dto.ts
 export type QuoteVehicleType = "TON_1" | "TON_2_5" | "TON_5";
 export type QuoteVehicleBodyType = "CARGO" | "WING_BODY" | "TOP_CAR";
 export type QuoteCargoType = "GENERAL" | "FROZEN";
@@ -7,6 +8,31 @@ export type QuoteChecklistItemDto = {
   checklistItemId: number;
   extraInput?: string;
   extraFee?: number;
+};
+
+export type QuoteStopDto = {
+  quoteStopId?: number | string;
+  seq?: number | string;
+  address?: string;
+  lat?: number | string;
+  lng?: number | string;
+  contactName?: string;
+  contactPhone?: string;
+  deptName?: string;
+  managerName?: string;
+};
+
+export type QuoteStopResponseDto = QuoteStopDto;
+
+export type QuoteStopRequestDto = {
+  seq?: number | string;
+  address?: string;
+  lat?: number | string;
+  lng?: number | string;
+  contactName?: string;
+  contactPhone?: string;
+  deptName?: string;
+  managerName?: string;
 };
 
 export type QuoteCreateRequestDto = {
@@ -30,6 +56,7 @@ export type QuoteCreateRequestDto = {
   loadMethod: QuoteWorkMethod;
   unloadMethod: QuoteWorkMethod;
   checklistItems: QuoteChecklistItemDto[];
+  stops?: QuoteStopRequestDto[] | null;
 };
 
 export type QuoteCreateResponseDto = {
@@ -53,6 +80,7 @@ export type QuoteListItemDto = {
 
 export type QuoteDetailResponseDto = {
   quoteId?: number | string;
+  quotePublicId?: string;
   shipperId?: number | string;
   truckId?: number | string;
   originAddress?: string;
@@ -81,6 +109,7 @@ export type QuoteDetailResponseDto = {
   createdAt?: string;
   updatedAt?: string;
   checklistItems?: QuoteChecklistItemDto[] | null;
+  stops?: QuoteStopDto[] | null;
 };
 
 export type QuoteUpdateRequestDto = QuoteCreateRequestDto;

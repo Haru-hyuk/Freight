@@ -379,9 +379,15 @@ function QuoteCreatePageInner() {
   const submitQuoteRequest = async () => {
     if (isSubmitting) return;
 
+    const payload = buildQuoteCreateRequest(draft);
+    const distanceKm = Number.isFinite(payload?.distanceKm) ? Math.trunc(payload.distanceKm) : 0;
+    if (distanceKm < 1) {
+      Alert.alert("견적 요청 실패", "거리 계산 후 요청해주세요.");
+      return;
+    }
+
     try {
       setIsSubmitting(true);
-      const payload = buildQuoteCreateRequest(draft);
       await createShipperQuote(payload);
 
       setIsSubmitDoneOpen(true);
