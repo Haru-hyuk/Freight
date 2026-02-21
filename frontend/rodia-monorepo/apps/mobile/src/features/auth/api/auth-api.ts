@@ -4,6 +4,7 @@ import { apiClient } from "@/shared/lib/api/apiClient";
 import { tokenStorage, type AuthTokens } from "@/shared/lib/storage/tokenStorage";
 import type { User, UserRole } from "@/entities/user/types";
 import { isAuthDebugLogsEnabled, isMockAuthEnabled } from "@/shared/lib/config/env";
+import { sanitizeDeep } from "@/shared/lib/debug/sanitize";
 import {
   inferMockRoleFromEmail,
   inferMockRoleFromTokens,
@@ -62,6 +63,45 @@ function toSafeEmail(v: unknown): string {
 
 function toSafePassword(v: unknown): string {
   return (pickString(v) ?? "").trim();
+}
+
+function onlyDigits(v: unknown): string {
+  return (pickString(v) ?? "").replace(/\D/g, "");
+}
+
+function normalizePhone(v: unknown): string {
+  const digits = onlyDigits(v);
+  if (digits.length === 11) return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7, 11)}`;
+  if (digits.length === 10 && digits.startsWith("02")) return `02-${digits.slice(2, 6)}-${digits.slice(6, 10)}`;
+  if (digits.length === 10) return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
+  return (pickString(v) ?? "").trim();
+}
+
+function normalizeOpenDate(v: unknown): string {
+  const digits = onlyDigits(v);
+  return digits.length >= 8 ? digits.slice(0, 8) : digits;
+}
+
+function isValidOpenDate(v: string): boolean {
+  if (!/^\d{8}$/.test(v)) return false;
+  const y = Number(v.slice(0, 4));
+  const m = Number(v.slice(4, 6));
+  const d = Number(v.slice(6, 8));
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return false;
+  if (m < 1 || m > 12 || d < 1 || d > 31) return false;
+  const date = new Date(y, m - 1, d);
+  return date.getFullYear() === y && date.getMonth() === m - 1 && date.getDate() === d;
+}
+
+function toSafePreview(input: unknown): string | undefined {
+  try {
+    const safe = sanitizeDeep(input);
+    const json = JSON.stringify(safe);
+    if (!isTruthyString(json) || json === "{}" || json === "[]") return undefined;
+    return json.length > 240 ? `${json.slice(0, 240)}...` : json;
+  } catch {
+    return undefined;
+  }
 }
 
 function isMockMode(): boolean {
@@ -163,6 +203,42 @@ function extractApiErrorMeta(err: unknown): { status?: number; code?: string; me
     pickString(d?.message, d?.error?.message, d?.errorMessage, e?.message, e?.toString?.()) ?? undefined;
 
   return { status: typeof status === "number" ? status : undefined, code: code ?? undefined, message };
+}
+
+function extractReadableApiErrorMessage(err: unknown, fallback?: string): string | undefined {
+  const e = (err ?? {}) as AnyObj;
+  const responseData = e?.response?.data ?? e?.data;
+  const safeData = sanitizeDeep(responseData);
+
+  if (typeof safeData === "string" && safeData.trim().length > 0) {
+    return safeData.trim();
+  }
+
+  const dataObj = (safeData ?? {}) as AnyObj;
+  const bodyMessage =
+    pickString(
+      dataObj?.message,
+      dataObj?.errorMessage,
+      dataObj?.error?.message,
+      dataObj?.detail,
+      dataObj?.reason,
+      dataObj?.data?.message,
+      dataObj?.result?.message
+    ) ?? undefined;
+
+  const bodyCode =
+    pickString(dataObj?.code, dataObj?.errorCode, dataObj?.error?.code, dataObj?.statusCode, dataObj?.resultCode) ??
+    undefined;
+
+  if (bodyMessage && bodyCode && !bodyMessage.includes(bodyCode)) {
+    return `${bodyMessage} (${bodyCode})`;
+  }
+
+  if (bodyMessage) return bodyMessage;
+
+  const preview = toSafePreview(safeData);
+  if (preview) return preview;
+  return pickString(fallback);
 }
 
 function extractAuthTokenResponse(data: unknown): AuthTokenResponseDTO | null {
@@ -376,12 +452,12 @@ export async function shipperSignup(params: ShipperSignupParams): Promise<Shippe
     password: toSafePassword(params?.password),
     name: pickString(params?.name) ?? "",
     companyName: pickString(params?.companyName) ?? "",
-    phone: pickString(params?.phone) ?? "",
+    phone: normalizePhone(params?.phone),
     address: pickString(params?.address) ?? "",
     addressDetail: pickString(params?.addressDetail) ?? "",
-    bizRegNo: pickString(params?.bizRegNo) ?? "",
-    bizPhone: pickString(params?.bizPhone) ?? "",
-    openDate: pickString(params?.openDate) ?? "",
+    bizRegNo: onlyDigits(params?.bizRegNo),
+    bizPhone: normalizePhone(params?.bizPhone),
+    openDate: normalizeOpenDate(params?.openDate),
     ownerName: pickString(params?.ownerName) ?? "",
   };
 
@@ -401,6 +477,34 @@ export async function shipperSignup(params: ShipperSignupParams): Promise<Shippe
     return { shipperId: null, errorCode: "INVALID_INPUT_VALUE", message: "필수 입력값 누락" };
   }
 
+  if (onlyDigits(payload.phone).length < 10) {
+    return { shipperId: null, errorCode: "INVALID_INPUT_VALUE", message: "전화번호는 숫자 10자리 이상 입력해 주세요." };
+  }
+
+  if (onlyDigits(payload.bizPhone).length < 10) {
+    return {
+      shipperId: null,
+      errorCode: "INVALID_INPUT_VALUE",
+      message: "사업장 연락처는 숫자 10자리 이상 입력해 주세요.",
+    };
+  }
+
+  if (payload.bizRegNo.length < 10) {
+    return {
+      shipperId: null,
+      errorCode: "INVALID_INPUT_VALUE",
+      message: "사업자등록번호는 숫자 10자리로 입력해 주세요.",
+    };
+  }
+
+  if (!isValidOpenDate(payload.openDate)) {
+    return {
+      shipperId: null,
+      errorCode: "INVALID_INPUT_VALUE",
+      message: "개업일자는 YYYYMMDD 형식(예: 20240131)으로 입력해 주세요.",
+    };
+  }
+
   if (isMockMode()) {
     return { shipperId: 1 };
   }
@@ -418,7 +522,8 @@ export async function shipperSignup(params: ShipperSignupParams): Promise<Shippe
   } catch (err) {
     const meta = extractApiErrorMeta(err);
     const isInvalid = meta?.status === 400;
-    return { shipperId: null, errorCode: isInvalid ? "INVALID_INPUT_VALUE" : "UNKNOWN", message: meta?.message };
+    const message = extractReadableApiErrorMessage(err, meta?.message) ?? meta?.message;
+    return { shipperId: null, errorCode: isInvalid ? "INVALID_INPUT_VALUE" : "UNKNOWN", message };
   }
 }
 

@@ -85,6 +85,14 @@ export function getApiBaseUrl(): string {
     );
   }
 
+  // http를 실서버로 착각하는 케이스 방지(모바일에서 차단될 수 있음)
+  if (__DEV__ && url.startsWith("http://") && !url.includes("localhost") && !url.includes("127.0.0.1")) {
+    warnOnce(
+      "env.api.base_url.http_warning",
+      "[env] API_BASE_URL이 http:// 입니다. 실서버라면 https:// 권장(모바일 보안 설정에 의해 차단될 수 있음)."
+    );
+  }
+
   return url;
 }
 
@@ -94,8 +102,6 @@ export function getAuthRefreshPath(): string {
 }
 
 // 목업 모드는 EXPO_PUBLIC_MOCK_MODE 하나로 통합해서 사용한다.
-// - true(1): 실서버 대신 목업 데이터/응답 사용
-// - false(0): 실서버 사용
 function baseMockMode(): boolean {
   return readBool("EXPO_PUBLIC_MOCK_MODE", false);
 }
@@ -112,6 +118,12 @@ export function isMockQuoteEnabled(): boolean {
 export function isAuthDebugLogsEnabled(): boolean {
   if (!__DEV__) return false;
   return readBool("EXPO_PUBLIC_AUTH_DEBUG_LOGS", false);
+}
+
+// API 전역 디버그 로그 출력 여부(개발 환경에서만 반영)
+export function isApiDebugLogsEnabled(): boolean {
+  if (!__DEV__) return false;
+  return readBool("EXPO_PUBLIC_API_DEBUG_LOGS", readBool("EXPO_PUBLIC_AUTH_DEBUG_LOGS", false));
 }
 
 // 견적 API 경로

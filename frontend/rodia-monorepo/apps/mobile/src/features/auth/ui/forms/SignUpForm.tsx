@@ -1,6 +1,6 @@
-﻿// apps/mobile/src/features/auth/ui/forms/SignUpForm.tsx
+// apps/mobile/src/features/auth/ui/forms/SignUpForm.tsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Easing, StyleSheet, type TextInput, View } from "react-native";
+import { Alert, Animated, Easing, StyleSheet, type TextInput, View } from "react-native";
 import { createThemedStyles } from "@/shared/theme/useAppTheme";
 import { AppButton } from "@/shared/ui/kit/AppButton";
 import { AppInput } from "@/shared/ui/kit/AppInput";
@@ -16,6 +16,11 @@ type SignUpParams = {
   name: string;
   phone: string;
   role: AuthUserRole;
+  companyName?: string;
+  ownerName?: string;
+  bizRegNo?: string;
+  bizPhone?: string;
+  openDate?: string;
 };
 
 type AuthStoreWithSignUp = ReturnType<typeof useAuth> & {
@@ -42,7 +47,9 @@ type Props = {
 };
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PHONE_FORMAT_REGEX = /^010-\d{4}-\d{4}$/;
+const OPEN_DATE_DIGITS = 8;
+const BIZ_REG_MIN_DIGITS = 10;
+const PHONE_MIN_DIGITS = 10;
 
 const useStyles = createThemedStyles((t) =>
   StyleSheet.create({
@@ -104,15 +111,38 @@ const useStyles = createThemedStyles((t) =>
   })
 );
 
+function onlyDigits(value?: string | null): string {
+  return (value ?? "").replace(/\D/g, "");
+}
+
 const formatPhoneNumber = (value: string) => {
-  const cleaned = (value ?? "").replace(/\D/g, "");
+  const cleaned = onlyDigits(value).slice(0, 11);
   if (cleaned.length <= 3) return cleaned;
   if (cleaned.length <= 7) return `${cleaned.slice(0, 3)}-${cleaned.slice(3)}`;
   return `${cleaned.slice(0, 3)}-${cleaned.slice(3, 7)}-${cleaned.slice(7, 11)}`;
 };
 
+const formatBizRegNo = (value: string) => {
+  const cleaned = onlyDigits(value).slice(0, 10);
+  if (cleaned.length <= 3) return cleaned;
+  if (cleaned.length <= 5) return `${cleaned.slice(0, 3)}-${cleaned.slice(3)}`;
+  return `${cleaned.slice(0, 3)}-${cleaned.slice(3, 5)}-${cleaned.slice(5, 10)}`;
+};
+
+const formatOpenDate = (value: string) => {
+  const cleaned = onlyDigits(value).slice(0, OPEN_DATE_DIGITS);
+  if (cleaned.length <= 4) return cleaned;
+  if (cleaned.length <= 6) return `${cleaned.slice(0, 4)}-${cleaned.slice(4)}`;
+  return `${cleaned.slice(0, 4)}-${cleaned.slice(4, 6)}-${cleaned.slice(6, 8)}`;
+};
+
 function normalizeEmail(value?: string | null) {
   return (value ?? "").trim();
+}
+
+function normalizeOpenDate(value?: string | null): string {
+  const digits = onlyDigits(value);
+  return digits.length >= OPEN_DATE_DIGITS ? digits.slice(0, OPEN_DATE_DIGITS) : digits;
 }
 
 function isEmailValid(value: string) {
@@ -120,10 +150,24 @@ function isEmailValid(value: string) {
 }
 
 function isPhoneValid(value?: string | null) {
-  const safe = (value ?? "").trim();
-  if (PHONE_FORMAT_REGEX.test(safe)) return true;
-  const digits = safe.replace(/\D/g, "");
-  return digits.length === 11;
+  const digits = onlyDigits(value);
+  return digits.length >= PHONE_MIN_DIGITS;
+}
+
+function isBizRegNoValid(value?: string | null) {
+  return onlyDigits(value).length >= BIZ_REG_MIN_DIGITS;
+}
+
+function isOpenDateValid(value?: string | null): boolean {
+  const openDate = normalizeOpenDate(value);
+  if (!/^\d{8}$/.test(openDate)) return false;
+  const y = Number(openDate.slice(0, 4));
+  const m = Number(openDate.slice(4, 6));
+  const d = Number(openDate.slice(6, 8));
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return false;
+  if (m < 1 || m > 12 || d < 1 || d > 31) return false;
+  const date = new Date(y, m - 1, d);
+  return date.getFullYear() === y && date.getMonth() === m - 1 && date.getDate() === d;
 }
 
 function readErrorMessage(error: unknown, fallback: string) {
@@ -152,6 +196,11 @@ export function SignUpForm({
   const passwordRef = useRef<TextInput>(null);
   const confirmPasswordRef = useRef<TextInput>(null);
   const phoneRef = useRef<TextInput>(null);
+  const companyNameRef = useRef<TextInput>(null);
+  const ownerNameRef = useRef<TextInput>(null);
+  const bizRegNoRef = useRef<TextInput>(null);
+  const bizPhoneRef = useRef<TextInput>(null);
+  const openDateRef = useRef<TextInput>(null);
   const submitInFlightRef = useRef(false);
   const enter = useRef(new Animated.Value(0)).current;
 
@@ -160,6 +209,11 @@ export function SignUpForm({
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [phone, setPhone] = useState("");
+  const [companyName, setCompanyName] = useState("");
+  const [ownerName, setOwnerName] = useState("");
+  const [bizRegNo, setBizRegNo] = useState("");
+  const [bizPhone, setBizPhone] = useState("");
+  const [openDate, setOpenDate] = useState("");
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -173,11 +227,20 @@ export function SignUpForm({
 
   useEffect(() => {
     if (!auth.isMockAuth) return;
-    setName(role === "driver" ? "Mock Driver" : "Mock Shipper");
+    const mockName = role === "driver" ? "Mock Driver" : "Mock Shipper";
+    const mockPhone = role === "driver" ? "010-1234-5678" : "010-9876-5432";
+    setName(mockName);
     setEmail(role === "driver" ? (MOCK_EMAIL_BY_ROLE.driver ?? "") : (MOCK_EMAIL_BY_ROLE.shipper ?? ""));
     setPassword(MOCK_PASSWORD ?? "");
     setConfirmPassword(MOCK_PASSWORD ?? "");
-    setPhone(role === "driver" ? "010-1234-5678" : "010-9876-5432");
+    setPhone(mockPhone);
+    if (role === "shipper") {
+      setCompanyName("로디아 화주");
+      setOwnerName(mockName);
+      setBizRegNo("123-45-67890");
+      setBizPhone(mockPhone);
+      setOpenDate("2020-01-01");
+    }
   }, [auth.isMockAuth, role]);
 
   const scrollIntoView = useCallback(
@@ -218,6 +281,30 @@ export function SignUpForm({
     [clearLocalError]
   );
 
+  const handleBizPhoneChange = useCallback(
+    (text: string) => {
+      clearLocalError();
+      setBizPhone(formatPhoneNumber(text ?? ""));
+    },
+    [clearLocalError]
+  );
+
+  const handleBizRegNoChange = useCallback(
+    (text: string) => {
+      clearLocalError();
+      setBizRegNo(formatBizRegNo(text ?? ""));
+    },
+    [clearLocalError]
+  );
+
+  const handleOpenDateChange = useCallback(
+    (text: string) => {
+      clearLocalError();
+      setOpenDate(formatOpenDate(text ?? ""));
+    },
+    [clearLocalError]
+  );
+
   const isValid = useMemo(() => {
     const safeName = name?.trim() ?? "";
     const safeEmail = normalizeEmail(email);
@@ -230,8 +317,28 @@ export function SignUpForm({
     if (safePassword.length < 6) return false;
     if (safePassword !== safeConfirm) return false;
     if (!isPhoneValid(safePhone)) return false;
+
+    if (role !== "shipper") return true;
+
+    if (!(companyName ?? "").trim()) return false;
+    if (!(ownerName ?? "").trim()) return false;
+    if (!isBizRegNoValid(bizRegNo)) return false;
+    if (!isPhoneValid(bizPhone)) return false;
+    if (!isOpenDateValid(openDate)) return false;
     return true;
-  }, [confirmPassword, email, name, password, phone]);
+  }, [bizPhone, bizRegNo, companyName, confirmPassword, email, name, openDate, ownerName, password, phone, role]);
+
+  const phoneError = phone && !isPhoneValid(phone) ? "전화번호는 숫자 10자리 이상 입력해 주세요." : undefined;
+  const bizPhoneError =
+    role === "shipper" && bizPhone && !isPhoneValid(bizPhone) ? "사업장 연락처는 숫자 10자리 이상 입력해 주세요." : undefined;
+  const bizRegNoError =
+    role === "shipper" && bizRegNo && !isBizRegNoValid(bizRegNo)
+      ? "사업자등록번호는 숫자 10자리로 입력해 주세요."
+      : undefined;
+  const openDateError =
+    role === "shipper" && openDate && !isOpenDateValid(openDate)
+      ? "개업일자는 YYYYMMDD 형식(예: 20240131)으로 입력해 주세요."
+      : undefined;
 
   const handleSubmit = useCallback(async () => {
     if (auth.isBusy || submitInFlightRef.current) return;
@@ -265,8 +372,41 @@ export function SignUpForm({
     }
 
     if (!isPhoneValid(safePhone)) {
-      reportError("전화번호를 010-1234-5678 형식으로 입력해 주세요.");
+      reportError("전화번호는 숫자 10자리 이상 입력해 주세요.");
       return;
+    }
+
+    const shipperCompany = (companyName ?? "").trim();
+    const shipperOwner = (ownerName ?? "").trim();
+    const shipperBizRegNo = onlyDigits(bizRegNo);
+    const shipperBizPhone = formatPhoneNumber(bizPhone ?? "");
+    const shipperOpenDate = normalizeOpenDate(openDate);
+
+    if (role === "shipper") {
+      if (!shipperCompany) {
+        reportError("상호명을 입력해 주세요.");
+        return;
+      }
+
+      if (!shipperOwner) {
+        reportError("대표자명을 입력해 주세요.");
+        return;
+      }
+
+      if (shipperBizRegNo.length < BIZ_REG_MIN_DIGITS) {
+        reportError("사업자등록번호는 숫자 10자리로 입력해 주세요.");
+        return;
+      }
+
+      if (!isPhoneValid(shipperBizPhone)) {
+        reportError("사업장 연락처는 숫자 10자리 이상 입력해 주세요.");
+        return;
+      }
+
+      if (!isOpenDateValid(shipperOpenDate)) {
+        reportError("개업일자는 YYYYMMDD 형식(예: 20240131)으로 입력해 주세요.");
+        return;
+      }
     }
 
     submitInFlightRef.current = true;
@@ -278,31 +418,44 @@ export function SignUpForm({
         password: safePassword,
         phone: safePhone,
         role,
+        companyName: role === "shipper" ? shipperCompany : undefined,
+        ownerName: role === "shipper" ? shipperOwner : undefined,
+        bizRegNo: role === "shipper" ? shipperBizRegNo : undefined,
+        bizPhone: role === "shipper" ? shipperBizPhone : undefined,
+        openDate: role === "shipper" ? shipperOpenDate : undefined,
       });
 
       if (!signUpOk) {
-        reportError(auth.errorMessage ?? "회원가입에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+        const message = auth.errorMessage ?? "회원가입에 실패했습니다. 잠시 후 다시 시도해 주세요.";
+        reportError(message);
+        Alert.alert("회원가입 실패", message);
         return;
       }
 
       onRequirePostSuccess?.({ role });
-
       onSignedUp?.({ role, email: safeEmail });
       onSuccess?.();
     } catch (error) {
-      reportError(readErrorMessage(error, auth.errorMessage ?? "회원가입 처리 중 오류가 발생했습니다."));
+      const message = readErrorMessage(error, auth.errorMessage ?? "회원가입 처리 중 오류가 발생했습니다.");
+      reportError(message);
+      Alert.alert("회원가입 실패", message);
     } finally {
       submitInFlightRef.current = false;
     }
   }, [
     auth,
+    bizPhone,
+    bizRegNo,
     clearLocalError,
+    companyName,
     confirmPassword,
     email,
     name,
     onRequirePostSuccess,
     onSignedUp,
     onSuccess,
+    openDate,
+    ownerName,
     password,
     phone,
     reportError,
@@ -407,19 +560,116 @@ export function SignUpForm({
               value={phone}
               shellStyle={s.inputShell}
               onChangeText={handlePhoneChange}
-              returnKeyType="done"
+              error={phoneError}
+              returnKeyType="next"
+              blurOnSubmit={false}
               onFocus={() => scrollIntoView(phoneRef.current ?? null)}
-              onSubmitEditing={handleSubmit}
+              onSubmitEditing={() => {
+                if (role === "shipper") {
+                  focusInput(companyNameRef.current ?? null);
+                  return;
+                }
+                handleSubmit();
+              }}
             />
+
+            {role === "shipper" ? (
+              <>
+                <AppInput
+                  ref={companyNameRef}
+                  label="상호명"
+                  placeholder="상호명을 입력해 주세요"
+                  value={companyName}
+                  shellStyle={s.inputShell}
+                  onChangeText={(value) => {
+                    clearLocalError();
+                    setCompanyName(value ?? "");
+                  }}
+                  returnKeyType="next"
+                  blurOnSubmit={false}
+                  onFocus={() => scrollIntoView(companyNameRef.current ?? null)}
+                  onSubmitEditing={() => focusInput(ownerNameRef.current ?? null)}
+                />
+
+                <AppInput
+                  ref={ownerNameRef}
+                  label="대표자명"
+                  placeholder="대표자명을 입력해 주세요"
+                  value={ownerName}
+                  shellStyle={s.inputShell}
+                  onChangeText={(value) => {
+                    clearLocalError();
+                    setOwnerName(value ?? "");
+                  }}
+                  returnKeyType="next"
+                  blurOnSubmit={false}
+                  onFocus={() => scrollIntoView(ownerNameRef.current ?? null)}
+                  onSubmitEditing={() => focusInput(bizRegNoRef.current ?? null)}
+                />
+
+                <AppInput
+                  ref={bizRegNoRef}
+                  label="사업자등록번호"
+                  placeholder="123-45-67890"
+                  keyboardType="number-pad"
+                  maxLength={12}
+                  value={bizRegNo}
+                  shellStyle={s.inputShell}
+                  onChangeText={handleBizRegNoChange}
+                  error={bizRegNoError}
+                  returnKeyType="next"
+                  blurOnSubmit={false}
+                  onFocus={() => scrollIntoView(bizRegNoRef.current ?? null)}
+                  onSubmitEditing={() => focusInput(bizPhoneRef.current ?? null)}
+                />
+
+                <AppInput
+                  ref={bizPhoneRef}
+                  label="사업장 연락처"
+                  placeholder="010-0000-0000"
+                  keyboardType="number-pad"
+                  maxLength={13}
+                  value={bizPhone}
+                  shellStyle={s.inputShell}
+                  onChangeText={handleBizPhoneChange}
+                  error={bizPhoneError}
+                  returnKeyType="next"
+                  blurOnSubmit={false}
+                  onFocus={() => scrollIntoView(bizPhoneRef.current ?? null)}
+                  onSubmitEditing={() => focusInput(openDateRef.current ?? null)}
+                />
+
+                <AppInput
+                  ref={openDateRef}
+                  label="개업일자"
+                  placeholder="YYYY-MM-DD 또는 YYYYMMDD"
+                  keyboardType="number-pad"
+                  maxLength={10}
+                  value={openDate}
+                  shellStyle={s.inputShell}
+                  onChangeText={handleOpenDateChange}
+                  error={openDateError}
+                  returnKeyType="done"
+                  onFocus={() => scrollIntoView(openDateRef.current ?? null)}
+                  onSubmitEditing={handleSubmit}
+                />
+              </>
+            ) : null}
           </View>
 
           <View style={s.infoBox}>
             <AppText variant="detail" weight="700" style={s.infoTitle}>
               안내
             </AppText>
-            <AppText variant="caption" style={s.infoBody}>
-              빠른 시작을 위해 필수 정보만 입력받고 있습니다.
-            </AppText>
+            {role === "shipper" ? (
+              <AppText variant="caption" style={s.infoBody}>
+                화주 가입은 사업자 진위확인이 포함됩니다. 사업자번호/개업일자/대표자명을 실정보로 입력해 주세요.
+              </AppText>
+            ) : (
+              <AppText variant="caption" style={s.infoBody}>
+                빠른 시작을 위해 필수 정보만 입력받고 있습니다.
+              </AppText>
+            )}
             <AppText variant="caption" color="textMain" weight="700">
               추가 인증(계좌, 차량 등)은 가입 후 단계에서 진행됩니다.
             </AppText>

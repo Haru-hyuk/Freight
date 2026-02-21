@@ -230,7 +230,7 @@ export function resolveTonePalette(theme: AppTheme, policy?: Pick<QuoteActionPol
       badgeBg: tint(c.textMain, 0.05, c.bgSurfaceAlt),
       badgeBorder: tint(c.textMain, 0.14, c.borderDefault),
       badgeText: c.textSub,
-      emphasisText: c.textSub,
+      emphasisText: c.textMain,
       iconColor: c.textSub,
       iconChipBg: tint(c.textMain, 0.04, c.bgSurface),
       iconChipBorder: tint(c.textMain, 0.12, c.borderDefault),

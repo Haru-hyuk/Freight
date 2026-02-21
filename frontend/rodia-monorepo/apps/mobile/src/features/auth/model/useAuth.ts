@@ -24,6 +24,11 @@ type SignUpParams = {
   name: string;
   phone: string;
   role: AuthUserRole;
+  companyName?: string;
+  ownerName?: string;
+  bizRegNo?: string;
+  bizPhone?: string;
+  openDate?: string;
 };
 
 type AuthActions = {
@@ -82,6 +87,36 @@ function onlyDigits(v: unknown): string {
   return safeTrim(v).replace(/\D/g, "");
 }
 
+function toPhoneHyphen(v: unknown): string {
+  const digits = onlyDigits(v);
+  if (digits.length === 11) {
+    return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7, 11)}`;
+  }
+  if (digits.length === 10 && digits.startsWith("02")) {
+    return `02-${digits.slice(2, 6)}-${digits.slice(6, 10)}`;
+  }
+  if (digits.length === 10) {
+    return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
+  }
+  return safeTrim(v);
+}
+
+function normalizeOpenDate(v: unknown): string {
+  const digits = onlyDigits(v);
+  return digits.length >= 8 ? digits.slice(0, 8) : digits;
+}
+
+function isValidOpenDate(v: string): boolean {
+  if (!/^\d{8}$/.test(v)) return false;
+  const y = Number(v.slice(0, 4));
+  const m = Number(v.slice(4, 6));
+  const d = Number(v.slice(6, 8));
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return false;
+  if (m < 1 || m > 12 || d < 1 || d > 31) return false;
+  const date = new Date(y, m - 1, d);
+  return date.getFullYear() === y && date.getMonth() === m - 1 && date.getDate() === d;
+}
+
 function readMockAuthMode(): boolean {
   return isMockAuthEnabled();
 }
@@ -132,15 +167,12 @@ function buildDriverSignupPayload(params: SignUpParams): DriverSignupParams {
 
 function buildShipperSignupPayload(params: SignUpParams): ShipperSignupParams {
   const safeName = safeTrim(params?.name);
-  const safePhone = safeTrim(params?.phone);
-  const phoneDigits = onlyDigits(safePhone);
-  const bizPhone =
-    phoneDigits.length === 11
-      ? `${phoneDigits.slice(0, 3)}-${phoneDigits.slice(3, 7)}-${phoneDigits.slice(7, 11)}`
-      : "02-1234-5678";
-  const bizRegNo = "1234567890";
-  const companyName = safeName ? `${safeName} 화주` : "로디아 화주";
-  const ownerName = safeName || "홍길동";
+  const safePhone = toPhoneHyphen(params?.phone);
+  const safeBizPhone = toPhoneHyphen(params?.bizPhone || safePhone);
+  const bizRegNo = onlyDigits(params?.bizRegNo);
+  const companyName = safeTrim(params?.companyName) || (safeName ? `${safeName} 화주` : "");
+  const ownerName = safeTrim(params?.ownerName) || safeName;
+  const openDate = normalizeOpenDate(params?.openDate);
 
   return {
     email: safeTrim(params?.email),
@@ -151,8 +183,8 @@ function buildShipperSignupPayload(params: SignUpParams): ShipperSignupParams {
     address: "서울특별시 강남구 테헤란로 1",
     addressDetail: "101호",
     bizRegNo,
-    bizPhone,
-    openDate: "20200101",
+    bizPhone: safeBizPhone,
+    openDate,
     ownerName,
   };
 }
@@ -319,7 +351,45 @@ async function signUpImpl(params: SignUpParams) {
 
   try {
     if (role === "shipper") {
-      const payload = buildShipperSignupPayload({ email, password, name, phone, role });
+      const companyName = safeTrim(params?.companyName);
+      const ownerName = safeTrim(params?.ownerName);
+      const bizRegNo = onlyDigits(params?.bizRegNo);
+      const bizPhoneDigits = onlyDigits(params?.bizPhone);
+      const openDate = normalizeOpenDate(params?.openDate);
+      const phoneDigits = onlyDigits(phone);
+
+      if (!companyName || !ownerName) {
+        setState({ isBusy: false, errorMessage: "상호명과 대표자명을 입력해 주세요." });
+        return false;
+      }
+
+      if (bizRegNo.length < 10) {
+        setState({ isBusy: false, errorMessage: "사업자등록번호는 숫자 10자리로 입력해 주세요." });
+        return false;
+      }
+
+      if (phoneDigits.length < 10 || bizPhoneDigits.length < 10) {
+        setState({ isBusy: false, errorMessage: "전화번호는 숫자 10자리 이상으로 입력해 주세요." });
+        return false;
+      }
+
+      if (!isValidOpenDate(openDate)) {
+        setState({ isBusy: false, errorMessage: "개업일자는 YYYYMMDD 형식(예: 20240131)으로 입력해 주세요." });
+        return false;
+      }
+
+      const payload = buildShipperSignupPayload({
+        email,
+        password,
+        name,
+        phone,
+        role,
+        companyName,
+        ownerName,
+        bizRegNo,
+        bizPhone: params?.bizPhone,
+        openDate,
+      });
       const res = await authApi.shipperSignup(payload);
       const shipperId = typeof res?.shipperId === "number" ? res.shipperId : null;
       if (shipperId && shipperId > 0) {

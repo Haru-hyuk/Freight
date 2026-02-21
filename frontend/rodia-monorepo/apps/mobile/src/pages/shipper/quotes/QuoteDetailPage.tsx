@@ -1,6 +1,6 @@
 // app/quote/[id].tsx (or wherever QuoteDetailPage lives)
 import React from "react";
-import { Alert, LayoutAnimation, Pressable, StyleSheet, View } from "react-native";
+import { Alert, KeyboardAvoidingView, LayoutAnimation, Modal, Platform, Pressable, StyleSheet, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -12,6 +12,7 @@ import { safeNumber, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppButton } from "@/shared/ui/kit/AppButton";
 import { AppCard } from "@/shared/ui/kit/AppCard";
+import { AppInput } from "@/shared/ui/kit/AppInput";
 import { AppText } from "@/shared/ui/kit/AppText";
 import { PageScaffold } from "@/widgets/layout/PageScaffold";
 
@@ -64,6 +65,39 @@ const useStyles = createThemedStyles((theme) => {
       color: c.textMuted,
       fontSize: safeNumber(theme.typography.scale.caption.size, 12),
       lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
+      fontWeight: "700",
+    },
+    cancelSummaryBox: {
+      borderWidth: 1,
+      borderColor: c.borderDefault,
+      backgroundColor: c.bgSurface,
+      borderRadius: safeNumber(theme.layout.radii.card, 16),
+      paddingHorizontal: spacing * 3,
+      paddingVertical: spacing * 2,
+      gap: spacing + 2,
+    },
+    cancelSummaryRow: {
+      minHeight: 24,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing,
+    },
+    cancelSummaryIcon: {
+      color: c.semanticWarning,
+      fontSize: 16,
+    },
+    cancelSummaryLabel: {
+      color: c.textMuted,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
+      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
+      fontWeight: "700",
+      width: 56,
+    },
+    cancelSummaryValue: {
+      flex: 1,
+      color: c.textMain,
+      fontSize: safeNumber(theme.typography.scale.detail.size, 14),
+      lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20),
       fontWeight: "700",
     },
 
@@ -153,6 +187,16 @@ const useStyles = createThemedStyles((theme) => {
       justifyContent: "space-between",
       gap: spacing,
     },
+    metricLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing,
+      flex: 1,
+    },
+    metricIcon: {
+      color: c.textSub,
+      fontSize: 14,
+    },
     metricLabel: {
       color: c.textMain,
       fontSize: safeNumber(theme.typography.scale.detail.size, 14),
@@ -187,14 +231,42 @@ const useStyles = createThemedStyles((theme) => {
       lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20),
       fontWeight: "700",
     },
+    highlightRow: {
+      minHeight: 24,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing,
+    },
+    highlightIcon: {
+      color: c.textSub,
+      fontSize: 14,
+    },
 
-    quickActionsRow: {
+    actionsContainer: {
       marginTop: spacing,
+      gap: spacing * 2,
+    },
+    quickActionsRow: {
       flexDirection: "row",
       gap: spacing * 2,
     },
     actionButton: {
       flex: 1,
+    },
+    cancelInlineWrapper: {
+      paddingTop: spacing * 2,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: tint(c.textMain, 0.08, c.borderDefault),
+    },
+    cancelInlineButton: {
+      minHeight: 44,
+    },
+    cancelInlineIcon: {
+      color: c.textSub,
+      fontSize: 18,
+    },
+    cancelInlineText: {
+      color: c.textSub,
     },
     footnote: {
       color: c.textSub,
@@ -202,6 +274,7 @@ const useStyles = createThemedStyles((theme) => {
       lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
       fontWeight: "600",
       marginTop: spacing,
+      textAlign: "center",
     },
 
     accordionHeader: {
@@ -276,6 +349,67 @@ const useStyles = createThemedStyles((theme) => {
       fontWeight: "700",
       textAlign: "right",
     },
+
+    cancelModalOverlay: {
+      flex: 1,
+      justifyContent: "center",
+      paddingHorizontal: spacing * 4,
+      backgroundColor: "rgba(0, 0, 0, 0.5)",
+    },
+    cancelModalSheet: {
+      width: "100%",
+    },
+    cancelModalCard: {
+      borderWidth: 0,
+      backgroundColor: c.bgSurface,
+      borderRadius: safeNumber(theme.layout.radii.card, 16) + 8,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.15,
+      shadowRadius: 20,
+      elevation: 10,
+    },
+    cancelModalContent: {
+      padding: spacing * 5,
+      gap: spacing * 3,
+    },
+    cancelModalHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing * 2,
+      marginBottom: spacing,
+    },
+    cancelModalIconContainer: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: tint(c.semanticWarning, 0.1, c.bgSurface),
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    cancelModalIcon: {
+      color: c.semanticWarning,
+      fontSize: 22,
+    },
+    cancelModalTitle: {
+      color: c.textMain,
+      fontSize: safeNumber(theme.typography.scale.heading.size, 18) + 2,
+      lineHeight: safeNumber(theme.typography.scale.heading.lineHeight, 24) + 4,
+      fontWeight: "900",
+      letterSpacing: -0.4,
+    },
+    cancelModalDesc: {
+      color: c.textSub,
+      fontSize: safeNumber(theme.typography.scale.detail.size, 14),
+      lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20),
+      fontWeight: "600",
+      marginBottom: spacing,
+    },
+    cancelModalActions: {
+      flexDirection: "row",
+      gap: spacing * 2,
+      marginTop: spacing * 2,
+    },
   });
 });
 
@@ -346,7 +480,15 @@ function resolvePriceLabel(view: QuoteDetailView): string {
   return "운임";
 }
 
-function OverviewCard({ view }: { view: QuoteDetailView }) {
+function OverviewCard({
+  view,
+  showCancelButton,
+  onPressCancel,
+}: {
+  view: QuoteDetailView;
+  showCancelButton?: boolean;
+  onPressCancel?: () => void;
+}) {
   const styles = useStyles();
   const theme = useAppTheme();
   const palette = resolveTonePalette(theme, view.policy);
@@ -359,6 +501,8 @@ function OverviewCard({ view }: { view: QuoteDetailView }) {
   const origin = view.coreSummary?.originAddress ?? "";
   const dest = view.coreSummary?.destinationAddress ?? "";
   const distanceText = view.coreSummary?.distanceText ?? "거리 정보 없음";
+  const completedAtText = (view.coreSummary?.completedAtText ?? "").trim();
+  const isCompleted = (view.quote?.status ?? "") === "DROPOFF";
 
   const isPriceCompare = (view.highlight?.type ?? "none") === "priceCompare";
   const isCanceled = (view.quote?.status ?? "") === "CANCELED";
@@ -423,15 +567,31 @@ function OverviewCard({ view }: { view: QuoteDetailView }) {
         <View style={styles.divider} />
 
         <View style={styles.metricRow}>
-          <AppText style={styles.metricLabel}>운송 거리</AppText>
+          <View style={styles.metricLeft}>
+            <Ionicons name="git-network-outline" style={styles.metricIcon} />
+            <AppText style={styles.metricLabel}>운송 거리</AppText>
+          </View>
           <AppText style={styles.metricValue}>{distanceText}</AppText>
         </View>
 
         {showPriceSummary ? (
           <View>
             <View style={styles.metricRow}>
-              <AppText style={styles.metricLabel}>{resolvePriceLabel(view)}</AppText>
-              <AppText style={styles.metricValue}>{note || "세부 요금은 아래에서 확인할 수 있습니다."}</AppText>
+              <View style={styles.metricLeft}>
+                <Ionicons
+                  name={isCompleted ? "wallet-outline" : "cash-outline"}
+                  style={[styles.metricIcon, { color: palette.iconColor }]}
+                />
+                <AppText style={styles.metricLabel}>{resolvePriceLabel(view)}</AppText>
+              </View>
+              {isCompleted && completedAtText ? (
+                <View style={styles.metricLeft}>
+                  <Ionicons name="checkmark-done-circle-outline" style={[styles.metricIcon, { color: palette.iconColor }]} />
+                  <AppText style={styles.metricValue}>{completedAtText}</AppText>
+                </View>
+              ) : (
+                <AppText style={styles.metricValue}>{note || "세부 요금은 아래에서 확인할 수 있습니다."}</AppText>
+              )}
             </View>
             <AppText style={[styles.priceValue, { color: palette.emphasisText }]}>{view.coreSummary?.totalPriceText ?? ""}</AppText>
           </View>
@@ -439,27 +599,46 @@ function OverviewCard({ view }: { view: QuoteDetailView }) {
 
         {highlightLines.length > 0
           ? highlightLines.slice(0, 4).map((line, index) => (
-              <AppText key={`${line}-${index}`} style={styles.highlightLine}>
-                {line}
-              </AppText>
+              <View key={`${line}-${index}`} style={styles.highlightRow}>
+                <Ionicons name="information-circle-outline" style={styles.highlightIcon} />
+                <AppText style={styles.highlightLine}>{line}</AppText>
+              </View>
             ))
           : null}
 
-        {quickActions.length > 0 ? (
-          <View style={styles.quickActionsRow}>
-            {quickActions.map((action) => (
-              <AppButton
-                key={action}
-                title={resolveQuickActionLabel(action)}
-                variant="secondary"
-                style={styles.actionButton}
-                onPress={() => runQuickAction(action, view)}
-              />
-            ))}
-          </View>
-        ) : null}
+        {/* 하단 액션 버튼 영역 (빠른 실행 및 취소 버튼 묶음 배치 개선) */}
+        {(quickActions.length > 0 || showCancelButton || footnote) && (
+          <View style={styles.actionsContainer}>
+            {quickActions.length > 0 ? (
+              <View style={styles.quickActionsRow}>
+                {quickActions.map((action) => (
+                  <AppButton
+                    key={action}
+                    title={resolveQuickActionLabel(action)}
+                    variant="secondary"
+                    style={styles.actionButton}
+                    onPress={() => runQuickAction(action, view)}
+                  />
+                ))}
+              </View>
+            ) : null}
 
-        {footnote ? <AppText style={styles.footnote}>{footnote}</AppText> : null}
+            {showCancelButton ? (
+              <View style={[styles.cancelInlineWrapper, quickActions.length === 0 && { borderTopWidth: 0, paddingTop: 0 }]}>
+                <AppButton
+                  title="요청 취소"
+                  variant="secondary"
+                  style={styles.cancelInlineButton}
+                  textStyle={styles.cancelInlineText}
+                  left={<Ionicons name="trash-outline" style={styles.cancelInlineIcon} />}
+                  onPress={onPressCancel}
+                />
+              </View>
+            ) : null}
+
+            {footnote ? <AppText style={styles.footnote}>{footnote}</AppText> : null}
+          </View>
+        )}
       </View>
     </AppCard>
   );
@@ -515,10 +694,59 @@ export default function QuoteDetailPage() {
   const theme = useAppTheme();
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string | string[] }>();
+  const [cancelOverride, setCancelOverride] = React.useState<{
+    status: "CANCELED";
+    cancelReason: string;
+    canceledAt: string;
+  } | null>(null);
+  const [showCancelModal, setShowCancelModal] = React.useState(false);
+  const [cancelReasonInput, setCancelReasonInput] = React.useState("");
+  const [cancelReasonError, setCancelReasonError] = React.useState<string | undefined>(undefined);
 
   const quoteId = parseQuoteId(params?.id);
-  const view = useQuoteDetail(quoteId);
+  const view = useQuoteDetail(quoteId, cancelOverride ?? undefined);
   const palette = resolveTonePalette(theme, view.policy);
+  const hasCancelAction = view.policy.bottomBar?.primary === "cancelRequest" || view.policy.bottomBar?.secondary === "cancelRequest";
+  const bottomBarWithoutCancel = React.useMemo(() => {
+    const original = view.policy.bottomBar;
+    if (!original) return null;
+
+    const nextPrimary = original.primary === "cancelRequest" ? undefined : original.primary;
+    const nextSecondary = original.secondary === "cancelRequest" ? undefined : original.secondary;
+
+    if (!nextPrimary && !nextSecondary) return null;
+    if (!nextPrimary && nextSecondary) return { primary: nextSecondary, secondary: undefined };
+    return { primary: nextPrimary, secondary: nextSecondary };
+  }, [view.policy.bottomBar]);
+  const handleCancelRequest = React.useCallback((payload: { quoteId: number; reason: string }) => {
+    const nextCanceledAt = new Date().toISOString();
+    setCancelOverride({
+      status: "CANCELED",
+      cancelReason: payload.reason,
+      canceledAt: nextCanceledAt,
+    });
+  }, []);
+  const openCancelModal = React.useCallback(() => {
+    setShowCancelModal(true);
+    setCancelReasonError(undefined);
+  }, []);
+  const closeCancelModal = React.useCallback(() => {
+    setShowCancelModal(false);
+    setCancelReasonError(undefined);
+  }, []);
+  const submitCancelModal = React.useCallback(() => {
+    const trimmed = cancelReasonInput.trim();
+    if (trimmed.length < 2) {
+      setCancelReasonError("취소 사유를 2자 이상 입력해주세요.");
+      return;
+    }
+
+    handleCancelRequest({ quoteId: view.actionsContext.quoteId, reason: trimmed });
+    setShowCancelModal(false);
+    setCancelReasonInput("");
+    setCancelReasonError(undefined);
+    Alert.alert("요청 취소", "취소 요청이 처리되었습니다.");
+  }, [cancelReasonInput, handleCancelRequest, view.actionsContext.quoteId]);
 
   React.useEffect(() => {
     initLayoutAnimationForAndroid();
@@ -529,7 +757,13 @@ export default function QuoteDetailPage() {
       title="견적 상세"
       backgroundColor={theme.colors.bgMain}
       contentStyle={styles.pageContent}
-      bottomBar={<BottomActionRouter ctx={view.actionsContext} bottomBar={view.policy.bottomBar} guards={view.policy.guards} />}
+      bottomBar={
+        <BottomActionRouter
+          ctx={view.actionsContext}
+          bottomBar={bottomBarWithoutCancel}
+          guards={view.policy.guards}
+        />
+      }
       onPressBack={() => router.back()}
       backLabel="이전"
     >
@@ -555,10 +789,66 @@ export default function QuoteDetailPage() {
             {view.commandCenter?.metaText ?? `#${view.quote?.quoteId ?? quoteId}`}
           </AppText>
         </View>
+
+        {view.commandCenter?.cancelReasonText ? (
+          <View style={styles.cancelSummaryBox}>
+            <View style={styles.cancelSummaryRow}>
+              <Ionicons name="alert-circle" style={styles.cancelSummaryIcon} />
+              <AppText style={styles.cancelSummaryLabel}>취소 사유</AppText>
+              <AppText style={styles.cancelSummaryValue}>{view.commandCenter.cancelReasonText}</AppText>
+            </View>
+            <View style={styles.cancelSummaryRow}>
+              <Ionicons name="time-outline" style={styles.cancelSummaryIcon} />
+              <AppText style={styles.cancelSummaryLabel}>취소 시간</AppText>
+              <AppText style={styles.cancelSummaryValue}>{view.commandCenter.canceledAtText || "시간 정보 없음"}</AppText>
+            </View>
+          </View>
+        ) : null}
       </View>
 
-      <OverviewCard view={view} />
+      <OverviewCard view={view} showCancelButton={hasCancelAction} onPressCancel={openCancelModal} />
       <SpecificationArchive view={view} />
+
+      <Modal transparent visible={showCancelModal} animationType="fade" onRequestClose={closeCancelModal}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.cancelModalOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={closeCancelModal} />
+          <View style={styles.cancelModalSheet}>
+            <AppCard outlined elevated={false} style={styles.cancelModalCard}>
+              <View style={styles.cancelModalContent}>
+                <View style={styles.cancelModalHeader}>
+                  <View style={styles.cancelModalIconContainer}>
+                    <Ionicons name="warning" style={styles.cancelModalIcon} />
+                  </View>
+                  <AppText style={styles.cancelModalTitle}>요청 취소</AppText>
+                </View>
+                <AppText style={styles.cancelModalDesc}>
+                  요청을 취소하시겠습니까? 취소 사유를 입력하면 즉시 취소 상태로 변경됩니다.
+                </AppText>
+
+                <AppInput
+                  label="취소 사유"
+                  placeholder="예) 다른 운송 수단 이용, 일정 변경 등"
+                  value={cancelReasonInput}
+                  onChangeText={(text) => {
+                    setCancelReasonInput(text);
+                    if (cancelReasonError) setCancelReasonError(undefined);
+                  }}
+                  error={cancelReasonError}
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
+                  maxLength={200}
+                />
+
+                <View style={styles.cancelModalActions}>
+                  <AppButton title="닫기" variant="secondary" style={styles.actionButton} onPress={closeCancelModal} />
+                  <AppButton title="취소 확정" variant="destructive" style={styles.actionButton} onPress={submitCancelModal} />
+                </View>
+              </View>
+            </AppCard>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </PageScaffold>
   );
 }

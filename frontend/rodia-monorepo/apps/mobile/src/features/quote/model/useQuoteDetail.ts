@@ -32,12 +32,20 @@ export type QuoteActionsContext = {
   destinationAddress: string;
 };
 
+export type QuoteDetailRuntimeOverride = {
+  status?: QuoteDetailResponse["status"];
+  cancelReason?: string;
+  canceledAt?: string;
+};
+
 export type QuoteDetailViewModel = {
   quote: QuoteDetailResponse;
   policy: QuoteActionPolicy;
   commandCenter: {
     statusLabel: string;
     metaText: string;
+    cancelReasonText?: string;
+    canceledAtText?: string;
   };
   highlight: QuoteHighlight;
   coreSummary: {
@@ -47,6 +55,7 @@ export type QuoteDetailViewModel = {
     distanceText: string;
     totalPriceText: string;
     totalPriceNote: string;
+    completedAtText?: string;
   };
   specificationArchive: QuoteSection[];
   actionsContext: QuoteActionsContext;
@@ -346,9 +355,36 @@ function formatChecklistItems(items: QuoteDetailResponse["checklistItems"] | und
   return lines.length ? lines.join(" / ") : "추가 요청 없음";
 }
 
-function buildHighlight(quote: QuoteDetailResponse, policy: QuoteActionPolicy): QuoteHighlight {
+function applyRuntimeOverride(quote: QuoteDetailResponse, override?: QuoteDetailRuntimeOverride): QuoteDetailResponse {
+  if (!override) return quote;
+
+  const nextStatus = override.status ?? quote.status;
+  const nextUpdatedAt = override.canceledAt ?? quote.updatedAt;
+
+  return {
+    ...quote,
+    status: nextStatus,
+    updatedAt: nextUpdatedAt,
+  };
+}
+
+function buildHighlight(
+  quote: QuoteDetailResponse,
+  policy: QuoteActionPolicy,
+  override?: QuoteDetailRuntimeOverride
+): QuoteHighlight {
   const quickActions = policy.highlightCard?.quickActions ?? [];
   const status = quote?.status ?? "";
+
+  if (status === "CANCELED") {
+    return {
+      type: "none",
+      eyebrow: "취소 상태",
+      title: "",
+      lines: [],
+      quickActions: [],
+    };
+  }
 
   if (policy.highlightCard.type === "priceCompare") {
     const desired = toSafeNumber(quote?.desiredPrice);
@@ -404,10 +440,9 @@ function buildHighlight(quote: QuoteDetailResponse, policy: QuoteActionPolicy): 
   if (policy.highlightCard.type === "proof") {
     return {
       type: "proof",
-      eyebrow: "완료 안내",
-      title: "운송이 완료되었습니다",
-      lines: [`완료 시간 ${formatDateTime(quote?.updatedAt)}`, "인수증을 확인할 수 있습니다."],
-      footnote: "문제가 있으면 고객센터로 문의해주세요.",
+      eyebrow: "정산 정보",
+      title: "",
+      lines: ["인수증을 확인할 수 있습니다."],
       quickActions,
     };
   }
@@ -419,7 +454,6 @@ function buildSpecificationArchive(quote: QuoteDetailResponse): QuoteSection[] {
   const vehicleType = String(quote?.vehicleType ?? "").trim();
   const vehicleBodyType = String(quote?.vehicleBodyType ?? "").trim();
   const vehicleText = [vehicleType, vehicleBodyType].filter(Boolean).join(" ").trim() || "정보 없음";
-
   return [
     {
       title: "차량 및 화물",
@@ -452,29 +486,35 @@ function buildSpecificationArchive(quote: QuoteDetailResponse): QuoteSection[] {
   ];
 }
 
-export function useQuoteDetail(quoteId: QuoteId): QuoteDetailViewModel {
+export function useQuoteDetail(quoteId: QuoteId, runtimeOverride?: QuoteDetailRuntimeOverride): QuoteDetailViewModel {
   return useMemo(() => {
-    const quote = (MOCK_DETAILS as Record<number, QuoteDetailResponse>)[quoteId] ?? MOCK_DETAILS[301];
+    const baseQuote = (MOCK_DETAILS as Record<number, QuoteDetailResponse>)[quoteId] ?? MOCK_DETAILS[301];
+    const quote = applyRuntimeOverride(baseQuote, runtimeOverride);
     const policy = getQuoteActionPolicy(quote?.status ?? "");
     const waypointAddresses = (MOCK_WAYPOINTS_BY_QUOTE_ID as Record<number, string[]>)[quote?.quoteId ?? 0] ?? [];
 
     const statusLabel = policy?.badgeLabel || getQuoteStatusLabel(quote?.status ?? "");
-    const updatedAtText = formatDateTime(quote?.updatedAt);
-    const metaText = `#${quote?.quoteId ?? quoteId} · ${updatedAtText}`;
-
     const originAddress = String(quote?.originAddress ?? "");
     const destinationAddress = String(quote?.destinationAddress ?? "");
     const finalPrice = toSafeNumber(quote?.finalPrice);
 
     const isCanceled = (quote?.status ?? "") === "CANCELED";
+    const isCompleted = (quote?.status ?? "") === "DROPOFF";
+    const updatedAtText = formatDateTime(quote?.updatedAt);
+    const metaText = isCanceled ? `#${quote?.quoteId ?? quoteId}` : `#${quote?.quoteId ?? quoteId} · ${updatedAtText}`;
+    const cancelReasonText = isCanceled
+      ? String(runtimeOverride?.cancelReason ?? "").trim() || "취소 사유가 입력되지 않았습니다."
+      : "";
+    const canceledAtText = isCanceled ? formatDateTime(runtimeOverride?.canceledAt ?? quote?.updatedAt) : "";
     const totalPriceText = isCanceled ? "" : formatKrw(finalPrice);
-    const totalPriceNote = isCanceled ? "" : "세부 요금은 아래에서 확인할 수 있습니다.";
+    const totalPriceNote = isCanceled ? "" : isCompleted ? "최종 정산 금액입니다." : "세부 요금은 아래에서 확인할 수 있습니다.";
+    const completedAtText = (quote?.status ?? "") === "DROPOFF" ? formatDateTime(quote?.updatedAt) : "";
 
     return {
       quote,
       policy,
-      commandCenter: { statusLabel, metaText },
-      highlight: buildHighlight(quote, policy),
+      commandCenter: { statusLabel, metaText, cancelReasonText, canceledAtText },
+      highlight: buildHighlight(quote, policy, runtimeOverride),
       coreSummary: {
         originAddress,
         destinationAddress,
@@ -482,6 +522,7 @@ export function useQuoteDetail(quoteId: QuoteId): QuoteDetailViewModel {
         distanceText: `${toSafeNumber(quote?.distanceKm).toFixed(1)}km`,
         totalPriceText,
         totalPriceNote,
+        completedAtText,
       },
       specificationArchive: buildSpecificationArchive(quote),
       actionsContext: {
@@ -493,5 +534,5 @@ export function useQuoteDetail(quoteId: QuoteId): QuoteDetailViewModel {
         destinationAddress,
       },
     };
-  }, [quoteId]);
+  }, [quoteId, runtimeOverride?.cancelReason, runtimeOverride?.canceledAt, runtimeOverride?.status]);
 }
