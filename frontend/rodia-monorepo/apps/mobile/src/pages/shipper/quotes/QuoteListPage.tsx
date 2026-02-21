@@ -1,9 +1,10 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import type { QuoteListItem, QuoteStatusApi } from "@/entities/quote/model/quote.types";
+import { listShipperQuotes } from "@/features/quote/api";
 import {
   getQuoteActionPolicy,
   resolveTonePalette,
@@ -14,6 +15,8 @@ import { safeNumber, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppCard } from "@/shared/ui/kit/AppCard";
 import { AppEmptyState } from "@/shared/ui/kit/AppEmptyState";
+import { AppErrorState } from "@/shared/ui/kit/AppErrorState";
+import { AppSpinner } from "@/shared/ui/kit/AppSpinner";
 import { AppText } from "@/shared/ui/kit/AppText";
 import { PageScaffold } from "@/widgets/layout/PageScaffold";
 import { RequestQuoteFab } from "@/widgets/shipper/RequestQuoteFab";
@@ -79,109 +82,6 @@ type QuoteListCardProps = {
 };
 
 const KRW = new Intl.NumberFormat("ko-KR");
-
-const MOCK_QUOTES: QuoteListMockItem[] = [
-  {
-    quoteId: 301,
-    truckId: 12,
-    originAddress: "서울특별시 금천구 가산동 123-4",
-    destinationAddress: "경기도 성남시 분당구 정자동 12-9",
-    distanceKm: 32.4,
-    vehicleType: "5톤",
-    vehicleBodyType: "윙바디",
-    cargoName: "전자부품",
-    desiredPrice: 180000,
-    finalPrice: 195000,
-    status: "NEGOTIATING",
-    createdAt: "2026-02-20T08:20:00Z",
-  },
-  {
-    quoteId: 302,
-    truckId: 4,
-    originAddress: "인천광역시 남동구 고잔동 511",
-    destinationAddress: "대전광역시 유성구 관평동 901",
-    distanceKm: 153.8,
-    vehicleType: "11톤",
-    vehicleBodyType: "탑차",
-    cargoName: "냉장식품",
-    desiredPrice: 420000,
-    finalPrice: 430000,
-    status: "ASSIGNED",
-    createdAt: "2026-02-20T06:45:00Z",
-  },
-  {
-    quoteId: 303,
-    truckId: 9,
-    originAddress: "경기도 하남시 미사강변동로 85",
-    destinationAddress: "충청남도 천안시 서북구 성거읍 331",
-    distanceKm: 95.3,
-    vehicleType: "2.5톤",
-    vehicleBodyType: "카고",
-    cargoName: "생활용품",
-    desiredPrice: 210000,
-    finalPrice: 210000,
-    status: "OPEN",
-    createdAt: "2026-02-20T05:55:00Z",
-  },
-  {
-    quoteId: 304,
-    truckId: 15,
-    originAddress: "부산광역시 사하구 장림동 220",
-    destinationAddress: "경상남도 창원시 의창구 팔용동 88",
-    distanceKm: 46.2,
-    vehicleType: "5톤",
-    vehicleBodyType: "카고",
-    cargoName: "건축 자재",
-    desiredPrice: 170000,
-    finalPrice: 170000,
-    status: "PICKUP",
-    createdAt: "2026-02-20T04:20:00Z",
-    waypointAddresses: ["부산광역시 강서구 대저동 33-5"],
-  },
-  {
-    quoteId: 305,
-    truckId: 6,
-    originAddress: "서울특별시 강남구 역삼동 721",
-    destinationAddress: "부산광역시 해운대구 우동 1408",
-    distanceKm: 402.6,
-    vehicleType: "11톤",
-    vehicleBodyType: "윙바디",
-    cargoName: "사무기기",
-    desiredPrice: 690000,
-    finalPrice: 710000,
-    status: "TRANSIT",
-    createdAt: "2026-02-20T03:10:00Z",
-    waypointAddresses: ["대전광역시 대덕구 문평동 211", "경상북도 칠곡군 지천면 92"],
-  },
-  {
-    quoteId: 306,
-    truckId: 3,
-    originAddress: "강원특별자치도 원주시 지정면 72",
-    destinationAddress: "서울특별시 송파구 문정동 640",
-    distanceKm: 114.5,
-    vehicleType: "5톤",
-    vehicleBodyType: "윙바디",
-    cargoName: "공산품",
-    desiredPrice: 230000,
-    finalPrice: 220000,
-    status: "DROPOFF",
-    createdAt: "2026-02-18T09:40:00Z",
-  },
-  {
-    quoteId: 307,
-    truckId: 17,
-    originAddress: "경기도 평택시 포승읍 만호리 12",
-    destinationAddress: "전라남도 여수시 중흥동 44",
-    distanceKm: 268.9,
-    vehicleType: "25톤",
-    vehicleBodyType: "컨테이너",
-    cargoName: "수출 화물",
-    desiredPrice: 980000,
-    finalPrice: 0,
-    status: "CANCELED",
-    createdAt: "2026-02-17T14:15:00Z",
-  },
-];
 
 const FILTER_OPTIONS: Array<{ key: QuoteListFilter; label: string }> = [
   { key: "ALL", label: "전체" },
@@ -678,8 +578,8 @@ function sortClosedPrice(a: QuoteListViewItem, b: QuoteListViewItem): number {
   return b.recencyValue - a.recencyValue;
 }
 
-function useQuoteList(controls: QuoteListControls): QuoteListResult {
-  const allItems = useMemo(() => MOCK_QUOTES.map(toViewItem), []);
+function useQuoteList(quotes: QuoteListMockItem[], controls: QuoteListControls): QuoteListResult {
+  const allItems = useMemo(() => quotes.map(toViewItem), [quotes]);
 
   const groupedSorted = useMemo(() => {
     const actionRequired = allItems.filter((item) => item.policy.category === "actionRequired");
@@ -808,6 +708,7 @@ function QuoteListCardBase({ item, onPress }: QuoteListCardProps) {
   const toneKey = resolveTonePalette(theme, item.policy).key;
   const toneStyles = useMemo(() => getToneStyles(toneKey, styles), [toneKey, styles]);
   const isClosed = item.policy.category === "closed";
+  const safeDistanceKm = Number.isFinite(item.quote.distanceKm) ? item.quote.distanceKm : 0;
 
   return (
     <Pressable
@@ -852,7 +753,7 @@ function QuoteListCardBase({ item, onPress }: QuoteListCardProps) {
             <View style={styles.cargoWrap}>
               <Ionicons name="cube-outline" style={styles.cargoIcon} />
               <AppText style={styles.cargoText} numberOfLines={1}>
-                {`${item.cargoText} · ${item.quote.distanceKm.toFixed(1)}km`}
+                {`${item.cargoText} · ${safeDistanceKm.toFixed(1)}km`}
               </AppText>
             </View>
 
@@ -893,12 +794,52 @@ export default function QuoteListPage() {
   const styles = useStyles();
   const theme = useAppTheme();
   const router = useRouter();
+  const isMountedRef = useRef(true);
 
   const [activeTab, setActiveTab] = useState<QuoteListTab>("ongoing");
   const [activeFilter, setActiveFilter] = useState<QuoteListFilter>("ALL");
   const [activeSort, setActiveSort] = useState<QuoteListSort>("LATEST");
+  const [quotes, setQuotes] = useState<QuoteListMockItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const { actionRequiredList, inProgressList, closedList, counts } = useQuoteList({
+  const loadQuoteList = useCallback(async () => {
+    if (!isMountedRef.current) return;
+
+    setIsLoading(true);
+    setErrorMessage(null);
+
+    try {
+      const response = await listShipperQuotes();
+      if (!isMountedRef.current) return;
+      setQuotes(Array.isArray(response) ? response : []);
+    } catch (error) {
+      if (!isMountedRef.current) return;
+
+      const message =
+        error instanceof Error && error.message.trim().length > 0
+          ? error.message.trim()
+          : "견적 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.";
+
+      setQuotes([]);
+      setErrorMessage(message);
+    } finally {
+      if (isMountedRef.current) {
+        setIsLoading(false);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    loadQuoteList();
+
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, [loadQuoteList]);
+
+  const { actionRequiredList, inProgressList, closedList, counts } = useQuoteList(quotes, {
     activeFilter,
     activeSort,
   });
@@ -921,6 +862,7 @@ export default function QuoteListPage() {
 
   const handlePressCard = useCallback(
     (quoteId: number, status: QuoteStatusApi) => {
+      if (!Number.isInteger(quoteId) || quoteId <= 0) return;
       router.push({ pathname: "/(shipper)/quotes/[id]", params: { id: String(quoteId), status } });
     },
     [router]
@@ -994,7 +936,17 @@ export default function QuoteListPage() {
       </View>
 
       <View style={styles.listContainer}>
-        {activeTab === "ongoing" ? (
+        {isLoading ? (
+          <AppSpinner label="견적 목록을 불러오는 중입니다." />
+        ) : errorMessage ? (
+          <AppErrorState
+            title="견적 목록을 불러오지 못했어요"
+            description={errorMessage}
+            retryLabel="다시 시도"
+            onRetry={loadQuoteList}
+            fullScreen={false}
+          />
+        ) : activeTab === "ongoing" ? (
           isOngoingEmpty ? (
             <AppEmptyState
               title="조건에 맞는 견적이 없어요"
@@ -1011,11 +963,21 @@ export default function QuoteListPage() {
                     count={actionRequiredList.length}
                     tone="attention"
                   />
-                  {actionRequiredList.map((item) => (
-                    <View key={item.quote.quoteId} style={styles.cardWrapper}>
-                      <QuoteListCard item={item} onPress={handlePressCard} />
-                    </View>
-                  ))}
+                  {actionRequiredList.map((item, index) => {
+                    const safeId =
+                      Number.isInteger(item.quote.quoteId) && item.quote.quoteId > 0 ? String(item.quote.quoteId) : "na";
+                    const safeCreatedAt =
+                      typeof item.quote.createdAt === "string" && item.quote.createdAt.length > 0
+                        ? item.quote.createdAt
+                        : "na";
+                    const stableKey = `${safeId}-${safeCreatedAt}-${index}`;
+
+                    return (
+                      <View key={stableKey} style={styles.cardWrapper}>
+                        <QuoteListCard item={item} onPress={handlePressCard} />
+                      </View>
+                    );
+                  })}
                 </View>
               ) : null}
 
@@ -1027,11 +989,21 @@ export default function QuoteListPage() {
                     count={inProgressList.length}
                     tone="progress"
                   />
-                  {inProgressList.map((item) => (
-                    <View key={item.quote.quoteId} style={styles.cardWrapper}>
-                      <QuoteListCard item={item} onPress={handlePressCard} />
-                    </View>
-                  ))}
+                  {inProgressList.map((item, index) => {
+                    const safeId =
+                      Number.isInteger(item.quote.quoteId) && item.quote.quoteId > 0 ? String(item.quote.quoteId) : "na";
+                    const safeCreatedAt =
+                      typeof item.quote.createdAt === "string" && item.quote.createdAt.length > 0
+                        ? item.quote.createdAt
+                        : "na";
+                    const stableKey = `${safeId}-${safeCreatedAt}-${index}`;
+
+                    return (
+                      <View key={stableKey} style={styles.cardWrapper}>
+                        <QuoteListCard item={item} onPress={handlePressCard} />
+                      </View>
+                    );
+                  })}
                 </View>
               ) : null}
             </>
@@ -1046,11 +1018,19 @@ export default function QuoteListPage() {
               count={closedList.length}
               tone="closed"
             />
-            {closedList.map((item) => (
-              <View key={item.quote.quoteId} style={styles.cardWrapper}>
-                <QuoteListCard item={item} onPress={handlePressCard} />
-              </View>
-            ))}
+            {closedList.map((item, index) => {
+              const safeId =
+                Number.isInteger(item.quote.quoteId) && item.quote.quoteId > 0 ? String(item.quote.quoteId) : "na";
+              const safeCreatedAt =
+                typeof item.quote.createdAt === "string" && item.quote.createdAt.length > 0 ? item.quote.createdAt : "na";
+              const stableKey = `${safeId}-${safeCreatedAt}-${index}`;
+
+              return (
+                <View key={stableKey} style={styles.cardWrapper}>
+                  <QuoteListCard item={item} onPress={handlePressCard} />
+                </View>
+              );
+            })}
           </View>
         )}
       </View>

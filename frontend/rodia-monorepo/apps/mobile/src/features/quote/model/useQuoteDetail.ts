@@ -1,8 +1,16 @@
-// features/quote/model/useQuoteDetail.ts
-import { useMemo } from "react";
+// rodia-monorepo/apps/mobile/src/features/quote/model/useQuoteDetail.ts
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { QuoteDetailResponse, QuoteId } from "@/entities/quote/model/quote.types";
-import { getQuoteActionPolicy, getQuoteStatusLabel, type BottomActionId, type QuoteActionPolicy, type QuoteHighlightType } from "@/features/quote/model/quoteActionMatrix";
+import { getShipperQuoteDetail } from "@/features/quote/api";
+import {
+  getQuoteActionPolicy,
+  getQuoteStatusLabel,
+  type BottomActionId,
+  type QuoteActionPolicy,
+  type QuoteHighlightType,
+} from "@/features/quote/model/quoteActionMatrix";
+import { isMockQuoteEnabled } from "@/shared/lib/config/env";
 
 export type QuoteSectionRow = {
   label: string;
@@ -41,6 +49,9 @@ export type QuoteDetailRuntimeOverride = {
 export type QuoteDetailViewModel = {
   quote: QuoteDetailResponse;
   policy: QuoteActionPolicy;
+  isLoading: boolean;
+  errorMessage: string | null;
+  refetch: () => void;
   commandCenter: {
     statusLabel: string;
     metaText: string;
@@ -71,254 +82,30 @@ const KRW_FORMAT = (() => {
   return { format: (v: number) => String(v) } as Pick<Intl.NumberFormat, "format">;
 })();
 
-const MOCK_WAYPOINTS_BY_QUOTE_ID: Record<number, string[]> = {
-  304: ["부산광역시 강서구 대저동 33-5"],
-  305: ["대전광역시 대덕구 문평동 211", "경상북도 칠곡군 지천면 92"],
-};
+const MOCK_WAYPOINTS_FALLBACK: string[] = ["인천광역시 연수구 (목업 경유지)"];
 
-const MOCK_DETAILS: Record<number, QuoteDetailResponse> = {
-  301: {
-    quoteId: 301,
-    shipperId: 1001,
-    truckId: 12,
-    originAddress: "서울특별시 금천구 가산동 123-4",
-    destinationAddress: "경기도 성남시 분당구 정자동 12-9",
-    originLat: 37.4765,
-    originLng: 126.8823,
-    destinationLat: 37.3695,
-    destinationLng: 127.1089,
-    distanceKm: 32.4,
-    weightKg: 1850,
-    volumeCbm: 9.2,
-    vehicleType: "5톤",
-    vehicleBodyType: "윙바디",
-    cargoName: "전자부품",
-    cargoType: "일반",
-    cargoDesc: "파손 주의 라벨이 부착된 정밀 부품 박스 48개",
-    basePrice: 150000,
-    distancePrice: 30000,
-    extraPrice: 15000,
-    desiredPrice: 180000,
-    finalPrice: 195000,
-    allowCombine: false,
-    loadMethod: "지게차 상차",
-    unloadMethod: "수작업 하차",
-    status: "NEGOTIATING",
-    createdAt: "2026-02-20T08:20:00Z",
-    updatedAt: "2026-02-20T08:42:00Z",
-    checklistItems: [
-      { checklistItemId: 1, extraInput: "파손 주의 스티커", extraFee: 5000 },
-      { checklistItemId: 4, extraInput: "방수 포장", extraFee: 10000 },
-    ],
-  },
-  302: {
-    quoteId: 302,
-    shipperId: 1001,
-    truckId: 4,
-    originAddress: "인천광역시 남동구 고잔동 511",
-    destinationAddress: "대전광역시 유성구 관평동 901",
-    originLat: 37.4032,
-    originLng: 126.7004,
-    destinationLat: 36.4231,
-    destinationLng: 127.3938,
-    distanceKm: 153.8,
-    weightKg: 3960,
-    volumeCbm: 21.7,
-    vehicleType: "11톤",
-    vehicleBodyType: "탑차",
-    cargoName: "냉장식품",
-    cargoType: "냉장",
-    cargoDesc: "냉장 온도 4도 유지가 필요한 식품 박스 120개",
-    basePrice: 330000,
-    distancePrice: 70000,
-    extraPrice: 30000,
-    desiredPrice: 420000,
-    finalPrice: 430000,
-    allowCombine: false,
-    loadMethod: "파렛트 상차",
-    unloadMethod: "파렛트 하차",
-    status: "ASSIGNED",
-    createdAt: "2026-02-20T06:45:00Z",
-    updatedAt: "2026-02-20T07:15:00Z",
-    checklistItems: [
-      { checklistItemId: 2, extraInput: "냉장 유지", extraFee: 20000 },
-      { checklistItemId: 5, extraInput: "시간 지정", extraFee: 10000 },
-    ],
-  },
-  303: {
-    quoteId: 303,
-    shipperId: 1001,
-    truckId: 9,
-    originAddress: "경기도 하남시 미사강변동로 85",
-    destinationAddress: "충청남도 천안시 서북구 성거읍 331",
-    originLat: 37.5601,
-    originLng: 127.1779,
-    destinationLat: 36.8969,
-    destinationLng: 127.1733,
-    distanceKm: 95.3,
-    weightKg: 2410,
-    volumeCbm: 13.2,
-    vehicleType: "2.5톤",
-    vehicleBodyType: "카고",
-    cargoName: "생활용품",
-    cargoType: "일반",
-    cargoDesc: "박스 및 비닐 포장 생활용품 85건",
-    basePrice: 150000,
-    distancePrice: 50000,
-    extraPrice: 10000,
-    desiredPrice: 210000,
-    finalPrice: 210000,
-    allowCombine: true,
-    loadMethod: "수작업 상차",
-    unloadMethod: "수작업 하차",
-    status: "OPEN",
-    createdAt: "2026-02-20T05:55:00Z",
-    updatedAt: "2026-02-20T06:05:00Z",
-    checklistItems: [
-      { checklistItemId: 3, extraInput: "도착 전 연락", extraFee: 0 },
-      { checklistItemId: 6, extraInput: "상차 위치 사진", extraFee: 0 },
-    ],
-  },
-  304: {
-    quoteId: 304,
-    shipperId: 1001,
-    truckId: 15,
-    originAddress: "부산광역시 사하구 장림동 220",
-    destinationAddress: "경상남도 창원시 의창구 팔용동 88",
-    originLat: 35.0803,
-    originLng: 128.9668,
-    destinationLat: 35.2598,
-    destinationLng: 128.6158,
-    distanceKm: 46.2,
-    weightKg: 3180,
-    volumeCbm: 17.1,
-    vehicleType: "5톤",
-    vehicleBodyType: "카고",
-    cargoName: "건축 자재",
-    cargoType: "일반",
-    cargoDesc: "타일, 몰탈 등 건축 자재 62건",
-    basePrice: 130000,
-    distancePrice: 25000,
-    extraPrice: 15000,
-    desiredPrice: 170000,
-    finalPrice: 170000,
-    allowCombine: false,
-    loadMethod: "지게차 상차",
-    unloadMethod: "지게차 하차",
-    status: "PICKUP",
-    createdAt: "2026-02-20T04:20:00Z",
-    updatedAt: "2026-02-20T04:52:00Z",
-    checklistItems: [
-      { checklistItemId: 1, extraInput: "파손 주의", extraFee: 5000 },
-      { checklistItemId: 7, extraInput: "현장 안전모 착용", extraFee: 10000 },
-    ],
-  },
-  305: {
-    quoteId: 305,
-    shipperId: 1001,
-    truckId: 6,
-    originAddress: "서울특별시 강남구 역삼동 721",
-    destinationAddress: "부산광역시 해운대구 우동 1408",
-    originLat: 37.5008,
-    originLng: 127.0368,
-    destinationLat: 35.1631,
-    destinationLng: 129.1636,
-    distanceKm: 402.6,
-    weightKg: 5220,
-    volumeCbm: 28.5,
-    vehicleType: "11톤",
-    vehicleBodyType: "윙바디",
-    cargoName: "사무기기",
-    cargoType: "일반",
-    cargoDesc: "컴퓨터, 모니터, 사무기기 팔레트 22개",
-    basePrice: 520000,
-    distancePrice: 140000,
-    extraPrice: 50000,
-    desiredPrice: 690000,
-    finalPrice: 710000,
-    allowCombine: false,
-    loadMethod: "리프트 상차",
-    unloadMethod: "리프트 하차",
-    status: "TRANSIT",
-    createdAt: "2026-02-20T03:10:00Z",
-    updatedAt: "2026-02-20T05:35:00Z",
-    checklistItems: [
-      { checklistItemId: 8, extraInput: "습기 주의", extraFee: 30000 },
-      { checklistItemId: 3, extraInput: "도착 전 연락", extraFee: 0 },
-    ],
-  },
-  306: {
-    quoteId: 306,
-    shipperId: 1001,
-    truckId: 3,
-    originAddress: "강원특별자치도 원주시 지정면 72",
-    destinationAddress: "서울특별시 송파구 문정동 640",
-    originLat: 37.3674,
-    originLng: 127.8679,
-    destinationLat: 37.4844,
-    destinationLng: 127.1197,
-    distanceKm: 114.5,
-    weightKg: 2740,
-    volumeCbm: 14.9,
-    vehicleType: "5톤",
-    vehicleBodyType: "윙바디",
-    cargoName: "공산품",
-    cargoType: "일반",
-    cargoDesc: "생활 공산품 박스 110건",
-    basePrice: 180000,
-    distancePrice: 30000,
-    extraPrice: 10000,
-    desiredPrice: 230000,
-    finalPrice: 220000,
-    allowCombine: true,
-    loadMethod: "지게차 상차",
-    unloadMethod: "수작업 하차",
-    status: "DROPOFF",
-    createdAt: "2026-02-18T09:40:00Z",
-    updatedAt: "2026-02-18T13:10:00Z",
-    checklistItems: [
-      { checklistItemId: 2, extraInput: "냉장 불필요", extraFee: 0 },
-      { checklistItemId: 9, extraInput: "도착 확인 서명", extraFee: 0 },
-    ],
-  },
-  307: {
-    quoteId: 307,
-    shipperId: 1001,
-    truckId: 17,
-    originAddress: "경기도 평택시 포승읍 만호리 12",
-    destinationAddress: "전라남도 여수시 중흥동 44",
-    originLat: 36.9984,
-    originLng: 126.846,
-    destinationLat: 34.7602,
-    destinationLng: 127.6622,
-    distanceKm: 268.9,
-    weightKg: 7900,
-    volumeCbm: 41.1,
-    vehicleType: "25톤",
-    vehicleBodyType: "컨테이너",
-    cargoName: "수출 화물",
-    cargoType: "일반",
-    cargoDesc: "수출용 포장 화물 40피트 컨테이너 1개",
-    basePrice: 760000,
-    distancePrice: 170000,
-    extraPrice: 50000,
-    desiredPrice: 980000,
-    finalPrice: 0,
-    allowCombine: false,
-    loadMethod: "컨테이너 상차",
-    unloadMethod: "컨테이너 하차",
-    status: "CANCELED",
-    createdAt: "2026-02-17T14:15:00Z",
-    updatedAt: "2026-02-17T14:40:00Z",
-    checklistItems: [
-      { checklistItemId: 10, extraInput: "보안 봉인", extraFee: 50000 },
-      { checklistItemId: 3, extraInput: "도착 전 연락", extraFee: 0 },
-    ],
-  },
+const QUOTE_STATUS_GUARD: Record<QuoteDetailResponse["status"], true> = {
+  OPEN: true,
+  NEGOTIATING: true,
+  ASSIGNED: true,
+  PICKUP: true,
+  TRANSIT: true,
+  DROPOFF: true,
+  CANCELED: true,
 };
 
 function toSafeNumber(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function toSafeInteger(value: unknown, fallback = 0): number {
+  const parsed = toSafeNumber(value);
+  return Number.isInteger(parsed) ? parsed : fallback;
+}
+
+function toSafeStatus(value: unknown): QuoteDetailResponse["status"] {
+  const candidate = String(value ?? "OPEN") as QuoteDetailResponse["status"];
+  return QUOTE_STATUS_GUARD[candidate] ? candidate : "OPEN";
 }
 
 function formatKrw(value: unknown): string {
@@ -355,6 +142,87 @@ function formatChecklistItems(items: QuoteDetailResponse["checklistItems"] | und
   return lines.length ? lines.join(" / ") : "추가 요청 없음";
 }
 
+function toSafeStops(rawStops: unknown): QuoteDetailResponse["stops"] {
+  if (!Array.isArray(rawStops)) return [];
+
+  const mapped = rawStops.slice(0, 100).map((item, index) => {
+    const src = (item ?? {}) as Partial<QuoteDetailResponse["stops"][number]>;
+    const quoteStopId = Math.max(0, toSafeInteger(src?.quoteStopId, 0));
+    const seq = Math.max(1, toSafeInteger(src?.seq, index + 1));
+
+    return {
+      quoteStopId,
+      seq,
+      address: String(src?.address ?? ""),
+      lat: toSafeNumber(src?.lat),
+      lng: toSafeNumber(src?.lng),
+      contactName: String(src?.contactName ?? ""),
+      contactPhone: String(src?.contactPhone ?? ""),
+      deptName: String(src?.deptName ?? ""),
+      managerName: String(src?.managerName ?? ""),
+    };
+  });
+
+  return mapped
+    .filter((stop) => Boolean(stop.address.trim()))
+    .sort((a, b) => {
+      const bySeq = a.seq - b.seq;
+      if (bySeq !== 0) return bySeq;
+      return a.quoteStopId - b.quoteStopId;
+    });
+}
+
+function toSafeQuote(quoteId: QuoteId, source?: QuoteDetailResponse | null): QuoteDetailResponse {
+  const safeQuoteId = Number.isInteger(quoteId) && quoteId > 0 ? quoteId : 0;
+  const nowIso = new Date().toISOString();
+  const raw = source ?? ({} as Partial<QuoteDetailResponse>);
+
+  const rawQuoteId = toSafeInteger(raw.quoteId, safeQuoteId);
+  const normalizedQuoteId = rawQuoteId > 0 ? rawQuoteId : safeQuoteId;
+
+  const checklistItems = Array.isArray(raw.checklistItems)
+    ? raw.checklistItems.map((item) => ({
+        checklistItemId: toSafeInteger(item?.checklistItemId),
+        extraInput: String(item?.extraInput ?? ""),
+        extraFee: toSafeNumber(item?.extraFee),
+      }))
+    : [];
+
+  return {
+    quoteId: normalizedQuoteId,
+    quotePublicId: String(raw.quotePublicId ?? "").trim() || undefined,
+    shipperId: toSafeInteger(raw.shipperId),
+    truckId: toSafeInteger(raw.truckId),
+    originAddress: String(raw.originAddress ?? ""),
+    destinationAddress: String(raw.destinationAddress ?? ""),
+    originLat: toSafeNumber(raw.originLat),
+    originLng: toSafeNumber(raw.originLng),
+    destinationLat: toSafeNumber(raw.destinationLat),
+    destinationLng: toSafeNumber(raw.destinationLng),
+    distanceKm: toSafeNumber(raw.distanceKm),
+    weightKg: toSafeNumber(raw.weightKg),
+    volumeCbm: toSafeNumber(raw.volumeCbm),
+    vehicleType: String(raw.vehicleType ?? ""),
+    vehicleBodyType: String(raw.vehicleBodyType ?? ""),
+    cargoName: String(raw.cargoName ?? ""),
+    cargoType: String(raw.cargoType ?? ""),
+    cargoDesc: String(raw.cargoDesc ?? ""),
+    basePrice: toSafeNumber(raw.basePrice),
+    distancePrice: toSafeNumber(raw.distancePrice),
+    extraPrice: toSafeNumber(raw.extraPrice),
+    desiredPrice: toSafeNumber(raw.desiredPrice),
+    finalPrice: toSafeNumber(raw.finalPrice),
+    allowCombine: typeof raw.allowCombine === "boolean" ? raw.allowCombine : false,
+    loadMethod: String(raw.loadMethod ?? ""),
+    unloadMethod: String(raw.unloadMethod ?? ""),
+    status: toSafeStatus(raw.status),
+    createdAt: String(raw.createdAt ?? nowIso),
+    updatedAt: String(raw.updatedAt ?? nowIso),
+    checklistItems,
+    stops: toSafeStops((raw as unknown as { stops?: unknown })?.stops),
+  };
+}
+
 function applyRuntimeOverride(quote: QuoteDetailResponse, override?: QuoteDetailRuntimeOverride): QuoteDetailResponse {
   if (!override) return quote;
 
@@ -371,9 +239,10 @@ function applyRuntimeOverride(quote: QuoteDetailResponse, override?: QuoteDetail
 function buildHighlight(
   quote: QuoteDetailResponse,
   policy: QuoteActionPolicy,
-  override?: QuoteDetailRuntimeOverride
+  _override?: QuoteDetailRuntimeOverride
 ): QuoteHighlight {
   const quickActions = policy.highlightCard?.quickActions ?? [];
+  const highlightType = policy.highlightCard?.type;
   const status = quote?.status ?? "";
 
   if (status === "CANCELED") {
@@ -386,7 +255,7 @@ function buildHighlight(
     };
   }
 
-  if (policy.highlightCard.type === "priceCompare") {
+  if (highlightType === "priceCompare") {
     const desired = toSafeNumber(quote?.desiredPrice);
     const final = toSafeNumber(quote?.finalPrice);
     const diff = final - desired;
@@ -402,7 +271,7 @@ function buildHighlight(
     };
   }
 
-  if (policy.highlightCard.type === "driverProfile") {
+  if (highlightType === "driverProfile") {
     return {
       type: "driverProfile",
       eyebrow: "배차 정보",
@@ -413,10 +282,14 @@ function buildHighlight(
     };
   }
 
-  if (policy.highlightCard.type === "miniMap") {
+  if (highlightType === "miniMap") {
     const updated = formatDateTime(quote?.updatedAt);
     const helper =
-      status === "TRANSIT" ? "실시간 위치를 확인할 수 있습니다." : status === "PICKUP" ? "상차 사진을 확인할 수 있습니다." : "진행 상황을 확인할 수 있습니다.";
+      status === "TRANSIT"
+        ? "실시간 위치를 확인할 수 있습니다."
+        : status === "PICKUP"
+          ? "상차 사진을 확인할 수 있습니다."
+          : "진행 상황을 확인할 수 있습니다.";
 
     return {
       type: "miniMap",
@@ -427,7 +300,7 @@ function buildHighlight(
     };
   }
 
-  if (policy.highlightCard.type === "progressInfo") {
+  if (highlightType === "progressInfo") {
     return {
       type: "progressInfo",
       eyebrow: "배차 진행",
@@ -437,7 +310,7 @@ function buildHighlight(
     };
   }
 
-  if (policy.highlightCard.type === "proof") {
+  if (highlightType === "proof") {
     return {
       type: "proof",
       eyebrow: "정산 정보",
@@ -450,11 +323,48 @@ function buildHighlight(
   return { type: "none", eyebrow: "운송 요약", title: "", lines: [], quickActions: [] };
 }
 
+function formatStopValue(stop: QuoteDetailResponse["stops"][number]): string {
+  const address = String(stop?.address ?? "").trim();
+  const contactName = String(stop?.contactName ?? "").trim();
+  const contactPhone = String(stop?.contactPhone ?? "").trim();
+  const deptName = String(stop?.deptName ?? "").trim();
+  const managerName = String(stop?.managerName ?? "").trim();
+
+  const metaParts = [
+    deptName ? `부서 ${deptName}` : "",
+    managerName ? `담당 ${managerName}` : "",
+    contactName ? `연락처 ${contactName}` : "",
+    contactPhone ? contactPhone : "",
+  ].filter(Boolean);
+
+  if (!metaParts.length) return address || "정보 없음";
+  return `${address || "정보 없음"} (${metaParts.join(" · ")})`;
+}
+
 function buildSpecificationArchive(quote: QuoteDetailResponse): QuoteSection[] {
   const vehicleType = String(quote?.vehicleType ?? "").trim();
   const vehicleBodyType = String(quote?.vehicleBodyType ?? "").trim();
   const vehicleText = [vehicleType, vehicleBodyType].filter(Boolean).join(" ").trim() || "정보 없음";
+
+  const stops = Array.isArray(quote?.stops) ? quote.stops : [];
+  const stopRows: QuoteSectionRow[] = stops.length
+    ? stops.map((stop) => ({
+        label: `경유지 ${Math.max(1, toSafeInteger(stop?.seq, 1))}`,
+        value: formatStopValue(stop),
+      }))
+    : [];
+
+  const stopSection: QuoteSection[] = stopRows.length
+    ? [
+        {
+          title: "경유지",
+          rows: stopRows,
+        },
+      ]
+    : [];
+
   return [
+    ...stopSection,
     {
       title: "차량 및 화물",
       rows: [
@@ -486,53 +396,136 @@ function buildSpecificationArchive(quote: QuoteDetailResponse): QuoteSection[] {
   ];
 }
 
+function buildWaypointAddresses(resolvedQuote: QuoteDetailResponse): string[] {
+  const fromStops = Array.isArray(resolvedQuote?.stops)
+    ? resolvedQuote.stops
+        .slice()
+        .sort((a, b) => toSafeInteger(a?.seq, 0) - toSafeInteger(b?.seq, 0))
+        .map((stop) => String(stop?.address ?? "").trim())
+        .filter(Boolean)
+    : [];
+
+  if (fromStops.length) return fromStops;
+
+  if (!isMockQuoteEnabled()) return [];
+  return MOCK_WAYPOINTS_FALLBACK.filter(Boolean);
+}
+
 export function useQuoteDetail(quoteId: QuoteId, runtimeOverride?: QuoteDetailRuntimeOverride): QuoteDetailViewModel {
+  const [quote, setQuote] = useState<QuoteDetailResponse | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [reloadTick, setReloadTick] = useState(0);
+  const overrideStatus = runtimeOverride?.status;
+  const overrideCancelReason = runtimeOverride?.cancelReason;
+  const overrideCanceledAt = runtimeOverride?.canceledAt;
+
+  const refetch = useCallback(() => {
+    setReloadTick((prev) => prev + 1);
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    if (!Number.isInteger(quoteId) || quoteId <= 0) {
+      setQuote(null);
+      setIsLoading(false);
+      setErrorMessage("유효하지 않은 견적 ID입니다.");
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    setIsLoading(true);
+    setErrorMessage(null);
+    setQuote(null);
+
+    getShipperQuoteDetail(quoteId)
+      .then((response) => {
+        if (!isMounted) return;
+        setQuote(response ?? null);
+      })
+      .catch((error: unknown) => {
+        if (!isMounted) return;
+        const message =
+          error instanceof Error && error.message.trim().length > 0
+            ? error.message.trim()
+            : "견적 상세를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.";
+        setQuote(null);
+        setErrorMessage(message);
+      })
+      .finally(() => {
+        if (!isMounted) return;
+        setIsLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [quoteId, reloadTick]);
+
   return useMemo(() => {
-    const baseQuote = (MOCK_DETAILS as Record<number, QuoteDetailResponse>)[quoteId] ?? MOCK_DETAILS[301];
-    const quote = applyRuntimeOverride(baseQuote, runtimeOverride);
-    const policy = getQuoteActionPolicy(quote?.status ?? "");
-    const waypointAddresses = (MOCK_WAYPOINTS_BY_QUOTE_ID as Record<number, string[]>)[quote?.quoteId ?? 0] ?? [];
+    const safeQuote = toSafeQuote(quoteId, quote);
 
-    const statusLabel = policy?.badgeLabel || getQuoteStatusLabel(quote?.status ?? "");
-    const originAddress = String(quote?.originAddress ?? "");
-    const destinationAddress = String(quote?.destinationAddress ?? "");
-    const finalPrice = toSafeNumber(quote?.finalPrice);
+    const normalizedOverride =
+      overrideStatus !== undefined || overrideCancelReason !== undefined || overrideCanceledAt !== undefined
+        ? {
+            status: overrideStatus,
+            cancelReason: overrideCancelReason,
+            canceledAt: overrideCanceledAt,
+          }
+        : undefined;
 
-    const isCanceled = (quote?.status ?? "") === "CANCELED";
-    const isCompleted = (quote?.status ?? "") === "DROPOFF";
-    const updatedAtText = formatDateTime(quote?.updatedAt);
-    const metaText = isCanceled ? `#${quote?.quoteId ?? quoteId}` : `#${quote?.quoteId ?? quoteId} · ${updatedAtText}`;
+    const resolvedQuote = applyRuntimeOverride(safeQuote, normalizedOverride);
+    const policy = getQuoteActionPolicy(resolvedQuote?.status ?? "");
+    const waypointAddresses = buildWaypointAddresses(resolvedQuote);
+
+    const statusLabel = policy?.badgeLabel || getQuoteStatusLabel(resolvedQuote?.status ?? "");
+    const originAddress = String(resolvedQuote?.originAddress ?? "");
+    const destinationAddress = String(resolvedQuote?.destinationAddress ?? "");
+    const finalPrice = toSafeNumber(resolvedQuote?.finalPrice);
+
+    const isCanceled = (resolvedQuote?.status ?? "") === "CANCELED";
+    const isCompleted = (resolvedQuote?.status ?? "") === "DROPOFF";
+    const updatedAtText = formatDateTime(resolvedQuote?.updatedAt);
+    const metaText = isCanceled ? `#${resolvedQuote?.quoteId ?? quoteId}` : `#${resolvedQuote?.quoteId ?? quoteId} · ${updatedAtText}`;
+
     const cancelReasonText = isCanceled
-      ? String(runtimeOverride?.cancelReason ?? "").trim() || "취소 사유가 입력되지 않았습니다."
+      ? String(overrideCancelReason ?? "").trim() || "취소 사유가 입력되지 않았습니다."
       : "";
-    const canceledAtText = isCanceled ? formatDateTime(runtimeOverride?.canceledAt ?? quote?.updatedAt) : "";
+
+    const canceledAtText = isCanceled ? formatDateTime(overrideCanceledAt ?? resolvedQuote?.updatedAt) : "";
+
     const totalPriceText = isCanceled ? "" : formatKrw(finalPrice);
     const totalPriceNote = isCanceled ? "" : isCompleted ? "최종 정산 금액입니다." : "세부 요금은 아래에서 확인할 수 있습니다.";
-    const completedAtText = (quote?.status ?? "") === "DROPOFF" ? formatDateTime(quote?.updatedAt) : "";
+    const completedAtText = (resolvedQuote?.status ?? "") === "DROPOFF" ? formatDateTime(resolvedQuote?.updatedAt) : "";
 
     return {
-      quote,
+      quote: resolvedQuote,
       policy,
+      isLoading,
+      errorMessage,
+      refetch,
       commandCenter: { statusLabel, metaText, cancelReasonText, canceledAtText },
-      highlight: buildHighlight(quote, policy, runtimeOverride),
+      highlight: buildHighlight(resolvedQuote, policy, normalizedOverride),
       coreSummary: {
         originAddress,
         destinationAddress,
         waypointAddresses,
-        distanceText: `${toSafeNumber(quote?.distanceKm).toFixed(1)}km`,
+        distanceText: `${toSafeNumber(resolvedQuote?.distanceKm).toFixed(1)}km`,
         totalPriceText,
         totalPriceNote,
         completedAtText,
       },
-      specificationArchive: buildSpecificationArchive(quote),
+      specificationArchive: buildSpecificationArchive(resolvedQuote),
       actionsContext: {
-        quoteId: quote?.quoteId ?? Number(quoteId),
-        status: quote?.status,
-        cargoName: String(quote?.cargoName ?? ""),
+        quoteId: resolvedQuote?.quoteId ?? Number(quoteId),
+        status: resolvedQuote?.status,
+        cargoName: String(resolvedQuote?.cargoName ?? ""),
         finalPrice,
         originAddress,
         destinationAddress,
       },
     };
-  }, [quoteId, runtimeOverride?.cancelReason, runtimeOverride?.canceledAt, runtimeOverride?.status]);
+  }, [quote, quoteId, overrideStatus, overrideCancelReason, overrideCanceledAt, isLoading, errorMessage, refetch]);
 }

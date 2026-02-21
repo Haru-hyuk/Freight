@@ -1,4 +1,5 @@
-﻿export type QuoteId = number;
+﻿// rodia-monorepo/apps/mobile/src/entities/quote/model/quote.types.ts
+export type QuoteId = number;
 
 export type QuoteStatusApi =
   | "OPEN"
@@ -13,6 +14,18 @@ export type QuoteChecklistItem = {
   checklistItemId: number;
   extraInput: string;
   extraFee: number;
+};
+
+export type QuoteStop = {
+  quoteStopId: number;
+  seq: number;
+  address: string;
+  lat: number;
+  lng: number;
+  contactName: string;
+  contactPhone: string;
+  deptName: string;
+  managerName: string;
 };
 
 export type QuoteCreateRequest = {
@@ -36,6 +49,7 @@ export type QuoteCreateRequest = {
   loadMethod: string;
   unloadMethod: string;
   checklistItems: QuoteChecklistItem[];
+  stops?: QuoteStop[];
 };
 
 export type QuoteCreateResponse = {
@@ -59,6 +73,7 @@ export type QuoteListItem = {
 
 export type QuoteDetailResponse = {
   quoteId: number;
+  quotePublicId?: string;
   shipperId: number;
   truckId: number;
   originAddress: string;
@@ -87,6 +102,7 @@ export type QuoteDetailResponse = {
   createdAt: string;
   updatedAt: string;
   checklistItems: QuoteChecklistItem[];
+  stops: QuoteStop[];
 };
 
 export type QuoteUpdateRequest = QuoteCreateRequest;

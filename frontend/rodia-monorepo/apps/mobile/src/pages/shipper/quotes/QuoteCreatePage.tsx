@@ -11,6 +11,7 @@ import type { AppTheme } from "@/shared/theme/types";
 import { AppButton } from "@/shared/ui/kit/AppButton";
 import { AppText } from "@/shared/ui/kit/AppText";
 import { PageScaffold } from "@/widgets/layout/PageScaffold";
+import { estimateRouteKm, isValidCoord, type LatLng } from "@/shared/lib/geo/distance";
 
 import {
   computeQuotePricing,
@@ -297,6 +298,30 @@ const useStyles = createThemedStyles((theme: AppTheme) => {
   });
 });
 
+function isDistanceDebugEnabled(): boolean {
+  const devFlag = typeof __DEV__ !== "undefined" && __DEV__;
+
+  let envFlag = false;
+  try {
+    const v = String((globalThis as any)?.process?.env?.EXPO_PUBLIC_DEBUG_LOGS ?? "").trim().toLowerCase();
+    envFlag = v === "1" || v === "true" || v === "yes" || v === "on";
+  } catch {
+    envFlag = false;
+  }
+
+  return devFlag || envFlag;
+}
+
+function quoteDistanceDebugLog(payload: {
+  wasAutoCalculated: boolean;
+  computedDistanceKm: number;
+  pointsCount: number;
+}) {
+  if (!isDistanceDebugEnabled()) return;
+  // eslint-disable-next-line no-console
+  console.log("[quote-create] distance", payload);
+}
+
 function QuoteCreatePageInner() {
   const theme = useAppTheme();
   const styles = useStyles();
@@ -379,9 +404,66 @@ function QuoteCreatePageInner() {
   const submitQuoteRequest = async () => {
     if (isSubmitting) return;
 
+    const payload = buildQuoteCreateRequest(draft);
+    let distanceKm = Number.isFinite(payload?.distanceKm) ? Math.trunc(payload.distanceKm) : 0;
+    let wasAutoCalculated = false;
+    let pointsCount = 0;
+
+    if (distanceKm < 1) {
+      const points: LatLng[] = [];
+
+      if (isValidCoord(payload?.originLat, payload?.originLng)) {
+        points.push({
+          lat: Number(payload?.originLat),
+          lng: Number(payload?.originLng),
+        });
+      }
+
+      const stops = Array.isArray(payload?.stops) ? payload.stops : [];
+      for (const stop of stops) {
+        const lat = (stop as { lat?: unknown })?.lat;
+        const lng = (stop as { lng?: unknown })?.lng;
+        if (!isValidCoord(lat, lng)) continue;
+
+        points.push({
+          lat: Number(lat),
+          lng: Number(lng),
+        });
+      }
+
+      if (isValidCoord(payload?.destinationLat, payload?.destinationLng)) {
+        points.push({
+          lat: Number(payload?.destinationLat),
+          lng: Number(payload?.destinationLng),
+        });
+      }
+
+      pointsCount = points.length;
+      const estimatedKm = Math.round(estimateRouteKm(points));
+
+      if (estimatedKm > 0) {
+        distanceKm = Math.max(1, estimatedKm);
+        payload.distanceKm = distanceKm;
+        wasAutoCalculated = true;
+      } else {
+        quoteDistanceDebugLog({
+          wasAutoCalculated: false,
+          computedDistanceKm: 0,
+          pointsCount,
+        });
+        Alert.alert("견적 요청 실패", "거리 계산 후 요청해주세요.");
+        return;
+      }
+    }
+
+    quoteDistanceDebugLog({
+      wasAutoCalculated,
+      computedDistanceKm: distanceKm,
+      pointsCount,
+    });
+
     try {
       setIsSubmitting(true);
-      const payload = buildQuoteCreateRequest(draft);
       await createShipperQuote(payload);
 
       setIsSubmitDoneOpen(true);

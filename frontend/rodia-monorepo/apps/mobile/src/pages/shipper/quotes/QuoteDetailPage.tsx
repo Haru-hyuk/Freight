@@ -12,7 +12,9 @@ import { safeNumber, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppButton } from "@/shared/ui/kit/AppButton";
 import { AppCard } from "@/shared/ui/kit/AppCard";
+import { AppErrorState } from "@/shared/ui/kit/AppErrorState";
 import { AppInput } from "@/shared/ui/kit/AppInput";
+import { AppSpinner } from "@/shared/ui/kit/AppSpinner";
 import { AppText } from "@/shared/ui/kit/AppText";
 import { PageScaffold } from "@/widgets/layout/PageScaffold";
 
@@ -416,7 +418,7 @@ const useStyles = createThemedStyles((theme) => {
 function parseQuoteId(value: string | string[] | undefined): number {
   const raw = Array.isArray(value) ? value[0] : value;
   const parsed = Number(raw);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 301;
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
 }
 
 function resolveSpotlightIconName(type: QuoteDetailView["highlight"]["type"]): keyof typeof Ionicons.glyphMap {
@@ -480,6 +482,15 @@ function resolvePriceLabel(view: QuoteDetailView): string {
   return "운임";
 }
 
+function toWorkMethodLabel(value: unknown): string {
+  const raw = String(value ?? "").trim();
+  const normalized = raw.toUpperCase();
+  if (normalized === "SHIPPER") return "화주";
+  if (normalized === "DRIVER") return "기사";
+  if (!raw) return "정보 없음";
+  return raw;
+}
+
 function OverviewCard({
   view,
   showCancelButton,
@@ -501,6 +512,8 @@ function OverviewCard({
   const origin = view.coreSummary?.originAddress ?? "";
   const dest = view.coreSummary?.destinationAddress ?? "";
   const distanceText = view.coreSummary?.distanceText ?? "거리 정보 없음";
+  const loadMethodText = toWorkMethodLabel(view.quote?.loadMethod);
+  const unloadMethodText = toWorkMethodLabel(view.quote?.unloadMethod);
   const completedAtText = (view.coreSummary?.completedAtText ?? "").trim();
   const isCompleted = (view.quote?.status ?? "") === "DROPOFF";
 
@@ -572,6 +585,22 @@ function OverviewCard({
             <AppText style={styles.metricLabel}>운송 거리</AppText>
           </View>
           <AppText style={styles.metricValue}>{distanceText}</AppText>
+        </View>
+
+        <View style={styles.metricRow}>
+          <View style={styles.metricLeft}>
+            <Ionicons name="cube-outline" style={styles.metricIcon} />
+            <AppText style={styles.metricLabel}>상차 방식</AppText>
+          </View>
+          <AppText style={styles.metricValue}>{loadMethodText}</AppText>
+        </View>
+
+        <View style={styles.metricRow}>
+          <View style={styles.metricLeft}>
+            <Ionicons name="exit-outline" style={styles.metricIcon} />
+            <AppText style={styles.metricLabel}>하차 방식</AppText>
+          </View>
+          <AppText style={styles.metricValue}>{unloadMethodText}</AppText>
         </View>
 
         {showPriceSummary ? (
@@ -667,22 +696,26 @@ function SpecificationArchive({ view }: { view: QuoteDetailView }) {
 
       {open ? (
         <View style={styles.accordionBody}>
-          {sections.map((section, sectionIndex) => (
-            <AppCard key={`${section.title}-${sectionIndex}`} outlined elevated={false}>
-              <View style={styles.archiveCardInner}>
-                <AppText style={styles.archiveTitle}>{section.title}</AppText>
-                {section.rows.map((row, rowIndex) => (
-                  <View
-                    key={`${section.title}-${row.label}-${rowIndex}`}
-                    style={[styles.archiveRow, rowIndex === section.rows.length - 1 && styles.archiveRowLast]}
-                  >
-                    <AppText style={styles.archiveLabel}>{row.label}</AppText>
-                    <AppText style={styles.archiveValue}>{row.value}</AppText>
-                  </View>
-                ))}
-              </View>
-            </AppCard>
-          ))}
+          {sections.map((section, sectionIndex) => {
+            const rows = Array.isArray(section.rows) ? section.rows : [];
+
+            return (
+              <AppCard key={`${section.title}-${sectionIndex}`} outlined elevated={false}>
+                <View style={styles.archiveCardInner}>
+                  <AppText style={styles.archiveTitle}>{section.title}</AppText>
+                  {rows.map((row, rowIndex) => (
+                    <View
+                      key={`${section.title}-${row.label}-${rowIndex}`}
+                      style={[styles.archiveRow, rowIndex === rows.length - 1 && styles.archiveRowLast]}
+                    >
+                      <AppText style={styles.archiveLabel}>{row.label}</AppText>
+                      <AppText style={styles.archiveValue}>{row.value}</AppText>
+                    </View>
+                  ))}
+                </View>
+              </AppCard>
+            );
+          })}
         </View>
       ) : null}
     </View>
@@ -705,9 +738,14 @@ export default function QuoteDetailPage() {
 
   const quoteId = parseQuoteId(params?.id);
   const view = useQuoteDetail(quoteId, cancelOverride ?? undefined);
-  const palette = resolveTonePalette(theme, view.policy);
-  const hasCancelAction = view.policy.bottomBar?.primary === "cancelRequest" || view.policy.bottomBar?.secondary === "cancelRequest";
+  const isBlockedByFetchState = view.isLoading || Boolean(view.errorMessage);
+  const palette = isBlockedByFetchState ? null : resolveTonePalette(theme, view.policy);
+  const hasCancelAction =
+    !isBlockedByFetchState &&
+    (view.policy.bottomBar?.primary === "cancelRequest" || view.policy.bottomBar?.secondary === "cancelRequest");
   const bottomBarWithoutCancel = React.useMemo(() => {
+    if (isBlockedByFetchState) return null;
+
     const original = view.policy.bottomBar;
     if (!original) return null;
 
@@ -717,7 +755,7 @@ export default function QuoteDetailPage() {
     if (!nextPrimary && !nextSecondary) return null;
     if (!nextPrimary && nextSecondary) return { primary: nextSecondary, secondary: undefined };
     return { primary: nextPrimary, secondary: nextSecondary };
-  }, [view.policy.bottomBar]);
+  }, [view.policy.bottomBar, isBlockedByFetchState]);
   const handleCancelRequest = React.useCallback((payload: { quoteId: number; reason: string }) => {
     const nextCanceledAt = new Date().toISOString();
     setCancelOverride({
@@ -727,26 +765,36 @@ export default function QuoteDetailPage() {
     });
   }, []);
   const openCancelModal = React.useCallback(() => {
+    if (isBlockedByFetchState) return;
     setShowCancelModal(true);
     setCancelReasonError(undefined);
-  }, []);
+  }, [isBlockedByFetchState]);
   const closeCancelModal = React.useCallback(() => {
     setShowCancelModal(false);
     setCancelReasonError(undefined);
   }, []);
   const submitCancelModal = React.useCallback(() => {
+    if (isBlockedByFetchState) return;
+
+    const safeQuoteId =
+      Number.isInteger(view.actionsContext?.quoteId) && view.actionsContext.quoteId > 0 ? view.actionsContext.quoteId : 0;
+    if (safeQuoteId <= 0) {
+      setCancelReasonError("유효한 견적 정보를 찾을 수 없습니다.");
+      return;
+    }
+
     const trimmed = cancelReasonInput.trim();
     if (trimmed.length < 2) {
       setCancelReasonError("취소 사유를 2자 이상 입력해주세요.");
       return;
     }
 
-    handleCancelRequest({ quoteId: view.actionsContext.quoteId, reason: trimmed });
+    handleCancelRequest({ quoteId: safeQuoteId, reason: trimmed });
     setShowCancelModal(false);
     setCancelReasonInput("");
     setCancelReasonError(undefined);
     Alert.alert("요청 취소", "취소 요청이 처리되었습니다.");
-  }, [cancelReasonInput, handleCancelRequest, view.actionsContext.quoteId]);
+  }, [cancelReasonInput, handleCancelRequest, view.actionsContext, isBlockedByFetchState]);
 
   React.useEffect(() => {
     initLayoutAnimationForAndroid();
@@ -758,97 +806,113 @@ export default function QuoteDetailPage() {
       backgroundColor={theme.colors.bgMain}
       contentStyle={styles.pageContent}
       bottomBar={
-        <BottomActionRouter
-          ctx={view.actionsContext}
-          bottomBar={bottomBarWithoutCancel}
-          guards={view.policy.guards}
-        />
+        bottomBarWithoutCancel ? (
+          <BottomActionRouter
+            ctx={view.actionsContext}
+            bottomBar={bottomBarWithoutCancel}
+            guards={view.policy.guards}
+          />
+        ) : null
       }
       onPressBack={() => router.back()}
       backLabel="이전"
     >
-      <View style={styles.commandCenter}>
-        <View style={styles.statusRow}>
-          <View style={styles.statusLeft}>
-            <View
-              style={[
-                styles.statusBadge,
-                {
-                  backgroundColor: palette.badgeBg,
-                  borderColor: palette.badgeBorder,
-                },
-              ]}
-            >
-              <AppText style={[styles.statusText, { color: palette.badgeText }]} numberOfLines={1}>
-                {view.commandCenter?.statusLabel ?? "진행 상태"}
-              </AppText>
-            </View>
-          </View>
-
-          <AppText style={styles.metaText} numberOfLines={1}>
-            {view.commandCenter?.metaText ?? `#${view.quote?.quoteId ?? quoteId}`}
-          </AppText>
-        </View>
-
-        {view.commandCenter?.cancelReasonText ? (
-          <View style={styles.cancelSummaryBox}>
-            <View style={styles.cancelSummaryRow}>
-              <Ionicons name="alert-circle" style={styles.cancelSummaryIcon} />
-              <AppText style={styles.cancelSummaryLabel}>취소 사유</AppText>
-              <AppText style={styles.cancelSummaryValue}>{view.commandCenter.cancelReasonText}</AppText>
-            </View>
-            <View style={styles.cancelSummaryRow}>
-              <Ionicons name="time-outline" style={styles.cancelSummaryIcon} />
-              <AppText style={styles.cancelSummaryLabel}>취소 시간</AppText>
-              <AppText style={styles.cancelSummaryValue}>{view.commandCenter.canceledAtText || "시간 정보 없음"}</AppText>
-            </View>
-          </View>
-        ) : null}
-      </View>
-
-      <OverviewCard view={view} showCancelButton={hasCancelAction} onPressCancel={openCancelModal} />
-      <SpecificationArchive view={view} />
-
-      <Modal transparent visible={showCancelModal} animationType="fade" onRequestClose={closeCancelModal}>
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.cancelModalOverlay}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={closeCancelModal} />
-          <View style={styles.cancelModalSheet}>
-            <AppCard outlined elevated={false} style={styles.cancelModalCard}>
-              <View style={styles.cancelModalContent}>
-                <View style={styles.cancelModalHeader}>
-                  <View style={styles.cancelModalIconContainer}>
-                    <Ionicons name="warning" style={styles.cancelModalIcon} />
-                  </View>
-                  <AppText style={styles.cancelModalTitle}>요청 취소</AppText>
-                </View>
-                <AppText style={styles.cancelModalDesc}>
-                  요청을 취소하시겠습니까? 취소 사유를 입력하면 즉시 취소 상태로 변경됩니다.
-                </AppText>
-
-                <AppInput
-                  label="취소 사유"
-                  placeholder="예) 다른 운송 수단 이용, 일정 변경 등"
-                  value={cancelReasonInput}
-                  onChangeText={(text) => {
-                    setCancelReasonInput(text);
-                    if (cancelReasonError) setCancelReasonError(undefined);
-                  }}
-                  error={cancelReasonError}
-                  multiline
-                  numberOfLines={4}
-                  textAlignVertical="top"
-                  maxLength={200}
-                />
-
-                <View style={styles.cancelModalActions}>
-                  <AppButton title="닫기" variant="secondary" style={styles.actionButton} onPress={closeCancelModal} />
-                  <AppButton title="취소 확정" variant="destructive" style={styles.actionButton} onPress={submitCancelModal} />
+      {view.isLoading ? (
+        <AppSpinner label="견적 상세를 불러오는 중입니다." />
+      ) : view.errorMessage ? (
+        <AppErrorState
+          title="견적 상세를 불러오지 못했어요"
+          description={view.errorMessage}
+          retryLabel="다시 시도"
+          onRetry={view.refetch}
+          fullScreen={false}
+        />
+      ) : (
+        <>
+          <View style={styles.commandCenter}>
+            <View style={styles.statusRow}>
+              <View style={styles.statusLeft}>
+                <View
+                  style={[
+                    styles.statusBadge,
+                    {
+                      backgroundColor: palette?.badgeBg ?? theme.colors.bgSurface,
+                      borderColor: palette?.badgeBorder ?? theme.colors.borderDefault,
+                    },
+                  ]}
+                >
+                  <AppText style={[styles.statusText, { color: palette?.badgeText ?? theme.colors.textMain }]} numberOfLines={1}>
+                    {view.commandCenter?.statusLabel ?? "진행 상태"}
+                  </AppText>
                 </View>
               </View>
-            </AppCard>
+
+              <AppText style={styles.metaText} numberOfLines={1}>
+                {view.commandCenter?.metaText ?? `#${view.quote?.quoteId ?? quoteId}`}
+              </AppText>
+            </View>
+
+            {view.commandCenter?.cancelReasonText ? (
+              <View style={styles.cancelSummaryBox}>
+                <View style={styles.cancelSummaryRow}>
+                  <Ionicons name="alert-circle" style={styles.cancelSummaryIcon} />
+                  <AppText style={styles.cancelSummaryLabel}>취소 사유</AppText>
+                  <AppText style={styles.cancelSummaryValue}>{view.commandCenter.cancelReasonText}</AppText>
+                </View>
+                <View style={styles.cancelSummaryRow}>
+                  <Ionicons name="time-outline" style={styles.cancelSummaryIcon} />
+                  <AppText style={styles.cancelSummaryLabel}>취소 시간</AppText>
+                  <AppText style={styles.cancelSummaryValue}>{view.commandCenter.canceledAtText || "시간 정보 없음"}</AppText>
+                </View>
+              </View>
+            ) : null}
           </View>
-        </KeyboardAvoidingView>
-      </Modal>
+
+          <OverviewCard view={view} showCancelButton={hasCancelAction} onPressCancel={openCancelModal} />
+          <SpecificationArchive view={view} />
+
+          <Modal transparent visible={showCancelModal} animationType="fade" onRequestClose={closeCancelModal}>
+            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.cancelModalOverlay}>
+              <Pressable style={StyleSheet.absoluteFill} onPress={closeCancelModal} />
+              <View style={styles.cancelModalSheet}>
+                <AppCard outlined elevated={false} style={styles.cancelModalCard}>
+                  <View style={styles.cancelModalContent}>
+                    <View style={styles.cancelModalHeader}>
+                      <View style={styles.cancelModalIconContainer}>
+                        <Ionicons name="warning" style={styles.cancelModalIcon} />
+                      </View>
+                      <AppText style={styles.cancelModalTitle}>요청 취소</AppText>
+                    </View>
+                    <AppText style={styles.cancelModalDesc}>
+                      요청을 취소하시겠습니까? 취소 사유를 입력하면 즉시 취소 상태로 변경됩니다.
+                    </AppText>
+
+                    <AppInput
+                      label="취소 사유"
+                      placeholder="예) 다른 운송 수단 이용, 일정 변경 등"
+                      value={cancelReasonInput}
+                      onChangeText={(text) => {
+                        setCancelReasonInput(text);
+                        if (cancelReasonError) setCancelReasonError(undefined);
+                      }}
+                      error={cancelReasonError}
+                      multiline
+                      numberOfLines={4}
+                      textAlignVertical="top"
+                      maxLength={200}
+                    />
+
+                    <View style={styles.cancelModalActions}>
+                      <AppButton title="닫기" variant="secondary" style={styles.actionButton} onPress={closeCancelModal} />
+                      <AppButton title="취소 확정" variant="destructive" style={styles.actionButton} onPress={submitCancelModal} />
+                    </View>
+                  </View>
+                </AppCard>
+              </View>
+            </KeyboardAvoidingView>
+          </Modal>
+        </>
+      )}
     </PageScaffold>
   );
 }
