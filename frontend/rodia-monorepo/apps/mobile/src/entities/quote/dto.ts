@@ -35,3 +35,65 @@ export type QuoteCreateRequestDto = {
 export type QuoteCreateResponseDto = {
   quoteId: number;
 };
+
+export type QuoteListItemDto = {
+  quoteId?: number | string;
+  truckId?: number | string;
+  originAddress?: string;
+  destinationAddress?: string;
+  distanceKm?: number | string;
+  vehicleType?: string;
+  vehicleBodyType?: string;
+  cargoName?: string;
+  desiredPrice?: number | string;
+  finalPrice?: number | string;
+  status?: string;
+  createdAt?: string;
+};
+
+export type QuoteDetailResponseDto = {
+  quoteId?: number | string;
+  shipperId?: number | string;
+  truckId?: number | string;
+  originAddress?: string;
+  destinationAddress?: string;
+  originLat?: number | string;
+  originLng?: number | string;
+  destinationLat?: number | string;
+  destinationLng?: number | string;
+  distanceKm?: number | string;
+  weightKg?: number | string;
+  volumeCbm?: number | string;
+  vehicleType?: string;
+  vehicleBodyType?: string;
+  cargoName?: string;
+  cargoType?: string;
+  cargoDesc?: string;
+  basePrice?: number | string;
+  distancePrice?: number | string;
+  extraPrice?: number | string;
+  desiredPrice?: number | string;
+  finalPrice?: number | string;
+  allowCombine?: boolean;
+  loadMethod?: string;
+  unloadMethod?: string;
+  status?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  checklistItems?: QuoteChecklistItemDto[] | null;
+};
+
+export type QuoteUpdateRequestDto = QuoteCreateRequestDto;
+export type QuoteUpdateResponseDto = QuoteDetailResponseDto;
+
+export type QuoteListEnvelopeDto = {
+  data?: QuoteListItemDto[] | null;
+  result?: QuoteListItemDto[] | null;
+  items?: QuoteListItemDto[] | null;
+  list?: QuoteListItemDto[] | null;
+};
+
+export type QuoteDetailEnvelopeDto = {
+  data?: QuoteDetailResponseDto | null;
+  result?: QuoteDetailResponseDto | null;
+};
