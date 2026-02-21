@@ -16,6 +16,11 @@ import type {
   QuoteUpdateResponse,
 } from "@/entities/quote/model/quote.types";
 import { apiClient } from "@/shared/lib/api/apiClient";
+import {
+  createQuote as createQuoteGenerated,
+  getQuote as getQuoteGenerated,
+  listQuotes as listQuotesGenerated,
+} from "@/shared/api/generated/quote-controller/quote-controller";
 import { getShipperQuoteCreatePath, isMockQuoteEnabled } from "@/shared/lib/config/env";
 
 export interface QuoteApi {
@@ -30,6 +35,26 @@ const SHIPPER_QUOTES_PATH = getShipperQuoteCreatePath();
 
 function isMockMode(): boolean {
   return isMockQuoteEnabled();
+}
+
+function isQuoteDebugEnabled(): boolean {
+  const devFlag = typeof __DEV__ !== "undefined" && __DEV__;
+
+  let envFlag = false;
+  try {
+    const v = String((globalThis as any)?.process?.env?.EXPO_PUBLIC_DEBUG_LOGS ?? "").trim().toLowerCase();
+    envFlag = v === "1" || v === "true" || v === "yes" || v === "on";
+  } catch {
+    envFlag = false;
+  }
+
+  return devFlag || envFlag;
+}
+
+function quoteDebugLog(event: string, payload: Record<string, unknown>) {
+  if (!isQuoteDebugEnabled()) return;
+  // eslint-disable-next-line no-console
+  console.log(`[quote-api] ${event}`, payload);
 }
 
 function resolveQuoteApi(): QuoteApi {
@@ -333,22 +358,33 @@ function buildQuoteDetailPath(quoteId: number): string {
 function createRealQuoteApi(): QuoteApi {
   return {
     async listShipperQuotes(): Promise<QuoteListItem[]> {
-      const res = await apiClient.get(SHIPPER_QUOTES_PATH);
-      return toQuoteList((res as { data?: unknown })?.data);
+      const data = await listQuotesGenerated();
+      return toQuoteList(data);
     },
 
     async getShipperQuoteDetail(quoteId: number): Promise<QuoteDetailResponse> {
       const safeQuoteId = normalizeQuoteId(quoteId);
       if (safeQuoteId <= 0) return toQuoteDetail({}, 0);
 
-      const res = await apiClient.get(buildQuoteDetailPath(safeQuoteId));
-      return toQuoteDetail((res as { data?: unknown })?.data, safeQuoteId);
+      const data = await getQuoteGenerated(String(safeQuoteId));
+      const detailRaw = (data ?? {}) as { stops?: unknown };
+      const detailStopsLength = Array.isArray(detailRaw.stops) ? detailRaw.stops.length : 0;
+      quoteDebugLog("detail.response", {
+        quoteId: safeQuoteId,
+        stopsLength: detailStopsLength,
+      });
+      return toQuoteDetail(data, safeQuoteId);
     },
 
     async createShipperQuote(payload: QuoteCreateRequestDto): Promise<QuoteCreateResponseDto> {
       const safePayload = sanitizeQuotePayload((payload ?? {}) as QuoteCreateRequestDto, true);
-      const res = await apiClient.post(SHIPPER_QUOTES_PATH, safePayload);
-      return toQuoteCreateResponse((res as { data?: unknown })?.data);
+      quoteDebugLog("create.payload", {
+        keys: Object.keys((safePayload ?? {}) as Record<string, unknown>),
+        stopsLength: Array.isArray(safePayload?.stops) ? safePayload.stops.length : 0,
+        distanceKm: safePayload?.distanceKm ?? null,
+      });
+      const data = await createQuoteGenerated(safePayload as unknown as Parameters<typeof createQuoteGenerated>[0]);
+      return toQuoteCreateResponse(data);
     },
 
     async updateShipperQuote(quoteId: number, payload: QuoteUpdateRequestDto): Promise<QuoteUpdateResponse> {

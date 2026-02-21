@@ -47,7 +47,7 @@ import { customInstance } from '../../orval/custom-instance';
       );
     }
   export const getById = (
-    paymentId: number,
+    paymentId: string,
  ) => {
       return customInstance<Blob>(
       {url: `/api/shipper/payments/${paymentId}`, method: 'GET',

@@ -9,7 +9,7 @@ import { customInstance } from '../../orval/custom-instance';
 
 
   export const acceptMatch = (
-    matchId: number,
+    matchId: string,
  ) => {
       return customInstance<Blob>(
       {url: `/api/driver/matches/${matchId}/accept`, method: 'POST',
@@ -27,7 +27,7 @@ import { customInstance } from '../../orval/custom-instance';
       );
     }
   export const getMatch1 = (
-    matchId: number,
+    matchId: string,
  ) => {
       return customInstance<Blob>(
       {url: `/api/driver/matches/${matchId}`, method: 'GET',
@@ -36,7 +36,7 @@ import { customInstance } from '../../orval/custom-instance';
       );
     }
   export const cancelMatch1 = (
-    matchId: number,
+    matchId: string,
  ) => {
       return customInstance<void>(
       {url: `/api/driver/matches/${matchId}`, method: 'DELETE'

@@ -14,7 +14,7 @@ import { customInstance } from '../../orval/custom-instance';
 
 
   export const get1 = (
-    announcementId: number,
+    announcementId: string,
  ) => {
       return customInstance<Blob>(
       {url: `/api/admin/announcements/${announcementId}`, method: 'GET',
@@ -23,7 +23,7 @@ import { customInstance } from '../../orval/custom-instance';
       );
     }
   export const update = (
-    announcementId: number,
+    announcementId: string,
     announcementUpdateRequest: AnnouncementUpdateRequest,
  ) => {
       return customInstance<Blob>(
@@ -35,7 +35,7 @@ import { customInstance } from '../../orval/custom-instance';
       );
     }
   export const _delete = (
-    announcementId: number,
+    announcementId: string,
  ) => {
       return customInstance<void>(
       {url: `/api/admin/announcements/${announcementId}`, method: 'DELETE'

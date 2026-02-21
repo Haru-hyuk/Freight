@@ -9,6 +9,8 @@ const ACCESS_TOKEN_KEY = "auth.accessToken";
 const REFRESH_TOKEN_KEY = "auth.refreshToken";
 
 const memoryFallback = new Map<string, string>();
+let cachedAccessToken: string | null = null;
+let cachedRefreshToken: string | null = null;
 
 function isWeb(): boolean {
   return typeof window !== "undefined" && typeof (window as any)?.document !== "undefined";
@@ -100,27 +102,44 @@ async function deleteItem(key: string): Promise<void> {
 
 export const tokenStorage = {
   async getAccessToken(): Promise<string | null> {
-    return getItem(ACCESS_TOKEN_KEY);
+    const cached = (cachedAccessToken ?? "").trim();
+    if (cached) return cached;
+
+    const fromStorage = (await getItem(ACCESS_TOKEN_KEY)) ?? "";
+    const normalized = fromStorage.trim();
+    cachedAccessToken = normalized || null;
+    return cachedAccessToken;
   },
 
   async getRefreshToken(): Promise<string | null> {
-    return getItem(REFRESH_TOKEN_KEY);
+    const cached = (cachedRefreshToken ?? "").trim();
+    if (cached) return cached;
+
+    const fromStorage = (await getItem(REFRESH_TOKEN_KEY)) ?? "";
+    const normalized = fromStorage.trim();
+    cachedRefreshToken = normalized || null;
+    return cachedRefreshToken;
   },
 
   async setAccessToken(token: string | null): Promise<void> {
     const v = (token ?? "").trim();
+    cachedAccessToken = v || null;
     if (!v) return deleteItem(ACCESS_TOKEN_KEY);
     return setItem(ACCESS_TOKEN_KEY, v);
   },
 
   async setRefreshToken(token: string | null): Promise<void> {
     const v = (token ?? "").trim();
+    cachedRefreshToken = v || null;
     if (!v) return deleteItem(REFRESH_TOKEN_KEY);
     return setItem(REFRESH_TOKEN_KEY, v);
   },
 
   async getTokens(): Promise<AuthTokens | null> {
-    const [accessToken, refreshToken] = await Promise.all([getItem(ACCESS_TOKEN_KEY), getItem(REFRESH_TOKEN_KEY)]);
+    const [accessToken, refreshToken] = await Promise.all([
+      tokenStorage.getAccessToken(),
+      tokenStorage.getRefreshToken(),
+    ]);
     const a = (accessToken ?? "").trim();
     const r = (refreshToken ?? "").trim();
     if (!a || !r) return null;
@@ -130,6 +149,8 @@ export const tokenStorage = {
   async setTokens(tokens: Partial<AuthTokens> | null): Promise<void> {
     const accessToken = (tokens?.accessToken ?? "").trim();
     const refreshToken = (tokens?.refreshToken ?? "").trim();
+    cachedAccessToken = accessToken || null;
+    cachedRefreshToken = refreshToken || null;
 
     await Promise.all([
       accessToken ? setItem(ACCESS_TOKEN_KEY, accessToken) : deleteItem(ACCESS_TOKEN_KEY),
@@ -138,6 +159,8 @@ export const tokenStorage = {
   },
 
   async clearTokens(): Promise<void> {
+    cachedAccessToken = null;
+    cachedRefreshToken = null;
     await Promise.all([deleteItem(ACCESS_TOKEN_KEY), deleteItem(REFRESH_TOKEN_KEY)]);
   },
 };

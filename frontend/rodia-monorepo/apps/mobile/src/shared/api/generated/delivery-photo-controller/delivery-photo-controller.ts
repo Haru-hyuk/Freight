@@ -14,7 +14,7 @@ import { customInstance } from '../../orval/custom-instance';
 
 
   export const getDriverMatchPhotos = (
-    matchId: number,
+    matchId: string,
  ) => {
       return customInstance<Blob>(
       {url: `/api/driver/matches/${matchId}/photos`, method: 'GET',
@@ -23,7 +23,7 @@ import { customInstance } from '../../orval/custom-instance';
       );
     }
   export const uploadDriverPhoto = (
-    matchId: number,
+    matchId: string,
     uploadDriverPhotoBody: UploadDriverPhotoBody,
     params: UploadDriverPhotoParams,
  ) => {const formData = new FormData();
@@ -38,7 +38,7 @@ formData.append(`file`, uploadDriverPhotoBody.file);
       );
     }
   export const getShipperMatchPhotos = (
-    matchId: number,
+    matchId: string,
  ) => {
       return customInstance<Blob>(
       {url: `/api/shipper/matches/${matchId}/photos`, method: 'GET',
@@ -47,7 +47,7 @@ formData.append(`file`, uploadDriverPhotoBody.file);
       );
     }
   export const downloadPhoto = (
-    photoId: number,
+    photoId: string,
  ) => {
       return customInstance<Blob>(
       {url: `/api/delivery-photos/${photoId}/file`, method: 'GET',

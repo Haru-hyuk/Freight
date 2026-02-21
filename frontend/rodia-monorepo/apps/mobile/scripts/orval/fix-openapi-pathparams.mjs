@@ -1,94 +1,189 @@
+// apps/mobile/scripts/orval/fix-openapi-path-params.mjs
 import fs from "node:fs";
 import path from "node:path";
-import http from "node:http";
-import https from "node:https";
-import { fileURLToPath } from "node:url";
 
-const SOURCE_URL = process.env.ORVAL_SOURCE_OPENAPI_URL || "http://192.168.0.28:8080/api-docs";
-const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
-const MOBILE_ROOT = path.resolve(SCRIPT_DIR, "..", "..");
-const RAW_PATH = path.resolve(MOBILE_ROOT, ".orval/openapi.raw.json");
-const FIXED_PATH = path.resolve(MOBILE_ROOT, ".orval/openapi.fixed.json");
+const DEFAULT_SOURCE =
+  process.env.ORVAL_OPENAPI_SOURCE ??
+  process.env.OPENAPI_SOURCE ??
+  "http://192.168.0.28:8080/api-docs";
 
-function fetchText(url) {
-  const client = url.startsWith("https://") ? https : http;
-  return new Promise((resolve, reject) => {
-    client
-      .get(url, (res) => {
-        let data = "";
-        res.on("data", (chunk) => {
-          data += chunk;
-        });
-        res.on("end", () => {
-          if (res.statusCode && res.statusCode >= 400) {
-            reject(new Error(`fetch failed: ${url} status=${res.statusCode}`));
-            return;
-          }
-          resolve(data);
-        });
-      })
-      .on("error", reject);
-  });
+const CWD = process.cwd(); // expected: apps/mobile
+const ORVAL_DIR = path.resolve(CWD, ".orval");
+
+const RAW_PATH =
+  process.env.ORVAL_OPENAPI_RAW_PATH ??
+  path.resolve(ORVAL_DIR, "openapi.raw.json");
+const FIXED_PATH =
+  process.env.ORVAL_OPENAPI_FIXED_PATH ??
+  path.resolve(ORVAL_DIR, "openapi.fixed.json");
+
+const FETCH_TIMEOUT_MS = Number(process.env.ORVAL_FETCH_TIMEOUT_MS ?? 10000);
+
+function ensureDir(dirPath) {
+  if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
 }
 
-function inferSchema(paramName) {
-  if (/id$/i.test(paramName)) {
-    return { type: "integer", format: "int64" };
+function safeReadJson(filePath) {
+  const txt = fs.readFileSync(filePath, "utf8");
+  return JSON.parse(txt);
+}
+
+function safeWriteJson(filePath, json) {
+  fs.writeFileSync(filePath, JSON.stringify(json, null, 2) + "\n", "utf8");
+}
+
+function extractPathParams(openapiPath) {
+  // e.g. "/api/shipper/quotes/{quoteId}/stops/{stopId}" -> ["quoteId","stopId"]
+  const matches = openapiPath.matchAll(/\{([^}]+)\}/g);
+  const params = [];
+  for (const m of matches) {
+    const name = (m?.[1] ?? "").trim();
+    if (name) params.push(name);
   }
+  return params;
+}
+
+function toParamSchema(existingSchema) {
+  // keep existing schema if provided, else default to string
+  if (existingSchema && typeof existingSchema === "object") return existingSchema;
   return { type: "string" };
 }
 
-function ensurePathParam(pathItem, paramName) {
-  const parameters = Array.isArray(pathItem.parameters) ? pathItem.parameters : [];
-  const exists = parameters.some(
-    (p) => p && String(p.name ?? "") === paramName && String(p.in ?? "") === "path"
-  );
-  if (exists) return false;
-
-  parameters.push({
-    name: paramName,
-    in: "path",
-    required: true,
-    schema: inferSchema(paramName),
-  });
-
-  pathItem.parameters = parameters;
-  return true;
+function normalizeParametersArray(value) {
+  return Array.isArray(value) ? value.filter(Boolean) : [];
 }
 
-async function main() {
-  const rawText = await fetchText(SOURCE_URL);
+function hasParam(params, name) {
+  return normalizeParametersArray(params).some(
+    (p) => p?.in === "path" && p?.name === name
+  );
+}
 
-  fs.mkdirSync(path.dirname(RAW_PATH), { recursive: true });
-  fs.writeFileSync(RAW_PATH, rawText, "utf8");
+function addMissingPathParamsToOperation(operation, paramNames, fallbackSchema) {
+  if (!operation || typeof operation !== "object") return 0;
 
-  const spec = JSON.parse(rawText);
-  const paths = spec?.paths ?? {};
+  const opParams = normalizeParametersArray(operation.parameters);
   let added = 0;
 
-  for (const [template, pathItem] of Object.entries(paths)) {
-    const matches = [...template.matchAll(/\{([^}]+)\}/g)];
-    if (!matches.length) continue;
+  for (const name of paramNames) {
+    if (hasParam(opParams, name)) continue;
 
+    opParams.push({
+      name,
+      in: "path",
+      required: true,
+      schema: toParamSchema(fallbackSchema),
+    });
+    added += 1;
+  }
+
+  operation.parameters = opParams;
+  return added;
+}
+
+function fixOpenApiPathParams(openapiJson) {
+  const paths = openapiJson?.paths ?? {};
+  if (!paths || typeof paths !== "object") return { fixed: openapiJson, added: 0 };
+
+  const HTTP_METHODS = [
+    "get",
+    "post",
+    "put",
+    "patch",
+    "delete",
+    "options",
+    "head",
+    "trace",
+  ];
+
+  let addedTotal = 0;
+
+  for (const [p, pathItem] of Object.entries(paths)) {
     if (!pathItem || typeof pathItem !== "object") continue;
-    for (const match of matches) {
-      const paramName = match[1];
-      if (ensurePathParam(pathItem, paramName)) {
-        added += 1;
+
+    const paramNames = extractPathParams(p);
+    if (paramNames.length === 0) continue;
+
+    // If pathItem.parameters already defines a schema for some params, reuse schema when adding to ops.
+    const pathLevelParams = normalizeParametersArray(pathItem?.parameters);
+    const schemaByName = new Map();
+    for (const pp of pathLevelParams) {
+      const name = pp?.name;
+      if (pp?.in === "path" && typeof name === "string" && name) {
+        schemaByName.set(name, pp?.schema);
+      }
+    }
+
+    for (const m of HTTP_METHODS) {
+      const op = pathItem?.[m];
+      if (!op) continue;
+
+      for (const name of paramNames) {
+        const schema = schemaByName.get(name);
+        addedTotal += addMissingPathParamsToOperation(op, [name], schema);
       }
     }
   }
 
-  fs.writeFileSync(FIXED_PATH, JSON.stringify(spec, null, 2), "utf8");
-
-  console.log(`[orval:fetch] source=${SOURCE_URL}`);
-  console.log(`[orval:fetch] raw=${RAW_PATH}`);
-  console.log(`[orval:fetch] fixed=${FIXED_PATH}`);
-  console.log(`[orval:fetch] addedPathParams=${added}`);
+  return { fixed: openapiJson, added: addedTotal };
 }
 
-main().catch((error) => {
-  const message = error instanceof Error ? error.message : String(error);
-  console.error(`[orval:fetch] failed: ${message}`);
+async function fetchJsonWithTimeout(url, timeoutMs) {
+  const ac = new AbortController();
+  const t = setTimeout(() => ac.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { signal: ac.signal });
+    if (!res?.ok) throw new Error(`HTTP ${res?.status} ${res?.statusText}`);
+    return await res.json();
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+async function main() {
+  ensureDir(ORVAL_DIR);
+
+  console.log(`[orval:fetch] source=${DEFAULT_SOURCE}`);
+  console.log(`[orval:fetch] raw=${RAW_PATH}`);
+  console.log(`[orval:fetch] fixed=${FIXED_PATH}`);
+
+  let rawJson = null;
+
+  // 1) Try fetch -> raw
+  try {
+    rawJson = await fetchJsonWithTimeout(DEFAULT_SOURCE, FETCH_TIMEOUT_MS);
+    safeWriteJson(RAW_PATH, rawJson);
+  } catch (e) {
+    const msg = e?.message ?? String(e);
+    const hasCache = fs.existsSync(RAW_PATH);
+
+    console.log(`[orval:fetch] fetch failed: ${msg}`);
+    if (!hasCache) {
+      console.error(
+        `[orval:fetch] no cached raw spec found at ${RAW_PATH}. Start backend or set ORVAL_OPENAPI_SOURCE, then retry.`
+      );
+      process.exit(1);
+    }
+
+    console.log(`[orval:fetch] using cached raw spec: ${RAW_PATH}`);
+    try {
+      rawJson = safeReadJson(RAW_PATH);
+    } catch (readErr) {
+      const rmsg = readErr?.message ?? String(readErr);
+      console.error(`[orval:fetch] cached raw parse failed: ${rmsg}`);
+      process.exit(1);
+    }
+  }
+
+  // 2) raw -> fixed (always attempt)
+  const { fixed, added } = fixOpenApiPathParams(rawJson ?? {});
+  safeWriteJson(FIXED_PATH, fixed);
+
+  console.log(`[orval:fetch] added Path Params=${added}`);
+}
+
+main().catch((e) => {
+  const msg = e?.message ?? String(e);
+  console.error(`[orval:fetch] fatal: ${msg}`);
   process.exit(1);
 });

@@ -9,7 +9,7 @@ import { customInstance } from '../../orval/custom-instance';
 
 
   export const markRead = (
-    notificationId: number,
+    notificationId: string,
  ) => {
       return customInstance<void>(
       {url: `/api/notifications/${notificationId}/read`, method: 'PATCH'

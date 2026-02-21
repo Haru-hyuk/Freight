@@ -98,17 +98,7 @@
             "description": "OK"
           }
         }
-      },
-      "parameters": [
-        {
-          "name": "quoteIdentifier",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "type": "string"
-          }
-        }
-      ]
+      }
     },
     "/api/driver/trucks/{truckId}": {
       "get": {
@@ -200,18 +190,7 @@
             "description": "OK"
           }
         }
-      },
-      "parameters": [
-        {
-          "name": "truckId",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "int64"
-          }
-        }
-      ]
+      }
     },
     "/api/admin/announcements/{announcementId}": {
       "get": {
@@ -219,7 +198,16 @@
           "admin-announcement-controller"
         ],
         "operationId": "get_1",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "announcementId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -238,7 +226,16 @@
           "admin-announcement-controller"
         ],
         "operationId": "update",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "announcementId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -267,24 +264,22 @@
           "admin-announcement-controller"
         ],
         "operationId": "delete",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "announcementId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK"
           }
         }
-      },
-      "parameters": [
-        {
-          "name": "announcementId",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "int64"
-          }
-        }
-      ]
+      }
     },
     "/api/shipper/quotes": {
       "get": {
@@ -558,7 +553,16 @@
           "driver-counter-offer-controller"
         ],
         "operationId": "createCounterOffer",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "quoteId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -581,18 +585,7 @@
             }
           }
         }
-      },
-      "parameters": [
-        {
-          "name": "quoteId",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "int64"
-          }
-        }
-      ]
+      }
     },
     "/api/driver/matches/{matchId}/photos": {
       "get": {
@@ -600,7 +593,16 @@
           "delivery-photo-controller"
         ],
         "operationId": "getDriverMatchPhotos",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "matchId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -659,6 +661,14 @@
             "schema": {
               "type": "number"
             }
+          },
+          {
+            "name": "matchId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -691,18 +701,7 @@
             }
           }
         }
-      },
-      "parameters": [
-        {
-          "name": "matchId",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "int64"
-          }
-        }
-      ]
+      }
     },
     "/api/driver/matches/{matchId}/accept": {
       "post": {
@@ -710,7 +709,16 @@
           "driver-match-controller"
         ],
         "operationId": "acceptMatch",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "matchId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -723,18 +731,7 @@
             }
           }
         }
-      },
-      "parameters": [
-        {
-          "name": "matchId",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "int64"
-          }
-        }
-      ]
+      }
     },
     "/api/auth/shipper/signup": {
       "post": {
@@ -956,24 +953,22 @@
           "shipper-counter-offer-controller"
         ],
         "operationId": "rejectCounterOffer",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "offerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK"
           }
         }
-      },
-      "parameters": [
-        {
-          "name": "offerId",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "int64"
-          }
-        }
-      ]
+      }
     },
     "/api/shipper/counter-offers/{offerId}/accept": {
       "patch": {
@@ -981,24 +976,22 @@
           "shipper-counter-offer-controller"
         ],
         "operationId": "acceptCounterOffer",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "offerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK"
           }
         }
-      },
-      "parameters": [
-        {
-          "name": "offerId",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "int64"
-          }
-        }
-      ]
+      }
     },
     "/api/notifications/{notificationId}/read": {
       "patch": {
@@ -1006,24 +999,22 @@
           "notification-controller"
         ],
         "operationId": "markRead",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "notificationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK"
           }
         }
-      },
-      "parameters": [
-        {
-          "name": "notificationId",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "int64"
-          }
-        }
-      ]
+      }
     },
     "/api/shipper/quotes/{quoteId}/counter-offers": {
       "get": {
@@ -1031,7 +1022,16 @@
           "shipper-counter-offer-controller"
         ],
         "operationId": "getCounterOffers",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "quoteId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -1047,18 +1047,7 @@
             }
           }
         }
-      },
-      "parameters": [
-        {
-          "name": "quoteId",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "int64"
-          }
-        }
-      ]
+      }
     },
     "/api/shipper/payments": {
       "get": {
@@ -1100,7 +1089,16 @@
           "payment-controller"
         ],
         "operationId": "getById",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "paymentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -1113,18 +1111,7 @@
             }
           }
         }
-      },
-      "parameters": [
-        {
-          "name": "paymentId",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "int64"
-          }
-        }
-      ]
+      }
     },
     "/api/shipper/payments/me": {
       "get": {
@@ -1155,7 +1142,16 @@
           "shipper-match-controller"
         ],
         "operationId": "getMatch",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "matchId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -1174,24 +1170,22 @@
           "shipper-match-controller"
         ],
         "operationId": "cancelMatch",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "matchId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK"
           }
         }
-      },
-      "parameters": [
-        {
-          "name": "matchId",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "int64"
-          }
-        }
-      ]
+      }
     },
     "/api/shipper/matches/{matchId}/photos": {
       "get": {
@@ -1199,7 +1193,16 @@
           "delivery-photo-controller"
         ],
         "operationId": "getShipperMatchPhotos",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "matchId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -1215,18 +1218,7 @@
             }
           }
         }
-      },
-      "parameters": [
-        {
-          "name": "matchId",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "int64"
-          }
-        }
-      ]
+      }
     },
     "/api/shipper/matches/me": {
       "get": {
@@ -1323,7 +1315,16 @@
           "driver-match-controller"
         ],
         "operationId": "getMatch_1",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "matchId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -1342,24 +1343,22 @@
           "driver-match-controller"
         ],
         "operationId": "cancelMatch_1",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "matchId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK"
           }
         }
-      },
-      "parameters": [
-        {
-          "name": "matchId",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "int64"
-          }
-        }
-      ]
+      }
     },
     "/api/driver/matches/me": {
       "get": {
@@ -1413,7 +1412,16 @@
           "delivery-photo-controller"
         ],
         "operationId": "downloadPhoto",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "photoId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -1427,18 +1435,7 @@
             }
           }
         }
-      },
-      "parameters": [
-        {
-          "name": "photoId",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "int64"
-          }
-        }
-      ]
+      }
     },
     "/api/checklist-items": {
       "get": {
@@ -1492,7 +1489,16 @@
           "announcement-controller"
         ],
         "operationId": "get",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "announcementId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -1505,18 +1511,7 @@
             }
           }
         }
-      },
-      "parameters": [
-        {
-          "name": "announcementId",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "int64"
-          }
-        }
-      ]
+      }
     }
   },
   "components": {

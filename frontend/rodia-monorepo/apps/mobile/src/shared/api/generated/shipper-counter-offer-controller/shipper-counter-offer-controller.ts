@@ -9,7 +9,7 @@ import { customInstance } from '../../orval/custom-instance';
 
 
   export const rejectCounterOffer = (
-    offerId: number,
+    offerId: string,
  ) => {
       return customInstance<void>(
       {url: `/api/shipper/counter-offers/${offerId}/reject`, method: 'PATCH'
@@ -17,7 +17,7 @@ import { customInstance } from '../../orval/custom-instance';
       );
     }
   export const acceptCounterOffer = (
-    offerId: number,
+    offerId: string,
  ) => {
       return customInstance<void>(
       {url: `/api/shipper/counter-offers/${offerId}/accept`, method: 'PATCH'
@@ -25,7 +25,7 @@ import { customInstance } from '../../orval/custom-instance';
       );
     }
   export const getCounterOffers = (
-    quoteId: number,
+    quoteId: string,
  ) => {
       return customInstance<Blob>(
       {url: `/api/shipper/quotes/${quoteId}/counter-offers`, method: 'GET',
