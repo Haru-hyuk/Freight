@@ -125,6 +125,19 @@ public class QuoteService {
 
         saveChecklistItems(saved.getQuoteId(), req.getChecklistItems());
         saveStops(saved.getQuoteId(), resolvedStops);
+        List<QuoteStopResponse> responseStops = resolvedStops.stream()
+                .map(stop -> new QuoteStopResponse(
+                        null,
+                        stop.seq(),
+                        stop.address(),
+                        stop.lat(),
+                        stop.lng(),
+                        stop.contactName(),
+                        stop.contactPhone(),
+                        stop.deptName(),
+                        stop.managerName()
+                ))
+                .collect(Collectors.toList());
 
         return new QuoteCreateResponse(
                 saved.getQuoteId(),
@@ -133,7 +146,7 @@ public class QuoteService {
                 saved.getOriginLng(),
                 saved.getDestinationLat(),
                 saved.getDestinationLng(),
-                stops
+                responseStops
         );
     }
 
