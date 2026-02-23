@@ -187,7 +187,7 @@ const useStyles = createThemedStyles((theme: AppTheme) => {
 export function QuoteCreateStep1() {
   const theme = useAppTheme();
   const styles = useStyles();
-  const { draft, patchDraft } = useQuoteCreateDraft();
+  const { draft, patchDraft, setDraft } = useQuoteCreateDraft();
 
   // 주소 검색 모달 상태 관리
   const [isPostcodeOpen, setIsPostcodeOpen] = useState(false);
@@ -239,19 +239,22 @@ export function QuoteCreateStep1() {
         return;
       }
 
-      const next = (waypoints ?? []).map((waypoint) =>
-        waypoint?.id === target
-          ? {
-              ...waypoint,
-              addr: selectedAddress,
-              lat: undefined,
-              lng: undefined,
-            }
-          : waypoint
-      );
-      patchDraft({ waypoints: next });
+      setDraft((prev) => {
+        const currentWaypoints = Array.isArray(prev?.waypoints) ? prev.waypoints : [];
+        const nextWaypoints = currentWaypoints.map((waypoint) =>
+          waypoint?.id === target
+            ? {
+                ...waypoint,
+                addr: selectedAddress,
+                lat: undefined,
+                lng: undefined,
+              }
+            : waypoint
+        );
+        return { ...prev, waypoints: nextWaypoints };
+      });
     },
-    [patchDraft, waypoints]
+    [patchDraft, setDraft]
   );
 
   const applyCoordinatesToTarget = useCallback(
@@ -268,18 +271,21 @@ export function QuoteCreateStep1() {
         return;
       }
 
-      const next = (waypoints ?? []).map((waypoint) =>
-        waypoint?.id === target
-          ? {
-              ...waypoint,
-              lat,
-              lng,
-            }
-          : waypoint
-      );
-      patchDraft({ waypoints: next });
+      setDraft((prev) => {
+        const currentWaypoints = Array.isArray(prev?.waypoints) ? prev.waypoints : [];
+        const nextWaypoints = currentWaypoints.map((waypoint) =>
+          waypoint?.id === target
+            ? {
+                ...waypoint,
+                lat,
+                lng,
+              }
+            : waypoint
+        );
+        return { ...prev, waypoints: nextWaypoints };
+      });
     },
-    [patchDraft, waypoints]
+    [patchDraft, setDraft]
   );
 
   const resolveCoordinatesForTask = useCallback(
