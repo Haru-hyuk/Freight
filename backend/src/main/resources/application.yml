@@ -2,6 +2,8 @@ server:
   port: ${SERVER_PORT:8080}
 
 spring:
+  application:
+    name: backend
   datasource:
     url: ${DB_URL}
     driver-class-name: ${DB_DRIVER_CLASS_NAME:com.mysql.cj.jdbc.Driver}
@@ -52,3 +54,11 @@ springdoc:
     path: /api-docs
   swagger-ui:
     path: /swagger-ui
+
+geocoding:
+  kakao:
+    base-url: ${GEOCODING_KAKAO_BASE_URL:https://dapi.kakao.com}
+    api-key: ${GEOCODING_KAKAO_API_KEY:${KAKAO_REST_API_KEY:}}
+  timeout-ms: ${GEOCODING_TIMEOUT_MS:2000}
+  cache:
+    ttl-seconds: ${GEOCODING_CACHE_TTL_SECONDS:86400}
