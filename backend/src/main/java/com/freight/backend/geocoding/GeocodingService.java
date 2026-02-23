@@ -1,24 +1,30 @@
 package com.freight.backend.geocoding;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.freight.backend.exception.CustomException;
 import com.freight.backend.exception.ErrorCode;
-import com.fasterxml.jackson.databind.JsonNode;
+import java.io.IOException;
 import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
-import org.springframework.web.util.UriUtils;
+import org.springframework.web.client.RestClientResponseException;
+import org.springframework.web.client.ResourceAccessException;
 
 @Service
+@Slf4j
 public class GeocodingService {
 
     private static final int MAX_ATTEMPTS = 2;
     private static final long DEFAULT_CACHE_TTL_SECONDS = 86400L;
 
     private final RestClient restClient;
+    private final ObjectMapper objectMapper;
     private final long cacheTtlSeconds;
     private final boolean hasApiKey;
     private final Map<String, CachedGeocoding> cache = new ConcurrentHashMap<>();
@@ -30,6 +36,7 @@ public class GeocodingService {
             @Value("${geocoding.timeout-ms:2000}") int timeoutMs,
             @Value("${geocoding.cache.ttl-seconds:86400}") long cacheTtlSeconds
     ) {
+        this.objectMapper = new ObjectMapper();
         this.cacheTtlSeconds = cacheTtlSeconds > 0 ? cacheTtlSeconds : DEFAULT_CACHE_TTL_SECONDS;
         this.hasApiKey = apiKey != null && !apiKey.isBlank();
 
@@ -61,15 +68,35 @@ public class GeocodingService {
         RuntimeException lastException = null;
         for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
             try {
-                JsonNode response = restClient.get()
-                        .uri("/v2/local/search/address.json?query="
-                                + UriUtils.encodeQueryParam(normalized, java.nio.charset.StandardCharsets.UTF_8))
+                log.debug("Geocode request attempt={} address='{}'", attempt, normalized);
+                String raw = restClient.get()
+                        .uri(uriBuilder -> uriBuilder
+                                .path("/v2/local/search/address.json")
+                                .queryParam("query", normalized)
+                                .build())
                         .retrieve()
-                        .body(JsonNode.class);
+                        .body(String.class);
+                JsonNode response = parseJson(raw);
                 GeocodingResult result = parseResponse(response, normalized);
                 cache.put(normalized, new CachedGeocoding(result, Instant.now().plusSeconds(cacheTtlSeconds)));
                 return result;
+            } catch (RestClientResponseException e) {
+                String body = e.getResponseBodyAsString();
+                log.warn(
+                        "Geocode HTTP error. attempt={}, status={}, address='{}', body='{}'",
+                        attempt,
+                        e.getStatusCode().value(),
+                        normalized,
+                        body == null ? "" : body
+                );
+                lastException = e;
+            } catch (ResourceAccessException e) {
+                log.warn("Geocode network error. attempt={}, address='{}', cause='{}'",
+                        attempt, normalized, e.getMessage());
+                lastException = e;
             } catch (RuntimeException e) {
+                log.warn("Geocode runtime error. attempt={}, address='{}', cause='{}'",
+                        attempt, normalized, e.getMessage());
                 lastException = e;
             }
         }
@@ -109,6 +136,7 @@ public class GeocodingService {
 
         JsonNode documents = response.path("documents");
         if (!documents.isArray() || documents.isEmpty()) {
+            log.warn("Geocode no documents. fallbackAddress='{}', response='{}'", fallbackAddress, response);
             throw new CustomException(ErrorCode.EXTERNAL_API_ERROR);
         }
 
@@ -132,6 +160,17 @@ public class GeocodingService {
             }
             return new GeocodingResult(lat, lng, normalizedAddress);
         } catch (NumberFormatException e) {
+            throw new CustomException(ErrorCode.EXTERNAL_API_ERROR);
+        }
+    }
+
+    private JsonNode parseJson(String raw) {
+        if (raw == null || raw.isBlank()) {
+            throw new CustomException(ErrorCode.EXTERNAL_API_ERROR);
+        }
+        try {
+            return objectMapper.readTree(raw);
+        } catch (IOException e) {
             throw new CustomException(ErrorCode.EXTERNAL_API_ERROR);
         }
     }
