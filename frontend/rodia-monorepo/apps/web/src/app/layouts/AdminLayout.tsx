@@ -129,6 +129,7 @@ export default function AdminLayout() {
         <aside className="w-64 shrink-0 border-r border-border bg-muted">
           <div className="flex h-16 items-center px-6">
             <div className="flex items-center gap-2">
+              {/* 수정: 색은 semantic(primary)만 사용 */}
               <span className="inline-flex h-2 w-2 rounded-full bg-primary" />
               <span className="text-sm font-semibold text-foreground">Rodia Admin</span>
             </div>
