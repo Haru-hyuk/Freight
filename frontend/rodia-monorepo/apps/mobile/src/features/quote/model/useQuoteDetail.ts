@@ -1,5 +1,5 @@
 // rodia-monorepo/apps/mobile/src/features/quote/model/useQuoteDetail.ts
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { QuoteDetailResponse, QuoteId } from "@/entities/quote/model/quote.types";
 import { getShipperQuoteDetailByIdentifier } from "@/features/quote/api";
@@ -53,7 +53,7 @@ export type QuoteDetailViewModel = {
   isLoading: boolean;
   errorMessage: string | null;
   isSessionExpired: boolean;
-  refetch: () => void;
+  refetch: () => Promise<void>;
   commandCenter: {
     statusLabel: string;
     metaText: string;
@@ -516,12 +516,16 @@ export function useQuoteDetail(quoteIdentifier: QuoteId | string, runtimeOverrid
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSessionExpired, setIsSessionExpired] = useState<boolean>(false);
   const [reloadTick, setReloadTick] = useState(0);
+  const pendingRefetchResolversRef = useRef<Array<() => void>>([]);
   const overrideStatus = runtimeOverride?.status;
   const overrideCancelReason = runtimeOverride?.cancelReason;
   const overrideCanceledAt = runtimeOverride?.canceledAt;
 
   const refetch = useCallback(() => {
-    setReloadTick((prev) => prev + 1);
+    return new Promise<void>((resolve) => {
+      pendingRefetchResolversRef.current.push(resolve);
+      setReloadTick((prev) => prev + 1);
+    });
   }, []);
 
   useEffect(() => {
@@ -565,6 +569,11 @@ export function useQuoteDetail(quoteIdentifier: QuoteId | string, runtimeOverrid
       .finally(() => {
         if (!isMounted) return;
         setIsLoading(false);
+
+        const resolvers = pendingRefetchResolversRef.current.splice(0);
+        resolvers.forEach((resolve) => {
+          resolve();
+        });
       });
 
     return () => {

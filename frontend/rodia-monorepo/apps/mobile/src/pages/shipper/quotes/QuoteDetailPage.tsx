@@ -4,7 +4,15 @@ import { Alert, KeyboardAvoidingView, LayoutAnimation, Modal, Platform, Pressabl
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
-import { cancelShipperMatch, listMyShipperMatches } from "@/features/matching/api";
+import {
+  acceptShipperCounterOffer,
+  isCounterOfferPending,
+  listShipperCounterOffers,
+  normalizeCounterOfferStatus,
+  rejectShipperCounterOffer,
+  type CounterOfferItem,
+} from "@/features/counter-offer/api";
+import { cancelShipperMatch, createShipperMatch, listMyShipperMatches, type ShipperMatchItem } from "@/features/matching/api";
 import { resolveTonePalette, type BottomActionId } from "@/features/quote/model/quoteActionMatrix";
 import { useQuoteDetail } from "@/features/quote/model/useQuoteDetail";
 import { deleteShipperQuote } from "@/features/quote/api";
@@ -21,6 +29,7 @@ import { AppText } from "@/shared/ui/kit/AppText";
 import { PageScaffold } from "@/widgets/layout/PageScaffold";
 
 type QuoteDetailView = ReturnType<typeof useQuoteDetail>;
+type BottomDecisionAction = "acceptOffer" | "rejectOffer" | "pay" | "reRequestRoute";
 
 const useStyles = createThemedStyles((theme) => {
   const c = theme.colors;
@@ -363,6 +372,88 @@ const useStyles = createThemedStyles((theme) => {
       textAlign: "center",
     },
 
+    negotiationSection: {
+      marginBottom: spacing * 3,
+      gap: spacing * 2,
+    },
+    negotiationCardInner: {
+      padding: spacing * 4,
+      gap: spacing * 2,
+    },
+    negotiationHeaderRow: {
+      minHeight: 24,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: spacing,
+    },
+    negotiationTitle: {
+      color: c.textMain,
+      fontSize: safeNumber(theme.typography.scale.detail.size, 14),
+      lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20),
+      fontWeight: "900",
+    },
+    negotiationSub: {
+      color: c.textMuted,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
+      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
+      fontWeight: "700",
+    },
+    negotiationStatusChip: {
+      borderWidth: 1,
+      borderRadius: 999,
+      paddingHorizontal: spacing * 2,
+      paddingVertical: spacing / 2,
+      borderColor: tint(c.brandPrimary, 0.22, c.borderDefault),
+      backgroundColor: tint(c.brandPrimary, 0.08, c.bgSurface),
+    },
+    negotiationStatusText: {
+      color: c.brandPrimary,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
+      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
+      fontWeight: "900",
+    },
+    negotiationInfoRow: {
+      minHeight: 20,
+      flexDirection: "row",
+      alignItems: "flex-start",
+      justifyContent: "space-between",
+      gap: spacing * 2,
+    },
+    negotiationLabel: {
+      width: "30%",
+      color: c.textMuted,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
+      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
+      fontWeight: "700",
+    },
+    negotiationValue: {
+      flex: 1,
+      color: c.textMain,
+      fontSize: safeNumber(theme.typography.scale.detail.size, 14),
+      lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20),
+      fontWeight: "700",
+      textAlign: "right",
+    },
+    negotiationDivider: {
+      height: 1,
+      backgroundColor: tint(c.textMain, 0.06, c.borderDefault),
+    },
+    negotiationActions: {
+      flexDirection: "row",
+      gap: spacing * 2,
+    },
+    negotiationButton: {
+      flex: 1,
+      minHeight: 40,
+    },
+    emptyStateText: {
+      color: c.textMuted,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
+      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
+      fontWeight: "700",
+    },
+
     accordionHeader: {
       minHeight: 44,
       flexDirection: "row",
@@ -584,6 +675,69 @@ function formatPriceText(value: unknown): string {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return "-";
   return `${Math.max(0, Math.trunc(parsed)).toLocaleString("ko-KR")}원`;
+}
+
+function toDisplayDash(value: unknown): string {
+  const text = String(value ?? "").trim();
+  return text || "-";
+}
+
+function formatDateTimeOrDash(value: unknown): string {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "-";
+
+  const date = new Date(raw);
+  if (!Number.isFinite(date.getTime())) return "-";
+
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  const hour = String(date.getHours()).padStart(2, "0");
+  const minute = String(date.getMinutes()).padStart(2, "0");
+  return `${month}월 ${day}일 ${hour}:${minute}`;
+}
+
+function normalizeMatchStatus(status: string): string {
+  const normalized = String(status ?? "").trim().toUpperCase();
+  if (!normalized) return "UNKNOWN";
+  if (normalized === "CANCELLED") return "CANCELED";
+  return normalized;
+}
+
+function resolveMatchStatusLabel(status: string): string {
+  const normalized = normalizeMatchStatus(status);
+  if (normalized === "OPEN") return "요청 접수";
+  if (normalized === "NEGOTIATING") return "협상 중";
+  if (normalized === "ASSIGNED") return "배차 완료";
+  if (normalized === "PICKUP") return "상차 중";
+  if (normalized === "TRANSIT") return "운송 중";
+  if (normalized === "DROPOFF") return "하차 완료";
+  if (normalized === "CANCELED") return "요청 취소";
+  return normalized;
+}
+
+function resolveCounterOfferStatusLabel(status: string): string {
+  const normalized = normalizeCounterOfferStatus(status);
+  if (normalized === "PENDING") return "대기";
+  if (normalized === "OPEN") return "대기";
+  if (normalized === "NEGOTIATING") return "협의 중";
+  if (normalized.includes("ACCEPT")) return "수락됨";
+  if (normalized.includes("REJECT")) return "거절됨";
+  if (normalized.includes("CANCEL")) return "취소됨";
+  return normalized;
+}
+
+function resolveCounterOfferActorLabel(role: CounterOfferItem["actorRole"]): string {
+  if (role === "DRIVER") return "기사";
+  if (role === "SHIPPER") return "화주";
+  return "-";
+}
+
+function findLatestQuoteMatch(matches: ShipperMatchItem[]): ShipperMatchItem | null {
+  const list = Array.isArray(matches) ? matches : [];
+  if (list.length <= 0) return null;
+
+  const sorted = [...list].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+  return sorted[0] ?? null;
 }
 
 function resolveArchiveRowIconName(
@@ -857,6 +1011,12 @@ export default function QuoteDetailPage() {
   const [cancelReasonError, setCancelReasonError] = React.useState<string | undefined>(undefined);
   const [isCancelSubmitting, setIsCancelSubmitting] = React.useState(false);
   const [isDeleting, setIsDeleting] = React.useState(false);
+  const [quoteMatches, setQuoteMatches] = React.useState<ShipperMatchItem[]>([]);
+  const [isMatchLoading, setIsMatchLoading] = React.useState(false);
+  const [isMatchSubmitting, setIsMatchSubmitting] = React.useState(false);
+  const [counterOffers, setCounterOffers] = React.useState<CounterOfferItem[]>([]);
+  const [isCounterOfferLoading, setIsCounterOfferLoading] = React.useState(false);
+  const [counterOfferPendingKey, setCounterOfferPendingKey] = React.useState<string | null>(null);
 
   const quoteIdentifier = parseRouteIdentifier(params?.id);
   const quoteId = parsePositiveIntParam(params?.id);
@@ -915,6 +1075,201 @@ export default function QuoteDetailPage() {
 
     return 0;
   }, [params?.matchId, view.actionsContext, view.quote]);
+  const resolveActionQuoteId = React.useCallback(() => {
+    const fromView = Number(view.quote?.quoteId);
+    if (Number.isInteger(fromView) && fromView > 0) return fromView;
+    if (Number.isInteger(quoteId) && quoteId > 0) return quoteId;
+    return 0;
+  }, [quoteId, view.quote?.quoteId]);
+
+  const loadQuoteMatches = React.useCallback(async (targetQuoteId: number): Promise<ShipperMatchItem[]> => {
+    const safeQuoteId = Number.isInteger(targetQuoteId) && targetQuoteId > 0 ? targetQuoteId : 0;
+    if (safeQuoteId <= 0) {
+      setQuoteMatches([]);
+      return [];
+    }
+
+    try {
+      setIsMatchLoading(true);
+      const matches = await listMyShipperMatches();
+      const safeMatches = Array.isArray(matches) ? matches : [];
+      const filtered = safeMatches
+        .filter((match) => {
+          const quoteIdFromMatch = Number((match as { quoteId?: unknown })?.quoteId);
+          return Number.isInteger(quoteIdFromMatch) && quoteIdFromMatch === safeQuoteId;
+        })
+        .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+
+      setQuoteMatches(filtered);
+      return filtered;
+    } catch {
+      setQuoteMatches([]);
+      return [];
+    } finally {
+      setIsMatchLoading(false);
+    }
+  }, []);
+
+  const loadCounterOffers = React.useCallback(async (targetQuoteId: number): Promise<CounterOfferItem[]> => {
+    const safeQuoteId = Number.isInteger(targetQuoteId) && targetQuoteId > 0 ? targetQuoteId : 0;
+    if (safeQuoteId <= 0) {
+      setCounterOffers([]);
+      return [];
+    }
+
+    try {
+      setIsCounterOfferLoading(true);
+      const offers = await listShipperCounterOffers(safeQuoteId);
+      const safeOffers = Array.isArray(offers) ? offers : [];
+      setCounterOffers(safeOffers);
+      return safeOffers;
+    } catch {
+      setCounterOffers([]);
+      return [];
+    } finally {
+      setIsCounterOfferLoading(false);
+    }
+  }, []);
+
+  const refreshNegotiationData = React.useCallback(async () => {
+    const targetQuoteId = resolveActionQuoteId();
+    const tasks: Array<Promise<unknown>> = [view.refetch()];
+    if (targetQuoteId > 0) {
+      tasks.push(loadQuoteMatches(targetQuoteId));
+      tasks.push(loadCounterOffers(targetQuoteId));
+    }
+    await Promise.all(tasks);
+  }, [loadCounterOffers, loadQuoteMatches, resolveActionQuoteId, view.refetch]);
+
+  React.useEffect(() => {
+    const targetQuoteId = resolveActionQuoteId();
+    if (targetQuoteId <= 0) {
+      setQuoteMatches([]);
+      setCounterOffers([]);
+      return;
+    }
+
+    void Promise.all([loadQuoteMatches(targetQuoteId), loadCounterOffers(targetQuoteId)]);
+  }, [loadCounterOffers, loadQuoteMatches, resolveActionQuoteId]);
+
+  const activeQuoteMatch = React.useMemo(() => findLatestQuoteMatch(quoteMatches), [quoteMatches]);
+
+  const latestPendingCounterOffer = React.useMemo(() => {
+    const safeList = Array.isArray(counterOffers) ? counterOffers : [];
+    return safeList.find((offer) => isCounterOfferPending(offer.status)) ?? null;
+  }, [counterOffers]);
+
+  const runCounterOfferDecision = React.useCallback(
+    async (offer: CounterOfferItem, action: "accept" | "reject") => {
+      const safeOfferId = Number.isInteger(offer?.counterOfferId) && offer.counterOfferId > 0 ? offer.counterOfferId : 0;
+      if (safeOfferId <= 0) {
+        Alert.alert("제안 처리 실패", "유효한 제안 ID를 찾을 수 없습니다.");
+        return;
+      }
+
+      const pendingKey = `${action}:${safeOfferId}`;
+      if (counterOfferPendingKey !== null) return;
+
+      try {
+        setCounterOfferPendingKey(pendingKey);
+        if (action === "accept") {
+          await acceptShipperCounterOffer(safeOfferId);
+        } else {
+          await rejectShipperCounterOffer(safeOfferId);
+        }
+
+        await refreshNegotiationData();
+
+        if (action === "accept") {
+          Alert.alert("제안 수락", "역제안을 수락했습니다.");
+        } else {
+          Alert.alert("제안 거절", "역제안을 거절했습니다.");
+        }
+      } catch (error) {
+        Alert.alert("제안 처리 실패", readErrorMessage(error));
+      } finally {
+        setCounterOfferPendingKey(null);
+      }
+    },
+    [counterOfferPendingKey, readErrorMessage, refreshNegotiationData]
+  );
+
+  const handleCreateMatch = React.useCallback(async () => {
+    if (isMatchSubmitting) return;
+
+    const targetQuoteId = resolveActionQuoteId();
+    if (targetQuoteId <= 0) {
+      Alert.alert("배차 요청 실패", "유효한 견적 정보를 찾을 수 없습니다.");
+      return;
+    }
+
+    try {
+      setIsMatchSubmitting(true);
+      await createShipperMatch(targetQuoteId);
+      await refreshNegotiationData();
+      Alert.alert("배차 요청", "배차 요청이 생성되었습니다.");
+    } catch (error) {
+      Alert.alert("배차 요청 실패", readErrorMessage(error));
+    } finally {
+      setIsMatchSubmitting(false);
+    }
+  }, [isMatchSubmitting, readErrorMessage, refreshNegotiationData, resolveActionQuoteId]);
+
+  const handleCancelMatchDirect = React.useCallback(async () => {
+    if (isMatchSubmitting) return;
+
+    const targetMatchId =
+      Number.isInteger(activeQuoteMatch?.matchId) && Number(activeQuoteMatch?.matchId) > 0
+        ? Number(activeQuoteMatch?.matchId)
+        : 0;
+    if (targetMatchId <= 0) {
+      Alert.alert("배차 취소 실패", "취소할 배차 요청을 찾을 수 없습니다.");
+      return;
+    }
+
+    try {
+      setIsMatchSubmitting(true);
+      await cancelShipperMatch(targetMatchId);
+      await refreshNegotiationData();
+      Alert.alert("배차 취소", "배차 요청을 취소했습니다.");
+    } catch (error) {
+      Alert.alert("배차 취소 실패", readErrorMessage(error));
+    } finally {
+      setIsMatchSubmitting(false);
+    }
+  }, [activeQuoteMatch?.matchId, isMatchSubmitting, readErrorMessage, refreshNegotiationData]);
+
+  const handleBottomAction = React.useCallback(
+    async (action: BottomDecisionAction) => {
+      if (action === "acceptOffer") {
+        if (!latestPendingCounterOffer) {
+          Alert.alert("제안 수락", "수락 가능한 역제안이 없습니다.");
+          return;
+        }
+        await runCounterOfferDecision(latestPendingCounterOffer, "accept");
+        return;
+      }
+
+      if (action === "rejectOffer") {
+        if (!latestPendingCounterOffer) {
+          Alert.alert("제안 거절", "거절 가능한 역제안이 없습니다.");
+          return;
+        }
+        await runCounterOfferDecision(latestPendingCounterOffer, "reject");
+        return;
+      }
+
+      if (action === "pay") {
+        const amount = Number.isFinite(view.actionsContext?.finalPrice) ? view.actionsContext.finalPrice : 0;
+        Alert.alert("결제 진행", `${Math.max(0, Math.trunc(amount)).toLocaleString("ko-KR")}원 결제를 진행합니다.`);
+        return;
+      }
+
+      router.push("/(shipper)/quotes/create");
+    },
+    [latestPendingCounterOffer, router, runCounterOfferDecision, view.actionsContext?.finalPrice]
+  );
+
   const submitCancelModal = React.useCallback(async () => {
     if (isBlockedByFetchState || isCancelSubmitting) return;
 
@@ -936,8 +1291,17 @@ export default function QuoteDetailPage() {
       let targetMatchId = resolveDirectMatchId();
 
       if (targetMatchId <= 0) {
-        const matches = await listMyShipperMatches();
-        const safeMatches = Array.isArray(matches) ? matches : [];
+        const safeMatches = Array.isArray(quoteMatches) ? quoteMatches : [];
+        const latestLocal = findLatestQuoteMatch(safeMatches);
+        const localMatchId = Number(latestLocal?.matchId ?? 0);
+        if (Number.isInteger(localMatchId) && localMatchId > 0) {
+          targetMatchId = localMatchId;
+        }
+      }
+
+      if (targetMatchId <= 0) {
+        const remoteMatches = await listMyShipperMatches();
+        const safeMatches = Array.isArray(remoteMatches) ? remoteMatches : [];
         const sameQuoteMatches = safeMatches.filter((match) => {
           const quoteIdFromMatch = Number((match as { quoteId?: unknown })?.quoteId);
           const matchIdFromMatch = Number((match as { matchId?: unknown })?.matchId);
@@ -958,24 +1322,26 @@ export default function QuoteDetailPage() {
       setShowCancelModal(false);
       setCancelReasonInput("");
       setCancelReasonError(undefined);
-      Alert.alert("요청 취소", "취소 요청이 처리되었습니다.", [
-        {
-          text: "확인",
-          onPress: () => router.replace("/(shipper)/matchings"),
-        },
-      ]);
+      await Promise.all([view.refetch(), loadQuoteMatches(safeQuoteId), loadCounterOffers(safeQuoteId)]);
+      Alert.alert("요청 취소", "취소 요청이 처리되었습니다.");
     } catch (error) {
       Alert.alert("요청 취소 실패", readErrorMessage(error));
     } finally {
       setIsCancelSubmitting(false);
     }
-  }, [cancelReasonInput, isBlockedByFetchState, isCancelSubmitting, readErrorMessage, resolveDirectMatchId, router, view.actionsContext]);
-  const resolveActionQuoteId = React.useCallback(() => {
-    const fromView = Number(view.quote?.quoteId);
-    if (Number.isInteger(fromView) && fromView > 0) return fromView;
-    if (Number.isInteger(quoteId) && quoteId > 0) return quoteId;
-    return 0;
-  }, [quoteId, view.quote?.quoteId]);
+  }, [
+    cancelReasonInput,
+    isBlockedByFetchState,
+    isCancelSubmitting,
+    loadCounterOffers,
+    loadQuoteMatches,
+    quoteMatches,
+    readErrorMessage,
+    resolveDirectMatchId,
+    view.actionsContext?.quoteId,
+    view.refetch,
+  ]);
+
   const handlePressEdit = React.useCallback(() => {
     if (isBlockedByFetchState) return;
     const targetQuoteId = resolveActionQuoteId();
@@ -1046,6 +1412,7 @@ export default function QuoteDetailPage() {
             ctx={view.actionsContext}
             bottomBar={bottomBarWithoutCancel}
             guards={view.policy.guards}
+            onRunAction={handleBottomAction}
           />
         ) : null
       }
@@ -1122,6 +1489,148 @@ export default function QuoteDetailPage() {
           </View>
 
           <OverviewCard view={view} showCancelButton={hasCancelAction} onPressCancel={openCancelModal} />
+
+          <View style={styles.negotiationSection}>
+            <AppCard outlined elevated={false}>
+              <View style={styles.negotiationCardInner}>
+                <View style={styles.negotiationHeaderRow}>
+                  <AppText style={styles.negotiationTitle}>배차 요청(Match)</AppText>
+                  <View style={styles.negotiationStatusChip}>
+                    <AppText style={styles.negotiationStatusText}>
+                      {activeQuoteMatch ? resolveMatchStatusLabel(activeQuoteMatch.status) : "요청 없음"}
+                    </AppText>
+                  </View>
+                </View>
+
+                <AppText style={styles.negotiationSub}>
+                  {isMatchLoading ? "매칭 상태를 불러오는 중입니다." : "배차 요청 생성/취소 후 최신 상태로 즉시 갱신됩니다."}
+                </AppText>
+
+                <View style={styles.negotiationInfoRow}>
+                  <AppText style={styles.negotiationLabel}>매칭 ID</AppText>
+                  <AppText style={styles.negotiationValue}>{toDisplayDash(activeQuoteMatch?.matchId)}</AppText>
+                </View>
+                <View style={styles.negotiationInfoRow}>
+                  <AppText style={styles.negotiationLabel}>견적 ID</AppText>
+                  <AppText style={styles.negotiationValue}>{toDisplayDash(activeQuoteMatch?.quoteId)}</AppText>
+                </View>
+                <View style={styles.negotiationInfoRow}>
+                  <AppText style={styles.negotiationLabel}>최근 갱신</AppText>
+                  <AppText style={styles.negotiationValue}>{formatDateTimeOrDash(activeQuoteMatch?.updatedAt)}</AppText>
+                </View>
+
+                <View style={styles.negotiationDivider} />
+
+                <View style={styles.negotiationActions}>
+                  <AppButton
+                    title="배차 요청"
+                    variant="primary"
+                    style={styles.negotiationButton}
+                    onPress={handleCreateMatch}
+                    loading={isMatchSubmitting && !activeQuoteMatch}
+                    disabled={isMatchSubmitting || Boolean(activeQuoteMatch)}
+                  />
+                  <AppButton
+                    title="배차 취소"
+                    variant="destructive"
+                    style={styles.negotiationButton}
+                    onPress={handleCancelMatchDirect}
+                    loading={isMatchSubmitting && Boolean(activeQuoteMatch)}
+                    disabled={isMatchSubmitting || !activeQuoteMatch}
+                  />
+                </View>
+              </View>
+            </AppCard>
+
+            <AppCard outlined elevated={false}>
+              <View style={styles.negotiationCardInner}>
+                <View style={styles.negotiationHeaderRow}>
+                  <AppText style={styles.negotiationTitle}>역제안 목록(Counter-Offer)</AppText>
+                  <View style={styles.negotiationStatusChip}>
+                    <AppText style={styles.negotiationStatusText}>{`${counterOffers.length}건`}</AppText>
+                  </View>
+                </View>
+
+                <AppText style={styles.negotiationSub}>
+                  {isCounterOfferLoading ? "역제안 목록을 불러오는 중입니다." : "각 제안의 상태/사유/시간을 확인하고 수락/거절할 수 있습니다."}
+                </AppText>
+
+                {counterOffers.length > 0 ? (
+                  counterOffers.map((offer) => {
+                    const safeOfferId =
+                      Number.isInteger(offer?.counterOfferId) && Number(offer?.counterOfferId) > 0
+                        ? Number(offer?.counterOfferId)
+                        : 0;
+                    const isPending = isCounterOfferPending(offer.status);
+                    const acceptPendingKey = `accept:${safeOfferId}`;
+                    const rejectPendingKey = `reject:${safeOfferId}`;
+                    const isAcceptLoading = counterOfferPendingKey === acceptPendingKey;
+                    const isRejectLoading = counterOfferPendingKey === rejectPendingKey;
+                    const isOtherActionPending =
+                      counterOfferPendingKey !== null && counterOfferPendingKey !== acceptPendingKey && counterOfferPendingKey !== rejectPendingKey;
+
+                    return (
+                      <View key={`offer-${safeOfferId || offer.createdAt}`}>
+                        <View style={styles.negotiationDivider} />
+                        <View style={styles.negotiationInfoRow}>
+                          <AppText style={styles.negotiationLabel}>제안 금액</AppText>
+                          <AppText style={styles.negotiationValue}>{formatPriceText(offer.proposedPrice)}</AppText>
+                        </View>
+                        <View style={styles.negotiationInfoRow}>
+                          <AppText style={styles.negotiationLabel}>사유</AppText>
+                          <AppText style={styles.negotiationValue}>{toDisplayDash(offer.message)}</AppText>
+                        </View>
+                        <View style={styles.negotiationInfoRow}>
+                          <AppText style={styles.negotiationLabel}>상태</AppText>
+                          <AppText style={styles.negotiationValue}>{resolveCounterOfferStatusLabel(offer.status)}</AppText>
+                        </View>
+                        <View style={styles.negotiationInfoRow}>
+                          <AppText style={styles.negotiationLabel}>주체</AppText>
+                          <AppText style={styles.negotiationValue}>{resolveCounterOfferActorLabel(offer.actorRole)}</AppText>
+                        </View>
+                        <View style={styles.negotiationInfoRow}>
+                          <AppText style={styles.negotiationLabel}>생성 시간</AppText>
+                          <AppText style={styles.negotiationValue}>{formatDateTimeOrDash(offer.createdAt)}</AppText>
+                        </View>
+                        <View style={styles.negotiationInfoRow}>
+                          <AppText style={styles.negotiationLabel}>응답 시간</AppText>
+                          <AppText style={styles.negotiationValue}>{formatDateTimeOrDash(offer.respondedAt)}</AppText>
+                        </View>
+
+                        {isPending ? (
+                          <View style={styles.negotiationActions}>
+                            <AppButton
+                              title="수락"
+                              variant="primary"
+                              style={styles.negotiationButton}
+                              onPress={() => {
+                                void runCounterOfferDecision(offer, "accept");
+                              }}
+                              loading={isAcceptLoading}
+                              disabled={isOtherActionPending || isRejectLoading}
+                            />
+                            <AppButton
+                              title="거절"
+                              variant="destructive"
+                              style={styles.negotiationButton}
+                              onPress={() => {
+                                void runCounterOfferDecision(offer, "reject");
+                              }}
+                              loading={isRejectLoading}
+                              disabled={isOtherActionPending || isAcceptLoading}
+                            />
+                          </View>
+                        ) : null}
+                      </View>
+                    );
+                  })
+                ) : (
+                  <AppText style={styles.emptyStateText}>표시할 역제안이 없습니다.</AppText>
+                )}
+              </View>
+            </AppCard>
+          </View>
+
           <SpecificationArchive view={view} />
 
           <Modal transparent visible={showCancelModal} animationType="fade" onRequestClose={closeCancelModal}>
