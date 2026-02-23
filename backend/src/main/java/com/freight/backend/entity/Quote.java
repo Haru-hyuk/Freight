@@ -9,11 +9,14 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
+import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "quotes")
@@ -27,6 +30,10 @@ public class Quote {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "quote_id")
     private Long quoteId;
+
+    @JdbcTypeCode(SqlTypes.BINARY)
+    @Column(name = "public_id", nullable = false, unique = true, columnDefinition = "BINARY(16)")
+    private UUID publicId;
 
     @Column(name = "shipper_id", nullable = false)
     private Long shipperId;
@@ -113,6 +120,9 @@ public class Quote {
     protected void onCreate() {
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();
+        if (publicId == null) {
+            publicId = UUID.randomUUID();
+        }
         if (status == null || status.isBlank()) {
             status = "OPEN";
         }

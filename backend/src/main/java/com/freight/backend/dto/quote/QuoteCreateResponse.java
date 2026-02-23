@@ -1,5 +1,6 @@
 package com.freight.backend.dto.quote;
 
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -7,4 +8,5 @@ import lombok.Getter;
 @AllArgsConstructor
 public class QuoteCreateResponse {
     private Long quoteId;
+    private UUID quotePublicId;
 }
