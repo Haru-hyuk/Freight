@@ -68,6 +68,8 @@ export type Waypoint = {
   phone: string;
   addr: string;
   detail: string;
+  lat?: number;
+  lng?: number;
 };
 
 export type QuoteCreateDraft = {

@@ -23,6 +23,7 @@ type BottomActionRouterProps = {
   bottomBar: QuoteActionPolicy["bottomBar"];
   guards?: QuoteActionPolicy["guards"];
   onCancelRequest?: (payload: CancelPayload) => void;
+  onRunAction?: (action: NonCancelAction, ctx: QuoteActionsContext) => Promise<void> | void;
 };
 
 type ActionRole = "primary" | "secondary";
@@ -152,7 +153,25 @@ function toOrderedActions(
   };
 }
 
-export function BottomActionRouter({ ctx, bottomBar, guards, onCancelRequest }: BottomActionRouterProps) {
+function readErrorMessage(error: unknown): string {
+  const fallback = "요청 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.";
+  if (!error || typeof error !== "object") return fallback;
+
+  const e = error as {
+    response?: { data?: { message?: unknown; error?: unknown } };
+    message?: unknown;
+  };
+
+  const serverMessage = String(e?.response?.data?.message ?? e?.response?.data?.error ?? "").trim();
+  if (serverMessage) return serverMessage;
+
+  const localMessage = String(e?.message ?? "").trim();
+  if (localMessage) return localMessage;
+
+  return fallback;
+}
+
+export function BottomActionRouter({ ctx, bottomBar, guards, onCancelRequest, onRunAction }: BottomActionRouterProps) {
   const styles = useStyles();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -170,6 +189,7 @@ export function BottomActionRouter({ ctx, bottomBar, guards, onCancelRequest }: 
   const [showCancelModal, setShowCancelModal] = React.useState(false);
   const [cancelReason, setCancelReason] = React.useState("");
   const [cancelReasonError, setCancelReasonError] = React.useState<string | undefined>(undefined);
+  const [pendingAction, setPendingAction] = React.useState<NonCancelAction | null>(null);
 
   React.useEffect(() => {
     if (!hasCancelAction) {
@@ -183,7 +203,12 @@ export function BottomActionRouter({ ctx, bottomBar, guards, onCancelRequest }: 
     return null;
   }
 
-  const runAction = (action: NonCancelAction) => {
+  const runAction = async (action: NonCancelAction) => {
+    if (typeof onRunAction === "function") {
+      await onRunAction(action, ctx);
+      return;
+    }
+
     if (action === "acceptOffer") {
       Alert.alert("제안 수락", `${ctx.quoteId}번 견적을 수락했습니다.`);
       return;
@@ -205,15 +230,31 @@ export function BottomActionRouter({ ctx, bottomBar, guards, onCancelRequest }: 
   };
 
   const requestAction = (action: NonCancelAction, needConfirm: boolean) => {
-    const execute = () => runAction(action);
+    const execute = async () => {
+      if (pendingAction !== null) return;
+      try {
+        setPendingAction(action);
+        await runAction(action);
+      } catch (error) {
+        Alert.alert("요청 실패", readErrorMessage(error));
+      } finally {
+        setPendingAction(null);
+      }
+    };
+
     if (!needConfirm) {
-      execute();
+      void execute();
       return;
     }
 
     Alert.alert("확인", CONFIRM_MESSAGE[action], [
       { text: "취소", style: "cancel" },
-      { text: "확인", onPress: execute },
+      {
+        text: "확인",
+        onPress: () => {
+          void execute();
+        },
+      },
     ]);
   };
 
@@ -250,6 +291,8 @@ export function BottomActionRouter({ ctx, bottomBar, guards, onCancelRequest }: 
               title={resolveTitle(item.action, ctx, hasCompanionButton)}
               variant={resolveVariant(item.action, item.role)}
               style={styles.flex1}
+              loading={pendingAction === item.action}
+              disabled={pendingAction !== null && pendingAction !== item.action}
               onPress={() =>
                 requestAction(
                   item.action,
@@ -262,7 +305,13 @@ export function BottomActionRouter({ ctx, bottomBar, guards, onCancelRequest }: 
       ) : null}
 
       {hasCancelAction ? (
-        <AppButton title={ACTION_LABEL.cancelRequest} variant="destructive" style={styles.cancelButton} onPress={() => setShowCancelModal(true)} />
+        <AppButton
+          title={ACTION_LABEL.cancelRequest}
+          variant="destructive"
+          style={styles.cancelButton}
+          disabled={pendingAction !== null}
+          onPress={() => setShowCancelModal(true)}
+        />
       ) : null}
 
       <Modal transparent visible={showCancelModal} animationType="fade" onRequestClose={closeCancelModal}>

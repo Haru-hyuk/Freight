@@ -151,11 +151,11 @@ export default function DriverLayout() {
             activeKey={activeKey}
             onChange={onChangeTab}
             items={[
-              { key: "home", label: "Home", iconActive: "home", iconInactive: "home-outline" },
-              { key: "quotes", label: "Quotes", iconActive: "list", iconInactive: "list-outline" },
-              { key: "run", label: "Run", iconActive: "car", iconInactive: "car-outline" },
-              { key: "settlement", label: "Settlement", iconActive: "wallet", iconInactive: "wallet-outline" },
-              { key: "profile", label: "Profile", iconActive: "person", iconInactive: "person-outline" },
+              { key: "home", label: "홈", iconActive: "home", iconInactive: "home-outline" },
+              { key: "quotes", label: "오더", iconActive: "list", iconInactive: "list-outline" },
+              { key: "run", label: "운행", iconActive: "car", iconInactive: "car-outline" },
+              { key: "settlement", label: "정산", iconActive: "wallet", iconInactive: "wallet-outline" },
+              { key: "profile", label: "내 정보", iconActive: "person", iconInactive: "person-outline" },
             ]}
           />
         </View>

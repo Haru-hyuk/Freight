@@ -18,14 +18,26 @@ import type {
 import { apiClient } from "@/shared/lib/api/apiClient";
 import {
   createQuote as createQuoteGenerated,
+  deleteQuote as deleteQuoteGenerated,
   getQuote as getQuoteGenerated,
   listQuotes as listQuotesGenerated,
+  updateQuote as updateQuoteGenerated,
+  validateQuote as validateQuoteGenerated,
 } from "@/shared/api/generated/quote-controller/quote-controller";
 import { getShipperQuoteCreatePath, isMockQuoteEnabled } from "@/shared/lib/config/env";
+
+export type QuotePricePreview = {
+  estimatedWeightedPrice?: number;
+  estimatedMinPrice?: number;
+  estimatedMaxPrice?: number;
+  aiSummary?: string;
+};
 
 export interface QuoteApi {
   listShipperQuotes: () => Promise<QuoteListItem[]>;
   getShipperQuoteDetail: (quoteId: number) => Promise<QuoteDetailResponse>;
+  getShipperQuoteDetailByIdentifier: (quoteIdentifier: string) => Promise<QuoteDetailResponse>;
+  previewShipperQuote: (payload: QuoteCreateRequestDto) => Promise<QuotePricePreview | null>;
   createShipperQuote: (payload: QuoteCreateRequestDto) => Promise<QuoteCreateResponseDto>;
   updateShipperQuote: (quoteId: number, payload: QuoteUpdateRequestDto) => Promise<QuoteUpdateResponse>;
   deleteShipperQuote: (quoteId: number) => Promise<void>;
@@ -103,8 +115,20 @@ function safeDateString(input: unknown, fallback: string): string {
   return Number.isFinite(ts) ? new Date(ts).toISOString() : fallback;
 }
 
+function pickFirstStringFrom(objects: AnyObj[], keys: string[], fallback = ""): string {
+  for (const obj of objects) {
+    for (const key of keys) {
+      const value = safeString(obj?.[key], "");
+      if (value) return value;
+    }
+  }
+  return fallback;
+}
+
 function parseStatus(input: unknown): QuoteStatusApi {
   const raw = safeString(input, "").toUpperCase();
+  if (raw === "CANCELLED" || raw === "CANCEL" || raw === "CANCELED") return "CANCELED";
+  if (raw === "COMPLETED" || raw === "DONE" || raw === "FINISHED") return "DROPOFF";
   return (QUOTE_STATUS.find((status) => status === raw) ?? "OPEN") as QuoteStatusApi;
 }
 
@@ -273,16 +297,51 @@ function sanitizeQuotePayload(payload: QuoteCreateRequestDto, strictDistance: bo
 function toQuoteCreateResponse(input: unknown): QuoteCreateResponseDto {
   const payload = asObject(pickPayload(input));
   const quoteId = pickQuoteId(payload, 0);
-  return { quoteId };
+  const quotePublicId = pickFirstStringFrom([payload], ["quotePublicId", "quoteIdentifier", "quote_identifier"]);
+
+  const basePrice = safeInt(payload.basePrice, NaN);
+  const distancePrice = safeInt(payload.distancePrice, NaN);
+  const extraPrice = safeInt(payload.extraPrice, NaN);
+  const desiredPrice = safeInt(payload.desiredPrice, NaN);
+  const finalPrice = safeInt(payload.finalPrice, NaN);
+
+  return {
+    quoteId,
+    quotePublicId: quotePublicId || undefined,
+    ...(Number.isFinite(basePrice) ? { basePrice: Math.max(0, basePrice) } : {}),
+    ...(Number.isFinite(distancePrice) ? { distancePrice: Math.max(0, distancePrice) } : {}),
+    ...(Number.isFinite(extraPrice) ? { extraPrice: Math.max(0, extraPrice) } : {}),
+    ...(Number.isFinite(desiredPrice) ? { desiredPrice: Math.max(0, desiredPrice) } : {}),
+    ...(Number.isFinite(finalPrice) ? { finalPrice: Math.max(0, finalPrice) } : {}),
+  };
+}
+
+function toQuotePricePreview(input: unknown): QuotePricePreview | null {
+  const payload = asObject(pickPayload(input));
+  const estimatedWeightedPrice = safeInt(payload.estimatedWeightedPrice, NaN);
+  const estimatedMinPrice = safeInt(payload.estimatedMinPrice, NaN);
+  const estimatedMaxPrice = safeInt(payload.estimatedMaxPrice, NaN);
+  const aiSummary = safeString(payload.aiSummary, "");
+
+  const preview: QuotePricePreview = {
+    ...(Number.isFinite(estimatedWeightedPrice) ? { estimatedWeightedPrice: Math.max(0, estimatedWeightedPrice) } : {}),
+    ...(Number.isFinite(estimatedMinPrice) ? { estimatedMinPrice: Math.max(0, estimatedMinPrice) } : {}),
+    ...(Number.isFinite(estimatedMaxPrice) ? { estimatedMaxPrice: Math.max(0, estimatedMaxPrice) } : {}),
+    ...(aiSummary ? { aiSummary } : {}),
+  };
+
+  return Object.keys(preview).length > 0 ? preview : null;
 }
 
 function toQuoteListItem(input: unknown, fallbackId = 0): QuoteListItem {
   const source = asObject(input as QuoteListItemDto);
   const nowIso = new Date().toISOString();
   const quoteId = pickQuoteId(source, fallbackId);
+  const quotePublicIdRaw = safeString(source.quotePublicId, "");
 
   return {
     quoteId,
+    quotePublicId: quotePublicIdRaw ? quotePublicIdRaw : undefined,
     truckId: Math.max(0, safeInt(source.truckId, 0)),
     originAddress: safeString(source.originAddress, ""),
     destinationAddress: safeString(source.destinationAddress, ""),
@@ -309,6 +368,43 @@ function toQuoteDetail(input: unknown, fallbackQuoteId = 0): QuoteDetailResponse
   const createdAt = safeDateString(source.createdAt, nowIso);
   const updatedAt = safeDateString(source.updatedAt, createdAt);
   const quotePublicIdRaw = safeString(source.quotePublicId, "");
+  const originObject = asObject(source.origin);
+  const destinationObject = asObject(source.destination);
+  const senderObject = asObject(source.sender);
+  const receiverObject = asObject(source.receiver);
+
+  const originAddressDetail = pickFirstStringFrom(
+    [source, originObject],
+    ["originAddressDetail", "originDetailAddress", "originDetail", "startAddrDetail", "startAddressDetail", "detailAddress"]
+  );
+  const destinationAddressDetail = pickFirstStringFrom(
+    [source, destinationObject],
+    [
+      "destinationAddressDetail",
+      "destinationDetailAddress",
+      "destinationDetail",
+      "endAddrDetail",
+      "endAddressDetail",
+      "detailAddress",
+    ]
+  );
+
+  const senderName = pickFirstStringFrom(
+    [source, senderObject, originObject],
+    ["senderName", "originContactName", "pickupContactName", "contactName", "name"]
+  );
+  const senderPhone = pickFirstStringFrom(
+    [source, senderObject, originObject],
+    ["senderPhone", "originContactPhone", "pickupContactPhone", "contactPhone", "phone"]
+  );
+  const receiverName = pickFirstStringFrom(
+    [source, receiverObject, destinationObject],
+    ["receiverName", "destinationContactName", "dropoffContactName", "contactName", "name"]
+  );
+  const receiverPhone = pickFirstStringFrom(
+    [source, receiverObject, destinationObject],
+    ["receiverPhone", "destinationContactPhone", "dropoffContactPhone", "contactPhone", "phone"]
+  );
 
   return {
     quoteId,
@@ -316,7 +412,9 @@ function toQuoteDetail(input: unknown, fallbackQuoteId = 0): QuoteDetailResponse
     shipperId: Math.max(0, safeInt(source.shipperId, 0)),
     truckId: Math.max(0, safeInt(source.truckId, 0)),
     originAddress: safeString(source.originAddress, ""),
+    originAddressDetail: originAddressDetail || undefined,
     destinationAddress: safeString(source.destinationAddress, ""),
+    destinationAddressDetail: destinationAddressDetail || undefined,
     originLat: safeNumber(source.originLat, 0),
     originLng: safeNumber(source.originLng, 0),
     destinationLat: safeNumber(source.destinationLat, 0),
@@ -340,6 +438,10 @@ function toQuoteDetail(input: unknown, fallbackQuoteId = 0): QuoteDetailResponse
     status: parseStatus(source.status),
     createdAt,
     updatedAt,
+    senderName: senderName || undefined,
+    senderPhone: senderPhone || undefined,
+    receiverName: receiverName || undefined,
+    receiverPhone: receiverPhone || undefined,
     checklistItems: mapChecklistItems(source.checklistItems),
     stops: mapStops(source.stops),
   };
@@ -350,12 +452,34 @@ function normalizeQuoteId(quoteId: number): number {
   return Math.max(0, Math.trunc(quoteId));
 }
 
+function normalizeQuoteIdentifier(input: unknown): string {
+  if (typeof input === "string") return input.trim();
+  const numeric = normalizeQuoteId(safeNumber(input, 0));
+  if (numeric > 0) return String(numeric);
+  return "";
+}
+
 function buildQuoteDetailPath(quoteId: number): string {
   const safeQuoteId = normalizeQuoteId(quoteId);
   return safeQuoteId > 0 ? `${SHIPPER_QUOTES_PATH}/${safeQuoteId}` : SHIPPER_QUOTES_PATH;
 }
 
 function createRealQuoteApi(): QuoteApi {
+  const fetchQuoteDetailByIdentifier = async (quoteIdentifier: string): Promise<QuoteDetailResponse> => {
+    const safeIdentifier = normalizeQuoteIdentifier(quoteIdentifier);
+    if (!safeIdentifier) return toQuoteDetail({}, 0);
+    const fallbackQuoteId = normalizeQuoteId(Number(safeIdentifier));
+
+    const data = await getQuoteGenerated(safeIdentifier);
+    const detailRaw = (data ?? {}) as { stops?: unknown };
+    const detailStopsLength = Array.isArray(detailRaw.stops) ? detailRaw.stops.length : 0;
+    quoteDebugLog("detail.response", {
+      quoteIdentifier: safeIdentifier,
+      stopsLength: detailStopsLength,
+    });
+    return toQuoteDetail(data, fallbackQuoteId);
+  };
+
   return {
     async listShipperQuotes(): Promise<QuoteListItem[]> {
       const data = await listQuotesGenerated();
@@ -365,15 +489,26 @@ function createRealQuoteApi(): QuoteApi {
     async getShipperQuoteDetail(quoteId: number): Promise<QuoteDetailResponse> {
       const safeQuoteId = normalizeQuoteId(quoteId);
       if (safeQuoteId <= 0) return toQuoteDetail({}, 0);
+      return fetchQuoteDetailByIdentifier(String(safeQuoteId));
+    },
 
-      const data = await getQuoteGenerated(String(safeQuoteId));
-      const detailRaw = (data ?? {}) as { stops?: unknown };
-      const detailStopsLength = Array.isArray(detailRaw.stops) ? detailRaw.stops.length : 0;
-      quoteDebugLog("detail.response", {
-        quoteId: safeQuoteId,
-        stopsLength: detailStopsLength,
-      });
-      return toQuoteDetail(data, safeQuoteId);
+    async getShipperQuoteDetailByIdentifier(quoteIdentifier: string): Promise<QuoteDetailResponse> {
+      return fetchQuoteDetailByIdentifier(quoteIdentifier);
+    },
+
+    async previewShipperQuote(payload: QuoteCreateRequestDto): Promise<QuotePricePreview | null> {
+      const safePayload = sanitizeQuotePayload((payload ?? {}) as QuoteCreateRequestDto, false);
+      try {
+        const data = await validateQuoteGenerated(
+          safePayload as unknown as Parameters<typeof validateQuoteGenerated>[0]
+        );
+        return toQuotePricePreview(data);
+      } catch (error) {
+        quoteDebugLog("preview.error", {
+          message: safeString((error as { message?: unknown })?.message, "preview-failed"),
+        });
+        return null;
+      }
     },
 
     async createShipperQuote(payload: QuoteCreateRequestDto): Promise<QuoteCreateResponseDto> {
@@ -392,14 +527,26 @@ function createRealQuoteApi(): QuoteApi {
       if (safeQuoteId <= 0) return toQuoteDetail({}, 0);
 
       const safePayload = sanitizeQuotePayload((payload ?? {}) as QuoteUpdateRequestDto, true);
-      const res = await apiClient.put(buildQuoteDetailPath(safeQuoteId), safePayload);
-      return toQuoteDetail((res as { data?: unknown })?.data, safeQuoteId);
+      try {
+        const data = await updateQuoteGenerated(
+          String(safeQuoteId),
+          safePayload as unknown as Parameters<typeof updateQuoteGenerated>[1]
+        );
+        return toQuoteDetail(data, safeQuoteId);
+      } catch {
+        const res = await apiClient.put(buildQuoteDetailPath(safeQuoteId), safePayload);
+        return toQuoteDetail((res as { data?: unknown })?.data, safeQuoteId);
+      }
     },
 
     async deleteShipperQuote(quoteId: number): Promise<void> {
       const safeQuoteId = normalizeQuoteId(quoteId);
       if (safeQuoteId <= 0) return;
-      await apiClient.delete(buildQuoteDetailPath(safeQuoteId));
+      try {
+        await deleteQuoteGenerated(String(safeQuoteId));
+      } catch {
+        await apiClient.delete(buildQuoteDetailPath(safeQuoteId));
+      }
     },
   };
 }
@@ -412,6 +559,7 @@ function buildMockListItem(quoteId: number): QuoteListItem {
   const safeQuoteId = normalizeQuoteId(quoteId) || 1;
   return {
     quoteId: safeQuoteId,
+    quotePublicId: `mock-quote-${safeQuoteId}`,
     truckId: 1,
     originAddress: "서울특별시 강남구",
     destinationAddress: "경기도 성남시 분당구",
@@ -510,6 +658,25 @@ function createMockQuoteApi(): QuoteApi {
       return buildMockDetail(quoteId);
     },
 
+    async getShipperQuoteDetailByIdentifier(quoteIdentifier: string): Promise<QuoteDetailResponse> {
+      const safeIdentifier = normalizeQuoteIdentifier(quoteIdentifier);
+      const parsedQuoteId = normalizeQuoteId(Number(safeIdentifier));
+      const fallbackQuoteId = parsedQuoteId > 0 ? parsedQuoteId : 1;
+      return buildMockDetail(fallbackQuoteId);
+    },
+
+    async previewShipperQuote(payload: QuoteCreateRequestDto): Promise<QuotePricePreview | null> {
+      const safePayload = sanitizeQuotePayload((payload ?? {}) as QuoteCreateRequestDto, false);
+      const desiredPrice = Math.max(0, safeInt(safePayload?.desiredPrice, 0));
+      const fallbackPrice = desiredPrice > 0 ? desiredPrice : 100000;
+      return {
+        estimatedWeightedPrice: fallbackPrice,
+        estimatedMinPrice: Math.max(0, Math.floor(fallbackPrice * 0.9)),
+        estimatedMaxPrice: Math.max(0, Math.floor(fallbackPrice * 1.1)),
+        aiSummary: "목업 미리보기 금액",
+      };
+    },
+
     async createShipperQuote(payload: QuoteCreateRequestDto): Promise<QuoteCreateResponseDto> {
       const safePayload = sanitizeQuotePayload((payload ?? {}) as QuoteCreateRequestDto, false);
       const seed =
@@ -517,7 +684,16 @@ function createMockQuoteApi(): QuoteApi {
         Math.max(0, Number(safePayload?.desiredPrice ?? 0)) +
         Math.max(0, Number(safePayload?.weightKg ?? 0));
       const quoteId = Math.max(1, Math.trunc(seed % 9_000_000));
-      return { quoteId };
+      const safeDesiredPrice = Math.max(0, Math.trunc(Number(safePayload?.desiredPrice ?? 0)));
+      return {
+        quoteId,
+        quotePublicId: `mock-quote-${quoteId}`,
+        basePrice: safeDesiredPrice,
+        distancePrice: 0,
+        extraPrice: 0,
+        desiredPrice: safeDesiredPrice,
+        finalPrice: safeDesiredPrice,
+      };
     },
 
     async updateShipperQuote(quoteId: number, payload: QuoteUpdateRequestDto): Promise<QuoteUpdateResponse> {
@@ -541,8 +717,16 @@ export function getShipperQuoteDetail(quoteId: number): Promise<QuoteDetailRespo
   return quoteApi.getShipperQuoteDetail(quoteId);
 }
 
+export function getShipperQuoteDetailByIdentifier(quoteIdentifier: string): Promise<QuoteDetailResponse> {
+  return quoteApi.getShipperQuoteDetailByIdentifier(quoteIdentifier);
+}
+
 export function createShipperQuote(payload: QuoteCreateRequestDto): Promise<QuoteCreateResponseDto> {
   return quoteApi.createShipperQuote(payload);
+}
+
+export function previewShipperQuote(payload: QuoteCreateRequestDto): Promise<QuotePricePreview | null> {
+  return quoteApi.previewShipperQuote(payload);
 }
 
 export function updateShipperQuote(quoteId: number, payload: QuoteUpdateRequestDto): Promise<QuoteUpdateResponse> {

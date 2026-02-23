@@ -322,6 +322,13 @@ function quoteDistanceDebugLog(payload: {
   console.log("[quote-create] distance", payload);
 }
 
+function hasBrokenAddressText(value?: string) {
+  const v = String(value ?? "").trim();
+  if (!v) return false;
+  if (v.includes("\uFFFD")) return true;
+  return /\?{2,}/.test(v);
+}
+
 function QuoteCreatePageInner() {
   const theme = useAppTheme();
   const styles = useStyles();
@@ -405,62 +412,17 @@ function QuoteCreatePageInner() {
     if (isSubmitting) return;
 
     const payload = buildQuoteCreateRequest(draft);
-    let distanceKm = Number.isFinite(payload?.distanceKm) ? Math.trunc(payload.distanceKm) : 0;
-    let wasAutoCalculated = false;
-    let pointsCount = 0;
+    const stops = Array.isArray(payload?.stops) ? payload.stops : [];
+    const addressCandidates = [
+      payload?.originAddress,
+      payload?.destinationAddress,
+      ...stops.map((stop) => (stop as { address?: unknown })?.address),
+    ];
 
-    if (distanceKm < 1) {
-      const points: LatLng[] = [];
-
-      if (isValidCoord(payload?.originLat, payload?.originLng)) {
-        points.push({
-          lat: Number(payload?.originLat),
-          lng: Number(payload?.originLng),
-        });
-      }
-
-      const stops = Array.isArray(payload?.stops) ? payload.stops : [];
-      for (const stop of stops) {
-        const lat = (stop as { lat?: unknown })?.lat;
-        const lng = (stop as { lng?: unknown })?.lng;
-        if (!isValidCoord(lat, lng)) continue;
-
-        points.push({
-          lat: Number(lat),
-          lng: Number(lng),
-        });
-      }
-
-      if (isValidCoord(payload?.destinationLat, payload?.destinationLng)) {
-        points.push({
-          lat: Number(payload?.destinationLat),
-          lng: Number(payload?.destinationLng),
-        });
-      }
-
-      pointsCount = points.length;
-      const estimatedKm = Math.round(estimateRouteKm(points));
-
-      if (estimatedKm > 0) {
-        distanceKm = Math.max(1, estimatedKm);
-        payload.distanceKm = distanceKm;
-        wasAutoCalculated = true;
-      } else {
-        quoteDistanceDebugLog({
-          wasAutoCalculated: false,
-          computedDistanceKm: 0,
-          pointsCount,
-        });
-        Alert.alert("견적 요청 실패", "거리 계산 후 요청해주세요.");
-        return;
-      }
+    if (addressCandidates.some((address) => hasBrokenAddressText(String(address ?? "")))) {
+      Alert.alert("견적 요청 실패", "주소 문자열이 깨져 있어요. 주소를 다시 선택해주세요.");
+      return;
     }
-
-    quoteDistanceDebugLog({
-      wasAutoCalculated,
-      computedDistanceKm: distanceKm,
-      pointsCount,
-    });
 
     try {
       setIsSubmitting(true);

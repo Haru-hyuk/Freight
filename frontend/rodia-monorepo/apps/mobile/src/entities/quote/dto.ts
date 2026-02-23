@@ -61,6 +61,12 @@ export type QuoteCreateRequestDto = {
 
 export type QuoteCreateResponseDto = {
   quoteId: number;
+  quotePublicId?: string;
+  basePrice?: number;
+  distancePrice?: number;
+  extraPrice?: number;
+  desiredPrice?: number;
+  finalPrice?: number;
 };
 
 export type QuoteListItemDto = {
@@ -84,7 +90,9 @@ export type QuoteDetailResponseDto = {
   shipperId?: number | string;
   truckId?: number | string;
   originAddress?: string;
+  originAddressDetail?: string;
   destinationAddress?: string;
+  destinationAddressDetail?: string;
   originLat?: number | string;
   originLng?: number | string;
   destinationLat?: number | string;
@@ -108,6 +116,10 @@ export type QuoteDetailResponseDto = {
   status?: string;
   createdAt?: string;
   updatedAt?: string;
+  senderName?: string;
+  senderPhone?: string;
+  receiverName?: string;
+  receiverPhone?: string;
   checklistItems?: QuoteChecklistItemDto[] | null;
   stops?: QuoteStopDto[] | null;
 };
