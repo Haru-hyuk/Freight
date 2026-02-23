@@ -6,7 +6,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import type { QuoteDetailResponse } from "@/entities/quote/model/quote.types";
-import { getShipperQuoteDetail, updateShipperQuote } from "@/features/quote/api/quote-api";
+import { getShipperQuoteDetailByIdentifier, updateShipperQuote } from "@/features/quote/api/quote-api";
 import { buildQuoteCreateRequest } from "@/features/quote/model/quoteCreateRequestMapper";
 import {
   computeQuotePricing,
@@ -42,6 +42,11 @@ function parseQuoteId(value: string | string[] | undefined): number {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
 }
 
+function parseQuoteIdentifier(value: string | string[] | undefined): string {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return typeof raw === "string" ? raw.trim() : "";
+}
+
 function toSafeNumber(value: unknown, fallback = 0): number {
   const num = typeof value === "number" ? value : Number(value);
   return Number.isFinite(num) ? num : fallback;
@@ -49,6 +54,15 @@ function toSafeNumber(value: unknown, fallback = 0): number {
 
 function toSafeInt(value: unknown, fallback = 0): number {
   return Math.trunc(toSafeNumber(value, fallback));
+}
+
+function readDetailValue(source: QuoteDetailResponse, keys: string[]): string {
+  const raw = source as unknown as Record<string, unknown>;
+  for (const key of keys) {
+    const value = String(raw?.[key] ?? "").trim();
+    if (value) return value;
+  }
+  return "";
 }
 
 function resolveTonIndex(vehicleType: unknown): number {
@@ -105,19 +119,41 @@ function mapDetailToDraft(detail: QuoteDetailResponse): QuoteCreateDraft {
   const base = createInitialQuoteCreateDraft();
   const createdDate = toDraftDate(detail?.createdAt);
   const updatedDate = toDraftDate(detail?.updatedAt);
+  const senderName = readDetailValue(detail, ["senderName", "originContactName", "pickupContactName"]);
+  const senderPhone = readDetailValue(detail, ["senderPhone", "originContactPhone", "pickupContactPhone"]);
+  const receiverName = readDetailValue(detail, ["receiverName", "destinationContactName", "dropoffContactName"]);
+  const receiverPhone = readDetailValue(detail, ["receiverPhone", "destinationContactPhone", "dropoffContactPhone"]);
+  const originAddressDetail = readDetailValue(detail, [
+    "originAddressDetail",
+    "originDetailAddress",
+    "originDetail",
+    "startAddrDetail",
+    "startAddressDetail",
+  ]);
+  const destinationAddressDetail = readDetailValue(detail, [
+    "destinationAddressDetail",
+    "destinationDetailAddress",
+    "destinationDetail",
+    "endAddrDetail",
+    "endAddressDetail",
+  ]);
+  const sortedStops = Array.isArray(detail?.stops)
+    ? detail.stops
+        .slice()
+        .sort((a, b) => Math.max(1, toSafeInt(a?.seq, 0)) - Math.max(1, toSafeInt(b?.seq, 0)))
+    : [];
 
   return {
     ...base,
-    senderName: "",
-    senderPhone: "",
-    receiverName: "",
-    receiverPhone: "",
+    senderName,
+    senderPhone,
+    receiverName,
+    receiverPhone,
     startAddr: String(detail?.originAddress ?? "").trim(),
-    startAddrDetail: "",
+    startAddrDetail: originAddressDetail,
     endAddr: String(detail?.destinationAddress ?? "").trim(),
-    endAddrDetail: "",
-    waypoints: Array.isArray(detail?.stops)
-      ? detail.stops.map((stop, index) => ({
+    endAddrDetail: destinationAddressDetail,
+    waypoints: sortedStops.map((stop, index) => ({
           id: index + 1,
           name: String(stop?.contactName ?? "").trim(),
           phone: String(stop?.contactPhone ?? "").trim(),
@@ -125,8 +161,7 @@ function mapDetailToDraft(detail: QuoteDetailResponse): QuoteCreateDraft {
           detail: "",
           lat: toSafeNumber(stop?.lat, 0),
           lng: toSafeNumber(stop?.lng, 0),
-        }))
-      : [],
+        })),
     loadMethod: resolveDraftWorkMethod(detail?.loadMethod),
     unloadMethod: resolveDraftWorkMethod(detail?.unloadMethod),
     date: createdDate,
@@ -232,10 +267,13 @@ function QuoteEditPageInner() {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ id?: string | string[] }>();
+  const quoteIdentifier = parseQuoteIdentifier(params?.id);
   const quoteId = parseQuoteId(params?.id);
 
   const { draft, patchDraft, setDraft } = useQuoteCreateDraft();
 
+  const [resolvedQuoteId, setResolvedQuoteId] = useState(0);
+  const [resolvedQuoteIdentifier, setResolvedQuoteIdentifier] = useState("");
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [bottomBarHeight, setBottomBarHeight] = useState(100);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -262,8 +300,9 @@ function QuoteEditPageInner() {
   const isStep2Ready = cargoList.length > 0 && validCargoCount === cargoList.length;
 
   const loadDetail = useCallback(async () => {
-    if (!Number.isInteger(quoteId) || quoteId <= 0) {
-      setErrorMessage("유효하지 않은 견적 ID입니다.");
+    const fallbackIdentifier = quoteIdentifier || (quoteId > 0 ? String(quoteId) : "");
+    if (!fallbackIdentifier) {
+      setErrorMessage("유효한 견적 식별자가 아닙니다.");
       setIsLoading(false);
       return;
     }
@@ -272,7 +311,14 @@ function QuoteEditPageInner() {
     setErrorMessage(null);
 
     try {
-      const detail = await getShipperQuoteDetail(quoteId);
+      const detail = await getShipperQuoteDetailByIdentifier(fallbackIdentifier);
+      const safeQuoteId = Math.max(0, toSafeInt(detail?.quoteId, quoteId));
+      const safeIdentifier =
+        String(detail?.quotePublicId ?? fallbackIdentifier).trim() ||
+        (safeQuoteId > 0 ? String(safeQuoteId) : fallbackIdentifier);
+
+      setResolvedQuoteId(safeQuoteId);
+      setResolvedQuoteIdentifier(safeIdentifier);
       setDraft(mapDetailToDraft(detail));
     } catch (error) {
       const message =
@@ -283,7 +329,7 @@ function QuoteEditPageInner() {
     } finally {
       setIsLoading(false);
     }
-  }, [quoteId, setDraft]);
+  }, [quoteIdentifier, quoteId, setDraft]);
 
   useEffect(() => {
     void loadDetail();
@@ -300,13 +346,18 @@ function QuoteEditPageInner() {
       return;
     }
 
-    if (quoteId > 0) {
-      router.replace({ pathname: "/(shipper)/quotes/[id]", params: { id: String(quoteId) } });
+    const routeBackIdentifier =
+      resolvedQuoteIdentifier ||
+      quoteIdentifier ||
+      (resolvedQuoteId > 0 ? String(resolvedQuoteId) : quoteId > 0 ? String(quoteId) : "");
+
+    if (routeBackIdentifier) {
+      router.replace({ pathname: "/(shipper)/quotes/[id]", params: { id: routeBackIdentifier } });
       return;
     }
 
     router.replace("/(shipper)/quotes");
-  }, [navigation, quoteId, router, step]);
+  }, [navigation, quoteId, quoteIdentifier, resolvedQuoteId, resolvedQuoteIdentifier, router, step]);
 
   const readErrorMessage = useCallback((error: unknown) => {
     const fallback = "네트워크 또는 요청 값을 확인해주세요.";
@@ -325,7 +376,9 @@ function QuoteEditPageInner() {
 
   const submitQuoteUpdate = useCallback(async () => {
     if (isSubmitting) return;
-    if (!Number.isInteger(quoteId) || quoteId <= 0) {
+
+    const targetQuoteId = resolvedQuoteId > 0 ? resolvedQuoteId : quoteId;
+    if (!Number.isInteger(targetQuoteId) || targetQuoteId <= 0) {
       Alert.alert("견적 수정 실패", "유효한 견적 ID를 찾을 수 없습니다.");
       return;
     }
@@ -374,12 +427,23 @@ function QuoteEditPageInner() {
 
     try {
       setIsSubmitting(true);
-      await updateShipperQuote(quoteId, payload);
+      const updatedDetail = await updateShipperQuote(targetQuoteId, payload);
+      const nextQuoteId = Math.max(0, toSafeInt(updatedDetail?.quoteId, targetQuoteId));
+      const nextIdentifier =
+        String(updatedDetail?.quotePublicId ?? resolvedQuoteIdentifier ?? quoteIdentifier ?? "").trim() ||
+        String(nextQuoteId > 0 ? nextQuoteId : targetQuoteId);
+
+      setResolvedQuoteId(nextQuoteId > 0 ? nextQuoteId : targetQuoteId);
+      setResolvedQuoteIdentifier(nextIdentifier);
+
       Alert.alert("견적 수정 완료", "견적 정보가 업데이트되었습니다.", [
         {
           text: "확인",
           onPress: () => {
-            router.replace({ pathname: "/(shipper)/quotes/[id]", params: { id: String(quoteId) } });
+            router.replace({
+              pathname: "/(shipper)/quotes/[id]",
+              params: { id: nextIdentifier, refreshedAt: String(Date.now()) },
+            });
           },
         },
       ]);
@@ -388,7 +452,16 @@ function QuoteEditPageInner() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [draft, isSubmitting, quoteId, readErrorMessage, router]);
+  }, [
+    draft,
+    isSubmitting,
+    quoteId,
+    quoteIdentifier,
+    readErrorMessage,
+    resolvedQuoteId,
+    resolvedQuoteIdentifier,
+    router,
+  ]);
 
   const handleNext = useCallback(async () => {
     if (step === 1 && !isStep1Ready) {

@@ -54,6 +54,12 @@ export type QuoteCreateRequest = {
 
 export type QuoteCreateResponse = {
   quoteId: number;
+  quotePublicId?: string;
+  basePrice?: number;
+  distancePrice?: number;
+  extraPrice?: number;
+  desiredPrice?: number;
+  finalPrice?: number;
 };
 
 export type QuoteListItem = {
@@ -78,7 +84,9 @@ export type QuoteDetailResponse = {
   shipperId: number;
   truckId: number;
   originAddress: string;
+  originAddressDetail?: string;
   destinationAddress: string;
+  destinationAddressDetail?: string;
   originLat: number;
   originLng: number;
   destinationLat: number;
@@ -102,6 +110,10 @@ export type QuoteDetailResponse = {
   status: QuoteStatusApi;
   createdAt: string;
   updatedAt: string;
+  senderName?: string;
+  senderPhone?: string;
+  receiverName?: string;
+  receiverPhone?: string;
   checklistItems: QuoteChecklistItem[];
   stops: QuoteStop[];
 };
