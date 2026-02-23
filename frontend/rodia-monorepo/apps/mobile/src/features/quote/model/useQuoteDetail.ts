@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { QuoteDetailResponse, QuoteId } from "@/entities/quote/model/quote.types";
-import { getShipperQuoteDetail } from "@/features/quote/api";
+import { getShipperQuoteDetailByIdentifier } from "@/features/quote/api";
 import {
   getQuoteActionPolicy,
   getQuoteStatusLabel,
@@ -170,6 +170,17 @@ function toSafeStops(rawStops: unknown): QuoteDetailResponse["stops"] {
       if (bySeq !== 0) return bySeq;
       return a.quoteStopId - b.quoteStopId;
     });
+}
+
+function normalizeQuoteIdentifier(input: QuoteId | string): string {
+  if (typeof input === "string") return input.trim();
+  if (Number.isInteger(input) && input > 0) return String(input);
+  return "";
+}
+
+function fallbackQuoteIdFromIdentifier(input: string): number {
+  const parsed = Number(input);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
 }
 
 function toSafeQuote(quoteId: QuoteId, source?: QuoteDetailResponse | null): QuoteDetailResponse {
@@ -411,7 +422,9 @@ function buildWaypointAddresses(resolvedQuote: QuoteDetailResponse): string[] {
   return MOCK_WAYPOINTS_FALLBACK.filter(Boolean);
 }
 
-export function useQuoteDetail(quoteId: QuoteId, runtimeOverride?: QuoteDetailRuntimeOverride): QuoteDetailViewModel {
+export function useQuoteDetail(quoteIdentifier: QuoteId | string, runtimeOverride?: QuoteDetailRuntimeOverride): QuoteDetailViewModel {
+  const normalizedIdentifier = normalizeQuoteIdentifier(quoteIdentifier);
+  const fallbackQuoteId = fallbackQuoteIdFromIdentifier(normalizedIdentifier);
   const [quote, setQuote] = useState<QuoteDetailResponse | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -427,10 +440,10 @@ export function useQuoteDetail(quoteId: QuoteId, runtimeOverride?: QuoteDetailRu
   useEffect(() => {
     let isMounted = true;
 
-    if (!Number.isInteger(quoteId) || quoteId <= 0) {
+    if (!normalizedIdentifier) {
       setQuote(null);
       setIsLoading(false);
-      setErrorMessage("유효하지 않은 견적 ID입니다.");
+      setErrorMessage("유효하지 않은 견적 식별자입니다.");
       return () => {
         isMounted = false;
       };
@@ -440,7 +453,7 @@ export function useQuoteDetail(quoteId: QuoteId, runtimeOverride?: QuoteDetailRu
     setErrorMessage(null);
     setQuote(null);
 
-    getShipperQuoteDetail(quoteId)
+    getShipperQuoteDetailByIdentifier(normalizedIdentifier)
       .then((response) => {
         if (!isMounted) return;
         setQuote(response ?? null);
@@ -462,10 +475,10 @@ export function useQuoteDetail(quoteId: QuoteId, runtimeOverride?: QuoteDetailRu
     return () => {
       isMounted = false;
     };
-  }, [quoteId, reloadTick]);
+  }, [normalizedIdentifier, reloadTick]);
 
   return useMemo(() => {
-    const safeQuote = toSafeQuote(quoteId, quote);
+    const safeQuote = toSafeQuote(fallbackQuoteId, quote);
 
     const normalizedOverride =
       overrideStatus !== undefined || overrideCancelReason !== undefined || overrideCanceledAt !== undefined
@@ -488,7 +501,10 @@ export function useQuoteDetail(quoteId: QuoteId, runtimeOverride?: QuoteDetailRu
     const isCanceled = (resolvedQuote?.status ?? "") === "CANCELED";
     const isCompleted = (resolvedQuote?.status ?? "") === "DROPOFF";
     const updatedAtText = formatDateTime(resolvedQuote?.updatedAt);
-    const metaText = isCanceled ? `#${resolvedQuote?.quoteId ?? quoteId}` : `#${resolvedQuote?.quoteId ?? quoteId} · ${updatedAtText}`;
+    const metaText =
+      isCanceled
+        ? `#${resolvedQuote?.quoteId ?? fallbackQuoteId}`
+        : `#${resolvedQuote?.quoteId ?? fallbackQuoteId} · ${updatedAtText}`;
 
     const cancelReasonText = isCanceled
       ? String(overrideCancelReason ?? "").trim() || "취소 사유가 입력되지 않았습니다."
@@ -519,7 +535,7 @@ export function useQuoteDetail(quoteId: QuoteId, runtimeOverride?: QuoteDetailRu
       },
       specificationArchive: buildSpecificationArchive(resolvedQuote),
       actionsContext: {
-        quoteId: resolvedQuote?.quoteId ?? Number(quoteId),
+        quoteId: resolvedQuote?.quoteId ?? Number(fallbackQuoteId),
         status: resolvedQuote?.status,
         cargoName: String(resolvedQuote?.cargoName ?? ""),
         finalPrice,
@@ -527,5 +543,5 @@ export function useQuoteDetail(quoteId: QuoteId, runtimeOverride?: QuoteDetailRu
         destinationAddress,
       },
     };
-  }, [quote, quoteId, overrideStatus, overrideCancelReason, overrideCanceledAt, isLoading, errorMessage, refetch]);
+  }, [quote, fallbackQuoteId, overrideStatus, overrideCancelReason, overrideCanceledAt, isLoading, errorMessage, refetch]);
 }

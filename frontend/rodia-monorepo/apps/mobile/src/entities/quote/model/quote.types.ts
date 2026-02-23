@@ -58,6 +58,7 @@ export type QuoteCreateResponse = {
 
 export type QuoteListItem = {
   quoteId: number;
+  quotePublicId?: string;
   truckId: number;
   originAddress: string;
   destinationAddress: string;

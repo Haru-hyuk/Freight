@@ -12,6 +12,10 @@ import { AppButton } from "@/shared/ui/kit/AppButton";
 import { AppText } from "@/shared/ui/kit/AppText";
 import { PageScaffold } from "@/widgets/layout/PageScaffold";
 import { estimateRouteKm, isValidCoord, type LatLng } from "@/shared/lib/geo/distance";
+import {
+  hasGoogleApiKeyConfigured,
+  resolveAddressCoordinates,
+} from "@/features/quote/api/quote-address-geocode";
 
 import {
   computeQuotePricing,
@@ -316,6 +320,19 @@ function quoteDistanceDebugLog(payload: {
   wasAutoCalculated: boolean;
   computedDistanceKm: number;
   pointsCount: number;
+  trigger?: string;
+  calculationMethod?: "haversine";
+  originCoordPresent?: boolean;
+  destinationCoordPresent?: boolean;
+  stopCount?: number;
+  stopsWithCoord?: number;
+  fallbackRequested?: number;
+  fallbackResolved?: number;
+  fallbackFailed?: number;
+  googleKeyConfigured?: boolean;
+  failureReason?: string;
+  geocodingStatuses?: string[];
+  placeDetailsStatuses?: string[];
 }) {
   if (!isDistanceDebugEnabled()) return;
   // eslint-disable-next-line no-console
@@ -405,11 +422,26 @@ function QuoteCreatePageInner() {
     if (isSubmitting) return;
 
     const payload = buildQuoteCreateRequest(draft);
+    const stopItems = Array.isArray(payload?.stops) ? payload.stops : [];
     let distanceKm = Number.isFinite(payload?.distanceKm) ? Math.trunc(payload.distanceKm) : 0;
     let wasAutoCalculated = false;
     let pointsCount = 0;
+    const geocodingStatuses: string[] = [];
+    const placeDetailsStatuses: string[] = [];
 
-    if (distanceKm < 1) {
+    const getPointSummary = () => {
+      const originCoordPresent = isValidCoord(payload?.originLat, payload?.originLng);
+      const destinationCoordPresent = isValidCoord(payload?.destinationLat, payload?.destinationLng);
+      const stopsWithCoord = stopItems.filter((stop) => isValidCoord(stop?.lat, stop?.lng)).length;
+      return {
+        originCoordPresent,
+        destinationCoordPresent,
+        stopCount: stopItems.length,
+        stopsWithCoord,
+      };
+    };
+
+    const pushRoutePoints = () => {
       const points: LatLng[] = [];
 
       if (isValidCoord(payload?.originLat, payload?.originLng)) {
@@ -419,8 +451,7 @@ function QuoteCreatePageInner() {
         });
       }
 
-      const stops = Array.isArray(payload?.stops) ? payload.stops : [];
-      for (const stop of stops) {
+      for (const stop of stopItems) {
         const lat = (stop as { lat?: unknown })?.lat;
         const lng = (stop as { lng?: unknown })?.lng;
         if (!isValidCoord(lat, lng)) continue;
@@ -438,28 +469,135 @@ function QuoteCreatePageInner() {
         });
       }
 
+      return points;
+    };
+
+    if (distanceKm < 1) {
+      const keyConfigured = hasGoogleApiKeyConfigured();
+      let fallbackRequested = 0;
+      let fallbackResolved = 0;
+      let fallbackFailed = 0;
+
+      if (!isValidCoord(payload?.originLat, payload?.originLng) && (payload?.originAddress ?? "").trim()) {
+        fallbackRequested += 1;
+        const result = await resolveAddressCoordinates({ addressText: payload?.originAddress ?? "" });
+        const lat = result?.coordinates?.lat;
+        const lng = result?.coordinates?.lng;
+        if (isValidCoord(lat, lng)) {
+          payload.originLat = Number(lat);
+          payload.originLng = Number(lng);
+          fallbackResolved += 1;
+        } else {
+          fallbackFailed += 1;
+        }
+
+        const geocodeStatus = String(result?.debug?.geocodingStatus ?? "").trim();
+        const placeStatus = String(result?.debug?.placeDetailsStatus ?? "").trim();
+        if (geocodeStatus) geocodingStatuses.push(geocodeStatus);
+        if (placeStatus) placeDetailsStatuses.push(placeStatus);
+      }
+
+      for (const stop of stopItems) {
+        const lat = (stop as { lat?: unknown })?.lat;
+        const lng = (stop as { lng?: unknown })?.lng;
+        const addressText = String(stop?.address ?? "").trim();
+        if (isValidCoord(lat, lng) || !addressText) continue;
+
+        fallbackRequested += 1;
+        const result = await resolveAddressCoordinates({ addressText });
+        const resolvedLat = result?.coordinates?.lat;
+        const resolvedLng = result?.coordinates?.lng;
+        if (isValidCoord(resolvedLat, resolvedLng)) {
+          stop.lat = Number(resolvedLat);
+          stop.lng = Number(resolvedLng);
+          fallbackResolved += 1;
+        } else {
+          fallbackFailed += 1;
+        }
+
+        const geocodeStatus = String(result?.debug?.geocodingStatus ?? "").trim();
+        const placeStatus = String(result?.debug?.placeDetailsStatus ?? "").trim();
+        if (geocodeStatus) geocodingStatuses.push(geocodeStatus);
+        if (placeStatus) placeDetailsStatuses.push(placeStatus);
+      }
+
+      if (!isValidCoord(payload?.destinationLat, payload?.destinationLng) && (payload?.destinationAddress ?? "").trim()) {
+        fallbackRequested += 1;
+        const result = await resolveAddressCoordinates({ addressText: payload?.destinationAddress ?? "" });
+        const lat = result?.coordinates?.lat;
+        const lng = result?.coordinates?.lng;
+        if (isValidCoord(lat, lng)) {
+          payload.destinationLat = Number(lat);
+          payload.destinationLng = Number(lng);
+          fallbackResolved += 1;
+        } else {
+          fallbackFailed += 1;
+        }
+
+        const geocodeStatus = String(result?.debug?.geocodingStatus ?? "").trim();
+        const placeStatus = String(result?.debug?.placeDetailsStatus ?? "").trim();
+        if (geocodeStatus) geocodingStatuses.push(geocodeStatus);
+        if (placeStatus) placeDetailsStatuses.push(placeStatus);
+      }
+
+      const points = pushRoutePoints();
       pointsCount = points.length;
       const estimatedKm = Math.round(estimateRouteKm(points));
+      const pointSummary = getPointSummary();
 
       if (estimatedKm > 0) {
         distanceKm = Math.max(1, estimatedKm);
         payload.distanceKm = distanceKm;
         wasAutoCalculated = true;
-      } else {
         quoteDistanceDebugLog({
+          trigger: "auto-distance-success",
+          wasAutoCalculated: true,
+          computedDistanceKm: distanceKm,
+          pointsCount,
+          calculationMethod: "haversine",
+          fallbackRequested,
+          fallbackResolved,
+          fallbackFailed,
+          googleKeyConfigured: keyConfigured,
+          geocodingStatuses: geocodingStatuses.slice(0, 5),
+          placeDetailsStatuses: placeDetailsStatuses.slice(0, 5),
+          ...pointSummary,
+        });
+      } else {
+        const failureReason =
+          pointsCount < 2 ? "insufficient-valid-coordinates" : "haversine-estimate-zero";
+
+        quoteDistanceDebugLog({
+          trigger: "auto-distance-failed",
           wasAutoCalculated: false,
           computedDistanceKm: 0,
           pointsCount,
+          calculationMethod: "haversine",
+          fallbackRequested,
+          fallbackResolved,
+          fallbackFailed,
+          googleKeyConfigured: keyConfigured,
+          failureReason,
+          geocodingStatuses: geocodingStatuses.slice(0, 5),
+          placeDetailsStatuses: placeDetailsStatuses.slice(0, 5),
+          ...pointSummary,
         });
         Alert.alert("견적 요청 실패", "거리 계산 후 요청해주세요.");
         return;
       }
     }
 
+    const finalPointSummary = getPointSummary();
     quoteDistanceDebugLog({
+      trigger: "before-submit",
       wasAutoCalculated,
       computedDistanceKm: distanceKm,
       pointsCount,
+      calculationMethod: "haversine",
+      googleKeyConfigured: hasGoogleApiKeyConfigured(),
+      geocodingStatuses: geocodingStatuses.slice(0, 5),
+      placeDetailsStatuses: placeDetailsStatuses.slice(0, 5),
+      ...finalPointSummary,
     });
 
     try {

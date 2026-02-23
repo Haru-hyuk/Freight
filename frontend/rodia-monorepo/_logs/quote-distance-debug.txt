@@ -1,0 +1,210 @@
+﻿[ENV]
+node -v: v24.11.0
+pnpm -v: 9.0.0
+pnpm -C apps/mobile exec pnpm -v: 9.0.0
+
+[GIT STATUS]
+ M frontend/rodia-monorepo/apps/mobile/.env.example
+ M frontend/rodia-monorepo/apps/mobile/app/debug/orval-smoke.tsx
+ M frontend/rodia-monorepo/apps/mobile/src/entities/quote/model/quote.types.ts
+ M frontend/rodia-monorepo/apps/mobile/src/features/quote/api/quote-api.ts
+ M frontend/rodia-monorepo/apps/mobile/src/features/quote/model/quoteCreateDraft.ts
+ M frontend/rodia-monorepo/apps/mobile/src/features/quote/model/quoteCreateRequestMapper.ts
+ M frontend/rodia-monorepo/apps/mobile/src/features/quote/model/useQuoteDetail.ts
+ M frontend/rodia-monorepo/apps/mobile/src/features/quote/ui/PostcodeModal.tsx
+ M frontend/rodia-monorepo/apps/mobile/src/features/quote/ui/QuoteCreateStep1.tsx
+ M frontend/rodia-monorepo/apps/mobile/src/pages/shipper/matchings/MatchingListPage.tsx
+ M frontend/rodia-monorepo/apps/mobile/src/pages/shipper/quotes/QuoteCreatePage.tsx
+ M frontend/rodia-monorepo/apps/mobile/src/pages/shipper/quotes/QuoteDetailPage.tsx
+ M frontend/rodia-monorepo/apps/mobile/src/pages/shipper/quotes/QuoteListPage.tsx
+ M frontend/rodia-monorepo/apps/mobile/src/shared/lib/debug/sanitize.ts
+?? frontend/rodia-monorepo/_logs/
+?? frontend/rodia-monorepo/apps/mobile/app/(shipper)/quotes/edit/
+?? frontend/rodia-monorepo/apps/mobile/src/features/matching/
+?? frontend/rodia-monorepo/apps/mobile/src/features/quote/api/quote-address-geocode.ts
+?? frontend/rodia-monorepo/apps/mobile/src/pages/shipper/quotes/QuoteEditPage.tsx
+
+[DISTANCE TRACE RESULTS]
+pattern: quote-create\] distance / hits=1
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteCreatePage.tsx:339 :: console.log("[quote-create] distance", payload);
+pattern: computedDistanceKm / hits=4
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteCreatePage.tsx:321 :: computedDistanceKm: number;
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteCreatePage.tsx:555 :: computedDistanceKm: distanceKm,
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteCreatePage.tsx:573 :: computedDistanceKm: 0,
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteCreatePage.tsx:594 :: computedDistanceKm: distanceKm,
+pattern: pointsCount / hits=7
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteCreatePage.tsx:322 :: pointsCount: number;
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteCreatePage.tsx:428 :: let pointsCount = 0;
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteCreatePage.tsx:544 :: pointsCount = points.length;
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteCreatePage.tsx:556 :: pointsCount,
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteCreatePage.tsx:568 :: pointsCount < 2 ? "insufficient-valid-coordinates" : "haversine-estimate-zero";
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteCreatePage.tsx:574 :: pointsCount,
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteCreatePage.tsx:595 :: pointsCount,
+pattern: wasAutoCalculated / hits=6
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteCreatePage.tsx:320 :: wasAutoCalculated: boolean;
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteCreatePage.tsx:427 :: let wasAutoCalculated = false;
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteCreatePage.tsx:551 :: wasAutoCalculated = true;
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteCreatePage.tsx:554 :: wasAutoCalculated: true,
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteCreatePage.tsx:572 :: wasAutoCalculated: false,
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteCreatePage.tsx:593 :: wasAutoCalculated,
+pattern: estimateRouteKm / hits=5
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteCreatePage.tsx:14 :: import { estimateRouteKm, isValidCoord, type LatLng } from "@/shared/lib/geo/distance";
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteCreatePage.tsx:545 :: const estimatedKm = Math.round(estimateRouteKm(points));
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteEditPage.tsx:23 :: import { estimateRouteKm, isValidCoord, type LatLng } from "@/shared/lib/geo/distance";
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteEditPage.tsx:365 :: const estimatedKm = Math.round(estimateRouteKm(points));
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\geo\distance.ts:40 :: export function estimateRouteKm(points: LatLng[]): number {
+pattern: isValidCoord / hits=22
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\quote\api\quote-address-geocode.ts:60 :: function isValidCoordinate(lat: number, lng: number): boolean {
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\quote\api\quote-address-geocode.ts:70 :: if (!isValidCoordinate(safeLat, safeLng)) return null;
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteCreatePage.tsx:14 :: import { estimateRouteKm, isValidCoord, type LatLng } from "@/shared/lib/geo/distance";
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteCreatePage.tsx:433 :: const originCoordPresent = isValidCoord(payload?.originLat, payload?.originLng);
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteCreatePage.tsx:434 :: const destinationCoordPresent = isValidCoord(payload?.destinationLat, payload?.destinationLng);
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteCreatePage.tsx:435 :: const stopsWithCoord = stopItems.filter((stop) => isValidCoord(stop?.lat, stop?.lng)).length;
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteCreatePage.tsx:447 :: if (isValidCoord(payload?.originLat, payload?.originLng)) {
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteCreatePage.tsx:457 :: if (!isValidCoord(lat, lng)) continue;
+pattern: resolveAddressCoordinates / hits=19
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\quote\api\quote-address-geocode.ts:6 :: type ResolveAddressCoordinatesInput = {
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\quote\api\quote-address-geocode.ts:12 :: type ResolveAddressCoordinatesResult = {
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\quote\api\quote-address-geocode.ts:16 :: debug?: ResolveAddressCoordinatesDebug;
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\quote\api\quote-address-geocode.ts:21 :: type ResolveAddressCoordinatesDebug = {
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\quote\api\quote-address-geocode.ts:189 :: export async function resolveAddressCoordinates(
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\quote\api\quote-address-geocode.ts:190 :: input: ResolveAddressCoordinatesInput
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\quote\api\quote-address-geocode.ts:191 :: ): Promise<ResolveAddressCoordinatesResult> {
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\quote\api\quote-address-geocode.ts:195 :: const debug: ResolveAddressCoordinatesDebug = {
+pattern: Directions / hits=0
+pattern: DistanceMatrix / hits=0
+Key context (+/-5 lines):
+--- apps/mobile/src/pages/shipper/quotes/QuoteCreatePage.tsx:421 ---
+ 416:       }
+ 417: 
+ 418:       await submitQuoteRequest();
+ 419:   };
+ 420: 
+ 421:   const submitQuoteRequest = async () => {
+ 422:     if (isSubmitting) return;
+ 423: 
+ 424:     const payload = buildQuoteCreateRequest(draft);
+ 425:     const stopItems = Array.isArray(payload?.stops) ? payload.stops : [];
+ 426:     let distanceKm = Number.isFinite(payload?.distanceKm) ? Math.trunc(payload.distanceKm) : 0;
+--- apps/mobile/src/pages/shipper/quotes/QuoteCreatePage.tsx:544 ---
+ 539:         if (geocodeStatus) geocodingStatuses.push(geocodeStatus);
+ 540:         if (placeStatus) placeDetailsStatuses.push(placeStatus);
+ 541:       }
+ 542: 
+ 543:       const points = pushRoutePoints();
+ 544:       pointsCount = points.length;
+ 545:       const estimatedKm = Math.round(estimateRouteKm(points));
+ 546:       const pointSummary = getPointSummary();
+ 547: 
+ 548:       if (estimatedKm > 0) {
+ 549:         distanceKm = Math.max(1, estimatedKm);
+--- apps/mobile/src/pages/shipper/quotes/QuoteCreatePage.tsx:552 ---
+ 547: 
+ 548:       if (estimatedKm > 0) {
+ 549:         distanceKm = Math.max(1, estimatedKm);
+ 550:         payload.distanceKm = distanceKm;
+ 551:         wasAutoCalculated = true;
+ 552:         quoteDistanceDebugLog({
+ 553:           trigger: "auto-distance-success",
+ 554:           wasAutoCalculated: true,
+ 555:           computedDistanceKm: distanceKm,
+ 556:           pointsCount,
+ 557:           calculationMethod: "haversine",
+--- apps/mobile/src/shared/lib/geo/distance.ts:10 ---
+   5: function toFiniteNumber(value: unknown): number | null {
+   6:   const n = typeof value === "number" ? value : Number(value);
+   7:   return Number.isFinite(n) ? n : null;
+   8: }
+   9: 
+  10: export function isValidCoord(lat: unknown, lng: unknown): boolean {
+  11:   const la = toFiniteNumber(lat);
+  12:   const ln = toFiniteNumber(lng);
+  13:   if (la == null || ln == null) return false;
+  14:   if (Math.abs(la) > 90 || Math.abs(ln) > 180) return false;
+  15:   if (Math.abs(la) < 1e-9 && Math.abs(ln) < 1e-9) return false;
+--- apps/mobile/src/features/quote/api/quote-address-geocode.ts:189 ---
+ 184:     httpOk: result.httpOk,
+ 185:     errorMessage: safeString(payload.error_message, ""),
+ 186:   };
+ 187: }
+ 188: 
+ 189: export async function resolveAddressCoordinates(
+ 190:   input: ResolveAddressCoordinatesInput
+ 191: ): Promise<ResolveAddressCoordinatesResult> {
+ 192:   const addressText = safeString(input?.addressText, "");
+ 193:   const placeId = safeString(input?.placeId, "");
+ 194: 
+
+[DATA FLOW: STOPS -> COORDS]
+Flow summary:
+- QuoteCreateStep1: address selected -> resolveAddressCoordinates() -> patchDraft(origin/destination/waypoint lat/lng).
+- quoteCreateRequestMapper: draft origin/destination and waypoint lat/lng -> payload originLat/originLng/destinationLat/destinationLng/stops[].lat/lng.
+- QuoteCreatePage submit: when distanceKm < 1, uses payload coordinates to build points and estimateRouteKm().
+- If all coords are invalid/missing, pointsCount=0 and auto distance fails.
+Evidence lines:
+- apps/mobile/src/features/quote/ui/QuoteCreateStep1.tsx:285 :: const resolveCoordinatesForTask = useCallback(
+- apps/mobile/src/features/quote/ui/QuoteCreateStep1.tsx:262 :: patchDraft({ originLat: lat, originLng: lng });
+- apps/mobile/src/features/quote/ui/QuoteCreateStep1.tsx:267 :: patchDraft({ destinationLat: lat, destinationLng: lng });
+- apps/mobile/src/features/quote/model/quoteCreateRequestMapper.ts:136 :: originLat: toNumber(draft.originLat, 0),
+- apps/mobile/src/features/quote/model/quoteCreateRequestMapper.ts:153 :: stops: buildStops(draft),
+- apps/mobile/src/pages/shipper/quotes/QuoteCreatePage.tsx:475 :: if (distanceKm < 1) {
+- apps/mobile/src/pages/shipper/quotes/QuoteCreatePage.tsx:544 :: pointsCount = points.length;
+Conclusion from static evidence: root cause A(좌표 누락/무효) confirmed. Route/Directions API usage path was not found in current quote-create flow.
+
+[GOOGLE CONFIG CHECK]
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\quote\api\quote-address-geocode.ts:32 :: type GoogleLookupResult = {
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\quote\api\quote-address-geocode.ts:39 :: const GOOGLE_KEY_CANDIDATES = [
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\quote\api\quote-address-geocode.ts:40 :: "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY",
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\quote\api\quote-address-geocode.ts:41 :: "EXPO_PUBLIC_GOOGLE_PLACES_API_KEY",
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\quote\api\quote-address-geocode.ts:42 :: "EXPO_PUBLIC_GOOGLE_API_KEY",
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\quote\api\quote-address-geocode.ts:74 :: function readLatLngFromGoogleLocation(input: unknown): LatLng | null {
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\quote\api\quote-address-geocode.ts:88 :: return readLatLngFromGoogleLocation(location);
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\quote\api\quote-address-geocode.ts:91 :: function getGoogleApiKey(): string {
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\quote\api\quote-address-geocode.ts:93 :: for (const key of GOOGLE_KEY_CANDIDATES) {
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\quote\api\quote-address-geocode.ts:100 :: export function hasGoogleApiKeyConfigured(): boolean {
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\quote\api\quote-address-geocode.ts:101 :: return getGoogleApiKey().length > 0;
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\quote\api\quote-address-geocode.ts:131 :: async function fetchPlaceDetailsLatLng(placeId: string, apiKey: string): Promise<GoogleLookupResult> {
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\quote\api\quote-address-geocode.ts:132 :: const url = buildUrl("https://maps.googleapis.com/maps/api/place/details/json", {
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\quote\api\quote-address-geocode.ts:159 :: async function fetchGeocodedLatLng(addressText: string, apiKey: string): Promise<GoogleLookupResult> {
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\quote\api\quote-address-geocode.ts:160 :: const url = buildUrl("https://maps.googleapis.com/maps/api/geocode/json", {
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\quote\api\quote-address-geocode.ts:182 :: coordinates: readLatLngFromGoogleLocation(geometry.location),
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\quote\api\quote-address-geocode.ts:208 :: const apiKey = getGoogleApiKey();
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteCreatePage.tsx:16 :: hasGoogleApiKeyConfigured,
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteCreatePage.tsx:332 :: googleKeyConfigured?: boolean;
+- C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteCreatePage.tsx:476 :: const keyConfigured = hasGoogleApiKeyConfigured();
+- key presence (masked): MAPS=True, PLACES=False, GOOGLE=False
+- quote-address-geocode uses process.env candidate keys and calls Google Place Details/Geocoding REST. Missing key => returns coordinates:null with explicit error.
+
+[FIX APPLIED]
+Applied fixes (minimal + defensive):
+- quote-address-geocode: added debug metadata (keyPresent, placeDetailsStatus, geocodingStatus, httpOk flags) without exposing key values.
+- quote-create submit: added submit-time coordinate fallback resolve for origin/stops/destination when coords missing.
+- quote-create debug log payload expanded to explain 0km/0points causes (coord presence, fallback requested/resolved/failed, failureReason, status samples).
+- auto-distance still uses existing haversine estimator, but now attempts coordinate recovery first, reducing pointsCount=0 failure cases.
+Patch evidence lines:
+- apps/mobile/src/features/quote/api/quote-address-geocode.ts:21 :: type ResolveAddressCoordinatesDebug = {
+- apps/mobile/src/features/quote/api/quote-address-geocode.ts:100 :: export function hasGoogleApiKeyConfigured(): boolean {
+- apps/mobile/src/features/quote/api/quote-address-geocode.ts:26 :: placeDetailsStatus?: string;
+- apps/mobile/src/pages/shipper/quotes/QuoteCreatePage.tsx:329 :: fallbackRequested?: number;
+- apps/mobile/src/pages/shipper/quotes/QuoteCreatePage.tsx:483 :: const result = await resolveAddressCoordinates({ addressText: payload?.originAddress ?? "" });
+- apps/mobile/src/pages/shipper/quotes/QuoteCreatePage.tsx:333 :: failureReason?: string;
+- apps/mobile/src/pages/shipper/quotes/QuoteCreatePage.tsx:332 :: googleKeyConfigured?: boolean;
+
+[VERIFY]
+command: pnpm -C apps/mobile exec tsc --noEmit --incremental false
+tsc exitCode: 0
+changed files (current run relevant):
+ M frontend/rodia-monorepo/apps/mobile/.env.example
+ M frontend/rodia-monorepo/apps/mobile/src/features/quote/model/quoteCreateDraft.ts
+ M frontend/rodia-monorepo/apps/mobile/src/features/quote/model/quoteCreateRequestMapper.ts
+ M frontend/rodia-monorepo/apps/mobile/src/features/quote/ui/PostcodeModal.tsx
+ M frontend/rodia-monorepo/apps/mobile/src/features/quote/ui/QuoteCreateStep1.tsx
+ M frontend/rodia-monorepo/apps/mobile/src/pages/shipper/quotes/QuoteCreatePage.tsx
+?? frontend/rodia-monorepo/apps/mobile/src/features/quote/api/quote-address-geocode.ts
+manual checklist:
+1) 앱 로그인 -> 화주 견적 생성 진입
+2) 출발/도착(및 경유지) 주소 선택
+3) 제출 시 콘솔 [quote-create] distance 로그 확인: originCoordPresent/destinationCoordPresent/stopCount/stopsWithCoord/fallback* 확인
+4) 실패 시 failureReason + geocodingStatuses/placeDetailsStatuses 확인(키 원문 없음)
+5) 성공 시 wasAutoCalculated=true, computedDistanceKm>0, pointsCount>=2 확인
+

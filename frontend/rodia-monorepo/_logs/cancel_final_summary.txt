@@ -1,0 +1,47 @@
+﻿A) Commands executed + key outputs
+- STEP0 preflight:
+  - git status --porcelain
+  - node -v -> v24.11.0
+  - pnpm -v -> 9.0.0
+  - pnpm -C apps/mobile exec pnpm -v -> 9.0.0
+  - git rev-parse --show-toplevel -> C:/lce/Freight
+- STEP1 openapi/generate inspection:
+  - rg/open file on apps/mobile/.orval/openapi.fixed.json and generated quote-controller
+  - confirmed quote delete operationId: deleteQuote
+- STEP2 trace:
+  - rg/open file on QuoteDetailPage, BottomActionRouter, quote-api, QuoteListPage
+  - found cancel UI was local override only (no network)
+- STEP3 filters:
+  - rg/open file on QuoteListPage + quoteActionMatrix + quote-api parseStatus
+  - confirmed CANCELED category=closed and completed tab uses closedList
+- STEP4 patch evidence:
+  - rg parseStatus alias lines in quote-api
+  - rg submitCancelModal + await deleteShipperQuote + router.replace in QuoteDetailPage
+- STEP5 verify:
+  - pnpm -C apps/mobile exec tsc --noEmit --incremental false -> exit code 0
+
+B) Changed/added files list (paths only)
+- apps/mobile/src/pages/shipper/quotes/QuoteDetailPage.tsx
+- apps/mobile/src/features/quote/api/quote-api.ts
+- _logs/cancel_step0_preflight.txt
+- _logs/cancel_step1_openapi.txt
+- _logs/cancel_step2_trace.txt
+- _logs/cancel_step3_filters.txt
+- _logs/cancel_step4_patch.txt
+- _logs/cancel_step5_tsc.txt
+- _logs/cancel_step5_manual.txt
+- _logs/cancel_final_summary.txt
+
+C) Confirmed cancel endpoint (method + path)
+- DELETE /api/shipper/quotes/{quoteIdentifier}
+- source: apps/mobile/.orval/openapi.fixed.json (operationId: deleteQuote), generated quote-controller deleteQuote()
+
+D) UI behavior after cancel
+- QuoteDetail "요청 취소" 모달 확정 시 deleteShipperQuote 호출(실제 네트워크).
+- 성공 시 알림 후 quotes 목록으로 이동(router.replace("/(shipper)/quotes")).
+- 목록은 mount 시 list API 재호출하며, CANCELED는 closed category로 "완료됨" 탭에 표시됨.
+
+E) Proof that server state changed (DB reflected)
+- FE 직접 DB 확인은 불가.
+- 검증 기준: 취소 직후 list/detail API 응답 status가 CANCELED(또는 alias)로 반환되는지 확인.
+- 수동 검증 절차는 _logs/cancel_step5_manual.txt에 기록.

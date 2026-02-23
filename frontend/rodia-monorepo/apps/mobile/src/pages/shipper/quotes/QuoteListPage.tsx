@@ -78,7 +78,7 @@ type SectionHeaderProps = {
 
 type QuoteListCardProps = {
   item: QuoteListViewItem;
-  onPress: (quoteId: number, status: QuoteStatusApi) => void;
+  onPress: (quoteId: number, quotePublicId: string | undefined, status: QuoteStatusApi) => void;
 };
 
 const KRW = new Intl.NumberFormat("ko-KR");
@@ -713,7 +713,7 @@ function QuoteListCardBase({ item, onPress }: QuoteListCardProps) {
   return (
     <Pressable
       accessibilityRole="button"
-      onPress={() => onPress(item.quote.quoteId, item.quote.status)}
+      onPress={() => onPress(item.quote.quoteId, item.quote.quotePublicId, item.quote.status)}
       style={({ pressed }) => [styles.pressable, isClosed && styles.closedCard, pressed && styles.pressed]}
     >
       <AppCard outlined elevated={false}>
@@ -861,9 +861,12 @@ export default function QuoteListPage() {
   }, []);
 
   const handlePressCard = useCallback(
-    (quoteId: number, status: QuoteStatusApi) => {
-      if (!Number.isInteger(quoteId) || quoteId <= 0) return;
-      router.push({ pathname: "/(shipper)/quotes/[id]", params: { id: String(quoteId), status } });
+    (quoteId: number, quotePublicId: string | undefined, status: QuoteStatusApi) => {
+      const safePublicId = String(quotePublicId ?? "").trim();
+      const hasNumericQuoteId = Number.isInteger(quoteId) && quoteId > 0;
+      if (!safePublicId && !hasNumericQuoteId) return;
+      const routeIdentifier = safePublicId || String(quoteId);
+      router.push({ pathname: "/(shipper)/quotes/[id]", params: { id: routeIdentifier, status } });
     },
     [router]
   );

@@ -26,6 +26,11 @@ function toNumber(input: unknown, fallback = 0) {
   return Number.isFinite(value) ? value : fallback;
 }
 
+function toOptionalNumber(input: unknown): number | undefined {
+  const value = typeof input === "number" ? input : Number(input);
+  return Number.isFinite(value) ? value : undefined;
+}
+
 function clampIndex(index: number, length: number) {
   if (length <= 0) return 0;
   if (!Number.isFinite(index)) return 0;
@@ -80,11 +85,14 @@ function buildStops(draft: QuoteCreateDraft): QuoteStopRequestDto[] {
       const address = joinAddress(waypoint?.addr, waypoint?.detail);
       if (!address) return null;
 
+      const stopLat = toOptionalNumber((waypoint as { lat?: unknown })?.lat);
+      const stopLng = toOptionalNumber((waypoint as { lng?: unknown })?.lng);
+
       return {
         seq: index + 1,
         address,
-        lat: 0,
-        lng: 0,
+        ...(typeof stopLat === "number" ? { lat: stopLat } : {}),
+        ...(typeof stopLng === "number" ? { lng: stopLng } : {}),
         contactName: (waypoint?.name ?? "").trim(),
         contactPhone: (waypoint?.phone ?? "").trim(),
         deptName: "",

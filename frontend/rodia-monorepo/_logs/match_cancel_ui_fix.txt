@@ -1,0 +1,144 @@
+﻿[STEP 0] Preflight
+## Commands
+1) git status --porcelain
+2) node -v
+3) pnpm -v
+4) pnpm -C apps/mobile exec pnpm -v
+
+## Output
+### git status --porcelain
+ M frontend/rodia-monorepo/apps/mobile/src/features/quote/api/quote-api.ts
+ M frontend/rodia-monorepo/apps/mobile/src/pages/shipper/matchings/MatchingListPage.tsx
+ M frontend/rodia-monorepo/apps/mobile/src/pages/shipper/quotes/QuoteDetailPage.tsx
+?? frontend/rodia-monorepo/_logs/
+?? frontend/rodia-monorepo/apps/mobile/app/(shipper)/quotes/edit/
+?? frontend/rodia-monorepo/apps/mobile/src/features/matching/
+?? frontend/rodia-monorepo/apps/mobile/src/pages/shipper/quotes/QuoteEditPage.tsx
+
+### node -v
+v24.11.0
+
+### pnpm -v
+9.0.0
+
+### pnpm -C apps/mobile exec pnpm -v
+9.0.0
+
+[STEP 1] Inspect matches model + MatchingListPage filtering
+## Commands
+1) Get-Content apps/mobile/src/pages/shipper/matchings/MatchingListPage.tsx
+2) Get-Content apps/mobile/src/features/matching/api/shipper-match-api.ts
+3) Get-Content apps/mobile/src/shared/api/generated/shipper-match-controller/shipper-match-controller.ts
+4) Get-Content apps/mobile/src/shared/api/generated/schemas/matchResponse.ts
+
+## 핵심 출력
+- MatchingListPage 현재 필터 구조:
+  - 별도 탭/완료 그룹 분리 없음
+  - matchings 전체를 단일 리스트로 렌더
+  - toMatchingStatus():
+    - OPEN/NEGOTIATING -> payment
+    - ASSIGNED/PICKUP -> loading
+    - TRANSIT -> moving
+    - 그 외 -> completed
+- 상태 문자열 처리:
+  - toStatusLabel/toMatchingTitle는 CANCELED만 명시 처리
+  - CANCELLED alias 정규화 없음
+- matching api 상태 처리:
+  - cancel 가능 제외 상태: CANCELED, COMPLETED, DROPOFF, DELIVERED
+- generated shipper-match-controller:
+  - cancelMatch(matchId: string) -> DELETE /api/shipper/matches/{matchId}
+  - getMyMatches() -> GET /api/shipper/matches/me
+- generated MatchResponse 필드:
+  - matchId, quoteId, driverId, accepted, status, acceptedAt, createdAt, updatedAt
+
+## 현재 statuses handled 요약
+- OPEN, NEGOTIATING, ASSIGNED, PICKUP, TRANSIT, DROPOFF, CANCELED (+ 기타 unknown)
+- unknown은 현재 completed로 떨어짐
+
+[STEP 2] Implement minimal UI fix
+## Commands
+1) rg -n "TERMINAL_MATCH_STATUSES|normalizeMatchStatus|toMatchingStatus|sectionTitle|진행 중|완료됨|activeMatchings|completedMatchings" apps/mobile/src/pages/shipper/matchings/MatchingListPage.tsx -S
+2) rg -n "matchings" apps/mobile/src/pages/shipper/quotes/QuoteDetailPage.tsx -S
+3) Get-Content apps/mobile/app/(shipper)/matchings/index.tsx
+
+## 핵심 출력
+### MatchingListPage.tsx
+- TERMINAL_MATCH_STATUSES 추가:
+  - CANCELED, COMPLETED, DONE, FINISHED, DROPOFF, DELIVERED
+- normalizeMatchStatus(status):
+  - CANCELLED/CANCEL -> CANCELED 정규화
+- toMatchingStatus:
+  - OPEN/NEGOTIATING -> payment
+  - ASSIGNED/PICKUP -> loading
+  - TRANSIT -> moving
+  - TERMINAL_MATCH_STATUSES 및 기타 -> completed
+- UI 그룹 분리 추가:
+  - activeMatchings (진행 중)
+  - completedMatchings (완료됨)
+  - 화면에 섹션 타이틀 "진행 중" / "완료됨" 렌더
+
+### QuoteDetailPage.tsx
+- 요청 취소 성공 후 라우트 변경:
+  - router.replace("/(shipper)/matchings")
+  - 위치: line 849 매치
+
+### Route 확인
+- apps/mobile/app/(shipper)/matchings/index.tsx 존재
+- "/(shipper)/matchings" 라우트는 MatchingListPage를 렌더
+
+## 적용 경로(요청 취소)
+- QuoteDetail 요청 취소: match cancel 호출 성공 -> / (shipper) /matchings 이동
+- 삭제 버튼(deleteShipperQuote) 경로는 기존 유지
+
+[STEP 3] Verify
+## Commands
+1) pnpm -C apps/mobile exec tsc --noEmit --incremental false
+
+## 핵심 출력
+- stdout: (no output)
+- exit code: 0
+
+## Manual verification steps
+1) 화주로 로그인 후 매칭 요청 생성(백엔드 POST /api/shipper/matches).
+2) 견적 상세에서 "요청 취소" 실행.
+3) 네트워크 확인:
+   - DELETE /api/shipper/matches/{matchId}
+   - 응답 204 또는 2xx
+4) 취소 성공 후 화면 이동 확인:
+   - / (shipper) /matchings 로 이동
+5) 매칭 화면 확인:
+   - 해당 항목이 "완료됨" 섹션에 표시
+   - 상태 라벨은 "취소됨"(CANCELED 계열)
+
+[Deliverable]
+## Changed files (paths only)
+- apps/mobile/src/pages/shipper/matchings/MatchingListPage.tsx
+- apps/mobile/src/pages/shipper/quotes/QuoteDetailPage.tsx
+- apps/mobile/src/features/matching/api/shipper-match-api.ts
+
+## Commands executed + key outputs
+- git status --porcelain
+  - working tree dirty (기존 변경 포함)
+- node -v
+  - v24.11.0
+- pnpm -v
+  - 9.0.0
+- pnpm -C apps/mobile exec pnpm -v
+  - 9.0.0
+- Get-Content/rg for STEP1/STEP2 inspection
+  - matches generated endpoint 확인: cancelMatch, getMyMatches
+  - route 확인: app/(shipper)/matchings/index.tsx
+- pnpm -C apps/mobile exec tsc --noEmit --incremental false
+  - exit code 0
+
+## "완료됨"으로 분류되는 status
+- 명시적 terminal statuses:
+  - CANCELED
+  - COMPLETED
+  - DONE
+  - FINISHED
+  - DROPOFF
+  - DELIVERED
+- alias 정규화:
+  - CANCELLED/CANCEL -> CANCELED
+- 위 외 매핑되지 않은 값도 현재 로직상 completed로 폴백

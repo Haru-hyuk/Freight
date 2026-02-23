@@ -1,0 +1,65 @@
+﻿[STEP 0] Preflight
+## Commands
+1) git status --porcelain
+2) node -v
+3) pnpm -v
+4) pnpm -C apps/mobile exec pnpm -v
+
+## Output
+### git status --porcelain
+ M frontend/rodia-monorepo/apps/mobile/src/features/quote/api/quote-api.ts
+ M frontend/rodia-monorepo/apps/mobile/src/pages/shipper/matchings/MatchingListPage.tsx
+ M frontend/rodia-monorepo/apps/mobile/src/pages/shipper/quotes/QuoteDetailPage.tsx
+?? frontend/rodia-monorepo/_logs/
+?? frontend/rodia-monorepo/apps/mobile/app/(shipper)/quotes/edit/
+?? frontend/rodia-monorepo/apps/mobile/src/features/matching/
+?? frontend/rodia-monorepo/apps/mobile/src/pages/shipper/quotes/QuoteEditPage.tsx
+
+### node -v
+v24.11.0
+
+### pnpm -v
+9.0.0
+
+### pnpm -C apps/mobile exec pnpm -v
+9.0.0
+
+[STEP 1] FAILED
+## Root cause
+- PowerShell parser error: ternary operator (? :) was used in this shell context and caused script parse failure before OpenAPI parsing could complete.
+
+## Minimal fix
+- Replace ternary expressions with explicit if/else variable assignment when formatting schema fields in the STEP 1 script.
+
+## Exact rerun command
+- Re-run STEP 1 using a script variant that does not use '? :' and writes schema display values via if/else-assigned variables.
+
+[STEP 1] OpenAPI quote detail path param 확인 (PowerShell)
+## Output
+[eval]:22
+console.log('schema.='+(sch['\']||''));
+                                   ^^^^
+Expected ']', got 'string literal ());, '));)'
+System.Management.Automation.RemoteException
+SyntaxError: Invalid or unexpected token
+    at makeContextifyScript (node:internal/vm:194:14)
+    at compileScript (node:internal/process/execution:388:10)
+    at evalTypeScript (node:internal/process/execution:260:22)
+    at node:internal/main/eval_string:71:3
+System.Management.Automation.RemoteException
+Node.js v24.11.0
+exitCode_node=1
+
+### Generated function signature (quote-controller.ts)
+16:   export const getQuote = (
+17:     quoteIdentifier: string,
+20:       {url: `/api/shipper/quotes/${quoteIdentifier}`, method: 'GET',
+26:     quoteIdentifier: string,
+30:       {url: `/api/shipper/quotes/${quoteIdentifier}`, method: 'PUT',
+38:     quoteIdentifier: string,
+41:       {url: `/api/shipper/quotes/${quoteIdentifier}`, method: 'DELETE'
+49:       {url: `/api/shipper/quotes`, method: 'GET',
+58:       {url: `/api/shipper/quotes`, method: 'POST',
+69:       {url: `/api/shipper/quotes/validate`, method: 'POST',
+76:   export type GetQuoteResult = NonNullable<Awaited<ReturnType<typeof getQuote>>>
+exitCode_selectString=0

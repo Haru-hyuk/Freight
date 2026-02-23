@@ -4,8 +4,10 @@ import { Alert, KeyboardAvoidingView, LayoutAnimation, Modal, Platform, Pressabl
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
+import { cancelShipperMatch, listMyShipperMatches } from "@/features/matching/api";
 import { resolveTonePalette, type BottomActionId } from "@/features/quote/model/quoteActionMatrix";
 import { useQuoteDetail } from "@/features/quote/model/useQuoteDetail";
+import { deleteShipperQuote } from "@/features/quote/api";
 import { BottomActionRouter } from "@/features/quote/ui/actions/BottomActionRouter";
 import { initLayoutAnimationForAndroid } from "@/shared/lib/ui/layoutAnimationInit";
 import { safeNumber, tint } from "@/shared/theme/colorUtils";
@@ -36,6 +38,15 @@ const useStyles = createThemedStyles((theme) => {
       marginTop: spacing,
       marginBottom: spacing * 3,
       gap: spacing,
+    },
+    manageActionsRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing * 2,
+    },
+    manageActionButton: {
+      flex: 1,
+      minHeight: 42,
     },
     statusRow: {
       minHeight: 44,
@@ -415,7 +426,12 @@ const useStyles = createThemedStyles((theme) => {
   });
 });
 
-function parseQuoteId(value: string | string[] | undefined): number {
+function parseRouteIdentifier(value: string | string[] | undefined): string {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return typeof raw === "string" ? raw.trim() : "";
+}
+
+function parsePositiveIntParam(value: string | string[] | undefined): number {
   const raw = Array.isArray(value) ? value[0] : value;
   const parsed = Number(raw);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
@@ -726,18 +742,16 @@ export default function QuoteDetailPage() {
   const styles = useStyles();
   const theme = useAppTheme();
   const router = useRouter();
-  const params = useLocalSearchParams<{ id?: string | string[] }>();
-  const [cancelOverride, setCancelOverride] = React.useState<{
-    status: "CANCELED";
-    cancelReason: string;
-    canceledAt: string;
-  } | null>(null);
+  const params = useLocalSearchParams<{ id?: string | string[]; matchId?: string | string[] }>();
   const [showCancelModal, setShowCancelModal] = React.useState(false);
   const [cancelReasonInput, setCancelReasonInput] = React.useState("");
   const [cancelReasonError, setCancelReasonError] = React.useState<string | undefined>(undefined);
+  const [isCancelSubmitting, setIsCancelSubmitting] = React.useState(false);
+  const [isDeleting, setIsDeleting] = React.useState(false);
 
-  const quoteId = parseQuoteId(params?.id);
-  const view = useQuoteDetail(quoteId, cancelOverride ?? undefined);
+  const quoteIdentifier = parseRouteIdentifier(params?.id);
+  const quoteId = parsePositiveIntParam(params?.id);
+  const view = useQuoteDetail(quoteIdentifier);
   const isBlockedByFetchState = view.isLoading || Boolean(view.errorMessage);
   const palette = isBlockedByFetchState ? null : resolveTonePalette(theme, view.policy);
   const hasCancelAction =
@@ -756,13 +770,19 @@ export default function QuoteDetailPage() {
     if (!nextPrimary && nextSecondary) return { primary: nextSecondary, secondary: undefined };
     return { primary: nextPrimary, secondary: nextSecondary };
   }, [view.policy.bottomBar, isBlockedByFetchState]);
-  const handleCancelRequest = React.useCallback((payload: { quoteId: number; reason: string }) => {
-    const nextCanceledAt = new Date().toISOString();
-    setCancelOverride({
-      status: "CANCELED",
-      cancelReason: payload.reason,
-      canceledAt: nextCanceledAt,
-    });
+  const readErrorMessage = React.useCallback((error: unknown) => {
+    const fallback = "네트워크 또는 요청 값을 확인해주세요.";
+    if (!error || typeof error !== "object") return fallback;
+
+    const e = error as {
+      response?: { data?: { message?: string; error?: string } };
+      message?: string;
+    };
+
+    const serverMessage = e.response?.data?.message ?? e.response?.data?.error;
+    if (typeof serverMessage === "string" && serverMessage.trim()) return serverMessage.trim();
+    if (typeof e.message === "string" && e.message.trim()) return e.message.trim();
+    return fallback;
   }, []);
   const openCancelModal = React.useCallback(() => {
     if (isBlockedByFetchState) return;
@@ -770,11 +790,24 @@ export default function QuoteDetailPage() {
     setCancelReasonError(undefined);
   }, [isBlockedByFetchState]);
   const closeCancelModal = React.useCallback(() => {
+    if (isCancelSubmitting) return;
     setShowCancelModal(false);
     setCancelReasonError(undefined);
-  }, []);
-  const submitCancelModal = React.useCallback(() => {
-    if (isBlockedByFetchState) return;
+  }, [isCancelSubmitting]);
+  const resolveDirectMatchId = React.useCallback((): number => {
+    const fromRoute = parsePositiveIntParam(params?.matchId);
+    if (fromRoute > 0) return fromRoute;
+
+    const fromQuote = Number((view.quote as unknown as { matchId?: unknown })?.matchId);
+    if (Number.isInteger(fromQuote) && fromQuote > 0) return fromQuote;
+
+    const fromActions = Number((view.actionsContext as unknown as { matchId?: unknown })?.matchId);
+    if (Number.isInteger(fromActions) && fromActions > 0) return fromActions;
+
+    return 0;
+  }, [params?.matchId, view.actionsContext, view.quote]);
+  const submitCancelModal = React.useCallback(async () => {
+    if (isBlockedByFetchState || isCancelSubmitting) return;
 
     const safeQuoteId =
       Number.isInteger(view.actionsContext?.quoteId) && view.actionsContext.quoteId > 0 ? view.actionsContext.quoteId : 0;
@@ -789,12 +822,94 @@ export default function QuoteDetailPage() {
       return;
     }
 
-    handleCancelRequest({ quoteId: safeQuoteId, reason: trimmed });
-    setShowCancelModal(false);
-    setCancelReasonInput("");
-    setCancelReasonError(undefined);
-    Alert.alert("요청 취소", "취소 요청이 처리되었습니다.");
-  }, [cancelReasonInput, handleCancelRequest, view.actionsContext, isBlockedByFetchState]);
+    try {
+      setIsCancelSubmitting(true);
+      let targetMatchId = resolveDirectMatchId();
+
+      if (targetMatchId <= 0) {
+        const matches = await listMyShipperMatches();
+        const safeMatches = Array.isArray(matches) ? matches : [];
+        const sameQuoteMatches = safeMatches.filter((match) => {
+          const quoteIdFromMatch = Number((match as { quoteId?: unknown })?.quoteId);
+          const matchIdFromMatch = Number((match as { matchId?: unknown })?.matchId);
+          return Number.isInteger(quoteIdFromMatch) && quoteIdFromMatch === safeQuoteId && Number.isInteger(matchIdFromMatch) && matchIdFromMatch > 0;
+        });
+
+        const preferred = sameQuoteMatches.find((match) => Boolean(match?.cancelable)) ?? sameQuoteMatches[0];
+        targetMatchId = Number(preferred?.matchId ?? 0);
+      }
+
+      if (!Number.isInteger(targetMatchId) || targetMatchId <= 0) {
+        setCancelReasonError("취소할 요청을 찾을 수 없습니다.");
+        return;
+      }
+
+      await cancelShipperMatch(targetMatchId);
+
+      setShowCancelModal(false);
+      setCancelReasonInput("");
+      setCancelReasonError(undefined);
+      Alert.alert("요청 취소", "취소 요청이 처리되었습니다.", [
+        {
+          text: "확인",
+          onPress: () => router.replace("/(shipper)/matchings"),
+        },
+      ]);
+    } catch (error) {
+      Alert.alert("요청 취소 실패", readErrorMessage(error));
+    } finally {
+      setIsCancelSubmitting(false);
+    }
+  }, [cancelReasonInput, isBlockedByFetchState, isCancelSubmitting, readErrorMessage, resolveDirectMatchId, router, view.actionsContext]);
+  const resolveActionQuoteId = React.useCallback(() => {
+    const fromView = Number(view.quote?.quoteId);
+    if (Number.isInteger(fromView) && fromView > 0) return fromView;
+    if (Number.isInteger(quoteId) && quoteId > 0) return quoteId;
+    return 0;
+  }, [quoteId, view.quote?.quoteId]);
+  const handlePressEdit = React.useCallback(() => {
+    if (isBlockedByFetchState) return;
+    const targetQuoteId = resolveActionQuoteId();
+    if (targetQuoteId <= 0) {
+      Alert.alert("수정 이동 실패", "유효한 견적 ID를 찾을 수 없습니다.");
+      return;
+    }
+
+    router.push({ pathname: "/(shipper)/quotes/edit/[id]", params: { id: String(targetQuoteId) } });
+  }, [isBlockedByFetchState, resolveActionQuoteId, router]);
+  const runDelete = React.useCallback(async () => {
+    if (isDeleting || isBlockedByFetchState) return;
+
+    const targetQuoteId = resolveActionQuoteId();
+    if (targetQuoteId <= 0) {
+      Alert.alert("견적 삭제 실패", "유효한 견적 ID를 찾을 수 없습니다.");
+      return;
+    }
+
+    try {
+      setIsDeleting(true);
+      await deleteShipperQuote(targetQuoteId);
+      router.replace("/(shipper)/quotes");
+    } catch (error) {
+      Alert.alert("견적 삭제 실패", readErrorMessage(error));
+    } finally {
+      setIsDeleting(false);
+    }
+  }, [isBlockedByFetchState, isDeleting, readErrorMessage, resolveActionQuoteId, router]);
+  const handlePressDelete = React.useCallback(() => {
+    if (isBlockedByFetchState || isDeleting) return;
+
+    Alert.alert("견적 삭제", "해당 견적을 삭제하시겠습니까?", [
+      { text: "취소", style: "cancel" },
+      {
+        text: "삭제",
+        style: "destructive",
+        onPress: () => {
+          void runDelete();
+        },
+      },
+    ]);
+  }, [isBlockedByFetchState, isDeleting, runDelete]);
 
   React.useEffect(() => {
     initLayoutAnimationForAndroid();
@@ -852,6 +967,24 @@ export default function QuoteDetailPage() {
               </AppText>
             </View>
 
+            {!isBlockedByFetchState ? (
+              <View style={styles.manageActionsRow}>
+                <AppButton
+                  title="수정"
+                  variant="secondary"
+                  style={styles.manageActionButton}
+                  onPress={handlePressEdit}
+                />
+                <AppButton
+                  title="삭제"
+                  variant="destructive"
+                  style={styles.manageActionButton}
+                  onPress={handlePressDelete}
+                  loading={isDeleting}
+                />
+              </View>
+            ) : null}
+
             {view.commandCenter?.cancelReasonText ? (
               <View style={styles.cancelSummaryBox}>
                 <View style={styles.cancelSummaryRow}>
@@ -873,7 +1006,7 @@ export default function QuoteDetailPage() {
 
           <Modal transparent visible={showCancelModal} animationType="fade" onRequestClose={closeCancelModal}>
             <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.cancelModalOverlay}>
-              <Pressable style={StyleSheet.absoluteFill} onPress={closeCancelModal} />
+              <Pressable style={StyleSheet.absoluteFill} onPress={isCancelSubmitting ? undefined : closeCancelModal} />
               <View style={styles.cancelModalSheet}>
                 <AppCard outlined elevated={false} style={styles.cancelModalCard}>
                   <View style={styles.cancelModalContent}>
@@ -903,8 +1036,21 @@ export default function QuoteDetailPage() {
                     />
 
                     <View style={styles.cancelModalActions}>
-                      <AppButton title="닫기" variant="secondary" style={styles.actionButton} onPress={closeCancelModal} />
-                      <AppButton title="취소 확정" variant="destructive" style={styles.actionButton} onPress={submitCancelModal} />
+                      <AppButton
+                        title="닫기"
+                        variant="secondary"
+                        style={styles.actionButton}
+                        onPress={closeCancelModal}
+                        disabled={isCancelSubmitting}
+                      />
+                      <AppButton
+                        title="취소 확정"
+                        variant="destructive"
+                        style={styles.actionButton}
+                        onPress={submitCancelModal}
+                        loading={isCancelSubmitting}
+                        disabled={isCancelSubmitting}
+                      />
                     </View>
                   </View>
                 </AppCard>

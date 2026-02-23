@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import React, { useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
   LayoutAnimation,
   Modal,
@@ -11,6 +11,10 @@ import {
   View,
 } from "react-native";
 
+import {
+  resolveAddressCoordinates,
+  type ResolveAddressCoordinatesInput,
+} from "@/features/quote/api/quote-address-geocode";
 import {
   useQuoteCreateDraft,
   WORK_METHODS,
@@ -26,7 +30,9 @@ import { initLayoutAnimationForAndroid } from "@/shared/lib/ui/layoutAnimationIn
 import { safeNumber, tint } from "@/shared/theme/colorUtils";
 import type { AppTheme } from "@/shared/theme/types";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
+import { AppErrorState } from "@/shared/ui/kit/AppErrorState";
 import { AppInput } from "@/shared/ui/kit/AppInput";
+import { AppSpinner } from "@/shared/ui/kit/AppSpinner";
 import { AppText } from "@/shared/ui/kit/AppText";
 
 initLayoutAnimationForAndroid();
@@ -40,6 +46,25 @@ function formatPhoneNumber(input: string) {
   return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
 }
 
+type AddressTarget = "start" | "end" | number;
+
+type AddressSelectionPayload = {
+  address?: string;
+  roadAddress?: string;
+  jibunAddress?: string;
+  zonecode?: string;
+  placeId?: string;
+  place_id?: string;
+  details?: unknown;
+};
+
+type CoordinateResolveTask = {
+  target: AddressTarget;
+  addressText: string;
+  placeId?: string;
+  details?: unknown;
+};
+
 const useStyles = createThemedStyles((theme: AppTheme) => {
   const c = theme.colors;
   const spacing = safeNumber(theme.layout.spacing.base, 4);
@@ -52,6 +77,7 @@ const useStyles = createThemedStyles((theme: AppTheme) => {
 
     sectionHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4, paddingHorizontal: 4 },
     sectionTitle: { fontSize: 16, fontWeight: "700", color: c.textMain },
+    statusWrap: { marginBottom: spacing * 2 },
 
     // [카드] 전체 타임라인 컨테이너
     routeCard: {
@@ -169,48 +195,165 @@ export function QuoteCreateStep1() {
 
   const [pickerMode, setPickerMode] = useState<"date" | "time" | null>(null);
   const [iosPickerValue, setIosPickerValue] = useState<Date | null>(null);
+  const [isResolvingCoords, setIsResolvingCoords] = useState(false);
+  const [coordError, setCoordError] = useState<string | null>(null);
+  const [coordTask, setCoordTask] = useState<CoordinateResolveTask | null>(null);
+  const coordRequestIdRef = useRef(0);
 
   const waypoints = draft?.waypoints ?? [];
   const canAddWaypoint = waypoints.length < MAX_WAYPOINTS;
-
-  type AddressPayload = {
-    address?: string;
-    roadAddress?: string;
-    jibunAddress?: string;
-    zonecode?: string;
-  };
+  const hasAnySelectedAddress = useMemo(() => {
+    const hasStart = (draft?.startAddr ?? "").trim().length > 0;
+    const hasEnd = (draft?.endAddr ?? "").trim().length > 0;
+    const hasWaypoint = waypoints.some((waypoint) => (waypoint?.addr ?? "").trim().length > 0);
+    return hasStart || hasEnd || hasWaypoint;
+  }, [draft?.endAddr, draft?.startAddr, waypoints]);
 
   const openPostcode = (type: "start" | "end" | number) => {
     setTargetField(type);
     setIsPostcodeOpen(true);
   };
 
-  const closePostcode = () => {
+  const closePostcode = useCallback(() => {
     setIsPostcodeOpen(false);
     setTargetField(null);
-  };
+  }, []);
 
-  const handleAddressSelected = (data: AddressPayload) => {
+  const applyAddressToTarget = useCallback(
+    (target: AddressTarget, selectedAddress: string) => {
+      if (target === "start") {
+        patchDraft({
+          startAddr: selectedAddress,
+          originLat: undefined,
+          originLng: undefined,
+        });
+        return;
+      }
+
+      if (target === "end") {
+        patchDraft({
+          endAddr: selectedAddress,
+          destinationLat: undefined,
+          destinationLng: undefined,
+        });
+        return;
+      }
+
+      const next = (waypoints ?? []).map((waypoint) =>
+        waypoint?.id === target
+          ? {
+              ...waypoint,
+              addr: selectedAddress,
+              lat: undefined,
+              lng: undefined,
+            }
+          : waypoint
+      );
+      patchDraft({ waypoints: next });
+    },
+    [patchDraft, waypoints]
+  );
+
+  const applyCoordinatesToTarget = useCallback(
+    (target: AddressTarget, lat: number, lng: number) => {
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+      if (target === "start") {
+        patchDraft({ originLat: lat, originLng: lng });
+        return;
+      }
+
+      if (target === "end") {
+        patchDraft({ destinationLat: lat, destinationLng: lng });
+        return;
+      }
+
+      const next = (waypoints ?? []).map((waypoint) =>
+        waypoint?.id === target
+          ? {
+              ...waypoint,
+              lat,
+              lng,
+            }
+          : waypoint
+      );
+      patchDraft({ waypoints: next });
+    },
+    [patchDraft, waypoints]
+  );
+
+  const resolveCoordinatesForTask = useCallback(
+    async (task: CoordinateResolveTask) => {
+      const requestId = coordRequestIdRef.current + 1;
+      coordRequestIdRef.current = requestId;
+      setIsResolvingCoords(true);
+      setCoordError(null);
+
+      const input: ResolveAddressCoordinatesInput = {
+        addressText: task?.addressText,
+        placeId: task?.placeId,
+        details: task?.details,
+      };
+
+      try {
+        const result = await resolveAddressCoordinates(input);
+        if (coordRequestIdRef.current !== requestId) return;
+
+        const lat = result?.coordinates?.lat;
+        const lng = result?.coordinates?.lng;
+        const hasCoordinates = Number.isFinite(lat) && Number.isFinite(lng);
+
+        if (hasCoordinates) {
+          applyCoordinatesToTarget(task.target, Number(lat), Number(lng));
+          setCoordError(null);
+          return;
+        }
+
+        setCoordError(
+          (result?.errorMessage ?? "").trim() || "선택한 주소의 좌표를 찾지 못했습니다. 다시 시도해 주세요."
+        );
+      } catch {
+        if (coordRequestIdRef.current !== requestId) return;
+        setCoordError("주소 좌표 조회 중 오류가 발생했습니다. 다시 시도해 주세요.");
+      } finally {
+        if (coordRequestIdRef.current === requestId) {
+          setIsResolvingCoords(false);
+        }
+      }
+    },
+    [applyCoordinatesToTarget]
+  );
+
+  const retryResolveCoordinates = useCallback(() => {
+    if (!coordTask) return;
+    void resolveCoordinatesForTask(coordTask);
+  }, [coordTask, resolveCoordinatesForTask]);
+
+  const handleAddressSelected = useCallback((data: AddressSelectionPayload) => {
     const selectedAddress = String(data?.address ?? data?.roadAddress ?? data?.jibunAddress ?? "").trim();
     if (!selectedAddress) {
       closePostcode();
       return;
     }
 
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    
-    if (targetField === "start") {
-      patchDraft({ startAddr: selectedAddress });
-    } else if (targetField === "end") {
-      patchDraft({ endAddr: selectedAddress });
-    } else if (typeof targetField === "number") {
-      const next = (waypoints || []).map((w) => 
-        (w.id === targetField ? { ...w, addr: selectedAddress } : w)
-      );
-      patchDraft({ waypoints: next });
-    }
+    const selectedTarget = targetField;
     closePostcode();
-  };
+
+    if (selectedTarget === null) return;
+
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    applyAddressToTarget(selectedTarget, selectedAddress);
+
+    const placeId = String(data?.placeId ?? data?.place_id ?? "").trim();
+    const task: CoordinateResolveTask = {
+      target: selectedTarget,
+      addressText: selectedAddress,
+      placeId: placeId || undefined,
+      details: data?.details,
+    };
+    setCoordTask(task);
+    void resolveCoordinatesForTask(task);
+  }, [applyAddressToTarget, closePostcode, resolveCoordinatesForTask, targetField]);
 
   // --- Handlers ---
   const addWaypoint = () => {
@@ -279,6 +422,23 @@ export function QuoteCreateStep1() {
       <ScrollView {...QUOTE_SCROLL_VIEW_PROPS} contentContainerStyle={styles.container}>
         {/* 1. 경로 입력 (타임라인) */}
         <View>
+          <View style={styles.statusWrap}>
+            {isResolvingCoords ? (
+              <AppSpinner label="주소 좌표를 확인하는 중입니다." />
+            ) : coordError ? (
+              <AppErrorState
+                title="좌표를 확인하지 못했어요"
+                description={coordError}
+                retryLabel="다시 시도"
+                onRetry={retryResolveCoordinates}
+              />
+            ) : !hasAnySelectedAddress ? (
+              <AppErrorState
+                title="주소를 검색해 주세요."
+                description="출발지, 도착지 또는 경유지를 선택하면 좌표가 자동으로 입력됩니다."
+              />
+            ) : null}
+          </View>
           <View style={styles.routeCard}>
                <View style={styles.sectionHeader}>
             <Ionicons name="map-outline" size={18} color={theme.colors.brandPrimary} />
@@ -327,7 +487,13 @@ export function QuoteCreateStep1() {
               </View>
 
               {/* [경유지 리스트] */}
-              {waypoints.map((wp, idx) => (
+              {waypoints.map((wp, idx) => {
+                const waypointAddress = String(wp?.addr ?? "").trim();
+                const waypointDetail = String(wp?.detail ?? "");
+                const waypointName = String(wp?.name ?? "");
+                const waypointPhone = String(wp?.phone ?? "");
+
+                return (
                   <View key={wp.id} style={styles.routeRow}>
                       <View style={styles.timelineCol}>
                           <View style={[styles.nodeIcon, styles.nodeVia]}>
@@ -343,33 +509,32 @@ export function QuoteCreateStep1() {
                               </Pressable>
                           </View>
 
-                          <Pressable onPress={() => openPostcode(wp.id)} style={[styles.addrBtn, wp.addr ? styles.addrBtnFilled : undefined]}>
-                              <AppText style={[styles.addrText, wp.addr && styles.addrTextFilled]} numberOfLines={1}>
-                                  {wp.addr || "경유지 주소 검색"}
+                          <Pressable onPress={() => openPostcode(wp.id)} style={[styles.addrBtn, waypointAddress ? styles.addrBtnFilled : undefined]}>
+                              <AppText style={[styles.addrText, waypointAddress && styles.addrTextFilled]} numberOfLines={1}>
+                                  {waypointAddress || "경유지 주소 검색"}
                               </AppText>
-                              <Ionicons name="search" size={16} color={wp.addr ? theme.colors.brandPrimary : theme.colors.textMuted} />
+                              <Ionicons name="search" size={16} color={waypointAddress ? theme.colors.brandPrimary : theme.colors.textMuted} />
                           </Pressable>
 
-                          {wp.addr && (
-                              <View style={styles.formBox}>
-                                  <AppInput placeholder="상세 주소" value={wp.detail} onChangeText={v => updateWaypoint(wp.id, { detail: v })} shellStyle={styles.inputShell} />
-                                  <View style={styles.rowHalf}>
-                                      <AppInput placeholder="담당자" value={wp.name} onChangeText={v => updateWaypoint(wp.id, { name: v })} shellStyle={styles.inputShell} containerStyle={{ flex: 1 }} />
-                                      <AppInput
-                                        placeholder="연락처"
-                                        keyboardType="phone-pad"
-                                        value={wp.phone}
-                                        onChangeText={v => updateWaypoint(wp.id, { phone: formatPhoneNumber(v) })}
-                                        maxLength={13}
-                                        shellStyle={styles.inputShell}
-                                        containerStyle={{ flex: 1 }}
-                                      />
-                                  </View>
+                          <View style={styles.formBox}>
+                              <AppInput placeholder="상세 주소" value={waypointDetail} onChangeText={v => updateWaypoint(wp.id, { detail: v })} shellStyle={styles.inputShell} />
+                              <View style={styles.rowHalf}>
+                                  <AppInput placeholder="담당자" value={waypointName} onChangeText={v => updateWaypoint(wp.id, { name: v })} shellStyle={styles.inputShell} containerStyle={{ flex: 1 }} />
+                                  <AppInput
+                                    placeholder="연락처"
+                                    keyboardType="phone-pad"
+                                    value={waypointPhone}
+                                    onChangeText={v => updateWaypoint(wp.id, { phone: formatPhoneNumber(v) })}
+                                    maxLength={13}
+                                    shellStyle={styles.inputShell}
+                                    containerStyle={{ flex: 1 }}
+                                  />
                               </View>
-                          )}
+                          </View>
                       </View>
                   </View>
-              ))}
+                );
+              })}
 
               {/* [경유지 추가 버튼] */}
               {canAddWaypoint && (
@@ -502,7 +667,7 @@ export function QuoteCreateStep1() {
       {/* [추가] 주소 검색 모달 */}
       <PostcodeModal
         visible={isPostcodeOpen}
-        onClose={() => setIsPostcodeOpen(false)}
+        onClose={closePostcode}
         onSelected={handleAddressSelected}
       />
     </>

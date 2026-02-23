@@ -18,14 +18,17 @@ import type {
 import { apiClient } from "@/shared/lib/api/apiClient";
 import {
   createQuote as createQuoteGenerated,
+  deleteQuote as deleteQuoteGenerated,
   getQuote as getQuoteGenerated,
   listQuotes as listQuotesGenerated,
+  updateQuote as updateQuoteGenerated,
 } from "@/shared/api/generated/quote-controller/quote-controller";
 import { getShipperQuoteCreatePath, isMockQuoteEnabled } from "@/shared/lib/config/env";
 
 export interface QuoteApi {
   listShipperQuotes: () => Promise<QuoteListItem[]>;
   getShipperQuoteDetail: (quoteId: number) => Promise<QuoteDetailResponse>;
+  getShipperQuoteDetailByIdentifier: (quoteIdentifier: string) => Promise<QuoteDetailResponse>;
   createShipperQuote: (payload: QuoteCreateRequestDto) => Promise<QuoteCreateResponseDto>;
   updateShipperQuote: (quoteId: number, payload: QuoteUpdateRequestDto) => Promise<QuoteUpdateResponse>;
   deleteShipperQuote: (quoteId: number) => Promise<void>;
@@ -105,6 +108,8 @@ function safeDateString(input: unknown, fallback: string): string {
 
 function parseStatus(input: unknown): QuoteStatusApi {
   const raw = safeString(input, "").toUpperCase();
+  if (raw === "CANCELLED" || raw === "CANCEL" || raw === "CANCELED") return "CANCELED";
+  if (raw === "COMPLETED" || raw === "DONE" || raw === "FINISHED") return "DROPOFF";
   return (QUOTE_STATUS.find((status) => status === raw) ?? "OPEN") as QuoteStatusApi;
 }
 
@@ -280,9 +285,11 @@ function toQuoteListItem(input: unknown, fallbackId = 0): QuoteListItem {
   const source = asObject(input as QuoteListItemDto);
   const nowIso = new Date().toISOString();
   const quoteId = pickQuoteId(source, fallbackId);
+  const quotePublicIdRaw = safeString(source.quotePublicId, "");
 
   return {
     quoteId,
+    quotePublicId: quotePublicIdRaw ? quotePublicIdRaw : undefined,
     truckId: Math.max(0, safeInt(source.truckId, 0)),
     originAddress: safeString(source.originAddress, ""),
     destinationAddress: safeString(source.destinationAddress, ""),
@@ -350,12 +357,34 @@ function normalizeQuoteId(quoteId: number): number {
   return Math.max(0, Math.trunc(quoteId));
 }
 
+function normalizeQuoteIdentifier(input: unknown): string {
+  if (typeof input === "string") return input.trim();
+  const numeric = normalizeQuoteId(safeNumber(input, 0));
+  if (numeric > 0) return String(numeric);
+  return "";
+}
+
 function buildQuoteDetailPath(quoteId: number): string {
   const safeQuoteId = normalizeQuoteId(quoteId);
   return safeQuoteId > 0 ? `${SHIPPER_QUOTES_PATH}/${safeQuoteId}` : SHIPPER_QUOTES_PATH;
 }
 
 function createRealQuoteApi(): QuoteApi {
+  const fetchQuoteDetailByIdentifier = async (quoteIdentifier: string): Promise<QuoteDetailResponse> => {
+    const safeIdentifier = normalizeQuoteIdentifier(quoteIdentifier);
+    if (!safeIdentifier) return toQuoteDetail({}, 0);
+    const fallbackQuoteId = normalizeQuoteId(Number(safeIdentifier));
+
+    const data = await getQuoteGenerated(safeIdentifier);
+    const detailRaw = (data ?? {}) as { stops?: unknown };
+    const detailStopsLength = Array.isArray(detailRaw.stops) ? detailRaw.stops.length : 0;
+    quoteDebugLog("detail.response", {
+      quoteIdentifier: safeIdentifier,
+      stopsLength: detailStopsLength,
+    });
+    return toQuoteDetail(data, fallbackQuoteId);
+  };
+
   return {
     async listShipperQuotes(): Promise<QuoteListItem[]> {
       const data = await listQuotesGenerated();
@@ -365,15 +394,11 @@ function createRealQuoteApi(): QuoteApi {
     async getShipperQuoteDetail(quoteId: number): Promise<QuoteDetailResponse> {
       const safeQuoteId = normalizeQuoteId(quoteId);
       if (safeQuoteId <= 0) return toQuoteDetail({}, 0);
+      return fetchQuoteDetailByIdentifier(String(safeQuoteId));
+    },
 
-      const data = await getQuoteGenerated(String(safeQuoteId));
-      const detailRaw = (data ?? {}) as { stops?: unknown };
-      const detailStopsLength = Array.isArray(detailRaw.stops) ? detailRaw.stops.length : 0;
-      quoteDebugLog("detail.response", {
-        quoteId: safeQuoteId,
-        stopsLength: detailStopsLength,
-      });
-      return toQuoteDetail(data, safeQuoteId);
+    async getShipperQuoteDetailByIdentifier(quoteIdentifier: string): Promise<QuoteDetailResponse> {
+      return fetchQuoteDetailByIdentifier(quoteIdentifier);
     },
 
     async createShipperQuote(payload: QuoteCreateRequestDto): Promise<QuoteCreateResponseDto> {
@@ -392,14 +417,26 @@ function createRealQuoteApi(): QuoteApi {
       if (safeQuoteId <= 0) return toQuoteDetail({}, 0);
 
       const safePayload = sanitizeQuotePayload((payload ?? {}) as QuoteUpdateRequestDto, true);
-      const res = await apiClient.put(buildQuoteDetailPath(safeQuoteId), safePayload);
-      return toQuoteDetail((res as { data?: unknown })?.data, safeQuoteId);
+      try {
+        const data = await updateQuoteGenerated(
+          String(safeQuoteId),
+          safePayload as unknown as Parameters<typeof updateQuoteGenerated>[1]
+        );
+        return toQuoteDetail(data, safeQuoteId);
+      } catch {
+        const res = await apiClient.put(buildQuoteDetailPath(safeQuoteId), safePayload);
+        return toQuoteDetail((res as { data?: unknown })?.data, safeQuoteId);
+      }
     },
 
     async deleteShipperQuote(quoteId: number): Promise<void> {
       const safeQuoteId = normalizeQuoteId(quoteId);
       if (safeQuoteId <= 0) return;
-      await apiClient.delete(buildQuoteDetailPath(safeQuoteId));
+      try {
+        await deleteQuoteGenerated(String(safeQuoteId));
+      } catch {
+        await apiClient.delete(buildQuoteDetailPath(safeQuoteId));
+      }
     },
   };
 }
@@ -412,6 +449,7 @@ function buildMockListItem(quoteId: number): QuoteListItem {
   const safeQuoteId = normalizeQuoteId(quoteId) || 1;
   return {
     quoteId: safeQuoteId,
+    quotePublicId: `mock-quote-${safeQuoteId}`,
     truckId: 1,
     originAddress: "서울특별시 강남구",
     destinationAddress: "경기도 성남시 분당구",
@@ -510,6 +548,13 @@ function createMockQuoteApi(): QuoteApi {
       return buildMockDetail(quoteId);
     },
 
+    async getShipperQuoteDetailByIdentifier(quoteIdentifier: string): Promise<QuoteDetailResponse> {
+      const safeIdentifier = normalizeQuoteIdentifier(quoteIdentifier);
+      const parsedQuoteId = normalizeQuoteId(Number(safeIdentifier));
+      const fallbackQuoteId = parsedQuoteId > 0 ? parsedQuoteId : 1;
+      return buildMockDetail(fallbackQuoteId);
+    },
+
     async createShipperQuote(payload: QuoteCreateRequestDto): Promise<QuoteCreateResponseDto> {
       const safePayload = sanitizeQuotePayload((payload ?? {}) as QuoteCreateRequestDto, false);
       const seed =
@@ -539,6 +584,10 @@ export function listShipperQuotes(): Promise<QuoteListItem[]> {
 
 export function getShipperQuoteDetail(quoteId: number): Promise<QuoteDetailResponse> {
   return quoteApi.getShipperQuoteDetail(quoteId);
+}
+
+export function getShipperQuoteDetailByIdentifier(quoteIdentifier: string): Promise<QuoteDetailResponse> {
+  return quoteApi.getShipperQuoteDetailByIdentifier(quoteIdentifier);
 }
 
 export function createShipperQuote(payload: QuoteCreateRequestDto): Promise<QuoteCreateResponseDto> {

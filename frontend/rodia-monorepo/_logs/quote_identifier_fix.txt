@@ -1,0 +1,182 @@
+﻿[STEP 0] Preflight
+## Commands
+1) git status --porcelain
+2) node -v
+3) pnpm -v
+4) pnpm -C apps/mobile exec pnpm -v
+
+## Output
+### git status --porcelain
+ M frontend/rodia-monorepo/apps/mobile/src/features/quote/api/quote-api.ts
+ M frontend/rodia-monorepo/apps/mobile/src/pages/shipper/matchings/MatchingListPage.tsx
+ M frontend/rodia-monorepo/apps/mobile/src/pages/shipper/quotes/QuoteDetailPage.tsx
+?? frontend/rodia-monorepo/_logs/
+?? frontend/rodia-monorepo/apps/mobile/app/(shipper)/quotes/edit/
+?? frontend/rodia-monorepo/apps/mobile/src/features/matching/
+?? frontend/rodia-monorepo/apps/mobile/src/pages/shipper/quotes/QuoteEditPage.tsx
+
+### node -v
+v24.11.0
+
+### pnpm -v
+9.0.0
+
+### pnpm -C apps/mobile exec pnpm -v
+9.0.0
+
+[STEP 1] Confirm identifier type from OpenAPI
+## Commands
+1) node -e parse apps/mobile/.orval/openapi.fixed.json for GET /api/shipper/quotes/{...}
+2) Select-String in generated quote-controller.ts for getQuote signature and URL template
+
+## Output
+### OpenAPI parsed
+path=/api/shipper/quotes/{quoteIdentifier}
+operationId=getQuote
+param.name=quoteIdentifier
+schema.type=string
+schema.format=
+
+### Generated quote-controller signature lines
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\api\generated\quote-controller\quote-controller.ts:16:   export const getQuote = (
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\api\generated\quote-controller\quote-controller.ts:17:     quoteIdentifier: string,
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\api\generated\quote-controller\quote-controller.ts:20:       {url: `/api/shipper/quotes/${quoteIdentifier}`, method: 'GET',
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\api\generated\quote-controller\quote-controller.ts:26:     quoteIdentifier: string,
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\api\generated\quote-controller\quote-controller.ts:30:       {url: `/api/shipper/quotes/${quoteIdentifier}`, method: 'PUT',
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\api\generated\quote-controller\quote-controller.ts:38:     quoteIdentifier: string,
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\api\generated\quote-controller\quote-controller.ts:41:       {url: `/api/shipper/quotes/${quoteIdentifier}`, method: 'DELETE'
+
+[STEP 2] Route/navigation fix to use quotePublicId
+## Step 2-1 Commands
+1) Select-String QuoteListPage.tsx for router.push/quotes/[id]/params usage
+2) Select-String app/(shipper)/quotes/index.tsx for detail route wiring
+
+## Step 2-1 Output
+### QuoteListPage.tsx
+apps/mobile/src/pages/shipper/quotes/QuoteListPage.tsx:866:       router.push({ pathname: "/(shipper)/quotes/[id]", params: { id: String(quoteId), status } });
+apps/mobile/src/pages/shipper/quotes/QuoteListPage.tsx:878:           onPress={() => router.push("/(shipper)/quotes/create")}
+apps/mobile/src/pages/shipper/quotes/QuoteListPage.tsx:954:               action={{ label: "견적 요청하기", onPress: () => router.push("/(shipper)/quotes/create") }}
+
+### app/(shipper)/quotes/index.tsx
+apps/mobile/app/(shipper)/quotes/index.tsx:4: import QuoteListPage from "@/pages/shipper/quotes/QuoteListPage";
+apps/mobile/app/(shipper)/quotes/index.tsx:6: export default function ShipperQuotesRoute() {
+apps/mobile/app/(shipper)/quotes/index.tsx:7:   return <QuoteListPage />;
+
+## Step 2-2/2-3/2-4 Output (applied changes evidence)
+### QuoteListPage detail navigation now prefers quotePublicId
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteListPage.tsx:81:   onPress: (quoteId: number, quotePublicId: string | undefined, status: QuoteStatusApi) => void;
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteListPage.tsx:716:       onPress={() => onPress(item.quote.quoteId, item.quote.quotePublicId, item.quote.status)}
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteListPage.tsx:868:       const routeIdentifier = safePublicId || String(quoteId);
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteListPage.tsx:869:       router.push({ pathname: "/(shipper)/quotes/[id]", params: { id: routeIdentifier, status } });
+
+### QuoteDetailPage route param handling uses string identifier
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteDetailPage.tsx:429: function parseRouteIdentifier(value: string | string[] | undefined): string {
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteDetailPage.tsx:434: function parsePositiveIntParam(value: string | string[] | undefined): number {
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteDetailPage.tsx:752:   const quoteIdentifier = parseRouteIdentifier(params?.id);
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteDetailPage.tsx:753:   const quoteId = parsePositiveIntParam(params?.id);
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteDetailPage.tsx:754:   const view = useQuoteDetail(quoteIdentifier);
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteDetailPage.tsx:798:     const fromRoute = parsePositiveIntParam(params?.matchId);
+
+### quote-api added identifier-based detail function
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\quote\api\quote-api.ts:31:   getShipperQuoteDetailByIdentifier: (quoteIdentifier: string) => Promise<QuoteDetailResponse>;
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\quote\api\quote-api.ts:288:   const quotePublicIdRaw = safeString(source.quotePublicId, "");
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\quote\api\quote-api.ts:292:     quotePublicId: quotePublicIdRaw ? quotePublicIdRaw : undefined,
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\quote\api\quote-api.ts:318:   const quotePublicIdRaw = safeString(source.quotePublicId, "");
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\quote\api\quote-api.ts:322:     quotePublicId: quotePublicIdRaw ? quotePublicIdRaw : undefined,
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\quote\api\quote-api.ts:360: function normalizeQuoteIdentifier(input: unknown): string {
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\quote\api\quote-api.ts:382:       return this.getShipperQuoteDetailByIdentifier(String(safeQuoteId));
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\quote\api\quote-api.ts:385:     async getShipperQuoteDetailByIdentifier(quoteIdentifier: string): Promise<QuoteDetailResponse> {
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\quote\api\quote-api.ts:386:       const safeIdentifier = normalizeQuoteIdentifier(quoteIdentifier);
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\quote\api\quote-api.ts:390:       const data = await getQuoteGenerated(safeIdentifier);
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\quote\api\quote-api.ts:448:     quotePublicId: `mock-quote-${safeQuoteId}`,
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\quote\api\quote-api.ts:498:     quotePublicId: undefined,
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\quote\api\quote-api.ts:547:     async getShipperQuoteDetailByIdentifier(quoteIdentifier: string): Promise<QuoteDetailResponse> {
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\quote\api\quote-api.ts:548:       const safeIdentifier = normalizeQuoteIdentifier(quoteIdentifier);
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\quote\api\quote-api.ts:585: export function getShipperQuoteDetailByIdentifier(quoteIdentifier: string): Promise<QuoteDetailResponse> {
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\quote\api\quote-api.ts:586:   return quoteApi.getShipperQuoteDetailByIdentifier(quoteIdentifier);
+
+### app/(shipper)/quotes/[id].tsx
+- Route file still delegates rendering to QuoteDetailPage; identifier parsing is handled in QuoteDetailPage.
+
+[STEP 3] Debug route for Authorization/header proof
+## Commands
+1) Select-String apps/mobile/app/debug/orval-smoke.tsx for token mask / quote detail call / auth-present boolean
+2) Select-String debugLogStore API usage lines
+
+## Output
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\app\debug\orval-smoke.tsx:5: import { getShipperQuoteDetailByIdentifier, listShipperQuotes } from "@/features/quote/api";
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\app\debug\orval-smoke.tsx:20: function maskFirst6(token: string): string {
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\app\debug\orval-smoke.tsx:28: function isAuthorizationPresent(group: DebugLogGroup | undefined): boolean {
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\app\debug\orval-smoke.tsx:42:   const groups = debugLogStore.getGroupSnapshot();
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\app\debug\orval-smoke.tsx:66:   const [requestPath, setRequestPath] = React.useState("-");
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\app\debug\orval-smoke.tsx:67:   const [requestStatus, setRequestStatus] = React.useState("-");
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\app\debug\orval-smoke.tsx:72:       const token = String((await tokenStorage.getAccessToken()) ?? "").trim();
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\app\debug\orval-smoke.tsx:75:       const preview = present ? maskFirst6(token) : "(empty)";
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\app\debug\orval-smoke.tsx:99:       const detail = await getShipperQuoteDetailByIdentifier(targetIdentifier);
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\app\debug\orval-smoke.tsx:107:       setRequestPath(String(latest?.path ?? "-"));
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\app\debug\orval-smoke.tsx:108:       setRequestStatus(String(latest?.status ?? "-"));
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\app\debug\orval-smoke.tsx:109:       setAuthorizationPresent(isAuthorizationPresent(latest));
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\app\debug\orval-smoke.tsx:120:             <AppButton title="Show token" onPress={onShowToken} />
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\app\debug\orval-smoke.tsx:136:             <AppButton title="Call quote detail (identifier)" onPress={onCallQuoteDetail} loading={isCalling} />
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\app\debug\orval-smoke.tsx:138:             <AppText>{`lastRequest.path: ${requestPath}`}</AppText>
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\app\debug\orval-smoke.tsx:139:             <AppText>{`lastRequest.status: ${requestStatus}`}</AppText>
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\app\debug\orval-smoke.tsx:140:             <AppText>{`Authorization present: ${authorizationPresent}`}</AppText>
+
+### debugLogStore access
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\debug\debugLogStore.ts:199:   getGroupSnapshot(): DebugLogGroup[] {
+
+[STEP 4] Verify
+## Commands
+1) pnpm -C apps/mobile exec tsc --noEmit --incremental false
+
+## Output
+### tsc
+exitCode=0
+
+## Manual verification steps
+1) Shipper 로그인
+2) Quote list -> detail 진입 시 route param(id)이 quotePublicId(UUID) 우선인지 확인 (없으면 numeric fallback)
+3) 네트워크에서 GET /api/shipper/quotes/{identifier} 호출 확인 (identifier가 UUID 문자열인지 확인)
+4) debug/orval-smoke 진입
+5) Show token 클릭 -> present: true 확인
+6) Call quote detail (identifier) 클릭 -> lastRequest.path/status 및 Authorization present: true 확인
+7) 기대 결과: 401이 아닌 200(또는 2xx)
+
+## Deliverable
+### Changed files (paths only)
+frontend/rodia-monorepo/apps/mobile/app/(shipper)/quotes/edit/
+frontend/rodia-monorepo/apps/mobile/app/debug/orval-smoke.tsx
+frontend/rodia-monorepo/apps/mobile/src/entities/quote/model/quote.types.ts
+frontend/rodia-monorepo/apps/mobile/src/features/matching/
+frontend/rodia-monorepo/apps/mobile/src/features/quote/api/quote-api.ts
+frontend/rodia-monorepo/apps/mobile/src/features/quote/model/useQuoteDetail.ts
+frontend/rodia-monorepo/apps/mobile/src/pages/shipper/matchings/MatchingListPage.tsx
+frontend/rodia-monorepo/apps/mobile/src/pages/shipper/quotes/QuoteDetailPage.tsx
+frontend/rodia-monorepo/apps/mobile/src/pages/shipper/quotes/QuoteEditPage.tsx
+frontend/rodia-monorepo/apps/mobile/src/pages/shipper/quotes/QuoteListPage.tsx
+
+### Identifier decision
+- Quote detail now uses quotePublicId-preferred identifier. If quotePublicId is missing, fallback is quoteId string.
+
+### Proof summary
+- OpenAPI param type for /api/shipper/quotes/{quoteIdentifier}: string
+- Debug route now exposes Authorization present boolean and last quote detail request path/status without token leakage.
+- Runtime proof requires manual in-app check (steps above).
+
+### Final decision
+- Applied fix path: B (identifier mismatch).
+- OpenAPI requires string quoteIdentifier, so detail call now uses quotePublicId-preferred route identifier.
+- Authorization header runtime proof is collected through debug/orval-smoke UI (CLI cannot execute in-app request).
+
+### Changed files in this run (paths only)
+apps/mobile/src/entities/quote/model/quote.types.ts
+apps/mobile/src/features/quote/api/quote-api.ts
+apps/mobile/src/features/quote/model/useQuoteDetail.ts
+apps/mobile/src/pages/shipper/quotes/QuoteListPage.tsx
+apps/mobile/src/pages/shipper/quotes/QuoteDetailPage.tsx
+apps/mobile/app/debug/orval-smoke.tsx
+
+### Post-fix check (quote-api detail resolver)
+apps/mobile/src/features/quote/api/quote-api.ts:373:   const fetchQuoteDetailByIdentifier = async (quoteIdentifier: string): Promise<QuoteDetailResponse> => {
+apps/mobile/src/features/quote/api/quote-api.ts:397:       return fetchQuoteDetailByIdentifier(String(safeQuoteId));
+apps/mobile/src/features/quote/api/quote-api.ts:401:       return fetchQuoteDetailByIdentifier(quoteIdentifier);

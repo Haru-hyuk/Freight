@@ -1,0 +1,332 @@
+﻿[ENV]
+- node: v24.11.0
+- pnpm: 9.0.0
+- pnpm(apps/mobile): 9.0.0
+
+[GIT STATUS]
+```
+ M frontend/rodia-monorepo/apps/mobile/app/debug/orval-smoke.tsx
+ M frontend/rodia-monorepo/apps/mobile/src/entities/quote/model/quote.types.ts
+ M frontend/rodia-monorepo/apps/mobile/src/features/quote/api/quote-api.ts
+ M frontend/rodia-monorepo/apps/mobile/src/features/quote/model/useQuoteDetail.ts
+ M frontend/rodia-monorepo/apps/mobile/src/pages/shipper/matchings/MatchingListPage.tsx
+ M frontend/rodia-monorepo/apps/mobile/src/pages/shipper/quotes/QuoteDetailPage.tsx
+ M frontend/rodia-monorepo/apps/mobile/src/pages/shipper/quotes/QuoteListPage.tsx
+ M frontend/rodia-monorepo/apps/mobile/src/shared/lib/debug/sanitize.ts
+?? frontend/rodia-monorepo/_logs/
+?? frontend/rodia-monorepo/apps/mobile/app/(shipper)/quotes/edit/
+?? frontend/rodia-monorepo/apps/mobile/src/features/matching/
+?? frontend/rodia-monorepo/apps/mobile/src/pages/shipper/quotes/QuoteEditPage.tsx
+```
+
+[MATCHES/ME TRACE RESULTS]
+검색 키워드: /api/shipper/matches/me, shipper/matches, matches/me, match-controller/generated, features/matching
+```
+# apps/mobile/src/features/matching/api/shipper-match-api.ts
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\matching\api\shipper-match-api.ts:1: import { apiClient } from "@/shared/lib/api/apiClient";
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\matching\api\shipper-match-api.ts:3: import { cancelMatch as cancelMatchGenerated, getMyMatches as getMyMatchesGenerated } from "@/shared/api/generated/shipper-match-controller/shipper-match-controller";
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\matching\api\shipper-match-api.ts:24: const SHIPPER_MATCHES_PATH = "/api/shipper/matches";
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\matching\api\shipper-match-api.ts:118:       const data = await getMyMatchesGenerated();
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\matching\api\shipper-match-api.ts:127:         await cancelMatchGenerated(String(safeMatchId));
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\features\matching\api\shipper-match-api.ts:129:         await apiClient.delete(`${SHIPPER_MATCHES_PATH}/${safeMatchId}`);
+
+# apps/mobile/src/shared/api/generated/shipper-match-controller/shipper-match-controller.ts
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\api\generated\shipper-match-controller\shipper-match-controller.ts:11: import { customInstance } from '../../orval/custom-instance';
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\api\generated\shipper-match-controller\shipper-match-controller.ts:18:       return customInstance<Blob>(
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\api\generated\shipper-match-controller\shipper-match-controller.ts:19:       {url: `/api/shipper/matches`, method: 'POST',
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\api\generated\shipper-match-controller\shipper-match-controller.ts:29:       return customInstance<Blob>(
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\api\generated\shipper-match-controller\shipper-match-controller.ts:30:       {url: `/api/shipper/matches/${matchId}`, method: 'GET',
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\api\generated\shipper-match-controller\shipper-match-controller.ts:35:   export const cancelMatch = (
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\api\generated\shipper-match-controller\shipper-match-controller.ts:38:       return customInstance<void>(
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\api\generated\shipper-match-controller\shipper-match-controller.ts:39:       {url: `/api/shipper/matches/${matchId}`, method: 'DELETE'
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\api\generated\shipper-match-controller\shipper-match-controller.ts:43:   export const getMyMatches = (
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\api\generated\shipper-match-controller\shipper-match-controller.ts:46:       return customInstance<Blob>(
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\api\generated\shipper-match-controller\shipper-match-controller.ts:47:       {url: `/api/shipper/matches/me`, method: 'GET',
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\api\generated\shipper-match-controller\shipper-match-controller.ts:54: export type CancelMatchResult = NonNullable<Awaited<ReturnType<typeof cancelMatch>>>
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\api\generated\shipper-match-controller\shipper-match-controller.ts:55: export type GetMyMatchesResult = NonNullable<Awaited<ReturnType<typeof getMyMatches>>>
+
+# apps/mobile/src/shared/api/generated/quote-controller/quote-controller.ts
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\api\generated\quote-controller\quote-controller.ts:12: import { customInstance } from '../../orval/custom-instance';
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\api\generated\quote-controller\quote-controller.ts:16:   export const getQuote = (
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\api\generated\quote-controller\quote-controller.ts:19:       return customInstance<Blob>(
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\api\generated\quote-controller\quote-controller.ts:29:       return customInstance<Blob>(
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\api\generated\quote-controller\quote-controller.ts:40:       return customInstance<void>(
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\api\generated\quote-controller\quote-controller.ts:48:       return customInstance<Blob>(
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\api\generated\quote-controller\quote-controller.ts:57:       return customInstance<Blob>(
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\api\generated\quote-controller\quote-controller.ts:68:       return customInstance<Blob>(
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\api\generated\quote-controller\quote-controller.ts:76:   export type GetQuoteResult = NonNullable<Awaited<ReturnType<typeof getQuote>>>
+
+# apps/mobile/src/shared/api/orval/custom-instance.ts
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\api\orval\custom-instance.ts:3: import { apiClient } from "@/shared/lib/api/apiClient";
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\api\orval\custom-instance.ts:11: export async function customInstance<T>(config: AxiosRequestConfig): Promise<T> {
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\api\orval\custom-instance.ts:18:   const response = await apiClient.request<T>(nextConfig);
+
+# apps/mobile/.orval/openapi.fixed.json
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\.orval\openapi.fixed.json:14:     "/api/shipper/quotes/{quoteIdentifier}": {
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\.orval\openapi.fixed.json:19:         "operationId": "getQuote",
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\.orval\openapi.fixed.json:425:     "/api/shipper/matches": {
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\.orval\openapi.fixed.json:428:           "shipper-match-controller"
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\.orval\openapi.fixed.json:709:           "driver-match-controller"
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\.orval\openapi.fixed.json:1139:     "/api/shipper/matches/{matchId}": {
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\.orval\openapi.fixed.json:1142:           "shipper-match-controller"
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\.orval\openapi.fixed.json:1170:           "shipper-match-controller"
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\.orval\openapi.fixed.json:1172:         "operationId": "cancelMatch",
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\.orval\openapi.fixed.json:1190:     "/api/shipper/matches/{matchId}/photos": {
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\.orval\openapi.fixed.json:1223:     "/api/shipper/matches/me": {
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\.orval\openapi.fixed.json:1226:           "shipper-match-controller"
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\.orval\openapi.fixed.json:1228:         "operationId": "getMyMatches",
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\.orval\openapi.fixed.json:1292:           "driver-match-controller"
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\.orval\openapi.fixed.json:1315:           "driver-match-controller"
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\.orval\openapi.fixed.json:1343:           "driver-match-controller"
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\.orval\openapi.fixed.json:1345:         "operationId": "cancelMatch_1",
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\.orval\openapi.fixed.json:1363:     "/api/driver/matches/me": {
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\.orval\openapi.fixed.json:1366:           "driver-match-controller"
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\.orval\openapi.fixed.json:1368:         "operationId": "getMyMatches_1",
+
+# apps/mobile/src/pages/shipper/matchings/MatchingListPage.tsx
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\matchings\MatchingListPage.tsx:7: import { cancelShipperMatch, listShipperMatches, type ShipperMatchItem } from "@/features/matching/api";
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\matchings\MatchingListPage.tsx:223:   const runCancelMatch = useCallback(
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\matchings\MatchingListPage.tsx:245:   const confirmCancelMatch = useCallback(
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\matchings\MatchingListPage.tsx:255:             void runCancelMatch(match);
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\matchings\MatchingListPage.tsx:260:     [cancellingMatchId, runCancelMatch]
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\matchings\MatchingListPage.tsx:335:                     onPress={() => confirmCancelMatch(m)}
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\matchings\MatchingListPage.tsx:348:     [cancellingMatchId, confirmCancelMatch, statusUi, styles, subtleText]
+
+# apps/mobile/src/pages/shipper/quotes/QuoteDetailPage.tsx
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteDetailPage.tsx:7: import { cancelShipperMatch, listMyShipperMatches } from "@/features/matching/api";
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteDetailPage.tsx:872:     const targetQuoteId = resolveActionQuoteId();
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteDetailPage.tsx:873:     if (targetQuoteId <= 0) {
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteDetailPage.tsx:878:     router.push({ pathname: "/(shipper)/quotes/edit/[id]", params: { id: String(targetQuoteId) } });
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteDetailPage.tsx:883:     const targetQuoteId = resolveActionQuoteId();
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteDetailPage.tsx:884:     if (targetQuoteId <= 0) {
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\shipper\quotes\QuoteDetailPage.tsx:891:       await deleteShipperQuote(targetQuoteId);
+
+```
+요약:
+- matches/me generated endpoint: GET /api/shipper/matches/me (getMyMatches).
+- shipper-match feature API는 generated(getMyMatches/cancelMatch)를 우선 호출하고 실패 시 apiClient 직접 호출로 fallback.
+- generated quote controller(getQuote)와 shipper-match controller 모두 customInstance(mutator)를 사용하고, customInstance는 apiClient 인스턴스를 사용.
+- 따라서 matches/me와 quotes/detail은 동일 interceptor 체인을 타는 구조로 확인됨.
+
+[API CLIENT AUTH INJECTION]
+apiClient.ts 발췌:
+```
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\api\apiClient.ts:9: import { getApiBaseUrl, getAuthRefreshPath, isApiDebugLogsEnabled } from "@/shared/lib/config/env";
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\api\apiClient.ts:11: import { sanitizeDeep, sanitizeHeaders } from "@/shared/lib/debug/sanitize";
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\api\apiClient.ts:109: function buildFullUrl(baseURL: string, url?: string): string {
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\api\apiClient.ts:111:   if (!u) return baseURL;
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\api\apiClient.ts:114:   const b = (baseURL ?? "").trim();
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\api\apiClient.ts:195: async function refreshAccessToken(baseURL: string): Promise<string | null> {
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\api\apiClient.ts:200:   const accessToken = await tokenStorage.getAccessToken();
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\api\apiClient.ts:205:   const refreshClient = axios.create({
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\api\apiClient.ts:206:     baseURL,
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\api\apiClient.ts:207:     timeout: 20_000,
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\api\apiClient.ts:208:     headers: { "Content-Type": "application/json" },
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\api\apiClient.ts:235:   const h: AnyObj = (config.headers ?? {}) as AnyObj;
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\api\apiClient.ts:237:   if (force || (!h.Authorization && !h.authorization)) {
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\api\apiClient.ts:238:     h.Authorization = `Bearer ${token}`;
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\api\apiClient.ts:241:   config.headers = h as any;
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\api\apiClient.ts:245:   const baseURL = (() => {
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\api\apiClient.ts:247:       const v = getApiBaseUrl?.();
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\api\apiClient.ts:254:   const client = axios.create({
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\api\apiClient.ts:255:     baseURL,
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\api\apiClient.ts:256:     timeout: 20_000,
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\api\apiClient.ts:257:     headers: { "Content-Type": "application/json" },
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\api\apiClient.ts:260:   client.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\api\apiClient.ts:266:     const fullUrl = buildFullUrl(baseURL, cfg.url);
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\api\apiClient.ts:281:             headers: sanitizeHeaders(cfg.headers),
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\api\apiClient.ts:290:     const accessToken = await tokenStorage.getAccessToken();
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\api\apiClient.ts:306:           headers: sanitizeHeaders(cfg.headers),
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\api\apiClient.ts:316:   client.interceptors.response.use(
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\api\apiClient.ts:324:       const fullUrl = buildFullUrl(baseURL, cfg.url);
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\api\apiClient.ts:357:         const fullUrl = buildFullUrl(baseURL, original.url);
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\api\apiClient.ts:372:             headers: sanitizeHeaders(original.headers),
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\api\apiClient.ts:395:       const accessToken = await tokenStorage.getAccessToken();
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\api\apiClient.ts:408:         refreshInFlight = refreshAccessToken(baseURL).finally(() => {
+```
+tokenStorage.ts 발췌:
+```
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\storage\tokenStorage.ts:1: import * as SecureStore from "expo-secure-store";
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\storage\tokenStorage.ts:8: const ACCESS_TOKEN_KEY = "auth.accessToken";
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\storage\tokenStorage.ts:9: const REFRESH_TOKEN_KEY = "auth.refreshToken";
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\storage\tokenStorage.ts:12: let cachedAccessToken: string | null = null;
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\storage\tokenStorage.ts:13: let cachedRefreshToken: string | null = null;
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\storage\tokenStorage.ts:29:     return (await SecureStore.getItemAsync(key)) ?? null;
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\storage\tokenStorage.ts:37:     await SecureStore.setItemAsync(key, value);
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\storage\tokenStorage.ts:45:     await SecureStore.deleteItemAsync(key);
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\storage\tokenStorage.ts:78:       globalThis.localStorage.removeItem(key);
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\storage\tokenStorage.ts:103: export const tokenStorage = {
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\storage\tokenStorage.ts:104:   async getAccessToken(): Promise<string | null> {
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\storage\tokenStorage.ts:105:     const cached = (cachedAccessToken ?? "").trim();
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\storage\tokenStorage.ts:106:     if (cached) return cached;
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\storage\tokenStorage.ts:108:     const fromStorage = (await getItem(ACCESS_TOKEN_KEY)) ?? "";
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\storage\tokenStorage.ts:110:     cachedAccessToken = normalized || null;
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\storage\tokenStorage.ts:111:     return cachedAccessToken;
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\storage\tokenStorage.ts:115:     const cached = (cachedRefreshToken ?? "").trim();
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\storage\tokenStorage.ts:116:     if (cached) return cached;
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\storage\tokenStorage.ts:118:     const fromStorage = (await getItem(REFRESH_TOKEN_KEY)) ?? "";
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\storage\tokenStorage.ts:120:     cachedRefreshToken = normalized || null;
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\storage\tokenStorage.ts:121:     return cachedRefreshToken;
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\storage\tokenStorage.ts:124:   async setAccessToken(token: string | null): Promise<void> {
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\storage\tokenStorage.ts:126:     cachedAccessToken = v || null;
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\storage\tokenStorage.ts:127:     if (!v) return deleteItem(ACCESS_TOKEN_KEY);
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\storage\tokenStorage.ts:128:     return setItem(ACCESS_TOKEN_KEY, v);
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\storage\tokenStorage.ts:133:     cachedRefreshToken = v || null;
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\storage\tokenStorage.ts:134:     if (!v) return deleteItem(REFRESH_TOKEN_KEY);
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\storage\tokenStorage.ts:135:     return setItem(REFRESH_TOKEN_KEY, v);
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\storage\tokenStorage.ts:140:       tokenStorage.getAccessToken(),
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\storage\tokenStorage.ts:152:     cachedAccessToken = accessToken || null;
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\storage\tokenStorage.ts:153:     cachedRefreshToken = refreshToken || null;
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\storage\tokenStorage.ts:156:       accessToken ? setItem(ACCESS_TOKEN_KEY, accessToken) : deleteItem(ACCESS_TOKEN_KEY),
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\storage\tokenStorage.ts:157:       refreshToken ? setItem(REFRESH_TOKEN_KEY, refreshToken) : deleteItem(REFRESH_TOKEN_KEY),
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\storage\tokenStorage.ts:161:   async clearTokens(): Promise<void> {
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\storage\tokenStorage.ts:162:     cachedAccessToken = null;
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\storage\tokenStorage.ts:163:     cachedRefreshToken = null;
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\storage\tokenStorage.ts:164:     await Promise.all([deleteItem(ACCESS_TOKEN_KEY), deleteItem(REFRESH_TOKEN_KEY)]);
+```
+결론:
+- matches/me 호출도 generated customInstance -> apiClient를 타므로 quotes/detail과 동일 request interceptor에서 Authorization 주입 경로를 사용.
+- quotes/detail은 200이고 matches/me만 403이면, 토큰 미주입보다는 서버 권한/정책(엔드포인트 role/predicate/ownership) 가능성이 상대적으로 높음.
+- 단, 런타임에서 실제 AuthorizationClaims가 matches/me 요청 헤더에 들어갔는지는 디버그 화면에서 확인 필요.
+
+[SANITIZE/DEBUG LOG PIPELINE]
+sanitize.ts 함수 선언/핵심:
+```
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\debug\sanitize.ts:14:   "authorization",
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\debug\sanitize.ts:43:   return normalized.includes("authorization");
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\debug\sanitize.ts:199:   if (normalized.includes("authorization")) return true;
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\debug\sanitize.ts:205: export function sanitizeHeaders(headers: unknown): AnyObj | undefined {
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\debug\sanitize.ts:227: export function sanitizeDeep(input: unknown, depth = 0): unknown {
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\debug\sanitize.ts:263: export function safeJsonPreview(input: unknown): string {
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\debug\sanitize.ts:280: - token/authorization 값은 기존대로 마스킹 유지, 대신 `<key>Claims`로 JWT 클레임(화이트리스트)만 추가합니다.
+```
+호출 추적(apiClient.ts):
+```
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\api\apiClient.ts:165:   debugLogStore.add({
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\api\apiClient.ts:184:     sanitizeDeep({
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\api\apiClient.ts:280:           request: sanitizeDeep({
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\api\apiClient.ts:281:             headers: sanitizeHeaders(cfg.headers),
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\api\apiClient.ts:305:         request: sanitizeDeep({
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\api\apiClient.ts:306:           headers: sanitizeHeaders(cfg.headers),
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\api\apiClient.ts:339:           response: sanitizeDeep(response.data),
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\api\apiClient.ts:371:           request: sanitizeDeep({
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\api\apiClient.ts:372:             headers: sanitizeHeaders(original.headers),
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\api\apiClient.ts:376:           error: sanitizeDeep(error?.response?.data ?? error?.message ?? error),
+```
+debugLogStore.ts 저장 구조:
+```
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\debug\debugLogStore.ts:6: export type DebugLogEntry = {
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\debug\debugLogStore.ts:21:   request?: unknown;
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\debug\debugLogStore.ts:22:   response?: unknown;
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\debug\debugLogStore.ts:163:   add(next: Omit<DebugLogEntry, "id" | "ts" | "requestId" | "phase"> & Partial<Pick<DebugLogEntry, "id" | "ts" | "requestId" | "phase">>) {
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\debug\debugLogStore.ts:185:     entries = [entry, ...entries];
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\debug\debugLogStore.ts:199:   getGroupSnapshot(): DebugLogGroup[] {
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\shared\lib\debug\debugLogStore.ts:212:     listeners.add(listener);
+```
+DebugLogDetailPage.tsx 렌더 경로: C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx
+```
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:8: import { debugLogStore, type DebugLogGroup } from "@/shared/lib/debug/debugLogStore";
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:9: import { safeJsonPreview } from "@/shared/lib/debug/sanitize";
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:27: function phaseSymbol(phase: "request" | "response" | "error"): string {
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:28:   if (phase === "request") return "→";
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:29:   if (phase === "response") return "←";
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:37: function pickRequestPayload(group: DebugLogGroup): AnyObj {
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:38:   const request = group.requestEntry?.request ?? group.errorEntry?.request;
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:39:   return isPlainObject(request) ? request : {};
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:60: function buildCurl(group: DebugLogGroup): string {
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:61:   const method = (group.method ?? "GET").toUpperCase();
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:62:   const payload = pickRequestPayload(group);
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:63:   const headers = isPlainObject(payload.headers) ? payload.headers : {};
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:67:   const baseUrl = (group.url ?? group.path ?? "").trim() || "https://example.invalid/path";
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:73:   for (const [key, value] of Object.entries(headers)) {
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:88: function buildSummary(group: DebugLogGroup): string {
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:89:   const method = (group.method ?? "-").toUpperCase();
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:90:   const path = (group.path ?? group.url ?? "-").trim() || "-";
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:91:   const status = typeof group.status === "number" ? String(group.status) : group.status ?? "-";
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:92:   const duration = typeof group.durationMs === "number" ? `${group.durationMs}ms` : "-";
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:93:   return `${formatTime(group.latestAt)} ${method} ${path} status=${status} duration=${duration} tag=${group.tag} requestId=${group.requestId}`;
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:197:   const text = React.useMemo(() => safeJsonPreview(props.value), [props.value]);
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:226:   const requestId = React.useMemo(() => {
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:232:   const [group, setGroup] = React.useState<DebugLogGroup | undefined>(() =>
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:233:     requestId ? debugLogStore.getGroupByRequestId(requestId) : undefined
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:239:     setGroup(requestId ? debugLogStore.getGroupByRequestId(requestId) : undefined);
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:241:       setGroup(requestId ? debugLogStore.getGroupByRequestId(requestId) : undefined);
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:243:   }, [requestId]);
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:252:     if (!group) return "-";
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:253:     return group.timeline.map((item) => phaseSymbol(item.phase)).join(" ");
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:254:   }, [group]);
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:270:   if (!group) {
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:281:           <AppText style={styles.emptyDesc}>이미 삭제되었거나 requestId가 유효하지 않습니다.</AppText>
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:288:   const summary = buildSummary(group);
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:289:   const rawJson = safeJsonPreview({
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:290:     requestId: group.requestId,
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:291:     startedAt: group.startedAt,
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:292:     latestAt: group.latestAt,
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:293:     level: group.level,
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:294:     tag: group.tag,
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:295:     method: group.method,
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:296:     path: group.path,
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:297:     url: group.url,
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:298:     status: group.status,
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:299:     durationMs: group.durationMs,
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:300:     timeline: group.timeline,
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:301:     request: group.requestEntry?.request,
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:302:     response: group.responseEntry?.response,
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:303:     error: group.errorEntry?.error,
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:305:   const curl = buildCurl(group);
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:319:               {formatTime(group.latestAt)} · {group.tag} · {typeof group.status === "number" ? group.status : group.status ?? "-"}
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:321:               {typeof group.durationMs === "number" ? `${group.durationMs}ms` : "-"}
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:324:               {(group.method ?? "-").toUpperCase()} {(group.path ?? group.url ?? "-").trim() || "-"}
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:327:             <AppText style={styles.meta}>requestId: {group.requestId}</AppText>
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:351:         <JsonSection title="Request" value={group.requestEntry?.request ?? null} />
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:352:         <JsonSection title="Response" value={group.responseEntry?.response ?? null} />
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\src\pages\debug\DebugLogDetailPage.tsx:353:         <JsonSection title="Error" value={group.errorEntry?.error ?? null} />
+```
+결론:
+- request 로그의 headers는 apiClient request interceptor에서 sanitizeHeaders를 거쳐 저장됨(Authorization 토큰은 마스킹, claims는 파싱 정보로 저장).
+- response/error payload는 sanitizeDeep(+ safeJsonPreview 경로)로 정리되어 debugLogStore에 저장됨.
+- 따라서 DebugLogDetail에서 AuthorizationClaims/response body(403 메시지) 확인이 가능해야 함.
+
+[OPTIONAL: ORVAL-SMOKE BUTTON CHANGE]
+변경 요약:
+- debug/orval-smoke에 "Call matches/me" 버튼 추가
+- 호출 후 마지막 matches/me 요청의 path/status/Authorization present/AuthorizationClaims(role/sub/expIso preview) 표시
+- 토큰 원문은 표시하지 않음(Show token은 길이+마스킹만)
+```
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\app\debug\orval-smoke.tsx:5: import { listMyShipperMatches } from "@/features/matching/api";
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\app\debug\orval-smoke.tsx:51: function findLatestMatchesMeGroup(): DebugLogGroup | undefined {
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\app\debug\orval-smoke.tsx:55:     return path.includes("/api/shipper/matches/me");
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\app\debug\orval-smoke.tsx:66: function buildClaimsPreview(group: DebugLogGroup | undefined): string {
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\app\debug\orval-smoke.tsx:69:   const claims = (headers.AuthorizationClaims ?? headers.authorizationClaims) as Record<string, unknown> | undefined;
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\app\debug\orval-smoke.tsx:98:   const [matchesCallState, setMatchesCallState] = React.useState("No matches/me call yet.");
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\app\debug\orval-smoke.tsx:151:     setMatchesCallState("Calling /api/shipper/matches/me ...");
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\app\debug\orval-smoke.tsx:154:       const list = await listMyShipperMatches();
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\app\debug\orval-smoke.tsx:156:       setMatchesCallState(`matches/me success (count=${count})`);
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\app\debug\orval-smoke.tsx:159:       setMatchesCallState(`matches/me failed: ${message}`);
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\app\debug\orval-smoke.tsx:161:       const latest = findLatestMatchesMeGroup();
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\app\debug\orval-smoke.tsx:165:       setMatchesClaimsPreview(buildClaimsPreview(latest));
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\app\debug\orval-smoke.tsx:196:             <AppText>{`Authorization present: ${authorizationPresent}`}</AppText>
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\app\debug\orval-smoke.tsx:202:             <AppText weight="700">3) Matches/me + claims check</AppText>
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\app\debug\orval-smoke.tsx:203:             <AppButton title="Call matches/me" onPress={onCallMatchesMe} loading={isCallingMatch} />
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\app\debug\orval-smoke.tsx:207:             <AppText>{`Authorization present: ${matchesAuthPresent}`}</AppText>
+C:\lce\Freight\frontend\rodia-monorepo\apps\mobile\app\debug\orval-smoke.tsx:208:             <AppText>{`AuthorizationClaims: ${matchesClaimsPreview}`}</AppText>
+```
+tsc:
+```
+exitCode=0
+```
+
+[NEXT MANUAL STEPS]
+사용자 실행 체크리스트:
+1) 앱에서 Shipper 로그인
+2) debug/orval-smoke 진입
+3) "Call matches/me" 클릭
+4) DebugLogDetail에서 해당 MATCH 요청(requestId) 열기
+5) 아래 2개를 복사해 공유:
+   - request.headers.AuthorizationClaims (role/sub/exp/iat/expIso 등)
+   - response body의 403 메시지/코드(Access denied 사유)
+
+정적 분석 기반 원인 가설:
+- quotes/detail(200)와 matches/me(403)는 동일 apiClient interceptor 체인을 사용하므로, 구조적으로 헤더 누락 가능성은 상대적으로 낮음.
+- matches/me만 403이면 서버 권한 정책(역할/스코프/소유권/상태 기반 접근 제어) 또는 엔드포인트별 보안 규칙 불일치 가능성이 높음.
+- 다만 최종 확정은 Runtime의 AuthorizationClaims + 403 response body 조합으로 판단 필요.
