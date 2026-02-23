@@ -762,11 +762,30 @@ public class QuoteService {
         }
         points.add(new RoutePoint(destinationPoint.lat(), destinationPoint.lng()));
         try {
-            return routeDistanceService.calculateDistanceKm(points);
+            int rawDistanceKm = routeDistanceService.calculateDistanceKm(points);
+            int normalizedDistanceKm = normalizeDistanceKm(rawDistanceKm);
+            log.info(
+                    "Route distance resolved. rawDistance={}, normalizedDistanceKm={}, pointsCount={}",
+                    rawDistanceKm,
+                    normalizedDistanceKm,
+                    points.size()
+            );
+            return normalizedDistanceKm;
         } catch (RuntimeException e) {
             log.warn("Route distance calculation failed. pointsCount={}, cause='{}'", points.size(), e.getMessage());
             throw new CustomException(ErrorCode.ROUTE_DISTANCE_FAILED);
         }
+    }
+
+    private int normalizeDistanceKm(int rawDistanceKm) {
+        if (rawDistanceKm <= 0) {
+            throw new CustomException(ErrorCode.ROUTE_DISTANCE_FAILED);
+        }
+        // Guard against legacy/runtime mismatch where meters can be returned instead of km.
+        if (rawDistanceKm > 500) {
+            return Math.max(1, (int) Math.round(rawDistanceKm / 1000.0d));
+        }
+        return rawDistanceKm;
     }
 
     private record ResolvedPoint(String address, Double lat, Double lng) {

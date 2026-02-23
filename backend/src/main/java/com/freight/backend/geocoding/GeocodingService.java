@@ -69,15 +69,16 @@ public class GeocodingService {
         for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
             try {
                 log.debug("Geocode request attempt={} address='{}'", attempt, normalized);
-                String raw = restClient.get()
-                        .uri(uriBuilder -> uriBuilder
-                                .path("/v2/local/search/address.json")
-                                .queryParam("query", normalized)
-                                .build())
-                        .retrieve()
-                        .body(String.class);
-                JsonNode response = parseJson(raw);
-                GeocodingResult result = parseResponse(response, normalized);
+                JsonNode addressResponse = requestGeocoding("/v2/local/search/address.json", normalized);
+                GeocodingResult result = extractResult(addressResponse, normalized);
+                if (result == null) {
+                    JsonNode keywordResponse = requestGeocoding("/v2/local/search/keyword.json", normalized);
+                    result = extractResult(keywordResponse, normalized, true);
+                }
+                if (result == null) {
+                    log.warn("Geocode no documents after fallback. address='{}'", normalized);
+                    throw new CustomException(ErrorCode.EXTERNAL_API_ERROR);
+                }
                 cache.put(normalized, new CachedGeocoding(result, Instant.now().plusSeconds(cacheTtlSeconds)));
                 return result;
             } catch (RestClientResponseException e) {
@@ -107,6 +108,17 @@ public class GeocodingService {
         throw new CustomException(ErrorCode.EXTERNAL_API_ERROR);
     }
 
+    private JsonNode requestGeocoding(String path, String query) {
+        String raw = restClient.get()
+                .uri(uriBuilder -> uriBuilder
+                        .path(path)
+                        .queryParam("query", query)
+                        .build())
+                .retrieve()
+                .body(String.class);
+        return parseJson(raw);
+    }
+
     public boolean isValidCoordinate(Double lat, Double lng) {
         if (lat == null || lng == null) {
             return false;
@@ -129,15 +141,14 @@ public class GeocodingService {
         return cached.result();
     }
 
-    private GeocodingResult parseResponse(JsonNode response, String fallbackAddress) {
+    private GeocodingResult extractResult(JsonNode response, String fallbackAddress) {
         if (response == null) {
             throw new CustomException(ErrorCode.EXTERNAL_API_ERROR);
         }
 
         JsonNode documents = response.path("documents");
         if (!documents.isArray() || documents.isEmpty()) {
-            log.warn("Geocode no documents. fallbackAddress='{}', response='{}'", fallbackAddress, response);
-            throw new CustomException(ErrorCode.EXTERNAL_API_ERROR);
+            return null;
         }
 
         JsonNode first = documents.get(0);
@@ -154,14 +165,60 @@ public class GeocodingService {
                 throw new CustomException(ErrorCode.EXTERNAL_API_ERROR);
             }
 
-            String normalizedAddress = first.path("address_name").asText(null);
-            if (normalizedAddress == null || normalizedAddress.isBlank()) {
-                normalizedAddress = fallbackAddress;
-            }
+            String normalizedAddress = readNormalizedAddress(first, fallbackAddress);
             return new GeocodingResult(lat, lng, normalizedAddress);
         } catch (NumberFormatException e) {
             throw new CustomException(ErrorCode.EXTERNAL_API_ERROR);
         }
+    }
+
+    private GeocodingResult extractResult(JsonNode response, String fallbackAddress, boolean strictMatch) {
+        GeocodingResult result = extractResult(response, fallbackAddress);
+        if (result == null) {
+            return null;
+        }
+        if (!strictMatch) {
+            return result;
+        }
+        if (isPlausibleFallbackMatch(fallbackAddress, result.normalizedAddress())) {
+            return result;
+        }
+        log.warn(
+                "Geocode fallback mismatch. query='{}', candidate='{}'",
+                fallbackAddress,
+                result.normalizedAddress()
+        );
+        return null;
+    }
+
+    private boolean isPlausibleFallbackMatch(String query, String candidateAddress) {
+        if (query == null || candidateAddress == null) {
+            return false;
+        }
+        String q = query.replaceAll("\\s+", "");
+        String c = candidateAddress.replaceAll("\\s+", "");
+
+        String[] tokens = q.split("(?<=\\D)(?=\\d)|(?<=\\d)(?=\\D)");
+        for (String token : tokens) {
+            if (token == null || token.length() < 2) {
+                continue;
+            }
+            if (c.contains(token)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String readNormalizedAddress(JsonNode first, String fallbackAddress) {
+        String normalizedAddress = first.path("road_address_name").asText(null);
+        if (normalizedAddress == null || normalizedAddress.isBlank()) {
+            normalizedAddress = first.path("address_name").asText(null);
+        }
+        if (normalizedAddress == null || normalizedAddress.isBlank()) {
+            normalizedAddress = fallbackAddress;
+        }
+        return normalizedAddress;
     }
 
     private JsonNode parseJson(String raw) {
@@ -179,11 +236,24 @@ public class GeocodingService {
         if (address == null) {
             return null;
         }
-        String trimmed = address.trim();
-        if (trimmed.isEmpty()) {
+        String normalized = address.trim().replaceAll("\\s+", " ");
+        if (normalized.isEmpty()) {
             return null;
         }
-        return trimmed.replaceAll("\\s+", " ");
+
+        // Strip details that often break geocoding matches.
+        normalized = normalized.replaceAll("\\([^)]*\\)", " ");
+        normalized = normalized.replaceAll(",.*$", " ");
+        normalized = normalized.replaceAll("\\s+", " ").trim();
+
+        // Remove trailing unit details like "101동", "1201호", "3층".
+        normalized = normalized.replaceAll("\\s+\\d+(동|호|층)$", "");
+
+        // Remove extra trailing number only when there is another number before it.
+        // Example: "삼양로123가길 5 1" -> "삼양로123가길 5"
+        normalized = normalized.replaceAll("(.*\\d)\\s+\\d+$", "$1").trim();
+
+        return normalized.isEmpty() ? null : normalized;
     }
 
     private record CachedGeocoding(GeocodingResult result, Instant expireAt) {
