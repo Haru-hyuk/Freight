@@ -1,13 +1,19 @@
-server:
+﻿server:
   port: ${SERVER_PORT:8080}
 
 spring:
+  application:
+    name: backend
+  servlet:
+    encoding:
+      enabled: true
+      charset: UTF-8
+      force: true
   datasource:
     url: ${DB_URL}
     driver-class-name: ${DB_DRIVER_CLASS_NAME:com.mysql.cj.jdbc.Driver}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
-
   jpa:
     hibernate:
       ddl-auto: update
@@ -19,10 +25,6 @@ spring:
 jwt:
   secret: ${JWT_SECRET:}
 
-# 토스페이먼츠
-# - 실제 결제 없이 테스트: 개발자센터(https://developers.tosspayments.com) → API 키 → 테스트 키(클라이언트 키/시크릿 키)를
-#   TOSS_PAYMENTS_CLIENT_KEY, TOSS_PAYMENTS_SECRET_KEY 에 설정. 테스트 키로 연동하면 결제창·승인 흐름은 동일하나 실제 청구되지 않음.
-# - 운영(실결제): 동일 API에 라이브 키로 교체.
 toss:
   payments:
     secret-key: ${TOSS_PAYMENTS_SECRET_KEY:}
@@ -52,3 +54,17 @@ springdoc:
     path: /api-docs
   swagger-ui:
     path: /swagger-ui
+
+geocoding:
+  kakao:
+    base-url: ${GEOCODING_KAKAO_BASE_URL:https://dapi.kakao.com}
+    api-key: ${KAKAO_REST_API_KEY:}
+  timeout-ms: ${GEOCODING_TIMEOUT_MS:2000}
+  cache:
+    ttl-seconds: ${GEOCODING_CACHE_TTL_SECONDS:86400}
+
+routing:
+  kakao:
+    base-url: ${ROUTING_KAKAO_BASE_URL:https://apis-navi.kakaomobility.com}
+    api-key: ${KAKAO_REST_API_KEY:}
+  timeout-ms: ${ROUTING_TIMEOUT_MS:3000}
