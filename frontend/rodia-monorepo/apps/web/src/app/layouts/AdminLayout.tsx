@@ -1,9 +1,10 @@
-// src/app/layouts/AdminLayout.tsx
-import * as React from "react";
+﻿import * as React from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 
 import { Button } from "@/shared/ui/shadcn/button";
+import { Switch } from "@/shared/ui/shadcn/switch";
 import { Separator } from "@/shared/ui/shadcn/separator";
+import { useMockMode } from "@/shared/lib/hooks/useMockMode";
 
 type NavItem = {
   label: string;
@@ -24,74 +25,58 @@ const NAV_GROUPS: NavGroup[] = [
   {
     title: "배송",
     items: [
-      // 수정: 배송 실시간/이력은 아직 페이지 없으니 disabled 유지
-      { label: "배송 실시간 모니터링", to: "/delivery/live", disabled: true },
-      { label: "배송 이력", to: "/delivery/history", disabled: true },
-
+      { label: "배송 실시간 모니터링", to: "/delivery/live" },
+      { label: "배송 이력", to: "/delivery/history" },
       { label: "견적 관리", to: "/quotes" },
-      { label: "배차 관리", to: "/dispatch", disabled: true },
+      { label: "배차 관리", to: "/dispatch" },
       { label: "매칭 관리", to: "/matchings" },
     ],
   },
   {
-    title: "사용자",
+    title: "회원",
     items: [
-      { label: "전체 사용자 조회", to: "/users" },
-
-      // 수정: 화주/차주 조회 페이지 라우트가 생겼으므로 활성화
+      { label: "전체 회원 조회", to: "/users" },
       { label: "화주 조회", to: "/users/shippers" },
       { label: "차주 조회", to: "/users/drivers" },
-
-      { label: "차주(기사) 승인", to: "/drivers/approvals" },
+      { label: "차주 승인", to: "/drivers/approvals" },
     ],
   },
   {
     title: "정산/결제",
     items: [
-      { label: "정산 승인 관리", to: "/settlement/approvals", disabled: true },
-      { label: "정산 내역", to: "/settlement" },
+      { label: "정산 승인 관리", to: "/settlement/approvals" },
+      { label: "정산 승인 이력", to: "/settlement/history" },
     ],
   },
   {
     title: "운영",
     items: [
-      { label: "시스템 설정", to: "/settings" },
-      { label: "고객지원", to: "/support", disabled: true },
-
-      // 수정: 제재 로그 페이지 라우트 연결 (disabled 해제)
-      { label: "제재 내역 로그", to: "/ops/sanctions/logs" },
+      { label: "금액 관리", to: "/ops/pricing" },
+      { label: "제재 이력 로그", to: "/ops/sanctions/logs" },
+      { label: "활동 로그", to: "/ops/activity-logs" },
+      { label: "시스템 설정", to: "/settings", disabled: true },
+      { label: "고객 지원", to: "/support", disabled: true },
     ],
   },
 ];
 
 function getPageName(pathname: string): string {
   if (pathname.startsWith("/dashboard")) return "대시보드";
-
   if (pathname.startsWith("/delivery/live")) return "배송 실시간 모니터링";
   if (pathname.startsWith("/delivery/history")) return "배송 이력";
-
   if (pathname.startsWith("/quotes")) return "견적 관리";
   if (pathname.startsWith("/dispatch")) return "배차 관리";
   if (pathname.startsWith("/matchings")) return "매칭 관리";
-
-  // 수정: 사용자 상세 라우트 우선 매칭 ("/users" 보다 먼저)
-  if (pathname.startsWith("/users/") && pathname.split("/").length >= 3) return "사용자 상세";
-
+  if (pathname.startsWith("/users/") && pathname.split("/").length >= 3) return "회원 상세";
   if (pathname.startsWith("/users/shippers")) return "화주 조회";
   if (pathname.startsWith("/users/drivers")) return "차주 조회";
-  if (pathname.startsWith("/users")) return "전체 사용자 조회";
-
-  if (pathname.startsWith("/drivers/approvals")) return "차주(기사) 승인";
-
+  if (pathname.startsWith("/users")) return "전체 회원 조회";
+  if (pathname.startsWith("/drivers/approvals")) return "차주 승인";
   if (pathname.startsWith("/settlement/approvals")) return "정산 승인 관리";
-  if (pathname.startsWith("/settlement")) return "정산 내역";
-
-  if (pathname.startsWith("/settings")) return "시스템 설정";
-  if (pathname.startsWith("/support")) return "고객지원";
-
-  // 수정: 운영 > 제재 로그 경로 반영
-  if (pathname.startsWith("/ops/sanctions/logs")) return "제재 내역 로그";
-
+  if (pathname.startsWith("/settlement/history")) return "정산 승인 이력";
+  if (pathname.startsWith("/ops/pricing")) return "금액 관리";
+  if (pathname.startsWith("/ops/sanctions/logs")) return "제재 이력 로그";
+  if (pathname.startsWith("/ops/activity-logs")) return "활동 로그";
   return "페이지";
 }
 
@@ -118,7 +103,7 @@ function NavItemLink({ item }: { item: NavItem }) {
         [
           "flex items-center rounded-lg px-3 py-2 text-sm font-medium",
           "border border-transparent",
-          isActive ? "bg-background border-border" : "bg-muted hover:bg-background",
+          isActive ? "bg-background border-border text-foreground" : "bg-muted hover:bg-background text-foreground",
         ].join(" ")
       }
     >
@@ -130,6 +115,7 @@ function NavItemLink({ item }: { item: NavItem }) {
 export default function AdminLayout() {
   const location = useLocation();
   const pageName = React.useMemo(() => getPageName(location.pathname), [location.pathname]);
+  const { enabled: mockModeEnabled, setEnabled: setMockModeEnabled } = useMockMode();
 
   const handleLogout = () => {
     localStorage.removeItem("rodia_admin_token");
@@ -140,13 +126,11 @@ export default function AdminLayout() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div className="flex min-h-screen">
-        {/* Sidebar */}
         <aside className="w-64 shrink-0 border-r border-border bg-muted">
           <div className="flex h-16 items-center px-6">
             <div className="flex items-center gap-2">
-              {/* 수정: 색은 semantic(primary)만 사용 */}
               <span className="inline-flex h-2 w-2 rounded-full bg-primary" />
-              <span className="text-sm font-semibold">Rodia Admin</span>
+              <span className="text-sm font-semibold text-foreground">Rodia Admin</span>
             </div>
           </div>
 
@@ -156,7 +140,7 @@ export default function AdminLayout() {
             <div className="space-y-4">
               {NAV_GROUPS.map((group) => (
                 <section key={group.title} className="space-y-2">
-                  <div className="px-2 text-xs font-semibold opacity-70">{group.title}</div>
+                  <div className="px-2 text-xs font-semibold text-foreground">{group.title}</div>
                   <ul className="space-y-1">
                     {group.items.map((item) => (
                       <li key={item.to}>
@@ -177,24 +161,27 @@ export default function AdminLayout() {
           </div>
         </aside>
 
-        {/* Main */}
         <div className="flex min-w-0 flex-1 flex-col">
-          {/* Header */}
           <header className="flex h-16 items-center justify-between border-b border-border bg-background px-6">
-            <div className="text-sm font-medium">
-              홈 &gt; <span className="text-foreground">{pageName}</span>
+            <div className="text-sm font-medium text-foreground">
+              운영 &gt; <span className="text-foreground">{pageName}</span>
             </div>
 
             <div className="flex items-center gap-3">
+              <div className="rounded-lg border border-border bg-background px-3 py-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium text-foreground">목업 데이터</span>
+                  <Switch checked={mockModeEnabled} onCheckedChange={setMockModeEnabled} aria-label="목업 데이터 모드 전환" />
+                </div>
+              </div>
               <div className="text-right">
-                <div className="text-sm font-semibold">최고관리자</div>
-                <div className="text-xs opacity-70">Super Admin</div>
+                <div className="text-sm font-semibold text-foreground">최고관리자</div>
+                <div className="text-xs text-foreground">{mockModeEnabled ? "Mock Mode" : "Real Mode"}</div>
               </div>
               <div className="h-10 w-10 rounded-full border border-border bg-muted" />
             </div>
           </header>
 
-          {/* Content */}
           <main className="flex-1 overflow-y-auto bg-background">
             <div className="mx-auto w-full max-w-6xl p-6">
               <Outlet />

@@ -1,4 +1,3 @@
-// src/features/users/ui/UserActivitySection.tsx
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/shadcn/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/shared/ui/shadcn/table";
 import { Badge } from "@/shared/ui/shadcn/badge";
@@ -11,13 +10,13 @@ type Props = {
 };
 
 export function UserActivitySection({ role, quotes = [], matches = [] }: Props) {
-  const title = role === "SHIPPER" ? "견적(Quotes)" : "매칭/운행(Matches)";
+  const title = "오더/매칭"; // MODIFIED: 탭 요구사항 명칭 반영
 
   return (
     <Card className="rounded-lg border border-border bg-background">
       <CardHeader className="space-y-1">
         <CardTitle className="text-base font-bold">{title}</CardTitle>
-        <p className="text-sm opacity-70">ERD: quotes / matches</p>
+        <p className="text-sm text-foreground/70">오더 및 매칭 이력</p>
       </CardHeader>
 
       <CardContent className="space-y-4">
@@ -34,18 +33,18 @@ export function UserActivitySection({ role, quotes = [], matches = [] }: Props) 
               <TableBody>
                 {quotes.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={3} className="py-10 text-center text-sm opacity-70">
-                      견적 데이터가 없습니다.
+                    <TableCell colSpan={3} className="py-10 text-center text-sm text-foreground/70">
+                      오더 데이터가 없습니다.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  quotes.map((q) => (
-                    <TableRow key={q.id}>
-                      <TableCell className="font-medium">{q.id}</TableCell>
+                  quotes.map((quote) => (
+                    <TableRow key={quote.id}>
+                      <TableCell className="font-medium">{quote.id}</TableCell>
                       <TableCell>
-                        <Badge variant="outline">{q.status}</Badge>
+                        <Badge variant="outline">{quote.status}</Badge>
                       </TableCell>
-                      <TableCell className="text-sm opacity-70">{q.createdAt}</TableCell>
+                      <TableCell className="text-sm text-foreground/70">{quote.createdAt}</TableCell>
                     </TableRow>
                   ))
                 )}
@@ -65,18 +64,18 @@ export function UserActivitySection({ role, quotes = [], matches = [] }: Props) 
               <TableBody>
                 {matches.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={3} className="py-10 text-center text-sm opacity-70">
+                    <TableCell colSpan={3} className="py-10 text-center text-sm text-foreground/70">
                       매칭 데이터가 없습니다.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  matches.map((m) => (
-                    <TableRow key={m.id}>
-                      <TableCell className="font-medium">{m.id}</TableCell>
+                  matches.map((match) => (
+                    <TableRow key={match.id}>
+                      <TableCell className="font-medium">{match.id}</TableCell>
                       <TableCell>
-                        <Badge variant="outline">{m.status}</Badge>
+                        <Badge variant="outline">{match.status}</Badge>
                       </TableCell>
-                      <TableCell className="text-sm opacity-70">{m.createdAt}</TableCell>
+                      <TableCell className="text-sm text-foreground/70">{match.createdAt}</TableCell>
                     </TableRow>
                   ))
                 )}

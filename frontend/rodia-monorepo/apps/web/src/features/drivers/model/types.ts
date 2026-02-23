@@ -1,12 +1,19 @@
-export type LicenseStatus = "검증됨" | "재요청";
-export type ApprovalStatus = "승인 대기" | "보류" | "승인 완료";
+export type DriverApprovalLicenseStatus = "VERIFIED" | "UNVERIFIED";
+export type DriverApprovalStatus = "PENDING" | "APPROVED" | "REJECTED";
 
 export type DriverApprovalRow = {
-  id: string;
+  driverId: string;
   requestedAt: string;
   name: string;
-  vehicle: string;
-  licenseStatus: LicenseStatus;
-  approvalStatus: ApprovalStatus;
   phone: string;
+  vehicleSummary: string;
+  licenseStatus: DriverApprovalLicenseStatus;
+  approvalStatus: DriverApprovalStatus;
+  reviewMemo?: string;
+};
+
+export type DriverApprovalReviewPayload = {
+  driverId: string;
+  action: "APPROVE" | "REJECT";
+  reason?: string;
 };

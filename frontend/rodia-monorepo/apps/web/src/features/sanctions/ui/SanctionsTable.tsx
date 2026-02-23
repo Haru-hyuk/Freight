@@ -1,6 +1,3 @@
-// src/features/sanctions/ui/SanctionsTable.tsx
-import * as React from "react";
-
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/shadcn/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/shared/ui/shadcn/table";
 import { Badge } from "@/shared/ui/shadcn/badge";
@@ -16,7 +13,7 @@ function RoleBadge({ role }: { role: UserRole }) {
 function TypeBadge({ type }: { type: SanctionType }) {
   if (type === "SUSPEND") return <Badge variant="destructive">정지</Badge>;
   if (type === "DRIVE_BLOCK") return <Badge variant="outline">운행중지</Badge>;
-  if (type === "FINE") return <Badge variant="secondary">범칙금</Badge>;
+  if (type === "FINE") return <Badge variant="secondary">벌점</Badge>;
   return <Badge variant="outline">경고</Badge>;
 }
 
@@ -33,8 +30,8 @@ export function SanctionsTable({ rows, onOpenDetail }: Props) {
   return (
     <Card className="rounded-lg border border-border bg-background">
       <CardHeader className="space-y-1">
-        <CardTitle className="text-lg">제재 내역 로그</CardTitle>
-        <p className="text-sm opacity-70">운영 기록(경고/범칙금/정지/운행중지)을 조회</p>
+        <CardTitle className="text-lg">제재 로그</CardTitle>
+        <p className="text-sm text-foreground/70">제재 이력 목록</p>
       </CardHeader>
 
       <CardContent>
@@ -43,32 +40,32 @@ export function SanctionsTable({ rows, onOpenDetail }: Props) {
             <TableHeader>
               <TableRow className="bg-muted">
                 <TableHead>ID</TableHead>
-                <TableHead>구분</TableHead>
                 <TableHead>대상</TableHead>
+                <TableHead>이름</TableHead>
                 <TableHead>제재</TableHead>
                 <TableHead>상태</TableHead>
-                <TableHead>일시</TableHead>
+                <TableHead>등록일</TableHead>
                 <TableHead className="text-right">관리</TableHead>
               </TableRow>
             </TableHeader>
 
             <TableBody>
-              {rows.map((r) => (
-                <TableRow key={r.id}>
-                  <TableCell className="font-medium">{r.id}</TableCell>
+              {rows.map((row) => (
+                <TableRow key={row.id}>
+                  <TableCell className="font-medium">{row.id}</TableCell>
                   <TableCell>
-                    <RoleBadge role={r.targetRole} />
+                    <RoleBadge role={row.targetRole} />
                   </TableCell>
-                  <TableCell className="font-medium">{r.targetName}</TableCell>
+                  <TableCell className="font-medium">{row.targetName}</TableCell>
                   <TableCell>
-                    <TypeBadge type={r.type} />
+                    <TypeBadge type={row.type} />
                   </TableCell>
                   <TableCell>
-                    <StatusBadge status={r.status} />
+                    <StatusBadge status={row.status} />
                   </TableCell>
-                  <TableCell className="text-sm opacity-70">{r.createdAt}</TableCell>
+                  <TableCell className="text-sm text-foreground/70">{row.createdAt}</TableCell>
                   <TableCell className="text-right">
-                    <Button type="button" variant="secondary" onClick={() => onOpenDetail?.(r)}>
+                    <Button type="button" variant="secondary" onClick={() => onOpenDetail?.(row)}>
                       상세
                     </Button>
                   </TableCell>
@@ -77,8 +74,8 @@ export function SanctionsTable({ rows, onOpenDetail }: Props) {
 
               {rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-10 text-center text-sm opacity-70">
-                    제재 로그가 없습니다.
+                  <TableCell colSpan={7} className="py-10 text-center text-sm text-foreground/70">
+                    제재 로그 데이터가 없습니다.
                   </TableCell>
                 </TableRow>
               ) : null}

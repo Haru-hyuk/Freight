@@ -1,4 +1,3 @@
-// src/features/sanctions/ui/SanctionDialog.tsx
 import * as React from "react";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/shared/ui/shadcn/dialog";
@@ -20,18 +19,18 @@ type Target = {
 
 type Props = {
   open: boolean;
-  onOpenChange: (open: boolean) => void; // 수정: onClose 단일 함수 대신 onOpenChange로 통일(Shadcn Dialog API)
+  onOpenChange: (open: boolean) => void;
   target: Target;
   onSubmit?: (payload: { type: SanctionType; reason: string; amount?: number }) => void;
 };
 
 function roleLabel(role: UserRole) {
-  return role === "SHIPPER" ? "화주" : "차주(기사)";
+  return role === "SHIPPER" ? "화주" : "차주";
 }
 
 function typeLabel(type: SanctionType) {
   if (type === "WARNING") return "경고";
-  if (type === "FINE") return "범칙금";
+  if (type === "FINE") return "벌점";
   if (type === "SUSPEND") return "정지";
   return "운행중지";
 }
@@ -76,13 +75,13 @@ export function SanctionDialog({ open, onOpenChange, target, onSubmit }: Props) 
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline">{roleLabel(target.role)}</Badge>
               <div className="font-semibold">{target.name}</div>
-              <div className="opacity-70">({target.id})</div>
+              <div className="text-foreground/70">({target.id})</div>
             </div>
           </div>
 
           <div className="space-y-2">
             <div className="text-sm font-semibold">제재 유형</div>
-            <Tabs value={type} onValueChange={(v) => setType(v as SanctionType)}>
+            <Tabs value={type} onValueChange={(nextType) => setType(nextType as SanctionType)}>
               <TabsList className="w-full border border-border bg-muted">
                 <TabsTrigger value="WARNING" className="flex-1">
                   {typeLabel("WARNING")}
@@ -104,21 +103,19 @@ export function SanctionDialog({ open, onOpenChange, target, onSubmit }: Props) 
             <div className="text-sm font-semibold">사유</div>
             <Textarea
               value={reason}
-              onChange={(e) => setReason(e.target.value)}
+              onChange={(event) => setReason(event.target.value)}
               placeholder="제재 사유를 입력하세요"
-              className="border border-border bg-background text-foreground focus:ring-2 focus:ring-primary"
             />
           </div>
 
           {type === "FINE" ? (
             <div className="space-y-2">
-              <div className="text-sm font-semibold">범칙금 금액</div>
+              <div className="text-sm font-semibold">벌점 금액</div>
               <Input
                 value={amount}
-                onChange={(e) => setAmount(e.target.value)}
+                onChange={(event) => setAmount(event.target.value)}
                 placeholder="금액 입력"
                 type="number"
-                className="border border-border bg-background text-foreground focus:ring-2 focus:ring-primary"
               />
             </div>
           ) : null}
@@ -127,8 +124,6 @@ export function SanctionDialog({ open, onOpenChange, target, onSubmit }: Props) 
             <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
               취소
             </Button>
-
-            {/* 수정: className으로 bg-primary 주입(규칙 위반 가능) 제거 → 기본 Button을 Primary 의미로 사용 */}
             <Button type="button" onClick={handleSubmit} disabled={!canSubmit}>
               제재 확정
             </Button>
