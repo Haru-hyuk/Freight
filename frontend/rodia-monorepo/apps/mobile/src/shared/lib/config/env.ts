@@ -21,8 +21,8 @@ function isTruthyString(v: unknown): v is string {
 
 function readEnvRaw(key: string): unknown {
   try {
-    const v = (process as any)?.env?.[key];
-    if (typeof v !== "undefined") return v;
+    const fromProcess = (process as any)?.env?.[key];
+    if (typeof fromProcess !== "undefined") return fromProcess;
   } catch {
     // ignore
   }
@@ -38,16 +38,32 @@ function readEnvRaw(key: string): unknown {
 }
 
 function readEnvString(key: string): string | undefined {
-  const v = readEnvRaw(key);
-  if (typeof v === "string") return v;
-  if (typeof v === "number") return String(v);
-  if (typeof v === "boolean") return v ? "true" : "false";
+  const raw = readEnvRaw(key);
+  if (typeof raw === "string") return raw;
+  if (typeof raw === "number") return String(raw);
+  if (typeof raw === "boolean") return raw ? "true" : "false";
   return undefined;
 }
 
-function isEnvTrue(v: string | undefined): boolean {
-  const raw = (v ?? "").trim().toLowerCase();
-  return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
+function toBool(raw: string | undefined): boolean {
+  const v = (raw ?? "").trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes" || v === "on";
+}
+
+function readBoolOrUndefined(key: string): boolean | undefined {
+  const raw = readEnvString(key);
+  if (typeof raw === "undefined") return undefined;
+  return toBool(raw);
+}
+
+function readBool(key: string, fallback: boolean): boolean {
+  const v = readBoolOrUndefined(key);
+  return typeof v === "boolean" ? v : fallback;
+}
+
+function readString(key: string, fallback: string): string {
+  const raw = readEnvString(key);
+  return isTruthyString(raw) ? raw.trim() : fallback;
 }
 
 function normalizeUrl(input: string): string {
@@ -57,70 +73,60 @@ function normalizeUrl(input: string): string {
   return v;
 }
 
+// 공통 API 베이스 URL
 export function getApiBaseUrl(): string {
-  const envBase =
-    readEnvString("EXPO_PUBLIC_API_BASE_URL") ??
-    readEnvString("API_BASE_URL") ??
-    readEnvString("VITE_API_BASE_URL") ??
-    readEnvString("apiBaseUrl");
+  const url = normalizeUrl(readString("EXPO_PUBLIC_API_BASE_URL", "http://localhost:3000"));
 
-  if (isTruthyString(envBase)) {
-    const url = normalizeUrl(envBase);
-    if (url.includes(":8081")) {
-      warnOnce(
-        "env.api.baseUrl.8081",
-        "[env] API_BASE_URL이 8081로 설정되어 있습니다. 8081은 Metro(번들러) 포트일 가능성이 높습니다. 실제 백엔드 포트로 변경하세요."
-      );
-    }
-    return url;
+  // Metro 기본 포트(8081)를 API 포트로 잘못 넣는 실수 방지
+  if (url.includes(":8081")) {
+    warnOnce(
+      "env.api.base_url.metro_port",
+      "[env] API_BASE_URL이 8081입니다. 8081은 보통 Metro 포트입니다. 실제 백엔드 포트로 바꾸세요."
+    );
   }
 
-  return "http://localhost:3000";
+  // http를 실서버로 착각하는 케이스 방지(모바일에서 차단될 수 있음)
+  if (__DEV__ && url.startsWith("http://") && !url.includes("localhost") && !url.includes("127.0.0.1")) {
+    warnOnce(
+      "env.api.base_url.http_warning",
+      "[env] API_BASE_URL이 http:// 입니다. 실서버라면 https:// 권장(모바일 보안 설정에 의해 차단될 수 있음)."
+    );
+  }
+
+  return url;
 }
 
-export function getAuthLoginPath(): string {
-  const envPath =
-    readEnvString("EXPO_PUBLIC_AUTH_LOGIN_PATH") ??
-    readEnvString("AUTH_LOGIN_PATH") ??
-    readEnvString("VITE_AUTH_LOGIN_PATH") ??
-    readEnvString("authLoginPath");
-
-  if (isTruthyString(envPath)) return envPath.trim();
-  return "/auth/login";
-}
-
-export function getAuthMePath(): string {
-  const envPath =
-    readEnvString("EXPO_PUBLIC_AUTH_ME_PATH") ??
-    readEnvString("AUTH_ME_PATH") ??
-    readEnvString("VITE_AUTH_ME_PATH") ??
-    readEnvString("authMePath");
-
-  if (isTruthyString(envPath)) return envPath.trim();
-  return "/auth/me";
-}
-
+// auth 토큰 재발급 경로
 export function getAuthRefreshPath(): string {
-  const envPath =
-    readEnvString("EXPO_PUBLIC_AUTH_REFRESH_PATH") ??
-    readEnvString("AUTH_REFRESH_PATH") ??
-    readEnvString("VITE_AUTH_REFRESH_PATH") ??
-    readEnvString("authRefreshPath");
+  return readString("EXPO_PUBLIC_AUTH_REFRESH_PATH", "/auth/refresh");
+}
 
-  if (isTruthyString(envPath)) return envPath.trim();
-  return "/auth/refresh";
+// 목업 모드는 EXPO_PUBLIC_MOCK_MODE 하나로 통합해서 사용한다.
+function baseMockMode(): boolean {
+  return readBool("EXPO_PUBLIC_MOCK_MODE", false);
 }
 
 export function isMockAuthEnabled(): boolean {
-  return (
-    isEnvTrue(readEnvString("EXPO_PUBLIC_MOCK_AUTH")) ||
-    isEnvTrue(readEnvString("MOCK_AUTH")) ||
-    isEnvTrue(readEnvString("VITE_MOCK_AUTH"))
-  );
+  return baseMockMode();
 }
 
-/**
- * 1) env는 process.env(EXPO_PUBLIC_*) 우선, 필요 시 expoConfig.extra도 보조로 읽습니다.
- * 2) baseURL/login/me/refresh/mock 판단을 한 곳으로 고정해 중복을 제거합니다.
- * 3) 8081(번들러 포트) 실수 방지를 위해 DEV에서만 1회 경고를 냅니다.
- */
+export function isMockQuoteEnabled(): boolean {
+  return baseMockMode();
+}
+
+// auth 디버그 로그 출력 여부(개발 환경에서만 반영)
+export function isAuthDebugLogsEnabled(): boolean {
+  if (!__DEV__) return false;
+  return readBool("EXPO_PUBLIC_AUTH_DEBUG_LOGS", false);
+}
+
+// API 전역 디버그 로그 출력 여부(개발 환경에서만 반영)
+export function isApiDebugLogsEnabled(): boolean {
+  if (!__DEV__) return false;
+  return readBool("EXPO_PUBLIC_API_DEBUG_LOGS", readBool("EXPO_PUBLIC_AUTH_DEBUG_LOGS", false));
+}
+
+// 견적 API 경로
+export function getShipperQuoteCreatePath(): string {
+  return readString("EXPO_PUBLIC_SHIPPER_QUOTE_CREATE_PATH", "/api/shipper/quotes");
+}

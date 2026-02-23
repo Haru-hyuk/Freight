@@ -3,10 +3,10 @@ server:
 
 spring:
   datasource:
-    url: jdbc:mysql://localhost:3306/rodia_db?serverTimezone=Asia/Seoul
-    driver-class-name: com.mysql.cj.jdbc.Driver
-    username: root
-    password: 1234
+    url: ${DB_URL}
+    driver-class-name: ${DB_DRIVER_CLASS_NAME:com.mysql.cj.jdbc.Driver}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
 
   jpa:
     hibernate:
@@ -34,11 +34,18 @@ odcloud:
     key: ${ODCLOUD_API_KEY:}
 
 deepseek:
-  enabled: false
+  enabled: ${DEEPSEEK_ENABLED:false}
   api:
     key: ${DEEPSEEK_API_KEY:}
     base-url: https://api.deepseek.com
     model: deepseek-chat
+
+fcm:
+  enabled: ${FCM_ENABLED:false}
+  service-account-path: ${FCM_SERVICE_ACCOUNT_PATH:classpath:firebase/service-account.json}
+
+delivery-photo:
+  storage-dir: ${DELIVERY_PHOTO_STORAGE_DIR:uploads/delivery-photos}
 
 springdoc:
   api-docs:

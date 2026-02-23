@@ -2,6 +2,7 @@ package com.freight.backend.dto.quote;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -9,6 +10,7 @@ import lombok.Getter;
 @AllArgsConstructor
 public class QuoteDetailResponse {
     private Long quoteId;
+    private UUID quotePublicId;
     private Long shipperId;
     private Long truckId;
     private String originAddress;

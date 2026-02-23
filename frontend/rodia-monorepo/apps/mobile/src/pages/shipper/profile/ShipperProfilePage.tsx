@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { Alert, Image, Pressable, StyleSheet, View, type ViewStyle } from "react-native";
+import { Alert, Image, Pressable, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
@@ -14,252 +14,379 @@ import { PageScaffold } from "@/widgets/layout/PageScaffold";
 type MenuAction = {
   id: string;
   title: string;
+  icon: keyof typeof Ionicons.glyphMap;
   onPress: () => void;
   danger?: boolean;
 };
 
-const VIEW_PRESSED: ViewStyle = { opacity: 0.85, transform: [{ scale: 0.98 }] };
+type SummaryStat = {
+  id: string;
+  label: string;
+  value: string;
+  accent?: boolean;
+  onPress: () => void;
+};
 
 const useStyles = createThemedStyles((theme) => {
   const spacing = safeNumber(theme?.layout?.spacing?.base, 4);
-  const radiusCard = safeNumber(theme?.components?.card?.radius, safeNumber(theme?.layout?.radii?.card, 16));
+  const radiusCard = safeNumber(theme?.components?.card?.radius, 20);
   const radiusControl = safeNumber(theme?.layout?.radii?.control, 12);
-  const buttonSm = safeNumber(theme?.components?.button?.sizes?.sm?.minHeight, 36);
-  const cardPadding = safeNumber(theme?.components?.card?.paddingMd, 20);
+  const radiusPill = safeNumber(theme?.layout?.radii?.pill, 999);
 
-  const cBg = safeString(theme?.colors?.bgMain, safeString(theme?.colors?.bgSurfaceAlt, safeString(theme?.colors?.bgSurface, "")));
-  const cSurface = safeString(theme?.colors?.bgSurface, cBg);
-  const cTextMain = safeString(theme?.colors?.textMain, safeString(theme?.colors?.textSub, safeString(theme?.colors?.textMuted, "")));
-  const cTextSub = safeString(theme?.colors?.textSub, cTextMain);
-  const cTextMuted = safeString(theme?.colors?.textMuted, cTextSub);
-  const cBorder = safeString(theme?.colors?.borderDefault, safeString(theme?.colors?.borderStrong, cSurface));
-  const cPrimary = safeString(theme?.colors?.brandPrimary, cTextMain);
-  const cDanger = safeString(theme?.colors?.semanticDanger, cPrimary);
-
-  const cPressed = safeString(theme?.colors?.stateOverlayPressed, tint(cTextMain, 0.06, cSurface));
-  const cBizBadgeBg = tint(cPrimary, 0.1, cSurface);
-  const cStatsAccentBg = tint(cPrimary, 0.14, cSurface);
-  const cDivider = tint(cBorder, 0.65, cBorder);
-  const cSectionLabel = tint(cTextSub, 0.9, cTextSub);
+  const cSurface = safeString(theme?.colors?.bgSurface, "#FFFFFF");
+  const cSurfaceAlt = safeString(theme?.colors?.bgSurfaceAlt, "#F8FAFC");
+  const cBorder = safeString(theme?.colors?.borderDefault, "#E2E8F0");
+  const cText = safeString(theme?.colors?.textMain, "#111827");
+  const cSub = safeString(theme?.colors?.textSub, "#334155");
+  const cMuted = safeString(theme?.colors?.textMuted, "#64748B");
+  const cBrand = safeString(theme?.colors?.brandPrimary, "#FF6A00");
+  const cOnBrand = safeString(theme?.colors?.textOnBrand, "#FFFFFF");
+  const cDanger = safeString(theme?.colors?.semanticDanger, "#EF4444");
+  const cPressed = safeString(theme?.colors?.stateOverlayPressed, tint(cText, 0.04, cSurface));
 
   return StyleSheet.create({
     pageContent: {
-      paddingTop: spacing * 3,
-      paddingBottom: spacing * 24,
+      paddingTop: spacing * 4,
+      paddingBottom: spacing * 28,
+      backgroundColor: cSurfaceAlt,
       paddingHorizontal: spacing * 5,
-      backgroundColor: cBg,
     },
-
+    
+    // --- Profile Section ---
     profileCard: {
       borderRadius: radiusCard,
-      padding: cardPadding,
       marginBottom: spacing * 4,
+      padding: spacing * 5,
+      backgroundColor: cSurface,
     },
     profileRow: {
       flexDirection: "row",
       alignItems: "center",
-      gap: spacing * 3,
+      gap: spacing * 4,
     },
     avatar: {
       width: spacing * 15,
       height: spacing * 15,
-      borderRadius: (spacing * 15) / 2,
+      borderRadius: radiusPill,
+      backgroundColor: cSurfaceAlt,
       borderWidth: 1,
-      borderColor: cDivider,
-      backgroundColor: cSurface,
+      borderColor: cBorder,
     },
     profileInfo: {
       flex: 1,
       minWidth: 0,
+      justifyContent: "center",
+      gap: spacing,
     },
     nameRow: {
       flexDirection: "row",
       alignItems: "center",
-      gap: spacing + 2,
-      marginBottom: spacing,
+      gap: spacing * 2,
     },
     bizBadge: {
-      backgroundColor: cBizBadgeBg,
-      borderRadius: radiusControl - 6,
-      paddingHorizontal: spacing + 2,
+      paddingHorizontal: spacing * 2,
       paddingVertical: 2,
+      borderRadius: radiusPill,
+      backgroundColor: tint(cBrand, 0.1, cSurface),
     },
-    profileEditBtn: {
-      minHeight: buttonSm,
-      paddingHorizontal: spacing * 3,
+    bizBadgeText: {
+      color: cBrand,
+    },
+    verificationWrap: {
+      marginTop: spacing,
+      alignSelf: "flex-start",
     },
 
+    // --- Stats Section ---
     statsCard: {
       borderRadius: radiusCard,
-      paddingVertical: spacing * 4 + 2,
+      marginBottom: spacing * 6,
+      paddingVertical: spacing * 4,
       paddingHorizontal: spacing * 2,
-      marginBottom: spacing * 5,
+      backgroundColor: cSurface,
     },
     statsRow: {
       flexDirection: "row",
-      alignItems: "center",
+      alignItems: "stretch",
     },
     statItem: {
       flex: 1,
       alignItems: "center",
       justifyContent: "center",
-      minHeight: spacing * 13,
+      minHeight: spacing * 14,
       borderRadius: radiusControl,
+      gap: spacing * 1.5,
     },
-    statPressed: {
+    statItemPressed: {
       backgroundColor: cPressed,
     },
     statDivider: {
       width: 1,
-      height: "65%",
-      backgroundColor: cDivider,
-      alignSelf: "center",
+      marginVertical: spacing * 3,
+      backgroundColor: cBorder,
     },
-    statNum: {
-      color: cTextMain,
+    statValue: {
+      color: cText,
       fontWeight: "800",
-      marginBottom: spacing,
+      fontSize: 22,
+      letterSpacing: -0.2,
     },
-    statNumHighlight: {
-      color: cPrimary,
-      backgroundColor: cStatsAccentBg,
-      paddingHorizontal: spacing * 2,
-      paddingVertical: spacing,
-      borderRadius: radiusControl - 6,
-      overflow: "hidden",
+    statValueAccentWrap: {
+      borderRadius: radiusPill,
+      backgroundColor: tint(cBrand, 0.1, cSurface),
+      paddingHorizontal: spacing * 4,
+      paddingVertical: spacing + 2,
+    },
+    statValueAccent: {
+      color: cBrand,
+      fontWeight: "800",
+      fontSize: 20,
+      letterSpacing: -0.2,
     },
 
-    sectionLabel: {
-      color: cSectionLabel,
-      fontWeight: "700",
-      marginBottom: spacing * 2 + 2,
+    // --- Menu Section ---
+    sectionHeader: {
+      marginBottom: spacing * 3,
       marginLeft: spacing,
     },
-    sectionGap: {
-      marginTop: spacing * 2,
-    },
-    menuCard: {
+    sectionCard: {
       borderRadius: radiusCard,
+      marginBottom: spacing * 6,
       padding: 0,
       overflow: "hidden",
-      marginBottom: spacing * 3,
-    },
-    menuItem: {
-      minHeight: spacing * 13,
-      paddingHorizontal: cardPadding,
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      borderBottomWidth: 1,
-      borderBottomColor: cDivider,
       backgroundColor: cSurface,
     },
-    menuItemLast: {
-      borderBottomWidth: 0,
+    menuItem: {
+      minHeight: 56,
+      paddingHorizontal: spacing * 5,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing * 3,
+      backgroundColor: cSurface,
     },
     menuItemPressed: {
       backgroundColor: cPressed,
     },
-
-    footerActions: {
-      marginTop: spacing * 4,
-      gap: spacing * 2,
+    menuIconWrap: {
+      width: 24,
+      alignItems: "center",
     },
-    versionText: {
-      textAlign: "center",
-      color: cTextMuted,
-      marginTop: spacing * 2,
+    menuDivider: {
+      height: 1,
+      backgroundColor: cBorder,
+      marginLeft: spacing * 5,
     },
+    
+    // --- Utilities ---
     textDanger: {
       color: cDanger,
     },
+    textBrand: {
+      color: cBrand,
+    },
     textMain: {
-      color: cTextMain,
+      color: cText,
     },
     textSub: {
-      color: cTextSub,
+      color: cSub,
     },
     textMuted: {
-      color: cTextMuted,
+      color: cMuted,
+    },
+    versionText: {
+      textAlign: "center",
+      marginTop: spacing * 2,
+      color: cMuted,
     },
   });
 });
 
-function MenuRow({
-  title,
+function SummaryRow({
+  stat,
   isLast,
-  onPress,
-  danger = false,
   styles,
 }: {
-  title: string;
+  stat: SummaryStat;
   isLast: boolean;
-  onPress: () => void;
-  danger?: boolean;
   styles: ReturnType<typeof useStyles>;
 }) {
   return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.menuItem,
-        isLast && styles.menuItemLast,
-        pressed && styles.menuItemPressed,
-      ]}
-    >
-      <AppText variant="detail" weight="600" style={danger ? styles.textDanger : styles.textMain}>
-        {title}
-      </AppText>
-      <Ionicons name="chevron-forward" size={18} style={styles.textMuted} />
-    </Pressable>
+    <>
+      <Pressable
+        onPress={stat.onPress}
+        style={({ pressed }) => [styles.statItem, pressed && styles.statItemPressed]}
+      >
+        {stat.accent ? (
+          <View style={styles.statValueAccentWrap}>
+            <AppText style={styles.statValueAccent}>{stat.value}</AppText>
+          </View>
+        ) : (
+          <AppText style={styles.statValue}>{stat.value}</AppText>
+        )}
+        <AppText variant="caption" weight="600" style={styles.textSub}>
+          {stat.label}
+        </AppText>
+      </Pressable>
+      {!isLast ? <View style={styles.statDivider} /> : null}
+    </>
+  );
+}
+
+function MenuRow({
+  item,
+  isLast,
+  styles,
+}: {
+  item: MenuAction;
+  isLast: boolean;
+  styles: ReturnType<typeof useStyles>;
+}) {
+  return (
+    <>
+      <Pressable 
+        onPress={item.onPress} 
+        style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+      >
+        <View style={styles.menuIconWrap}>
+          <Ionicons
+            name={item.icon}
+            size={20}
+            color={item.danger ? styles.textDanger.color : styles.textSub.color}
+          />
+        </View>
+        <AppText
+          variant="body"
+          weight="600"
+          style={item.danger ? styles.textDanger : styles.textMain}
+        >
+          {item.title}
+        </AppText>
+        <View style={{ flex: 1 }} />
+        <Ionicons name="chevron-forward" size={18} color={styles.textMuted.color} />
+      </Pressable>
+      {!isLast ? <View style={styles.menuDivider} /> : null}
+    </>
   );
 }
 
 export function ShipperProfilePage() {
+  const router = useRouter();
   const theme = useAppTheme();
   const styles = useStyles();
-  const router = useRouter();
   const auth = useAuth();
 
-  const cBg = safeString(theme?.colors?.bgMain, safeString(theme?.colors?.bgSurfaceAlt, ""));
-  const cTextMain = safeString(theme?.colors?.textMain, "");
-  const cOnBrand = safeString(theme?.colors?.textOnBrand, safeString(theme?.colors?.textInverse, ""));
+  const cBg = safeString(theme?.colors?.bgSurfaceAlt, "#F8FAFC");
+  const cText = safeString(theme?.colors?.textMain, "#111827");
+  const cBrand = safeString(theme?.colors?.brandPrimary, "#FF6A00");
+  const cOnBrand = safeString(theme?.colors?.textOnBrand, "#FFFFFF");
 
-  const profileName = safeString((auth?.user as any)?.name, "(주) 로디아 유통");
-  const email = safeString((auth?.user as any)?.email, "business@rodia.co.kr");
+  const user = auth.user as { name?: string; email?: string } | null;
+  const profileName = safeString(user?.name, "로디아 화주");
+  const email = safeString(user?.email, "shipper@rodia.co.kr");
+  const isVerified = auth.pendingVerificationRole !== "shipper";
 
-  const avatarBg = safeString(theme?.colors?.brandSecondary, cTextMain).replace("#", "");
+  const avatarBg = cBrand.replace("#", "");
   const avatarFg = cOnBrand.replace("#", "");
-  const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(profileName)}&background=${avatarBg}&color=${avatarFg}&size=128`;
+  const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(
+    profileName
+  )}&background=${avatarBg}&color=${avatarFg}&size=128&bold=true`;
+
+  const stats = useMemo<SummaryStat[]>(
+    () => [
+      {
+        id: "in-progress",
+        label: "진행중",
+        value: "3",
+        accent: true,
+        onPress: () => router.push("/(shipper)/matchings"),
+      },
+      {
+        id: "request-history",
+        label: "견적요청",
+        value: "15",
+        onPress: () => router.push("/(shipper)/quotes"),
+      },
+      {
+        id: "settlement-wait",
+        label: "정산대기",
+        value: "1",
+        onPress: () => Alert.alert("정산 내역", "정산 상세 화면을 준비 중입니다."),
+      },
+    ],
+    [router]
+  );
 
   const businessMenus = useMemo<MenuAction[]>(
     () => [
-      { id: "payment", title: "결제 수단 관리", onPress: () => Alert.alert("결제 수단 관리") },
-      { id: "tax", title: "세금계산서 정보", onPress: () => Alert.alert("세금계산서 정보") },
-      { id: "address", title: "자주 쓰는 주소지", onPress: () => Alert.alert("주소지 관리") },
+      {
+        id: "biz-verification",
+        title: "사업자 정보 및 인증 관리",
+        icon: "business-outline",
+        onPress: () => Alert.alert("사업자 인증", "사업자 정보 관리 화면을 준비 중입니다."),
+      },
+      {
+        id: "addresses",
+        title: "상하차지 주소 관리",
+        icon: "map-outline",
+        onPress: () => Alert.alert("주소 관리", "주소 관리 화면을 준비 중입니다."),
+      },
+      {
+        id: "payment",
+        title: "운임 결제 수단 관리",
+        icon: "card-outline",
+        onPress: () => Alert.alert("결제 수단", "결제 수단 관리 화면을 준비 중입니다."),
+      },
+      {
+        id: "tax-invoice",
+        title: "세금계산서 발행 내역",
+        icon: "receipt-outline",
+        onPress: () => Alert.alert("세금계산서", "세금계산서 화면을 준비 중입니다."),
+      },
     ],
     []
   );
 
   const supportMenus = useMemo<MenuAction[]>(
     () => [
-      { id: "notice", title: "공지사항", onPress: () => Alert.alert("공지사항") },
-      { id: "support", title: "1:1 문의 / 고객센터", onPress: () => Alert.alert("고객센터") },
-      { id: "terms", title: "이용약관", onPress: () => Alert.alert("이용약관") },
+      {
+        id: "notice",
+        title: "공지사항",
+        icon: "megaphone-outline",
+        onPress: () => Alert.alert("공지사항", "공지사항 화면을 준비 중입니다."),
+      },
+      {
+        id: "help",
+        title: "1:1 문의 / 고객센터",
+        icon: "chatbubbles-outline",
+        onPress: () => Alert.alert("고객센터", "고객센터 화면을 준비 중입니다."),
+      },
+      {
+        id: "terms",
+        title: "이용약관",
+        icon: "document-text-outline",
+        onPress: () => Alert.alert("이용약관", "약관 화면을 준비 중입니다."),
+      },
     ],
     []
   );
 
   const accountMenus = useMemo<MenuAction[]>(
     () => [
-      { id: "logout", title: auth.isBusy ? "로그아웃 중..." : "로그아웃", onPress: async () => {
-        try {
-          await auth.logout();
-          Alert.alert("로그아웃", "로그아웃되었습니다.");
-        } catch (error) {
-          console.error(error);
-        }
-      }, danger: true },
+      {
+        id: "logout",
+        title: auth.isBusy ? "로그아웃 중..." : "로그아웃",
+        icon: "log-out-outline",
+        danger: true,
+        onPress: async () => {
+          if (auth.isBusy) return;
+          try {
+            await auth.logout();
+          } catch (error) {
+            console.error(error);
+            Alert.alert("오류", "로그아웃 처리 중 문제가 발생했습니다.");
+          }
+        },
+      },
     ],
     [auth]
   );
@@ -268,134 +395,103 @@ export function ShipperProfilePage() {
     <PageScaffold
       title="내 정보"
       backgroundColor={cBg}
+      scroll={true}
       contentStyle={styles.pageContent}
       headerRight={
         <AppButton
           size="icon"
           variant="secondary"
           accessibilityLabel="설정"
-          onPress={() => Alert.alert("설정")}
+          onPress={() => Alert.alert("설정", "설정 화면을 준비 중입니다.")}
         >
-          <Ionicons name="settings-outline" size={18} color={cTextMain} />
+          <Ionicons name="settings-outline" size={24} color={cText} />
         </AppButton>
       }
     >
-      <AppCard outlined style={styles.profileCard}>
+      {/* 프로필 요약 카드 */}
+      <AppCard outlined elevated={false} style={styles.profileCard}>
         <View style={styles.profileRow}>
           <Image source={{ uri: avatarUrl }} style={styles.avatar} />
-
           <View style={styles.profileInfo}>
             <View style={styles.nameRow}>
-              <AppText variant="heading" weight="800" numberOfLines={1} style={styles.textMain}>
+              <AppText variant="title" weight="800" numberOfLines={1} style={styles.textMain}>
                 {profileName}
               </AppText>
               <View style={styles.bizBadge}>
-                <AppText variant="caption" weight="800" style={styles.textDanger}>
+                <AppText variant="caption" weight="800" style={styles.bizBadgeText}>
                   BIZ
                 </AppText>
               </View>
             </View>
-            <AppText variant="caption" style={styles.textSub} numberOfLines={1}>
+            <AppText variant="detail" numberOfLines={1} style={styles.textMuted}>
               {email}
             </AppText>
+            
+            {/* 인증 상태를 이름/이메일 하단에 깔끔하게 배치 */}
+            <View style={styles.verificationWrap}>
+              <AppText 
+                variant="caption" 
+                weight="700" 
+                style={isVerified ? styles.textBrand : styles.textDanger}
+              >
+                {isVerified ? "✓ 사업자 인증 완료" : "⚠ 사업자 인증 필요"}
+              </AppText>
+            </View>
           </View>
-
+          
           <AppButton
-            title="편집"
-            size="sm"
+            size="icon"
             variant="secondary"
-            style={styles.profileEditBtn}
-            onPress={() => Alert.alert("프로필 편집")}
-          />
+            onPress={() => Alert.alert("프로필 관리", "프로필 수정 화면을 준비 중입니다.")}
+          >
+            <Ionicons name="chevron-forward" size={18} color={cText} />
+          </AppButton>
         </View>
       </AppCard>
 
-      <AppCard outlined style={styles.statsCard}>
+      {/* 통계 카드 */}
+      <AppCard outlined elevated={false} style={styles.statsCard}>
         <View style={styles.statsRow}>
-          <Pressable style={({ pressed }) => [styles.statItem, pressed && styles.statPressed]} onPress={() => Alert.alert("쿠폰함")}>
-            <AppText variant="heading" style={styles.statNum}>
-              2
-            </AppText>
-            <AppText variant="caption" style={styles.textSub}>
-              쿠폰함
-            </AppText>
-          </Pressable>
-
-          <View style={styles.statDivider} />
-
-          <Pressable style={({ pressed }) => [styles.statItem, pressed && styles.statPressed]} onPress={() => Alert.alert("포인트")}>
-            <AppText variant="heading" style={styles.statNum}>
-              2.5M
-            </AppText>
-            <AppText variant="caption" style={styles.textSub}>
-              포인트
-            </AppText>
-          </Pressable>
-
-          <View style={styles.statDivider} />
-
-          <Pressable style={({ pressed }) => [styles.statItem, pressed && styles.statPressed]} onPress={() => router.push("/(shipper)/quotes")}>
-            <AppText variant="heading" style={styles.statNum}>
-              15
-            </AppText>
-            <AppText variant="caption" style={styles.textSub}>
-              이용내역
-            </AppText>
-          </Pressable>
+          {stats.map((stat, index) => (
+            <SummaryRow key={stat.id} stat={stat} isLast={index === stats.length - 1} styles={styles} />
+          ))}
         </View>
       </AppCard>
 
-      <View style={styles.sectionGap}>
-        <AppText variant="caption" style={styles.sectionLabel}>
+      {/* 비즈니스 관리 메뉴 */}
+      <View style={styles.sectionHeader}>
+        <AppText variant="caption" weight="700" style={styles.textMuted}>
           비즈니스 관리
         </AppText>
-        <AppCard outlined style={styles.menuCard}>
-          {businessMenus.map((item, index) => (
-            <MenuRow
-              key={item.id}
-              title={item.title}
-              onPress={item.onPress}
-              isLast={index === businessMenus.length - 1}
-              styles={styles}
-            />
-          ))}
-        </AppCard>
       </View>
+      <AppCard outlined elevated={false} style={styles.sectionCard}>
+        {businessMenus.map((item, index) => (
+          <MenuRow key={item.id} item={item} isLast={index === businessMenus.length - 1} styles={styles} />
+        ))}
+      </AppCard>
 
-      <View style={styles.sectionGap}>
-        <AppText variant="caption" style={styles.sectionLabel}>
+      {/* 고객 지원 메뉴 */}
+      <View style={styles.sectionHeader}>
+        <AppText variant="caption" weight="700" style={styles.textMuted}>
           고객 지원
         </AppText>
-        <AppCard outlined style={styles.menuCard}>
-          {supportMenus.map((item, index) => (
-            <MenuRow
-              key={item.id}
-              title={item.title}
-              onPress={item.onPress}
-              isLast={index === supportMenus.length - 1}
-              styles={styles}
-            />
-          ))}
-        </AppCard>
       </View>
+      <AppCard outlined elevated={false} style={styles.sectionCard}>
+        {supportMenus.map((item, index) => (
+          <MenuRow key={item.id} item={item} isLast={index === supportMenus.length - 1} styles={styles} />
+        ))}
+      </AppCard>
 
-      <View style={styles.footerActions}>
-        <AppCard outlined style={styles.menuCard}>
-          {accountMenus.map((item, index) => (
-            <MenuRow
-              key={item.id}
-              title={item.title}
-              onPress={item.onPress}
-              danger={item.danger}
-              isLast={index === accountMenus.length - 1}
-              styles={styles}
-            />
-          ))}
-        </AppCard>
-        <AppText variant="caption" style={styles.versionText}>
-          현재 버전 v1.2.0
-        </AppText>
-      </View>
+      {/* 계정 (로그아웃 등) */}
+      <AppCard outlined elevated={false} style={styles.sectionCard}>
+        {accountMenus.map((item, index) => (
+          <MenuRow key={item.id} item={item} isLast={index === accountMenus.length - 1} styles={styles} />
+        ))}
+      </AppCard>
+
+      <AppText variant="caption" style={styles.versionText}>
+        현재 버전 v1.2.0
+      </AppText>
     </PageScaffold>
   );
 }
