@@ -1,21 +1,21 @@
-// src/features/drivers/ui/DriverApprovalBadges.tsx
 import { Badge } from "@/shared/ui/shadcn/badge";
-import type { ApprovalStatus, LicenseStatus } from "../model/types";
+import type { DriverApprovalLicenseStatus, DriverApprovalStatus } from "@/features/drivers/model/types";
 
-export function LicenseBadge({ status }: { status: LicenseStatus }) {
-  return status === "검증됨" ? (
-    <Badge className="bg-secondary text-foreground">검증됨</Badge>
-  ) : (
-    <Badge className="bg-destructive text-foreground">재요청</Badge>
-  );
+type LicenseBadgeProps = {
+  status: DriverApprovalLicenseStatus;
+};
+
+type ApprovalBadgeProps = {
+  status: DriverApprovalStatus;
+};
+
+export function DriverLicenseBadge({ status }: LicenseBadgeProps) {
+  if (status === "VERIFIED") return <Badge variant="secondary">인증완료</Badge>;
+  return <Badge variant="destructive">미인증</Badge>;
 }
 
-export function ApprovalBadge({ status }: { status: ApprovalStatus }) {
-  if (status === "승인 완료") {
-    return <Badge className="bg-secondary text-foreground">승인 완료</Badge>;
-  }
-  if (status === "승인 대기") {
-    return <Badge className="bg-muted text-foreground">승인 대기</Badge>;
-  }
-  return <Badge className="bg-destructive text-foreground">보류</Badge>;
+export function DriverApprovalStatusBadge({ status }: ApprovalBadgeProps) {
+  if (status === "APPROVED") return <Badge variant="secondary">승인</Badge>;
+  if (status === "REJECTED") return <Badge variant="destructive">거부</Badge>;
+  return <Badge variant="outline">대기</Badge>;
 }

@@ -1,12 +1,11 @@
-// src/pages/users/ShipperListPage.tsx
 import { UsersListView } from "@/features/users/ui/UsersListView";
 
 export default function ShipperListPage() {
   return (
     <UsersListView
-      title="화주 조회"
-      description="화주 계정을 조회하고, 견적/결제/정산 관련 상태를 확인해."
-      presetRole="SHIPPER" // 추가: 역할 고정 프리셋
+      title="화주 조회" // MODIFIED: role 고정 페이지 문구 정리
+      description="화주 계정을 조회하고 상태를 관리합니다." // MODIFIED: role 고정 페이지 문구 정리
+      presetRole="SHIPPER" // MODIFIED: 화주 고정
     />
   );
 }

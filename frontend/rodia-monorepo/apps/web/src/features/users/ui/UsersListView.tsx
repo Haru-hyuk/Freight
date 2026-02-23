@@ -1,4 +1,3 @@
-// src/features/users/ui/UsersListView.tsx
 import * as React from "react";
 import { Link } from "react-router-dom";
 
@@ -15,16 +14,12 @@ import { UserFilters } from "@/features/users/ui/UserFilters";
 import { toUserListQuery, type UserFilterValue } from "@/features/users/model/filters";
 
 type Props = {
-  // 추가: 페이지에서 타이틀/설명만 바꿔 끼우게 props로 받음
   title: string;
   description: string;
-
-  // 추가: 화주/차주 조회는 역할을 고정하는 프리셋 지원
   presetRole?: UserRole;
 };
 
 export function UsersListView({ title, description, presetRole }: Props) {
-  // 수정: presetRole이 있으면 role을 고정, 없으면 전체(all)
   const [filters, setFilters] = React.useState<UserFilterValue>({
     q: "",
     role: presetRole ?? "all",
@@ -46,21 +41,12 @@ export function UsersListView({ title, description, presetRole }: Props) {
     try {
       const query = toUserListQuery(filters, page, size);
       const res = await fetchUsers(query);
-
-      let items = res.items;
-
-      // 참고: status가 API query에 아직 없다면 클라 필터로 임시 처리 가능
-      // (백엔드 확정되면 fetchUsers query에 status 포함시키면 됨)
-      if (filters.status !== "all") {
-        items = items.filter((x) => x.status === filters.status);
-      }
-
-      setRows(items);
+      setRows(res.items);
       setTotal(res.total);
     } catch {
       setRows([]);
       setTotal(0);
-      setError("사용자 목록을 불러오지 못했어.");
+      setError("사용자 목록을 불러오지 못했습니다."); // MODIFIED: 오류 문구 정리
     } finally {
       setLoading(false);
     }
@@ -74,31 +60,29 @@ export function UsersListView({ title, description, presetRole }: Props) {
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-semibold">{title}</h2>
-        <p className="mt-1 text-sm opacity-70">{description}</p>
+        <p className="mt-1 text-sm text-foreground/70">{description}</p>
       </div>
 
-      {/* 수정: presetRole이 있으면 role 선택 UI를 잠그거나 숨김 */}
       <UserFilters
         value={filters}
         onChange={(next) => {
-          // 수정: presetRole이 있으면 role 변경을 막음(프리셋 유지)
           if (presetRole) {
-            setFilters({ ...next, role: presetRole });
+            setFilters({ ...next, role: presetRole }); // MODIFIED: role 고정 페이지 방어
             return;
           }
           setFilters(next);
         }}
         onSubmit={load}
         loading={loading}
-        roleLocked={Boolean(presetRole)} // 추가
+        roleLocked={Boolean(presetRole)}
       />
 
       <Separator />
 
       <Card className="rounded-lg border border-border bg-background">
         <CardHeader className="space-y-1">
-          <CardTitle className="text-lg">사용자 리스트</CardTitle>
-          <p className="text-sm opacity-70">총 {total}명</p>
+          <CardTitle className="text-lg">사용자 목록</CardTitle>
+          <p className="text-sm text-foreground/70">총 {total}명</p>
         </CardHeader>
 
         <CardContent className="space-y-3">
@@ -130,25 +114,25 @@ export function UsersListView({ title, description, presetRole }: Props) {
                   </TableRow>
                 ) : rows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="py-10 text-center text-sm opacity-70">
+                    <TableCell colSpan={6} className="py-10 text-center text-sm text-foreground/70">
                       사용자 데이터가 없습니다.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  rows.map((u) => (
-                    <TableRow key={u.id}>
-                      <TableCell className="font-medium">{u.id}</TableCell>
+                  rows.map((user) => (
+                    <TableRow key={user.id}>
+                      <TableCell className="font-medium">{user.id}</TableCell>
                       <TableCell>
-                        <UserRoleBadge role={u.role} />
+                        <UserRoleBadge role={user.role} />
                       </TableCell>
-                      <TableCell className="font-medium">{u.name}</TableCell>
+                      <TableCell className="font-medium">{user.name}</TableCell>
                       <TableCell>
-                        <UserStatusBadge status={u.status} />
+                        <UserStatusBadge status={user.status} />
                       </TableCell>
-                      <TableCell className="text-sm opacity-70">{u.createdAt}</TableCell>
+                      <TableCell className="text-sm text-foreground/70">{user.createdAt}</TableCell>
                       <TableCell className="text-right">
                         <Button asChild type="button" variant="secondary">
-                          <Link to={`/users/${u.id}`}>상세</Link>
+                          <Link to={`/users/${user.id}`}>상세</Link>
                         </Button>
                       </TableCell>
                     </TableRow>
