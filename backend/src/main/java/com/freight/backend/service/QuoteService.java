@@ -126,7 +126,15 @@ public class QuoteService {
         saveChecklistItems(saved.getQuoteId(), req.getChecklistItems());
         saveStops(saved.getQuoteId(), resolvedStops);
 
-        return new QuoteCreateResponse(saved.getQuoteId(), saved.getPublicId());
+        return new QuoteCreateResponse(
+                saved.getQuoteId(),
+                saved.getPublicId(),
+                saved.getOriginLat(),
+                saved.getOriginLng(),
+                saved.getDestinationLat(),
+                saved.getDestinationLng(),
+                stops
+        );
     }
 
     @Transactional

@@ -36,6 +36,10 @@ public enum ErrorCode {
     DESTINATION_GEOCODE_FAILED(HttpStatus.UNPROCESSABLE_ENTITY, "Failed to geocode destination address."),
     STOP_GEOCODE_FAILED(HttpStatus.UNPROCESSABLE_ENTITY, "Failed to geocode stop address."),
     ROUTE_DISTANCE_FAILED(HttpStatus.UNPROCESSABLE_ENTITY, "Failed to calculate route distance."),
+    EXTERNAL_API_ERROR(HttpStatus.SERVICE_UNAVAILABLE, "외부 서비스 연결에 실패했습니다."),
+    ORIGIN_GEOCODE_FAILED(HttpStatus.UNPROCESSABLE_ENTITY, "Failed to geocode origin address."),
+    DESTINATION_GEOCODE_FAILED(HttpStatus.UNPROCESSABLE_ENTITY, "Failed to geocode destination address."),
+    STOP_GEOCODE_FAILED(HttpStatus.UNPROCESSABLE_ENTITY, "Failed to geocode stop address."),
 
     /* =========================
        COMMON
