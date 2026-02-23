@@ -237,6 +237,79 @@ const useStyles = createThemedStyles((theme) => {
       fontWeight: "600",
       marginTop: spacing,
     },
+    locationSection: {
+      marginBottom: spacing * 3,
+      gap: spacing * 2,
+    },
+    locationSectionTitle: {
+      color: c.textMain,
+      fontSize: safeNumber(theme.typography.scale.detail.size, 14),
+      lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20),
+      fontWeight: "900",
+    },
+    locationCard: {
+      borderWidth: 1,
+      borderColor: c.borderDefault,
+    },
+    locationCardInner: {
+      padding: spacing * 3,
+      gap: spacing,
+    },
+    locationCardHeader: {
+      minHeight: 28,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing,
+    },
+    locationIconChip: {
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      borderWidth: 1,
+      borderColor: tint(c.textMain, 0.18, c.borderDefault),
+      backgroundColor: tint(c.textMain, 0.04, c.bgSurface),
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    locationIcon: {
+      fontSize: 12,
+      color: c.textSub,
+    },
+    locationCardTitle: {
+      color: c.textMain,
+      fontSize: safeNumber(theme.typography.scale.detail.size, 14),
+      lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20),
+      fontWeight: "900",
+    },
+    locationRow: {
+      minHeight: 20,
+      flexDirection: "row",
+      alignItems: "flex-start",
+      justifyContent: "space-between",
+      gap: spacing * 2,
+      paddingTop: 2,
+    },
+    locationLabel: {
+      width: "28%",
+      color: c.textMuted,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
+      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
+      fontWeight: "700",
+    },
+    locationValue: {
+      flex: 1,
+      color: c.textMain,
+      fontSize: safeNumber(theme.typography.scale.detail.size, 14),
+      lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20),
+      fontWeight: "700",
+      textAlign: "right",
+    },
+    noWaypointText: {
+      color: c.textMuted,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
+      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
+      fontWeight: "700",
+    },
 
     highlightLine: {
       color: c.textMain,
@@ -347,8 +420,18 @@ const useStyles = createThemedStyles((theme) => {
     archiveRowLast: {
       borderBottomWidth: 0,
     },
-    archiveLabel: {
+    archiveLabelGroup: {
       width: "35%",
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing,
+    },
+    archiveLabelIcon: {
+      color: c.textSub,
+      fontSize: 14,
+    },
+    archiveLabel: {
+      flex: 1,
       color: c.textMuted,
       fontSize: safeNumber(theme.typography.scale.caption.size, 12),
       lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
@@ -488,16 +571,6 @@ function buildWaypointText(waypoints: string[]): string {
   return `경유지 ${list.length}곳: ${list[0]} 외 ${list.length - 1}곳`;
 }
 
-function resolvePriceLabel(view: QuoteDetailView): string {
-  const status = view.quote?.status ?? "";
-  const type = view.highlight?.type ?? "none";
-
-  if (type === "driverProfile") return "결제 금액";
-  if (type === "proof") return "최종 운임";
-  if (status === "CANCELED") return "운임";
-  return "운임";
-}
-
 function toWorkMethodLabel(value: unknown): string {
   const raw = String(value ?? "").trim();
   const normalized = raw.toUpperCase();
@@ -505,6 +578,30 @@ function toWorkMethodLabel(value: unknown): string {
   if (normalized === "DRIVER") return "기사";
   if (!raw) return "정보 없음";
   return raw;
+}
+
+function formatPriceText(value: unknown): string {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return "-";
+  return `${Math.max(0, Math.trunc(parsed)).toLocaleString("ko-KR")}원`;
+}
+
+function resolveArchiveRowIconName(
+  sectionTitle: string,
+  rowLabel: string
+): keyof typeof Ionicons.glyphMap | null {
+  const normalizedSectionTitle = String(sectionTitle ?? "").trim();
+  const normalizedLabel = String(rowLabel ?? "").trim();
+  if (normalizedSectionTitle !== "차량/화물") return null;
+
+  if (normalizedLabel === "차량") return "bus-outline";
+  if (normalizedLabel === "화물명") return "cube-outline";
+  if (normalizedLabel === "화물 구분") return "pricetag-outline";
+  if (normalizedLabel === "화물 설명") return "document-text-outline";
+  if (normalizedLabel === "중량") return "git-network-outline";
+  if (normalizedLabel === "부피") return "layers-outline";
+  if (normalizedLabel === "하차 위치") return "navigate-outline";
+  return null;
 }
 
 function OverviewCard({
@@ -533,10 +630,8 @@ function OverviewCard({
   const completedAtText = (view.coreSummary?.completedAtText ?? "").trim();
   const isCompleted = (view.quote?.status ?? "") === "DROPOFF";
 
-  const isPriceCompare = (view.highlight?.type ?? "none") === "priceCompare";
-  const isCanceled = (view.quote?.status ?? "") === "CANCELED";
-  const hasPriceText = Boolean((view.coreSummary?.totalPriceText ?? "").trim());
-  const showPriceSummary = !isPriceCompare && !isCanceled && hasPriceText;
+  const desiredPriceText = formatPriceText(view.quote?.desiredPrice);
+  const finalPriceText = formatPriceText(view.quote?.finalPrice);
 
   const highlightLines = Array.isArray(view.highlight?.lines) ? view.highlight.lines.filter(Boolean) : [];
   const title = (view.highlight?.title ?? "").trim();
@@ -619,28 +714,34 @@ function OverviewCard({
           <AppText style={styles.metricValue}>{unloadMethodText}</AppText>
         </View>
 
-        {showPriceSummary ? (
-          <View>
-            <View style={styles.metricRow}>
-              <View style={styles.metricLeft}>
-                <Ionicons
-                  name={isCompleted ? "wallet-outline" : "cash-outline"}
-                  style={[styles.metricIcon, { color: palette.iconColor }]}
-                />
-                <AppText style={styles.metricLabel}>{resolvePriceLabel(view)}</AppText>
-              </View>
-              {isCompleted && completedAtText ? (
-                <View style={styles.metricLeft}>
-                  <Ionicons name="checkmark-done-circle-outline" style={[styles.metricIcon, { color: palette.iconColor }]} />
-                  <AppText style={styles.metricValue}>{completedAtText}</AppText>
-                </View>
-              ) : (
-                <AppText style={styles.metricValue}>{note || "세부 요금은 아래에서 확인할 수 있습니다."}</AppText>
-              )}
+        <View>
+          <View style={styles.metricRow}>
+            <View style={styles.metricLeft}>
+              <Ionicons name="cash-outline" style={[styles.metricIcon, { color: palette.iconColor }]} />
+              <AppText style={styles.metricLabel}>제안 금액</AppText>
             </View>
-            <AppText style={[styles.priceValue, { color: palette.emphasisText }]}>{view.coreSummary?.totalPriceText ?? ""}</AppText>
+            <AppText style={styles.metricValue}>{desiredPriceText}</AppText>
           </View>
-        ) : null}
+
+          <View style={styles.metricRow}>
+            <View style={styles.metricLeft}>
+              <Ionicons
+                name={isCompleted ? "wallet-outline" : "pricetag-outline"}
+                style={[styles.metricIcon, { color: palette.iconColor }]}
+              />
+              <AppText style={styles.metricLabel}>최종 금액</AppText>
+            </View>
+            <AppText style={styles.metricValue}>{finalPriceText}</AppText>
+          </View>
+
+          <AppText style={[styles.priceValue, { color: palette.emphasisText }]}>{finalPriceText}</AppText>
+
+          {isCompleted && completedAtText ? (
+            <AppText style={styles.note}>{`최종 정산 완료: ${completedAtText}`}</AppText>
+          ) : (
+            <AppText style={styles.note}>{note || "세부 요금은 아래에서 확인할 수 있습니다."}</AppText>
+          )}
+        </View>
 
         {highlightLines.length > 0
           ? highlightLines.slice(0, 4).map((line, index) => (
@@ -691,7 +792,7 @@ function OverviewCard({
 
 function SpecificationArchive({ view }: { view: QuoteDetailView }) {
   const styles = useStyles();
-  const [open, setOpen] = React.useState(false);
+  const [open, setOpen] = React.useState(true);
 
   const toggle = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -720,13 +821,21 @@ function SpecificationArchive({ view }: { view: QuoteDetailView }) {
                 <View style={styles.archiveCardInner}>
                   <AppText style={styles.archiveTitle}>{section.title}</AppText>
                   {rows.map((row, rowIndex) => (
-                    <View
-                      key={`${section.title}-${row.label}-${rowIndex}`}
-                      style={[styles.archiveRow, rowIndex === rows.length - 1 && styles.archiveRowLast]}
-                    >
-                      <AppText style={styles.archiveLabel}>{row.label}</AppText>
-                      <AppText style={styles.archiveValue}>{row.value}</AppText>
-                    </View>
+                    (() => {
+                      const iconName = resolveArchiveRowIconName(section.title, row.label);
+                      return (
+                        <View
+                          key={`${section.title}-${row.label}-${rowIndex}`}
+                          style={[styles.archiveRow, rowIndex === rows.length - 1 && styles.archiveRowLast]}
+                        >
+                          <View style={styles.archiveLabelGroup}>
+                            {iconName ? <Ionicons name={iconName} style={styles.archiveLabelIcon} /> : null}
+                            <AppText style={styles.archiveLabel}>{row.label}</AppText>
+                          </View>
+                          <AppText style={styles.archiveValue}>{row.value}</AppText>
+                        </View>
+                      );
+                    })()
                   ))}
                 </View>
               </AppCard>
@@ -870,13 +979,16 @@ export default function QuoteDetailPage() {
   const handlePressEdit = React.useCallback(() => {
     if (isBlockedByFetchState) return;
     const targetQuoteId = resolveActionQuoteId();
-    if (targetQuoteId <= 0) {
+    const preferredIdentifier = String(view.quote?.quotePublicId ?? quoteIdentifier ?? "").trim();
+    const routeIdentifier = preferredIdentifier || (targetQuoteId > 0 ? String(targetQuoteId) : "");
+
+    if (!routeIdentifier) {
       Alert.alert("수정 이동 실패", "유효한 견적 ID를 찾을 수 없습니다.");
       return;
     }
 
-    router.push({ pathname: "/(shipper)/quotes/edit/[id]", params: { id: String(targetQuoteId) } });
-  }, [isBlockedByFetchState, resolveActionQuoteId, router]);
+    router.push({ pathname: "/(shipper)/quotes/edit/[id]", params: { id: routeIdentifier } });
+  }, [isBlockedByFetchState, quoteIdentifier, resolveActionQuoteId, router, view.quote?.quotePublicId]);
   const runDelete = React.useCallback(async () => {
     if (isDeleting || isBlockedByFetchState) return;
 
@@ -915,6 +1027,14 @@ export default function QuoteDetailPage() {
     initLayoutAnimationForAndroid();
   }, []);
 
+  const handleDetailErrorRetry = React.useCallback(() => {
+    if (view.isSessionExpired) {
+      router.replace("/(auth)/login");
+      return;
+    }
+    view.refetch();
+  }, [router, view.isSessionExpired, view.refetch]);
+
   return (
     <PageScaffold
       title="견적 상세"
@@ -936,10 +1056,10 @@ export default function QuoteDetailPage() {
         <AppSpinner label="견적 상세를 불러오는 중입니다." />
       ) : view.errorMessage ? (
         <AppErrorState
-          title="견적 상세를 불러오지 못했어요"
-          description={view.errorMessage}
-          retryLabel="다시 시도"
-          onRetry={view.refetch}
+          title={view.isSessionExpired ? "세션이 만료되었습니다" : "견적 상세를 불러오지 못했어요"}
+          description={view.isSessionExpired ? "세션이 만료되었습니다. 다시 로그인해 주세요." : view.errorMessage}
+          retryLabel={view.isSessionExpired ? "로그인으로 이동" : "다시 시도"}
+          onRetry={handleDetailErrorRetry}
           fullScreen={false}
         />
       ) : (

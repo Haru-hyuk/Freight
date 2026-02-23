@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { QuoteDetailResponse, QuoteId } from "@/entities/quote/model/quote.types";
 import { getShipperQuoteDetailByIdentifier } from "@/features/quote/api";
+import { isSessionExpiredApiError, SESSION_EXPIRED_MESSAGE } from "@/shared/lib/api/apiClient";
 import {
   getQuoteActionPolicy,
   getQuoteStatusLabel,
@@ -51,6 +52,7 @@ export type QuoteDetailViewModel = {
   policy: QuoteActionPolicy;
   isLoading: boolean;
   errorMessage: string | null;
+  isSessionExpired: boolean;
   refetch: () => void;
   commandCenter: {
     statusLabel: string;
@@ -113,6 +115,43 @@ function formatKrw(value: unknown): string {
   return `${KRW_FORMAT.format(safeValue)}원`;
 }
 
+function mapEnumLabel<T extends string>(value: unknown, mapping: Record<string, string>, fallback = "-"): string {
+  const raw = String(value ?? "").trim();
+  if (!raw) return fallback;
+  const normalized = raw.toUpperCase();
+  return mapping[normalized] ?? raw;
+}
+
+function toVehicleTypeLabel(value: unknown): string {
+  return mapEnumLabel(value, {
+    TON_1: "1톤",
+    TON_2_5: "2.5톤",
+    TON_5: "5톤",
+  });
+}
+
+function toVehicleBodyTypeLabel(value: unknown): string {
+  return mapEnumLabel(value, {
+    CARGO: "카고",
+    WING_BODY: "윙바디",
+    TOP_CAR: "탑차",
+  });
+}
+
+function toCargoTypeLabel(value: unknown): string {
+  return mapEnumLabel(value, {
+    GENERAL: "일반",
+    FROZEN: "냉장/냉동",
+  });
+}
+
+function toWorkMethodLabel(value: unknown): string {
+  return mapEnumLabel(value, {
+    SHIPPER: "화주",
+    DRIVER: "기사",
+  });
+}
+
 function formatDateTime(iso: unknown): string {
   const raw = typeof iso === "string" ? iso : "";
   const date = new Date(raw);
@@ -123,6 +162,11 @@ function formatDateTime(iso: unknown): string {
   const hour = String(date.getHours()).padStart(2, "0");
   const minute = String(date.getMinutes()).padStart(2, "0");
   return `${month}월 ${day}일 ${hour}:${minute}`;
+}
+
+function toDisplayText(value: unknown, fallback = "-"): string {
+  const text = String(value ?? "").trim();
+  return text || fallback;
 }
 
 function formatChecklistItems(items: QuoteDetailResponse["checklistItems"] | undefined): string {
@@ -205,7 +249,9 @@ function toSafeQuote(quoteId: QuoteId, source?: QuoteDetailResponse | null): Quo
     shipperId: toSafeInteger(raw.shipperId),
     truckId: toSafeInteger(raw.truckId),
     originAddress: String(raw.originAddress ?? ""),
+    originAddressDetail: String(raw.originAddressDetail ?? "").trim() || undefined,
     destinationAddress: String(raw.destinationAddress ?? ""),
+    destinationAddressDetail: String(raw.destinationAddressDetail ?? "").trim() || undefined,
     originLat: toSafeNumber(raw.originLat),
     originLng: toSafeNumber(raw.originLng),
     destinationLat: toSafeNumber(raw.destinationLat),
@@ -229,6 +275,10 @@ function toSafeQuote(quoteId: QuoteId, source?: QuoteDetailResponse | null): Quo
     status: toSafeStatus(raw.status),
     createdAt: String(raw.createdAt ?? nowIso),
     updatedAt: String(raw.updatedAt ?? nowIso),
+    senderName: String(raw.senderName ?? "").trim() || undefined,
+    senderPhone: String(raw.senderPhone ?? "").trim() || undefined,
+    receiverName: String(raw.receiverName ?? "").trim() || undefined,
+    receiverPhone: String(raw.receiverPhone ?? "").trim() || undefined,
     checklistItems,
     stops: toSafeStops((raw as unknown as { stops?: unknown })?.stops),
   };
@@ -352,10 +402,30 @@ function formatStopValue(stop: QuoteDetailResponse["stops"][number]): string {
   return `${address || "정보 없음"} (${metaParts.join(" · ")})`;
 }
 
+function buildDropOffSummary(quote: QuoteDetailResponse): string {
+  const stops = Array.isArray(quote?.stops) ? quote.stops : [];
+  const stopTexts = stops
+    .slice()
+    .sort((a, b) => toSafeInteger(a?.seq, 0) - toSafeInteger(b?.seq, 0))
+    .map((stop, index) => {
+      const seq = Math.max(1, toSafeInteger(stop?.seq, index + 1));
+      const address = String(stop?.address ?? "").trim();
+      if (!address) return "";
+      return `경유지 ${seq} (${address})`;
+    })
+    .filter(Boolean);
+
+  const destinationAddress = String(quote?.destinationAddress ?? "").trim();
+  const destinationText = destinationAddress ? `도착지 (${destinationAddress})` : "";
+  const parts = destinationText ? [...stopTexts, destinationText] : stopTexts;
+
+  return parts.length ? parts.join(" / ") : "-";
+}
+
 function buildSpecificationArchive(quote: QuoteDetailResponse): QuoteSection[] {
-  const vehicleType = String(quote?.vehicleType ?? "").trim();
-  const vehicleBodyType = String(quote?.vehicleBodyType ?? "").trim();
-  const vehicleText = [vehicleType, vehicleBodyType].filter(Boolean).join(" ").trim() || "정보 없음";
+  const vehicleType = toVehicleTypeLabel(quote?.vehicleType);
+  const vehicleBodyType = toVehicleBodyTypeLabel(quote?.vehicleBodyType);
+  const vehicleText = [vehicleType, vehicleBodyType].filter(Boolean).join(" ").trim();
 
   const stops = Array.isArray(quote?.stops) ? quote.stops : [];
   const stopRows: QuoteSectionRow[] = stops.length
@@ -363,35 +433,48 @@ function buildSpecificationArchive(quote: QuoteDetailResponse): QuoteSection[] {
         label: `경유지 ${Math.max(1, toSafeInteger(stop?.seq, 1))}`,
         value: formatStopValue(stop),
       }))
-    : [];
-
-  const stopSection: QuoteSection[] = stopRows.length
-    ? [
-        {
-          title: "경유지",
-          rows: stopRows,
-        },
-      ]
-    : [];
+    : [{ label: "경유지", value: "-" }];
 
   return [
-    ...stopSection,
     {
-      title: "차량 및 화물",
+      title: "출발지 정보",
       rows: [
-        { label: "차량", value: vehicleText },
-        { label: "화물명", value: String(quote?.cargoName ?? "정보 없음") },
-        { label: "화물 구분", value: String(quote?.cargoType ?? "정보 없음") },
-        { label: "화물 설명", value: String(quote?.cargoDesc ?? "정보 없음") },
-        { label: "중량", value: `${toSafeNumber(quote?.weightKg).toLocaleString("ko-KR")}kg` },
-        { label: "부피", value: `${toSafeNumber(quote?.volumeCbm).toFixed(1)}cbm` },
+        { label: "주소", value: toDisplayText(quote?.originAddress) },
+        { label: "상세주소", value: toDisplayText(quote?.originAddressDetail) },
+        { label: "발송인", value: toDisplayText(quote?.senderName) },
+        { label: "연락처", value: toDisplayText(quote?.senderPhone) },
       ],
     },
     {
-      title: "상차 및 하차",
+      title: "도착지 정보",
       rows: [
-        { label: "상차 방식", value: String(quote?.loadMethod ?? "정보 없음") },
-        { label: "하차 방식", value: String(quote?.unloadMethod ?? "정보 없음") },
+        { label: "주소", value: toDisplayText(quote?.destinationAddress) },
+        { label: "상세주소", value: toDisplayText(quote?.destinationAddressDetail) },
+        { label: "수취인", value: toDisplayText(quote?.receiverName) },
+        { label: "연락처", value: toDisplayText(quote?.receiverPhone) },
+      ],
+    },
+    {
+      title: "경유지",
+      rows: stopRows,
+    },
+    {
+      title: "차량/화물",
+      rows: [
+        { label: "차량", value: toDisplayText(vehicleText) },
+        { label: "화물명", value: toDisplayText(quote?.cargoName) },
+        { label: "화물 구분", value: toDisplayText(toCargoTypeLabel(quote?.cargoType)) },
+        { label: "화물 설명", value: toDisplayText(quote?.cargoDesc) },
+        { label: "중량", value: `${toSafeNumber(quote?.weightKg).toLocaleString("ko-KR")}kg` },
+        { label: "부피", value: `${toSafeNumber(quote?.volumeCbm).toFixed(1)}cbm` },
+        { label: "하차 위치", value: buildDropOffSummary(quote) },
+      ],
+    },
+    {
+      title: "상차/하차",
+      rows: [
+        { label: "상차 방식", value: toDisplayText(toWorkMethodLabel(quote?.loadMethod)) },
+        { label: "하차 방식", value: toDisplayText(toWorkMethodLabel(quote?.unloadMethod)) },
         { label: "합짐 여부", value: quote?.allowCombine ? "허용" : "단독 운송" },
         { label: "추가 요청", value: formatChecklistItems(quote?.checklistItems) },
       ],
@@ -399,9 +482,12 @@ function buildSpecificationArchive(quote: QuoteDetailResponse): QuoteSection[] {
     {
       title: "요금 내역",
       rows: [
+        { label: "제안 금액", value: formatKrw(quote?.desiredPrice) },
+        { label: "최종 금액", value: formatKrw(quote?.finalPrice) },
         { label: "기본 요금", value: formatKrw(quote?.basePrice) },
         { label: "거리 요금", value: formatKrw(quote?.distancePrice) },
         { label: "추가 요금", value: formatKrw(quote?.extraPrice) },
+        { label: "운송 거리", value: `${toSafeNumber(quote?.distanceKm).toFixed(1)}km` },
       ],
     },
   ];
@@ -428,6 +514,7 @@ export function useQuoteDetail(quoteIdentifier: QuoteId | string, runtimeOverrid
   const [quote, setQuote] = useState<QuoteDetailResponse | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSessionExpired, setIsSessionExpired] = useState<boolean>(false);
   const [reloadTick, setReloadTick] = useState(0);
   const overrideStatus = runtimeOverride?.status;
   const overrideCancelReason = runtimeOverride?.cancelReason;
@@ -444,6 +531,7 @@ export function useQuoteDetail(quoteIdentifier: QuoteId | string, runtimeOverrid
       setQuote(null);
       setIsLoading(false);
       setErrorMessage("유효하지 않은 견적 식별자입니다.");
+      setIsSessionExpired(false);
       return () => {
         isMounted = false;
       };
@@ -451,20 +539,27 @@ export function useQuoteDetail(quoteIdentifier: QuoteId | string, runtimeOverrid
 
     setIsLoading(true);
     setErrorMessage(null);
+    setIsSessionExpired(false);
     setQuote(null);
 
     getShipperQuoteDetailByIdentifier(normalizedIdentifier)
       .then((response) => {
         if (!isMounted) return;
         setQuote(response ?? null);
+        setIsSessionExpired(false);
       })
       .catch((error: unknown) => {
         if (!isMounted) return;
+        const status = Number((error as { response?: { status?: unknown } } | undefined)?.response?.status ?? 0);
+        const sessionExpired = isSessionExpiredApiError(error) || status === 401;
         const message =
-          error instanceof Error && error.message.trim().length > 0
+          sessionExpired
+            ? SESSION_EXPIRED_MESSAGE
+            : error instanceof Error && error.message.trim().length > 0
             ? error.message.trim()
             : "견적 상세를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.";
         setQuote(null);
+        setIsSessionExpired(sessionExpired);
         setErrorMessage(message);
       })
       .finally(() => {
@@ -521,6 +616,7 @@ export function useQuoteDetail(quoteIdentifier: QuoteId | string, runtimeOverrid
       policy,
       isLoading,
       errorMessage,
+      isSessionExpired,
       refetch,
       commandCenter: { statusLabel, metaText, cancelReasonText, canceledAtText },
       highlight: buildHighlight(resolvedQuote, policy, normalizedOverride),
@@ -543,5 +639,5 @@ export function useQuoteDetail(quoteIdentifier: QuoteId | string, runtimeOverrid
         destinationAddress,
       },
     };
-  }, [quote, fallbackQuoteId, overrideStatus, overrideCancelReason, overrideCanceledAt, isLoading, errorMessage, refetch]);
+  }, [quote, fallbackQuoteId, overrideStatus, overrideCancelReason, overrideCanceledAt, isLoading, errorMessage, isSessionExpired, refetch]);
 }
