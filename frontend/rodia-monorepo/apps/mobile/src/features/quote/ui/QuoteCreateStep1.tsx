@@ -428,23 +428,6 @@ export function QuoteCreateStep1() {
       <ScrollView {...QUOTE_SCROLL_VIEW_PROPS} contentContainerStyle={styles.container}>
         {/* 1. 경로 입력 (타임라인) */}
         <View>
-          <View style={styles.statusWrap}>
-            {isResolvingCoords ? (
-              <AppSpinner label="주소 좌표를 확인하는 중입니다." />
-            ) : coordError ? (
-              <AppErrorState
-                title="좌표를 확인하지 못했어요"
-                description={coordError}
-                retryLabel="다시 시도"
-                onRetry={retryResolveCoordinates}
-              />
-            ) : !hasAnySelectedAddress ? (
-              <AppErrorState
-                title="주소를 검색해 주세요."
-                description="출발지, 도착지 또는 경유지를 선택하면 좌표가 자동으로 입력됩니다."
-              />
-            ) : null}
-          </View>
           <View style={styles.routeCard}>
                <View style={styles.sectionHeader}>
             <Ionicons name="map-outline" size={18} color={theme.colors.brandPrimary} />
