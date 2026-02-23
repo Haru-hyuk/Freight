@@ -1,67 +1,100 @@
 // src/features/dashboard/ui/DashboardQuickActions.tsx
-import type { DeviationFeedItem, KpiData } from "@/features/dashboard/model/types";
+import type { KpiData } from "@/features/dashboard/model/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/shadcn/card";
 import { Button } from "@/shared/ui/shadcn/button";
 import { Separator } from "@/shared/ui/shadcn/separator";
 import { Skeleton } from "@/shared/ui/shadcn/skeleton";
 import { Badge } from "@/shared/ui/shadcn/badge";
+import { AlertCircle, CheckCircle2, Clock } from "lucide-react";
 
 type Props = {
   loading: boolean;
   kpi: KpiData | null;
-  items: DeviationFeedItem[];
+  pendingApprovals: {
+    drivers: number;
+    trucks: number;
+  };
 };
 
-export function DashboardQuickActions({ loading, kpi, items }: Props) {
-  const severeCount = items.filter((x) => x.severity === "SEVERE" && !x.adjusted).length;
-  const unsettled = kpi?.unsettledAmount ?? 0;
+export function DashboardQuickActions({ loading, kpi, pendingApprovals }: Props) {
+  const deviationCount = kpi?.deviationCasesOpen ?? 0;
+  const pendingTotal = pendingApprovals.drivers + pendingApprovals.trucks;
 
   return (
     <Card className="rounded-lg border border-border bg-background">
       <CardHeader className="space-y-1">
-        <CardTitle className="text-base font-bold">운영 액션</CardTitle>
-        <p className="text-sm opacity-70">바로 처리해야 하는 일만 추려서</p>
+        <CardTitle className="text-base font-bold">즉시 처리 항목</CardTitle>
+        <p className="text-sm text-muted-foreground">우선 조치 필요한 업무</p>
       </CardHeader>
 
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-3">
         {loading ? (
           <div className="space-y-3">
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-16 w-full" />
             <Skeleton className="h-10 w-full" />
           </div>
         ) : (
           <>
-            <div className="rounded-lg border border-border bg-muted p-4">
-              <div className="flex items-center justify-between">
-                <div className="text-sm font-semibold">미조정 SEVERE</div>
-                <Badge className={severeCount > 0 ? "bg-destructive text-foreground" : "bg-secondary text-foreground"}>
-                  {severeCount}건
-                </Badge>
+            {/* 신청 대기 - 기사/차량 */}
+            <div className="rounded-lg border border-border bg-muted p-4 flex gap-3">
+              <Clock className="h-5 w-5 text-warning flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold">신청 대기</p>
+                  <Badge className="bg-warning text-foreground">{pendingTotal}건</Badge>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  기사 {pendingApprovals.drivers}건 / 차량 {pendingApprovals.trucks}건
+                </p>
               </div>
-              <div className="mt-2 text-sm opacity-70">경로 이탈/이상 이벤트 중 우선순위 최상</div>
             </div>
 
-            <div className="rounded-lg border border-border bg-muted p-4">
-              <div className="flex items-center justify-between">
-                <div className="text-sm font-semibold">미정산 금액</div>
-                <Badge className={unsettled > 0 ? "bg-accent text-foreground" : "bg-secondary text-foreground"}>
-                  {unsettled > 0 ? "확인 필요" : "정상"}
-                </Badge>
+            {/* 이상 징후 */}
+            <div className="rounded-lg border border-border bg-muted p-4 flex gap-3">
+              <AlertCircle className={`h-5 w-5 flex-shrink-0 mt-0.5 ${
+                deviationCount > 0 ? "text-destructive" : "text-muted-foreground"
+              }`} />
+              <div className="flex-1">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold">이상 징후 관리</p>
+                  <Badge className={deviationCount > 0 ? "bg-destructive text-foreground" : "bg-secondary text-foreground"}>
+                    {deviationCount}건
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  검토 중인 경로이탈, 시간초과 등
+                </p>
               </div>
-              <div className="mt-2 text-sm opacity-70">settlements.status != COMPLETED</div>
             </div>
 
-            <Separator />
+            {/* 미정산 금액 */}
+            <div className="rounded-lg border border-border bg-muted p-4 flex gap-3">
+              <CheckCircle2 className="h-5 w-5 text-accent flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold">정산 관리</p>
+                  <Badge className="bg-secondary text-foreground">확인</Badge>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  미정산: {kpi?.totalSettlementAmount ? (kpi.totalSettlementAmount / 1000000).toFixed(1) : 0}백만
+                </p>
+              </div>
+            </div>
 
+            <Separator className="my-2" />
+
+            {/* 액션 버튼들 */}
             <div className="grid grid-cols-1 gap-2">
-              <Button className="bg-primary text-foreground">이상 징후 상세 보기</Button>
-              <Button className="bg-secondary text-foreground">정산 대기 목록 열기</Button>
-              <Button className="bg-destructive text-foreground">긴급 조치 플로우 실행</Button>
-            </div>
-
-            <div className="text-xs opacity-60">
-              지금은 목업 버튼. 추후 라우팅(`/orders`, `/settlement`) 연결하면 끝.
+              <Button variant="default" className="bg-primary text-primary-foreground hover:opacity-90">
+                신청 승인 관리
+              </Button>
+              <Button variant="outline" className="border-border text-foreground hover:bg-muted">
+                이상 징후 조사
+              </Button>
+              <Button variant="outline" className="border-border text-foreground hover:bg-muted">
+                정산 처리현황
+              </Button>
             </div>
           </>
         )}

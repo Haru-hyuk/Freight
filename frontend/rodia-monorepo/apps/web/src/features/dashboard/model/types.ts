@@ -1,5 +1,5 @@
 // src/features/dashboard/model/types.ts
-export type TimeRange = "today" | "week";
+export type TimeRange = "today" | "week" | "month";
 
 /** 서버에서 오는 severity (실제 응답) */
 export type ApiDeviationSeverity = "LOW" | "MEDIUM" | "HIGH";
@@ -8,18 +8,36 @@ export type ApiDeviationSeverity = "LOW" | "MEDIUM" | "HIGH";
 export type DeviationSeverity = "MINOR" | "MODERATE" | "SEVERE";
 
 export type KpiData = {
-  todayOrders: number;
-  weeklyOrders: number;
+  todayOrders?: number;
+  weeklyOrders?: number;
 
-  dispatchCompletionRate: number;
-  avgDispatchMinutes: number;
+  dispatchCompletionRate?: number;
+  avgDispatchMinutes?: number;
 
-  inTransitCount: number;
-  canceledQuotes: number;
+  inTransitCount?: number;
+  canceledQuotes?: number;
 
-  gmv: number;
-  platformRevenue: number;
-  unsettledAmount: number;
+  gmv?: number;
+  platformRevenue?: number;
+  unsettledAmount?: number;
+  
+  // Admin Dashboard KPI additions
+  totalShippers?: number;
+  totalDrivers?: number;
+  newShippersToday?: number;
+  newDriversToday?: number;
+  totalQuotesOpen?: number;
+  totalMatches?: number;
+  matchCompletionRate?: number;
+  averageMatchingTime?: number;
+  totalRevenue?: number;
+  totalPlatformFee?: number;
+  totalSettlementAmount?: number;
+  deviationCasesOpen?: number;
+  averageShipperRating?: number;
+  averageDriverRating?: number;
+  driverCompletionRate?: number;
+  driverOnTimeRate?: number;
 };
 
 /** ✅ 서버 응답의 deviation 이벤트 DTO */
