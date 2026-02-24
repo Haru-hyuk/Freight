@@ -342,6 +342,7 @@ function QuoteCreatePageInner() {
   const [bottomBarHeight, setBottomBarHeight] = useState(100);
   const [isSubmitDoneOpen, setIsSubmitDoneOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [createdQuoteIdentifier, setCreatedQuoteIdentifier] = useState("");
   const [devMockCursor, setDevMockCursor] = useState(0);
   const [appliedMockLabel, setAppliedMockLabel] = useState("");
 
@@ -396,6 +397,17 @@ function QuoteCreatePageInner() {
     return fallback;
   };
 
+  const resolveCreatedQuoteIdentifier = (input: unknown): string => {
+    if (!input || typeof input !== "object") return "";
+    const source = input as { quotePublicId?: unknown; quoteId?: unknown };
+    const quotePublicId = typeof source?.quotePublicId === "string" ? source.quotePublicId.trim() : "";
+    if (quotePublicId) return quotePublicId;
+
+    const quoteId = Number(source?.quoteId);
+    if (Number.isFinite(quoteId) && quoteId > 0) return String(Math.trunc(quoteId));
+    return "";
+  };
+
   const handleNext = async () => {
       if (step === 1 && !isStep1Ready) return alert("출발지와 도착지, 연락처를 입력해주세요.");
       if (step === 2 && !isStep2Ready) return alert("화물 정보를 입력해주세요.");
@@ -426,7 +438,16 @@ function QuoteCreatePageInner() {
 
     try {
       setIsSubmitting(true);
-      await createShipperQuote(payload);
+      setCreatedQuoteIdentifier("");
+      const response = await createShipperQuote(payload);
+      const nextQuoteIdentifier = resolveCreatedQuoteIdentifier(response);
+      setCreatedQuoteIdentifier(nextQuoteIdentifier);
+
+      if (nextQuoteIdentifier) {
+        setIsSubmitDoneOpen(false);
+        router.replace({ pathname: "/(shipper)/quotes/[id]", params: { id: nextQuoteIdentifier } });
+        return;
+      }
 
       setIsSubmitDoneOpen(true);
     } catch (error) {
@@ -447,13 +468,25 @@ function QuoteCreatePageInner() {
     setDevMockCursor((prev) => (prev + 1) % presets.length);
   };
 
+  const goToCreatedQuoteDetail = () => {
+    const safeIdentifier = String(createdQuoteIdentifier ?? "").trim();
+    setIsSubmitDoneOpen(false);
+    if (!safeIdentifier) {
+      router.replace("/(shipper)/quotes");
+      return;
+    }
+    router.replace({ pathname: "/(shipper)/quotes/[id]", params: { id: safeIdentifier } });
+  };
+
   const goToQuoteList = () => {
     setIsSubmitDoneOpen(false);
+    setCreatedQuoteIdentifier("");
     router.replace("/(shipper)/quotes");
   };
 
   const goToHome = () => {
     setIsSubmitDoneOpen(false);
+    setCreatedQuoteIdentifier("");
     router.replace("/(shipper)/home"); // 홈 경로로 이동 (가정)
   };
 
@@ -468,6 +501,9 @@ function QuoteCreatePageInner() {
       // 아직 차량 선택 전(Step 1,2)이라도 AI 예상 견적(1톤 기준) 보여줌 (동기부여)
       return formatKrw(pricing.finalPrice || pricing.basePrice);
   };
+
+  const startAddrLabel = String(draft?.startAddr ?? "").trim().split(/\s+/).filter(Boolean)[0] ?? "-";
+  const endAddrLabel = String(draft?.endAddr ?? "").trim().split(/\s+/).filter(Boolean)[0] ?? "-";
 
   const stepProgress =
     QUOTE_STEP_ITEMS.length > 1 ? ((step - 1) / (QUOTE_STEP_ITEMS.length - 1)) * 100 : 0;
@@ -582,13 +618,14 @@ function QuoteCreatePageInner() {
                     <View style={styles.infoRow}>
                         <AppText style={styles.infoLabel}>운송 구간</AppText>
                         <AppText style={[styles.infoValue, { maxWidth: "70%" }]} numberOfLines={1}>
-                            {draft.startAddr.split(" ")[0]} <Ionicons name="arrow-forward" size={10}/> {draft.endAddr.split(" ")[0]}
+                            {startAddrLabel} <Ionicons name="arrow-forward" size={10}/> {endAddrLabel}
                         </AppText>
                     </View>
                 </View>
 
                 <View style={styles.modalBtnGroup}>
-                    <AppButton title="내역 확인하기" size="lg" style={styles.modalBtn} onPress={goToQuoteList} />
+                    <AppButton title="견적 상세 보기" size="lg" style={styles.modalBtn} onPress={goToCreatedQuoteDetail} />
+                    <AppButton title="내역 확인하기" variant="secondary" size="lg" style={styles.modalBtnSecondary} onPress={goToQuoteList} />
                     <AppButton title="홈으로" variant="secondary" size="lg" style={styles.modalBtnSecondary} onPress={goToHome} />
                 </View>
             </View>

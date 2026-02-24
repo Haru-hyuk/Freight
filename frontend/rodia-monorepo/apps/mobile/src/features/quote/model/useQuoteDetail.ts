@@ -7,9 +7,7 @@ import { isSessionExpiredApiError, SESSION_EXPIRED_MESSAGE } from "@/shared/lib/
 import {
   getQuoteActionPolicy,
   getQuoteStatusLabel,
-  type BottomActionId,
   type QuoteActionPolicy,
-  type QuoteHighlightType,
 } from "@/features/quote/model/quoteActionMatrix";
 import { isMockQuoteEnabled } from "@/shared/lib/config/env";
 
@@ -21,15 +19,6 @@ export type QuoteSectionRow = {
 export type QuoteSection = {
   title: string;
   rows: QuoteSectionRow[];
-};
-
-export type QuoteHighlight = {
-  type: QuoteHighlightType;
-  eyebrow: string;
-  title: string;
-  lines: string[];
-  footnote?: string;
-  quickActions: BottomActionId[];
 };
 
 export type QuoteActionsContext = {
@@ -60,14 +49,10 @@ export type QuoteDetailViewModel = {
     cancelReasonText?: string;
     canceledAtText?: string;
   };
-  highlight: QuoteHighlight;
   coreSummary: {
     originAddress: string;
     destinationAddress: string;
     waypointAddresses: string[];
-    distanceText: string;
-    totalPriceText: string;
-    totalPriceNote: string;
     completedAtText?: string;
   };
   specificationArchive: QuoteSection[];
@@ -155,7 +140,7 @@ function toWorkMethodLabel(value: unknown): string {
 function formatDateTime(iso: unknown): string {
   const raw = typeof iso === "string" ? iso : "";
   const date = new Date(raw);
-  if (!Number.isFinite(date.getTime())) return "시간 정보 없음";
+  if (!Number.isFinite(date.getTime())) return "-";
 
   const month = date.getMonth() + 1;
   const day = date.getDate();
@@ -171,7 +156,7 @@ function toDisplayText(value: unknown, fallback = "-"): string {
 
 function formatChecklistItems(items: QuoteDetailResponse["checklistItems"] | undefined): string {
   const list = Array.isArray(items) ? items : [];
-  if (!list.length) return "추가 요청 없음";
+  if (!list.length) return "-";
 
   const lines = list
     .map((item) => {
@@ -183,7 +168,7 @@ function formatChecklistItems(items: QuoteDetailResponse["checklistItems"] | und
     })
     .filter(Boolean);
 
-  return lines.length ? lines.join(" / ") : "추가 요청 없음";
+  return lines.length ? lines.join(" / ") : "-";
 }
 
 function toSafeStops(rawStops: unknown): QuoteDetailResponse["stops"] {
@@ -297,93 +282,6 @@ function applyRuntimeOverride(quote: QuoteDetailResponse, override?: QuoteDetail
   };
 }
 
-function buildHighlight(
-  quote: QuoteDetailResponse,
-  policy: QuoteActionPolicy,
-  _override?: QuoteDetailRuntimeOverride
-): QuoteHighlight {
-  const quickActions = policy.highlightCard?.quickActions ?? [];
-  const highlightType = policy.highlightCard?.type;
-  const status = quote?.status ?? "";
-
-  if (status === "CANCELED") {
-    return {
-      type: "none",
-      eyebrow: "취소 상태",
-      title: "",
-      lines: [],
-      quickActions: [],
-    };
-  }
-
-  if (highlightType === "priceCompare") {
-    const desired = toSafeNumber(quote?.desiredPrice);
-    const final = toSafeNumber(quote?.finalPrice);
-    const diff = final - desired;
-    const diffText = diff > 0 ? `+${formatKrw(diff)}` : diff < 0 ? `-${formatKrw(Math.abs(diff))}` : "동일";
-
-    return {
-      type: "priceCompare",
-      eyebrow: "운임 비교",
-      title: "제안 금액을 확인해주세요",
-      lines: [`희망 운임 ${formatKrw(desired)}`, `제안 운임 ${formatKrw(final)}`, `차액 ${diffText}`],
-      footnote: "수락 또는 거절을 선택할 수 있습니다.",
-      quickActions,
-    };
-  }
-
-  if (highlightType === "driverProfile") {
-    return {
-      type: "driverProfile",
-      eyebrow: "배차 정보",
-      title: "결제 후 운송이 시작됩니다",
-      lines: [`차량 번호 ${String(quote?.truckId ?? "-")}`, "결제 완료 후 기사님 연락이 가능합니다."],
-      footnote: "필요 시 취소 요청도 가능합니다.",
-      quickActions,
-    };
-  }
-
-  if (highlightType === "miniMap") {
-    const updated = formatDateTime(quote?.updatedAt);
-    const helper =
-      status === "TRANSIT"
-        ? "실시간 위치를 확인할 수 있습니다."
-        : status === "PICKUP"
-          ? "상차 사진을 확인할 수 있습니다."
-          : "진행 상황을 확인할 수 있습니다.";
-
-    return {
-      type: "miniMap",
-      eyebrow: "운송 추적",
-      title: "현재 진행 상황입니다",
-      lines: [`최근 갱신 ${updated}`, helper],
-      quickActions,
-    };
-  }
-
-  if (highlightType === "progressInfo") {
-    return {
-      type: "progressInfo",
-      eyebrow: "배차 진행",
-      title: "배차 가능한 기사님을 확인 중입니다",
-      lines: [`접수 ${formatDateTime(quote?.createdAt)}`, `최근 갱신 ${formatDateTime(quote?.updatedAt)}`],
-      quickActions,
-    };
-  }
-
-  if (highlightType === "proof") {
-    return {
-      type: "proof",
-      eyebrow: "정산 정보",
-      title: "",
-      lines: ["인수증을 확인할 수 있습니다."],
-      quickActions,
-    };
-  }
-
-  return { type: "none", eyebrow: "운송 요약", title: "", lines: [], quickActions: [] };
-}
-
 function formatStopValue(stop: QuoteDetailResponse["stops"][number]): string {
   const address = String(stop?.address ?? "").trim();
   const contactName = String(stop?.contactName ?? "").trim();
@@ -398,8 +296,32 @@ function formatStopValue(stop: QuoteDetailResponse["stops"][number]): string {
     contactPhone ? contactPhone : "",
   ].filter(Boolean);
 
-  if (!metaParts.length) return address || "정보 없음";
-  return `${address || "정보 없음"} (${metaParts.join(" · ")})`;
+  if (!metaParts.length) return address || "-";
+  return `${address || "-"} (${metaParts.join(" · ")})`;
+}
+
+function formatPositiveKrw(value: unknown): string {
+  const amount = toSafeNumber(value);
+  if (!(amount > 0)) return "-";
+  return formatKrw(amount);
+}
+
+function formatPositiveWeightKg(value: unknown): string {
+  const weight = toSafeNumber(value);
+  if (!(weight > 0)) return "-";
+  return `${weight.toLocaleString("ko-KR")}kg`;
+}
+
+function formatPositiveVolumeCbm(value: unknown): string {
+  const volume = toSafeNumber(value);
+  if (!(volume > 0)) return "-";
+  return `${volume.toFixed(1)}cbm`;
+}
+
+function formatPositiveDistanceKm(value: unknown): string {
+  const distance = toSafeNumber(value);
+  if (!(distance > 0)) return "-";
+  return `${distance.toFixed(1)}km`;
 }
 
 function buildDropOffSummary(quote: QuoteDetailResponse): string {
@@ -425,7 +347,8 @@ function buildDropOffSummary(quote: QuoteDetailResponse): string {
 function buildSpecificationArchive(quote: QuoteDetailResponse): QuoteSection[] {
   const vehicleType = toVehicleTypeLabel(quote?.vehicleType);
   const vehicleBodyType = toVehicleBodyTypeLabel(quote?.vehicleBodyType);
-  const vehicleText = [vehicleType, vehicleBodyType].filter(Boolean).join(" ").trim();
+  const isCompleted = (quote?.status ?? "") === "DROPOFF";
+  const finalAmountLabel = isCompleted ? "정산 금액" : "예상 금액";
 
   const stops = Array.isArray(quote?.stops) ? quote.stops : [];
   const stopRows: QuoteSectionRow[] = stops.length
@@ -459,14 +382,22 @@ function buildSpecificationArchive(quote: QuoteDetailResponse): QuoteSection[] {
       rows: stopRows,
     },
     {
+      title: "운송 일정",
+      rows: [
+        { label: "운송 날짜", value: "-" },
+        { label: "상차 시간", value: "-" },
+      ],
+    },
+    {
       title: "차량/화물",
       rows: [
-        { label: "차량", value: toDisplayText(vehicleText) },
+        { label: "톤수", value: toDisplayText(vehicleType) },
+        { label: "차종", value: toDisplayText(vehicleBodyType) },
         { label: "화물명", value: toDisplayText(quote?.cargoName) },
         { label: "화물 구분", value: toDisplayText(toCargoTypeLabel(quote?.cargoType)) },
         { label: "화물 설명", value: toDisplayText(quote?.cargoDesc) },
-        { label: "중량", value: `${toSafeNumber(quote?.weightKg).toLocaleString("ko-KR")}kg` },
-        { label: "부피", value: `${toSafeNumber(quote?.volumeCbm).toFixed(1)}cbm` },
+        { label: "중량", value: formatPositiveWeightKg(quote?.weightKg) },
+        { label: "부피", value: formatPositiveVolumeCbm(quote?.volumeCbm) },
         { label: "하차 위치", value: buildDropOffSummary(quote) },
       ],
     },
@@ -476,18 +407,18 @@ function buildSpecificationArchive(quote: QuoteDetailResponse): QuoteSection[] {
         { label: "상차 방식", value: toDisplayText(toWorkMethodLabel(quote?.loadMethod)) },
         { label: "하차 방식", value: toDisplayText(toWorkMethodLabel(quote?.unloadMethod)) },
         { label: "합짐 여부", value: quote?.allowCombine ? "허용" : "단독 운송" },
-        { label: "추가 요청", value: formatChecklistItems(quote?.checklistItems) },
+        { label: "추가 옵션/요청", value: formatChecklistItems(quote?.checklistItems) },
       ],
     },
     {
       title: "요금 내역",
       rows: [
-        { label: "제안 금액", value: formatKrw(quote?.desiredPrice) },
-        { label: "최종 금액", value: formatKrw(quote?.finalPrice) },
-        { label: "기본 요금", value: formatKrw(quote?.basePrice) },
-        { label: "거리 요금", value: formatKrw(quote?.distancePrice) },
-        { label: "추가 요금", value: formatKrw(quote?.extraPrice) },
-        { label: "운송 거리", value: `${toSafeNumber(quote?.distanceKm).toFixed(1)}km` },
+        { label: "희망 운임", value: formatPositiveKrw(quote?.desiredPrice) },
+        { label: finalAmountLabel, value: formatPositiveKrw(quote?.finalPrice) },
+        { label: "기본 요금", value: formatPositiveKrw(quote?.basePrice) },
+        { label: "거리 요금", value: formatPositiveKrw(quote?.distancePrice) },
+        { label: "추가 요금", value: formatPositiveKrw(quote?.extraPrice) },
+        { label: "운송 거리", value: formatPositiveDistanceKm(quote?.distanceKm) },
       ],
     },
   ];
@@ -603,7 +534,6 @@ export function useQuoteDetail(quoteIdentifier: QuoteId | string, runtimeOverrid
     const finalPrice = toSafeNumber(resolvedQuote?.finalPrice);
 
     const isCanceled = (resolvedQuote?.status ?? "") === "CANCELED";
-    const isCompleted = (resolvedQuote?.status ?? "") === "DROPOFF";
     const updatedAtText = formatDateTime(resolvedQuote?.updatedAt);
     const metaText =
       isCanceled
@@ -616,8 +546,6 @@ export function useQuoteDetail(quoteIdentifier: QuoteId | string, runtimeOverrid
 
     const canceledAtText = isCanceled ? formatDateTime(overrideCanceledAt ?? resolvedQuote?.updatedAt) : "";
 
-    const totalPriceText = isCanceled ? "" : formatKrw(finalPrice);
-    const totalPriceNote = isCanceled ? "" : isCompleted ? "최종 정산 금액입니다." : "세부 요금은 아래에서 확인할 수 있습니다.";
     const completedAtText = (resolvedQuote?.status ?? "") === "DROPOFF" ? formatDateTime(resolvedQuote?.updatedAt) : "";
 
     return {
@@ -628,14 +556,10 @@ export function useQuoteDetail(quoteIdentifier: QuoteId | string, runtimeOverrid
       isSessionExpired,
       refetch,
       commandCenter: { statusLabel, metaText, cancelReasonText, canceledAtText },
-      highlight: buildHighlight(resolvedQuote, policy, normalizedOverride),
       coreSummary: {
         originAddress,
         destinationAddress,
         waypointAddresses,
-        distanceText: `${toSafeNumber(resolvedQuote?.distanceKm).toFixed(1)}km`,
-        totalPriceText,
-        totalPriceNote,
         completedAtText,
       },
       specificationArchive: buildSpecificationArchive(resolvedQuote),
