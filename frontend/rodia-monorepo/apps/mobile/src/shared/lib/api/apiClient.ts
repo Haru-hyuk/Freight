@@ -5,10 +5,34 @@ import axios, {
   type AxiosResponse,
   type InternalAxiosRequestConfig,
 } from "axios";
+
+import { getApiBaseUrl, getAuthRefreshPath, isApiDebugLogsEnabled } from "@/shared/lib/config/env";
+import { debugLogStore, type DebugLogPhase, type DebugLogTag } from "@/shared/lib/debug/debugLogStore";
+import { sanitizeDeep, sanitizeHeaders } from "@/shared/lib/debug/sanitize";
 import { tokenStorage, type AuthTokens } from "@/shared/lib/storage/tokenStorage";
-import { getApiBaseUrl, getAuthRefreshPath } from "@/shared/lib/config/env";
 
 type AnyObj = Record<string, any>;
+
+type ApiMeta = {
+  tag?: DebugLogTag;
+  skipDebugLog?: boolean;
+};
+
+type ApiTimingMeta = {
+  startAt: number;
+  requestId: string;
+};
+
+type InternalConfig = InternalAxiosRequestConfig & { _retry?: boolean; meta?: ApiMeta; __timing?: ApiTimingMeta };
+
+type SessionExpiredApiError = Error & {
+  code: "SESSION_EXPIRED";
+  status: 401;
+  isSessionExpired: true;
+  originalError?: unknown;
+};
+
+export const SESSION_EXPIRED_MESSAGE = "세션이 만료되었습니다. 다시 로그인해 주세요.";
 
 function isTruthyString(v: unknown): v is string {
   return typeof v === "string" && v.trim().length > 0;
@@ -17,24 +41,8 @@ function isTruthyString(v: unknown): v is string {
 function extractTokens(data: unknown): Partial<AuthTokens> | null {
   const d = (data ?? {}) as AnyObj;
 
-  const accessToken =
-    d?.accessToken ??
-    d?.access_token ??
-    d?.token ??
-    d?.data?.accessToken ??
-    d?.data?.access_token ??
-    d?.data?.token ??
-    d?.tokens?.accessToken ??
-    d?.tokens?.access_token ??
-    d?.tokens?.token;
-
-  const refreshToken =
-    d?.refreshToken ??
-    d?.refresh_token ??
-    d?.data?.refreshToken ??
-    d?.data?.refresh_token ??
-    d?.tokens?.refreshToken ??
-    d?.tokens?.refresh_token;
+  const accessToken = d?.accessToken;
+  const refreshToken = d?.refreshToken;
 
   const a = isTruthyString(accessToken) ? accessToken.trim() : "";
   const r = isTruthyString(refreshToken) ? refreshToken.trim() : "";
@@ -47,15 +55,197 @@ function extractTokens(data: unknown): Partial<AuthTokens> | null {
   };
 }
 
-type InternalConfig = InternalAxiosRequestConfig & { _retry?: boolean };
-
 let refreshInFlight: Promise<string | null> | null = null;
 
-async function refreshAccessToken(baseURL: string): Promise<string | null> {
-  const refreshToken = await tokenStorage.getRefreshToken();
-  if (!isTruthyString(refreshToken)) return null;
+function safeGetRefreshPaths(): string[] {
+  const candidates: string[] = [];
 
-  const refreshPath = getAuthRefreshPath();
+  function pushCandidate(value: unknown) {
+    const normalized = String(value ?? "").trim();
+    if (!normalized) return;
+    if (candidates.includes(normalized)) return;
+    candidates.push(normalized);
+  }
+
+  try {
+    const p = getAuthRefreshPath?.();
+    pushCandidate(p);
+  } catch {
+    // ignore
+  }
+
+  // 환경값이 비어 있거나 스펙과 다른 경우를 대비한 안전 후보.
+  pushCandidate("/api/auth/refresh");
+  pushCandidate("/auth/refresh");
+  return candidates;
+}
+
+function buildSessionExpiredError(originalError?: unknown): SessionExpiredApiError {
+  const err = new Error(SESSION_EXPIRED_MESSAGE) as SessionExpiredApiError;
+  err.name = "SessionExpiredError";
+  err.code = "SESSION_EXPIRED";
+  err.status = 401;
+  err.isSessionExpired = true;
+  err.originalError = originalError;
+  return err;
+}
+
+export function isSessionExpiredApiError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const e = error as {
+    code?: unknown;
+    status?: unknown;
+    isSessionExpired?: unknown;
+    response?: { status?: unknown };
+  };
+  if (e.isSessionExpired === true) return true;
+  if (String(e.code ?? "").toUpperCase() === "SESSION_EXPIRED") return true;
+  const status = Number(e.status ?? e.response?.status ?? 0);
+  return status === 401;
+}
+
+function stripQueryAndHash(input: string): string {
+  const raw = (input ?? "").trim();
+  if (!raw) return "";
+  const noHash = raw.split("#")[0] ?? raw;
+  const noQuery = noHash.split("?")[0] ?? noHash;
+  return noQuery.trim();
+}
+
+function normalizePathFromUrl(url?: string): string {
+  const u = (url ?? "").trim();
+  if (!u) return "";
+
+  if (u.startsWith("http://") || u.startsWith("https://")) {
+    try {
+      return stripQueryAndHash(new URL(u).pathname);
+    } catch {
+      return stripQueryAndHash(u);
+    }
+  }
+
+  return stripQueryAndHash(u);
+}
+
+function isPublicAuthEndpoint(url?: string): boolean {
+  const path = normalizePathFromUrl(url);
+  if (path === "/api/auth/driver/login") return true;
+  if (path === "/api/auth/driver/signup") return true;
+  if (path === "/api/auth/shipper/login") return true;
+  if (path === "/api/auth/shipper/signup") return true;
+  return false;
+}
+
+function makeRequestId(): string {
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function safeTag(meta?: ApiMeta, url?: string): DebugLogTag {
+  const t = (meta?.tag ?? "").trim();
+  if (t) return t as DebugLogTag;
+
+  const path = normalizePathFromUrl(url);
+  if (path.startsWith("/api/auth/")) return "AUTH";
+  if (path.includes("/quotes") && path.includes("/counter-offers")) return "OFFER";
+  if (path.includes("/matches")) return "MATCH";
+  if (path.includes("/quotes")) return "QUOTE";
+  if (path.includes("/notifications")) return "NOTI";
+  return "UNKNOWN";
+}
+
+function buildFullUrl(baseURL: string, url?: string): string {
+  const u = (url ?? "").trim();
+  if (!u) return baseURL;
+  if (u.startsWith("http://") || u.startsWith("https://")) return u;
+
+  const b = (baseURL ?? "").trim();
+  if (!b) return u;
+
+  if (b.endsWith("/") && u.startsWith("/")) return `${b.slice(0, -1)}${u}`;
+  if (!b.endsWith("/") && !u.startsWith("/")) return `${b}/${u}`;
+  return `${b}${u}`;
+}
+
+function toSafeLogUrl(input?: string): string {
+  const raw = (input ?? "").trim();
+  if (!raw) return "";
+  if (raw.startsWith("http://") || raw.startsWith("https://")) {
+    try {
+      const u = new URL(raw);
+      return `${u.origin}${stripQueryAndHash(u.pathname)}`;
+    } catch {
+      return stripQueryAndHash(raw);
+    }
+  }
+  return stripQueryAndHash(raw);
+}
+
+function safeMethod(method?: string): string {
+  return (method ?? "GET").toUpperCase();
+}
+
+function shouldDebugLog(): boolean {
+  try {
+    return isApiDebugLogsEnabled();
+  } catch {
+    return false;
+  }
+}
+
+function addApiLog(entry: {
+  phase: DebugLogPhase;
+  requestId?: string;
+  level: "info" | "warn" | "error";
+  tag: DebugLogTag;
+  title: string;
+  method?: string;
+  path?: string;
+  url?: string;
+  status?: number | "NETWORK_ERROR";
+  durationMs?: number;
+  request?: unknown;
+  response?: unknown;
+  error?: unknown;
+}) {
+  if (!shouldDebugLog()) return;
+
+  debugLogStore.add({
+    requestId: entry.requestId,
+    phase: entry.phase,
+    level: entry.level,
+    tag: entry.tag,
+    title: entry.title,
+    method: entry.method,
+    path: entry.path,
+    url: entry.url,
+    status: entry.status,
+    durationMs: entry.durationMs,
+    request: entry.request,
+    response: entry.response,
+    error: entry.error,
+  });
+
+  // eslint-disable-next-line no-console
+  console.log(
+    `[api:${entry.tag}] ${entry.title}`,
+    sanitizeDeep({
+      requestId: entry.requestId,
+      method: entry.method,
+      path: entry.path,
+      url: entry.url,
+      status: entry.status,
+      durationMs: entry.durationMs,
+    })
+  );
+}
+
+async function refreshAccessToken(baseURL: string, refreshPaths: string[]): Promise<string | null> {
+  if (!Array.isArray(refreshPaths) || refreshPaths.length <= 0) return null;
+  const refreshToken = await tokenStorage.getRefreshToken();
+  const accessToken = await tokenStorage.getAccessToken();
+
+  if (!isTruthyString(refreshToken)) return null;
+  if (isTruthyString(accessToken) && refreshToken.trim() === accessToken.trim()) return null;
 
   const refreshClient = axios.create({
     baseURL,
@@ -63,24 +253,31 @@ async function refreshAccessToken(baseURL: string): Promise<string | null> {
     headers: { "Content-Type": "application/json" },
   });
 
-  try {
-    const res = await refreshClient.post(refreshPath, { refreshToken });
-    const tokens = extractTokens((res as AxiosResponse)?.data);
+  for (const refreshPathRaw of refreshPaths) {
+    const refreshPath = (refreshPathRaw ?? "").trim();
+    if (!refreshPath) continue;
 
-    const nextAccess = (tokens?.accessToken ?? "").trim();
-    const nextRefresh = (tokens?.refreshToken ?? "").trim();
+    try {
+      const res = await refreshClient.post(refreshPath, { refreshToken: refreshToken.trim() });
+      const tokens = extractTokens((res as AxiosResponse)?.data);
 
-    if (!nextAccess) return null;
+      const nextAccess = (tokens?.accessToken ?? "").trim();
+      const nextRefresh = (tokens?.refreshToken ?? "").trim();
 
-    await tokenStorage.setTokens({
-      accessToken: nextAccess,
-      refreshToken: nextRefresh || refreshToken,
-    });
+      if (!nextAccess) continue;
 
-    return nextAccess;
-  } catch {
-    return null;
+      await tokenStorage.setTokens({
+        accessToken: nextAccess,
+        refreshToken: nextRefresh || refreshToken.trim(),
+      });
+
+      return nextAccess;
+    } catch {
+      // 다음 후보 경로를 시도한다.
+    }
   }
+
+  return null;
 }
 
 function setAuthHeader(config: InternalAxiosRequestConfig, accessToken: string, force: boolean) {
@@ -97,7 +294,14 @@ function setAuthHeader(config: InternalAxiosRequestConfig, accessToken: string, 
 }
 
 export function createApiClient(): AxiosInstance {
-  const baseURL = getApiBaseUrl();
+  const baseURL = (() => {
+    try {
+      const v = getApiBaseUrl?.();
+      return isTruthyString(v) ? v.trim() : "";
+    } catch {
+      return "";
+    }
+  })();
 
   const client = axios.create({
     baseURL,
@@ -106,33 +310,154 @@ export function createApiClient(): AxiosInstance {
   });
 
   client.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
+    const cfg = config as InternalConfig;
+    const requestId = cfg.__timing?.requestId ?? makeRequestId();
+    cfg.__timing = { startAt: Date.now(), requestId };
+
+    const safePath = normalizePathFromUrl(cfg.url);
+    const fullUrl = buildFullUrl(baseURL, cfg.url);
+    const safeUrl = toSafeLogUrl(fullUrl);
+
+    if (isPublicAuthEndpoint(cfg?.url)) {
+      if (!cfg.meta?.skipDebugLog) {
+        addApiLog({
+          phase: "request",
+          requestId,
+          level: "info",
+          tag: safeTag(cfg.meta, cfg.url),
+          title: `→ ${safeMethod(cfg.method)} ${safePath || cfg.url || ""}`,
+          method: safeMethod(cfg.method),
+          path: safePath,
+          url: safeUrl,
+          request: sanitizeDeep({
+            headers: sanitizeHeaders(cfg.headers),
+            params: cfg.params,
+            data: cfg.data,
+          }),
+        });
+      }
+      return cfg;
+    }
+
     const accessToken = await tokenStorage.getAccessToken();
     if (isTruthyString(accessToken)) {
-      setAuthHeader(config, accessToken, false);
+      setAuthHeader(cfg, accessToken, false);
     }
-    return config;
+
+    if (!cfg.meta?.skipDebugLog) {
+      addApiLog({
+        phase: "request",
+        requestId,
+        level: "info",
+        tag: safeTag(cfg.meta, cfg.url),
+        title: `→ ${safeMethod(cfg.method)} ${safePath || cfg.url || ""}`,
+        method: safeMethod(cfg.method),
+        path: safePath,
+        url: safeUrl,
+        request: sanitizeDeep({
+          headers: sanitizeHeaders(cfg.headers),
+          params: cfg.params,
+          data: cfg.data,
+        }),
+      });
+    }
+
+    return cfg;
   });
 
   client.interceptors.response.use(
-    (response: AxiosResponse) => response,
+    (response: AxiosResponse) => {
+      const cfg = (response?.config ?? {}) as InternalConfig;
+      const started = cfg.__timing?.startAt ?? 0;
+      const durationMs = started ? Date.now() - started : undefined;
+      const requestId = cfg.__timing?.requestId ?? makeRequestId();
+
+      const safePath = normalizePathFromUrl(cfg.url);
+      const fullUrl = buildFullUrl(baseURL, cfg.url);
+      const safeUrl = toSafeLogUrl(fullUrl);
+
+      if (!cfg.meta?.skipDebugLog) {
+        addApiLog({
+          phase: "response",
+          requestId,
+          level: "info",
+          tag: safeTag(cfg.meta, cfg.url),
+          title: `← ${safeMethod(cfg.method)} ${safePath || cfg.url || ""} (${response.status})`,
+          method: safeMethod(cfg.method),
+          path: safePath,
+          url: safeUrl,
+          status: response.status,
+          durationMs,
+          response: sanitizeDeep(response.data),
+        });
+      }
+
+      return response;
+    },
     async (error: AxiosError) => {
       const status = error?.response?.status;
       const original = (error?.config ?? undefined) as InternalConfig | undefined;
 
+      const started = original?.__timing?.startAt ?? 0;
+      const durationMs = started ? Date.now() - started : undefined;
+      const requestId = original?.__timing?.requestId ?? makeRequestId();
+
+      const level: "warn" | "error" = status && status >= 500 ? "error" : "warn";
+
+      if (original && !original.meta?.skipDebugLog) {
+        const safePath = normalizePathFromUrl(original.url);
+        const fullUrl = buildFullUrl(baseURL, original.url);
+        const safeUrl = toSafeLogUrl(fullUrl);
+
+        addApiLog({
+          phase: "error",
+          requestId,
+          level,
+          tag: safeTag(original.meta, original.url),
+          title: `✕ ${safeMethod(original.method)} ${safePath || original.url || ""} (${status ?? "NETWORK_ERROR"})`,
+          method: safeMethod(original.method),
+          path: safePath,
+          url: safeUrl,
+          status: (status ?? "NETWORK_ERROR") as number | "NETWORK_ERROR",
+          durationMs,
+          request: sanitizeDeep({
+            headers: sanitizeHeaders(original.headers),
+            params: (original as any)?.params,
+            data: (original as any)?.data,
+          }),
+          error: sanitizeDeep(error?.response?.data ?? error?.message ?? error),
+        });
+      }
+
       if (!status || !original) return Promise.reject(error);
       if (status !== 401) return Promise.reject(error);
+
+      if (isPublicAuthEndpoint(original?.url)) return Promise.reject(error);
 
       if (original._retry) return Promise.reject(error);
       original._retry = true;
 
-      const existingRefresh = await tokenStorage.getRefreshToken();
-      if (!isTruthyString(existingRefresh)) {
+      const refreshPaths = safeGetRefreshPaths();
+      if (refreshPaths.length <= 0) {
         await tokenStorage.clearTokens();
-        return Promise.reject(error);
+        return Promise.reject(buildSessionExpiredError(error));
+      }
+
+      const refreshToken = await tokenStorage.getRefreshToken();
+      const accessToken = await tokenStorage.getAccessToken();
+
+      if (!isTruthyString(refreshToken)) {
+        await tokenStorage.clearTokens();
+        return Promise.reject(buildSessionExpiredError(error));
+      }
+
+      if (isTruthyString(accessToken) && refreshToken.trim() === accessToken.trim()) {
+        await tokenStorage.clearTokens();
+        return Promise.reject(buildSessionExpiredError(error));
       }
 
       if (!refreshInFlight) {
-        refreshInFlight = refreshAccessToken(baseURL).finally(() => {
+        refreshInFlight = refreshAccessToken(baseURL, refreshPaths).finally(() => {
           refreshInFlight = null;
         });
       }
@@ -141,7 +466,7 @@ export function createApiClient(): AxiosInstance {
 
       if (!isTruthyString(nextAccess)) {
         await tokenStorage.clearTokens();
-        return Promise.reject(error);
+        return Promise.reject(buildSessionExpiredError(error));
       }
 
       setAuthHeader(original, nextAccess, true);
@@ -153,9 +478,3 @@ export function createApiClient(): AxiosInstance {
 }
 
 export const apiClient = createApiClient();
-
-/**
- * 1) baseURL/refreshPath는 shared/lib/config/env 단일 소스에서만 가져옵니다.
- * 2) 401 → refresh 단일 비행 + 원요청 1회 재시도로 안정화합니다.
- * 3) headers 런타임 빈 값 대비를 포함해 Authorization 주입이 안전하게 동작합니다.
- */

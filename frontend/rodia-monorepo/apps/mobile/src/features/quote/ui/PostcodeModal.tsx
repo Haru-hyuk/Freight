@@ -7,7 +7,15 @@ import { AppText } from '@/shared/ui/kit/AppText';
 interface PostcodeModalProps {
   visible: boolean;
   onClose: () => void;
-  onSelected: (data: { address: string; zonecode: string; bname?: string; buildingName?: string }) => void;
+  onSelected: (data: {
+    address: string;
+    zonecode: string;
+    bname?: string;
+    buildingName?: string;
+    placeId?: string;
+    place_id?: string;
+    details?: unknown;
+  }) => void;
 }
 
 export function PostcodeModal({ visible, onClose, onSelected }: PostcodeModalProps) {
@@ -109,8 +117,8 @@ export function PostcodeModal({ visible, onClose, onSelected }: PostcodeModalPro
               });
               
               onClose();
-            } catch (error) {
-              console.error("Address parsing error:", error);
+            } catch {
+              onClose();
             }
           }}
           style={styles.webview}

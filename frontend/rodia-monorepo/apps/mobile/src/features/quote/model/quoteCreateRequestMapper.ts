@@ -1,11 +1,12 @@
 import type {
   QuoteCargoType,
   QuoteCreateRequestDto,
+  QuoteStopRequestDto,
   QuoteVehicleBodyType,
   QuoteVehicleType,
   QuoteWorkMethod,
 } from "@/entities/quote/dto";
-import { computeQuotePricing, type QuoteCreateDraft } from "@/features/quote/model/quoteCreateDraft";
+import { EXTRA_OPTIONS, type QuoteCreateDraft } from "@/features/quote/model/quoteCreateDraft";
 
 const VEHICLE_TYPE_BY_TON_INDEX: QuoteVehicleType[] = ["TON_1", "TON_2_5", "TON_5"];
 const VEHICLE_BODY_BY_TYPE_INDEX: QuoteVehicleBodyType[] = ["CARGO", "WING_BODY", "TOP_CAR"];
@@ -71,6 +72,28 @@ function summarizeCargoDesc(draft: QuoteCreateDraft) {
   return names.slice(0, 5).join(", ");
 }
 
+function buildStops(draft: QuoteCreateDraft): QuoteStopRequestDto[] {
+  const waypoints = Array.isArray(draft?.waypoints) ? draft.waypoints : [];
+
+  return waypoints
+    .map((waypoint, index) => {
+      const address = joinAddress(waypoint?.addr, waypoint?.detail);
+      if (!address) return null;
+
+      return {
+        seq: index + 1,
+        address,
+        lat: toNumber(waypoint?.lat, 0),
+        lng: toNumber(waypoint?.lng, 0),
+        contactName: (waypoint?.name ?? "").trim(),
+        contactPhone: (waypoint?.phone ?? "").trim(),
+        deptName: "",
+        managerName: "",
+      } as QuoteStopRequestDto;
+    })
+    .filter((stop): stop is QuoteStopRequestDto => Boolean(stop));
+}
+
 function calculateVolumeCbm(draft: QuoteCreateDraft) {
   const sum = (draft.cargoList ?? []).reduce((acc, item) => {
     const l = toInt(item?.lengthCm, 0);
@@ -90,8 +113,24 @@ function calculateWeightKg(draft: QuoteCreateDraft) {
 function resolveDesiredPrice(draft: QuoteCreateDraft) {
   const input = toInt(draft.budget, 0);
   if (input > 0) return input;
-  const pricing = computeQuotePricing(draft);
-  return Math.max(0, toNumber(pricing.finalPrice, 0));
+  return 0;
+}
+
+function buildChecklistItems(draft: QuoteCreateDraft): QuoteCreateRequestDto["checklistItems"] {
+  const selected = Array.isArray(draft?.selectedOpts) ? draft.selectedOpts : [];
+  if (selected.length === 0) return [];
+
+  return selected.map((optionId, index) => {
+    const option = EXTRA_OPTIONS.find((item) => item?.id === optionId);
+    const title = String(option?.title ?? optionId ?? "").trim();
+    const extraFee = Math.max(0, toInt(option?.price, 0));
+
+    return {
+      checklistItemId: index + 1,
+      extraInput: title || `옵션 ${index + 1}`,
+      extraFee,
+    };
+  });
 }
 
 export function buildQuoteCreateRequest(draft: QuoteCreateDraft): QuoteCreateRequestDto {
@@ -106,7 +145,7 @@ export function buildQuoteCreateRequest(draft: QuoteCreateDraft): QuoteCreateReq
     originLng: toNumber(draft.originLng, 0),
     destinationLat: toNumber(draft.destinationLat, 0),
     destinationLng: toNumber(draft.destinationLng, 0),
-    distanceKm: Math.max(0, toNumber(draft.distanceKm, 0)),
+    distanceKm: Math.max(1, Math.trunc(toNumber(draft.distanceKm, 0))),
     weightKg: calculateWeightKg(draft),
     volumeCbm: calculateVolumeCbm(draft),
     vehicleType: mapVehicleType(draft.tonIdx),
@@ -118,6 +157,7 @@ export function buildQuoteCreateRequest(draft: QuoteCreateDraft): QuoteCreateReq
     allowCombine: !!draft.isPool,
     loadMethod: mapWorkMethod(draft.loadMethod),
     unloadMethod: mapWorkMethod(draft.unloadMethod),
-    checklistItems: [],
+    checklistItems: buildChecklistItems(draft),
+    stops: buildStops(draft),
   };
 }

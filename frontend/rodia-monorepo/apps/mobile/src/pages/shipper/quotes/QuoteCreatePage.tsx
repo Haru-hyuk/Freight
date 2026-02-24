@@ -1,5 +1,5 @@
 ﻿import React, { useMemo, useState } from "react";
-import { Alert, Modal, Pressable, StyleSheet, View } from "react-native";
+import { Alert, Modal, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, type NavigationProp, type ParamListBase } from "@react-navigation/native";
 import { useRouter } from "expo-router";
@@ -11,15 +11,19 @@ import type { AppTheme } from "@/shared/theme/types";
 import { AppButton } from "@/shared/ui/kit/AppButton";
 import { AppText } from "@/shared/ui/kit/AppText";
 import { PageScaffold } from "@/widgets/layout/PageScaffold";
+import { estimateRouteKm, isValidCoord, type LatLng } from "@/shared/lib/geo/distance";
 
 import {
   computeQuotePricing,
+  createInitialQuoteCreateDraft,
   formatKrw,
   QuoteCreateDraftProvider,
+  type QuoteCreateDraft,
   useQuoteCreateDraft,
 } from "@/features/quote/model/quoteCreateDraft";
 import { createShipperQuote } from "@/features/quote/api/quote-api";
 import { buildQuoteCreateRequest } from "@/features/quote/model/quoteCreateRequestMapper";
+import { getQuoteFlatCardStyle, QUOTE_PROGRESS_TOKENS } from "@/features/quote/ui/QuoteCreateUiPrimitives";
 import QuoteCreateStep1 from "@/features/quote/ui/QuoteCreateStep1";
 import QuoteCreateStep2 from "@/features/quote/ui/QuoteCreateStep2";
 import QuoteCreateStep3 from "@/features/quote/ui/QuoteCreateStep3";
@@ -30,11 +34,155 @@ const QUOTE_STEP_ITEMS = [
   { step: 3 as const, label: "차량/옵션" },
 ];
 
+type DevMockPreset = {
+  id: "route" | "cargo" | "option";
+  label: string;
+  step: 1 | 2 | 3;
+  draft: QuoteCreateDraft;
+};
+
+const DEV_MOCK_LABELS = ["경로", "화물", "옵션"] as const;
+
+function createDevMockPresets(now: Date): DevMockPreset[] {
+  const date = new Date(now);
+  const time = new Date(now);
+  time.setHours(10, 30, 0, 0);
+
+  const common: QuoteCreateDraft = {
+    ...createInitialQuoteCreateDraft(),
+    senderName: "테스트 발송인",
+    senderPhone: "010-1234-5678",
+    receiverName: "테스트 수취인",
+    receiverPhone: "010-8765-4321",
+    startAddr: "서울 강남구 테헤란로 427",
+    startAddrDetail: "15층 물류팀",
+    endAddr: "경기 성남시 분당구 판교역로 166",
+    endAddrDetail: "1층 하차장",
+    loadMethod: "수작업",
+    unloadMethod: "지게차",
+    date,
+    time,
+    truckId: 1,
+    originLat: 37.5066,
+    originLng: 127.0543,
+    destinationLat: 37.3944,
+    destinationLng: 127.1112,
+    distanceKm: 23,
+  };
+
+  return [
+    {
+      id: "route",
+      label: "경로/입력 기본 점검",
+      step: 1,
+      draft: {
+        ...common,
+        waypoints: [{ id: 1, name: "", phone: "", addr: "서울 송파구 올림픽로 300", detail: "" }],
+        cargoList: [
+          {
+            id: 1,
+            itemCategory: "BOX",
+            type: "전자부품 박스",
+            quantity: "3",
+            lengthCm: "48",
+            widthCm: "38",
+            heightCm: "34",
+            weight: "45",
+            dropOffKey: "END",
+          },
+        ],
+        budget: "",
+        selectedOpts: [],
+      },
+    },
+    {
+      id: "cargo",
+      label: "화물/경유지 다건 점검",
+      step: 2,
+      draft: {
+        ...common,
+        waypoints: [
+          { id: 1, name: "경유 담당자1", phone: "010-5555-6666", addr: "서울 송파구 올림픽로 300", detail: "B1 집하장" },
+          { id: 2, name: "경유 담당자2", phone: "010-3333-9999", addr: "경기 하남시 미사강변대로 100", detail: "2층 출고장" },
+        ],
+        cargoList: [
+          {
+            id: 1,
+            itemCategory: "BOX",
+            type: "전자부품 박스",
+            quantity: "12",
+            lengthCm: "48",
+            widthCm: "38",
+            heightCm: "34",
+            weight: "180",
+            dropOffKey: "WP:1",
+          },
+          {
+            id: 2,
+            itemCategory: "PALLET",
+            type: "파렛트 자재",
+            quantity: "2",
+            lengthCm: "110",
+            widthCm: "110",
+            heightCm: "120",
+            weight: "420",
+            dropOffKey: "END",
+          },
+          {
+            id: 3,
+            itemCategory: "FURNITURE",
+            type: "3인소파",
+            quantity: "1",
+            lengthCm: "200",
+            widthCm: "90",
+            heightCm: "90",
+            weight: "80",
+            dropOffKey: "WP:2",
+          },
+        ],
+        budget: "180000",
+        noteToDriver: "2단계 UI 점검용 목업입니다.",
+      },
+    },
+    {
+      id: "option",
+      label: "차량/옵션/예산 점검",
+      step: 3,
+      draft: {
+        ...common,
+        waypoints: [{ id: 1, name: "경유 담당자", phone: "010-2222-4444", addr: "서울 동작구 노량진로 10", detail: "1층" }],
+        cargoList: [
+          {
+            id: 1,
+            itemCategory: "PALLET",
+            type: "냉장 식자재",
+            quantity: "4",
+            lengthCm: "110",
+            widthCm: "110",
+            heightCm: "120",
+            weight: "900",
+            dropOffKey: "END",
+          },
+        ],
+        tonIdx: 1,
+        typeIdx: 1,
+        isFrozen: true,
+        isPool: false,
+        selectedOpts: ["caution", "waterproof"],
+        budget: "220000",
+        noteToDriver: "3단계 옵션/AI UI 점검용 목업입니다.",
+      },
+    },
+  ];
+}
+
 const useStyles = createThemedStyles((theme: AppTheme) => {
   const c = theme.colors;
   const spacing = safeNumber(theme.layout.spacing.base, 4);
-  const radiusCard = safeNumber(theme.layout.radii.card, 16);
-  const overlay = tint(c.textMain, 0.45, "rgba(0,0,0,0.45)");
+  const overlay = tint(c.textMain, 0.45, c.textMain);
+  const stepCircleSize = QUOTE_PROGRESS_TOKENS.circleSize;
+  const stepLineHeight = QUOTE_PROGRESS_TOKENS.lineHeight;
+  const flatCard = getQuoteFlatCardStyle(theme);
 
   return StyleSheet.create({
     content: { backgroundColor: c.bgMain, paddingTop: 16 },
@@ -46,29 +194,51 @@ const useStyles = createThemedStyles((theme: AppTheme) => {
     },
     stepBar: {
       flexDirection: "row",
-      alignItems: "center",
+      alignItems: "flex-start",
       justifyContent: "space-between",
       position: 'relative',
     },
-    stepLineBg: {
-        position: 'absolute', top: 14, left: 0, right: 0, height: 2, backgroundColor: c.borderDefault, zIndex: 0
+    stepLineTrack: {
+      position: "absolute",
+      top: stepCircleSize / 2 - stepLineHeight / 2,
+      left: 0,
+      right: 0,
+      height: stepLineHeight,
+      borderRadius: stepLineHeight,
+      backgroundColor: tint(c.textMain, 0.08, c.borderDefault),
+      zIndex: 0,
+      overflow: "hidden",
     },
+    stepLineFill: { height: "100%", borderRadius: stepLineHeight, backgroundColor: c.brandPrimary },
     stepItem: { alignItems: 'center', zIndex: 1, gap: 6 },
     stepCircle: {
-        width: 30, height: 30, borderRadius: 15, backgroundColor: c.bgSurface,
-        borderWidth: 2, borderColor: c.borderDefault, alignItems: 'center', justifyContent: 'center'
+      width: stepCircleSize,
+      height: stepCircleSize,
+      borderRadius: stepCircleSize / 2,
+      backgroundColor: c.bgSurface,
+      borderWidth: 2,
+      borderColor: c.borderDefault,
+      alignItems: "center",
+      justifyContent: "center",
     },
     stepCircleActive: {
-        backgroundColor: c.brandPrimary, borderColor: c.brandPrimary
+      backgroundColor: c.brandPrimary,
+      borderColor: c.brandPrimary,
     },
-    stepCheck: { color: "#fff", fontWeight: 'bold', fontSize: 12 }, // Used indirectly via Icon
     stepNum: { fontSize: 12, fontWeight: '700', color: c.textMuted },
     stepLabel: { fontSize: 11, fontWeight: '600', color: c.textMuted },
     stepLabelActive: { color: c.brandPrimary, fontWeight: '700' },
     devAutoFillBtn: {
       minHeight: 36,
-      minWidth: 44,
+      minWidth: 68,
       paddingHorizontal: 10,
+    },
+    devAppliedLabel: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: c.textMuted,
+      marginBottom: spacing * 2,
+      paddingHorizontal: spacing * 5,
     },
 
     // 하단 바 (Bottom Bar)
@@ -78,7 +248,6 @@ const useStyles = createThemedStyles((theme: AppTheme) => {
       borderTopColor: c.borderDefault,
       paddingHorizontal: spacing * 5,
       paddingTop: spacing * 3,
-      shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 10, elevation: 10
     },
     bottomContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
     
@@ -103,16 +272,11 @@ const useStyles = createThemedStyles((theme: AppTheme) => {
     },
     requestModalWrap: { width: "100%", maxWidth: 360 }, // 너비 조정
     requestModalCard: {
+      ...flatCard,
       width: "100%",
-      borderRadius: radiusCard,
       paddingHorizontal: spacing * 6,
       paddingVertical: spacing * 6,
       alignItems: "center", // 중앙 정렬
-      backgroundColor: c.bgSurface,
-      elevation: 5,
-      shadowColor: "#000",
-      shadowOpacity: 0.25,
-      shadowRadius: 10,
     },
     requestModalIcon: {
       width: 72, height: 72, borderRadius: 36, backgroundColor: tint(c.brandPrimary, 0.1, c.bgSurface),
@@ -130,9 +294,40 @@ const useStyles = createThemedStyles((theme: AppTheme) => {
     
     modalBtnGroup: { width: '100%', gap: 10 },
     modalBtn: { width: '100%', height: 50, borderRadius: 12 },
-    modalBtnSecondary: { width: '100%', height: 50, borderRadius: 12, backgroundColor: 'transparent', borderWidth: 0 },
+    modalBtnSecondary: { width: '100%', height: 50, borderRadius: 12 },
   });
 });
+
+function isDistanceDebugEnabled(): boolean {
+  const devFlag = typeof __DEV__ !== "undefined" && __DEV__;
+
+  let envFlag = false;
+  try {
+    const v = String((globalThis as any)?.process?.env?.EXPO_PUBLIC_DEBUG_LOGS ?? "").trim().toLowerCase();
+    envFlag = v === "1" || v === "true" || v === "yes" || v === "on";
+  } catch {
+    envFlag = false;
+  }
+
+  return devFlag || envFlag;
+}
+
+function quoteDistanceDebugLog(payload: {
+  wasAutoCalculated: boolean;
+  computedDistanceKm: number;
+  pointsCount: number;
+}) {
+  if (!isDistanceDebugEnabled()) return;
+  // eslint-disable-next-line no-console
+  console.log("[quote-create] distance", payload);
+}
+
+function hasBrokenAddressText(value?: string) {
+  const v = String(value ?? "").trim();
+  if (!v) return false;
+  if (v.includes("\uFFFD")) return true;
+  return /\?{2,}/.test(v);
+}
 
 function QuoteCreatePageInner() {
   const theme = useAppTheme();
@@ -146,8 +341,10 @@ function QuoteCreatePageInner() {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [bottomBarHeight, setBottomBarHeight] = useState(100);
   const [isSubmitDoneOpen, setIsSubmitDoneOpen] = useState(false);
-  const [submittedAt, setSubmittedAt] = useState<Date | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [createdQuoteIdentifier, setCreatedQuoteIdentifier] = useState("");
+  const [devMockCursor, setDevMockCursor] = useState(0);
+  const [appliedMockLabel, setAppliedMockLabel] = useState("");
 
   const pricing = useMemo(() => computeQuotePricing(draft), [draft]);
 
@@ -200,6 +397,17 @@ function QuoteCreatePageInner() {
     return fallback;
   };
 
+  const resolveCreatedQuoteIdentifier = (input: unknown): string => {
+    if (!input || typeof input !== "object") return "";
+    const source = input as { quotePublicId?: unknown; quoteId?: unknown };
+    const quotePublicId = typeof source?.quotePublicId === "string" ? source.quotePublicId.trim() : "";
+    if (quotePublicId) return quotePublicId;
+
+    const quoteId = Number(source?.quoteId);
+    if (Number.isFinite(quoteId) && quoteId > 0) return String(Math.trunc(quoteId));
+    return "";
+  };
+
   const handleNext = async () => {
       if (step === 1 && !isStep1Ready) return alert("출발지와 도착지, 연락처를 입력해주세요.");
       if (step === 2 && !isStep2Ready) return alert("화물 정보를 입력해주세요.");
@@ -215,12 +423,32 @@ function QuoteCreatePageInner() {
   const submitQuoteRequest = async () => {
     if (isSubmitting) return;
 
+    const payload = buildQuoteCreateRequest(draft);
+    const stops = Array.isArray(payload?.stops) ? payload.stops : [];
+    const addressCandidates = [
+      payload?.originAddress,
+      payload?.destinationAddress,
+      ...stops.map((stop) => (stop as { address?: unknown })?.address),
+    ];
+
+    if (addressCandidates.some((address) => hasBrokenAddressText(String(address ?? "")))) {
+      Alert.alert("견적 요청 실패", "주소 문자열이 깨져 있어요. 주소를 다시 선택해주세요.");
+      return;
+    }
+
     try {
       setIsSubmitting(true);
-      const payload = buildQuoteCreateRequest(draft);
-      await createShipperQuote(payload);
+      setCreatedQuoteIdentifier("");
+      const response = await createShipperQuote(payload);
+      const nextQuoteIdentifier = resolveCreatedQuoteIdentifier(response);
+      setCreatedQuoteIdentifier(nextQuoteIdentifier);
 
-      setSubmittedAt(new Date());
+      if (nextQuoteIdentifier) {
+        setIsSubmitDoneOpen(false);
+        router.replace({ pathname: "/(shipper)/quotes/[id]", params: { id: nextQuoteIdentifier } });
+        return;
+      }
+
       setIsSubmitDoneOpen(true);
     } catch (error) {
       Alert.alert("견적 요청 실패", readErrorMessage(error));
@@ -230,75 +458,35 @@ function QuoteCreatePageInner() {
   };
 
   const applyDevAutoFill = () => {
-    const date = new Date();
-    const time = new Date();
-    time.setHours(10, 30, 0, 0);
+    const presets = createDevMockPresets(new Date());
+    const index = devMockCursor % presets.length;
+    const selected = presets[index];
 
-    patchDraft({
-      senderName: "테스트 발송인",
-      senderPhone: "01012345678",
-      receiverName: "테스트 수취인",
-      receiverPhone: "01087654321",
-      startAddr: "서울 강남구 테헤란로 427",
-      startAddrDetail: "15층 물류팀",
-      endAddr: "경기 성남시 분당구 판교역로 166",
-      endAddrDetail: "1층 하차장",
-      waypoints: [
-        { id: 1, name: "경유 담당자", phone: "01055556666", addr: "서울 송파구 올림픽로 300", detail: "B1 집하장" },
-      ],
-      loadMethod: "수작업",
-      unloadMethod: "지게차",
-      date,
-      time,
-      cargoList: [
-        {
-          id: 1,
-          itemCategory: "BOX",
-          type: "전자부품 박스",
-          quantity: "12",
-          lengthCm: "48",
-          widthCm: "38",
-          heightCm: "34",
-          weight: "180",
-          dropOffKey: "WP:1",
-        },
-        {
-          id: 2,
-          itemCategory: "PALLET",
-          type: "파렛트 자재",
-          quantity: "2",
-          lengthCm: "110",
-          widthCm: "110",
-          heightCm: "120",
-          weight: "420",
-          dropOffKey: "END",
-        },
-      ],
-      tonIdx: 1,
-      typeIdx: 0,
-      isFrozen: false,
-      isPool: false,
-      selectedOpts: ["caution"],
-      budget: "180000",
-      noteToDriver: "개발용 자동 입력 데이터입니다.",
-      truckId: 1,
-      originLat: 37.5066,
-      originLng: 127.0543,
-      destinationLat: 37.3944,
-      destinationLng: 127.1112,
-      distanceKm: 23,
-    });
+    patchDraft(selected.draft);
+    setStep(selected.step);
+    setAppliedMockLabel(selected.label);
+    setDevMockCursor((prev) => (prev + 1) % presets.length);
+  };
 
-    setStep(3);
+  const goToCreatedQuoteDetail = () => {
+    const safeIdentifier = String(createdQuoteIdentifier ?? "").trim();
+    setIsSubmitDoneOpen(false);
+    if (!safeIdentifier) {
+      router.replace("/(shipper)/quotes");
+      return;
+    }
+    router.replace({ pathname: "/(shipper)/quotes/[id]", params: { id: safeIdentifier } });
   };
 
   const goToQuoteList = () => {
     setIsSubmitDoneOpen(false);
+    setCreatedQuoteIdentifier("");
     router.replace("/(shipper)/quotes");
   };
 
   const goToHome = () => {
     setIsSubmitDoneOpen(false);
+    setCreatedQuoteIdentifier("");
     router.replace("/(shipper)/home"); // 홈 경로로 이동 (가정)
   };
 
@@ -313,6 +501,13 @@ function QuoteCreatePageInner() {
       // 아직 차량 선택 전(Step 1,2)이라도 AI 예상 견적(1톤 기준) 보여줌 (동기부여)
       return formatKrw(pricing.finalPrice || pricing.basePrice);
   };
+
+  const startAddrLabel = String(draft?.startAddr ?? "").trim().split(/\s+/).filter(Boolean)[0] ?? "-";
+  const endAddrLabel = String(draft?.endAddr ?? "").trim().split(/\s+/).filter(Boolean)[0] ?? "-";
+
+  const stepProgress =
+    QUOTE_STEP_ITEMS.length > 1 ? ((step - 1) / (QUOTE_STEP_ITEMS.length - 1)) * 100 : 0;
+  const nextDevMockLabel = DEV_MOCK_LABELS[devMockCursor] ?? DEV_MOCK_LABELS[0];
 
   const bottomBar = (
     <View
@@ -354,12 +549,12 @@ function QuoteCreatePageInner() {
       title="견적 요청"
       headerRight={
         <AppButton
-          title="⚡️"
+          title={`${devMockCursor + 1}/3`}
           size="sm"
           variant="secondary"
           style={styles.devAutoFillBtn}
           onPress={applyDevAutoFill}
-          accessibilityLabel="개발용 자동 입력"
+          accessibilityLabel={`개발용 목업 자동 입력 (${nextDevMockLabel})`}
         />
       }
       onPressBack={goBack}
@@ -371,7 +566,9 @@ function QuoteCreatePageInner() {
       {/* Step Progress Bar */}
       <View style={styles.stepBarContainer}>
           <View style={styles.stepBar}>
-              <View style={styles.stepLineBg} />
+              <View style={styles.stepLineTrack}>
+                <View style={[styles.stepLineFill, { width: `${stepProgress}%` }]} />
+              </View>
               {QUOTE_STEP_ITEMS.map((item) => {
                   const isActive = step >= item.step;
                   const isCurrent = step === item.step;
@@ -379,12 +576,12 @@ function QuoteCreatePageInner() {
                       <View key={item.step} style={styles.stepItem}>
                           <View style={[styles.stepCircle, isActive && styles.stepCircleActive]}>
                               {isActive ? (
-                                  <Ionicons name="checkmark" size={16} color="#fff" />
+                                  <Ionicons name="checkmark" size={16} color={theme.colors.textOnBrand} />
                               ) : (
                                   <AppText style={styles.stepNum}>{item.step}</AppText>
                               )}
                           </View>
-                          <AppText style={isCurrent ? styles.stepLabelActive : styles.stepLabel}>
+                          <AppText style={[styles.stepLabel, isCurrent && styles.stepLabelActive]}>
                               {item.label}
                           </AppText>
                       </View>
@@ -392,6 +589,7 @@ function QuoteCreatePageInner() {
               })}
           </View>
       </View>
+      {appliedMockLabel ? <AppText style={styles.devAppliedLabel}>목업 적용: {appliedMockLabel}</AppText> : null}
 
       {/* Content Area */}
       {step === 1 && <QuoteCreateStep1 />}
@@ -420,13 +618,14 @@ function QuoteCreatePageInner() {
                     <View style={styles.infoRow}>
                         <AppText style={styles.infoLabel}>운송 구간</AppText>
                         <AppText style={[styles.infoValue, { maxWidth: "70%" }]} numberOfLines={1}>
-                            {draft.startAddr.split(" ")[0]} <Ionicons name="arrow-forward" size={10}/> {draft.endAddr.split(" ")[0]}
+                            {startAddrLabel} <Ionicons name="arrow-forward" size={10}/> {endAddrLabel}
                         </AppText>
                     </View>
                 </View>
 
                 <View style={styles.modalBtnGroup}>
-                    <AppButton title="내역 확인하기" size="lg" style={styles.modalBtn} onPress={goToQuoteList} />
+                    <AppButton title="견적 상세 보기" size="lg" style={styles.modalBtn} onPress={goToCreatedQuoteDetail} />
+                    <AppButton title="내역 확인하기" variant="secondary" size="lg" style={styles.modalBtnSecondary} onPress={goToQuoteList} />
                     <AppButton title="홈으로" variant="secondary" size="lg" style={styles.modalBtnSecondary} onPress={goToHome} />
                 </View>
             </View>

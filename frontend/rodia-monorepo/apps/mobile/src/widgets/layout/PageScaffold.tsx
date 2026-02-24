@@ -1,9 +1,11 @@
+// apps/mobile/src/widgets/layout/PageScaffold.tsx
 import React, { useMemo } from "react";
 import { Platform, StyleSheet, View, type ViewStyle } from "react-native";
 
 import { safeString } from "@/shared/theme/colorUtils";
 import { useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppContainer } from "@/shared/ui/kit/AppContainer";
+import { DebugOpenButton } from "@/shared/ui/kit/DebugOpenButton";
 import { PageTopBar } from "@/widgets/layout/PageTopBar";
 
 type Props = {
@@ -57,7 +59,15 @@ export function PageScaffold(props: Props) {
           {props.children ?? null}
         </AppContainer>
 
-        {props.floating ? <View style={styles.floatingWrap}>{props.floating}</View> : null}
+        {(props.floating || true) ? (
+          <View style={styles.floatingWrap} pointerEvents="box-none">
+            {props.floating ? <View style={styles.floatingSlot}>{props.floating}</View> : null}
+            <View style={styles.debugSlot}>
+              <DebugOpenButton />
+            </View>
+          </View>
+        ) : null}
+
         {props.bottomBar ? <View style={styles.bottomBarWrap}>{props.bottomBar}</View> : null}
       </AppContainer>
     </View>
@@ -83,12 +93,23 @@ function createStyles(cShadow: string) {
       flexGrow: 1,
       paddingTop: 0,
     },
-    floatingWrap: {
-      position: "absolute",
-      right: 20,
-      bottom: 10,
-      zIndex: 30,
+
+  floatingWrap: {
+  position: "absolute",
+  right: 20,
+  bottom: 10,
+  zIndex: 30,
+  elevation: 50, // android에서 떠오르게
+  alignItems: "flex-end",
+  gap: 10,
+},
+    floatingSlot: {
+      alignItems: "flex-end",
     },
+    debugSlot: {
+      alignItems: "flex-end",
+    },
+
     bottomBarWrap: {
       position: "absolute",
       left: 0,
@@ -99,4 +120,3 @@ function createStyles(cShadow: string) {
     },
   });
 }
-

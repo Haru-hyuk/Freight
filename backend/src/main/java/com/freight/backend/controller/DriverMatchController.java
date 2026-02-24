@@ -7,9 +7,8 @@ import com.freight.backend.service.MatchService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -29,11 +28,16 @@ public class DriverMatchController {
 
     private final MatchService matchService;
 
-    private static Long requireDriverId(UserDetails userDetails) {
-        if (userDetails == null || !userDetails.getAuthorities().contains(new SimpleGrantedAuthority("ROLE_DRIVER"))) {
+    private static Long requireDriverId(Authentication authentication) {
+        if (authentication == null
+                || !authentication.getAuthorities().contains(new SimpleGrantedAuthority("ROLE_DRIVER"))) {
             throw new CustomException(ErrorCode.AUTH_FORBIDDEN);
         }
-        return Long.parseLong(userDetails.getUsername());
+        try {
+            return Long.parseLong(authentication.getName());
+        } catch (NumberFormatException e) {
+            throw new CustomException(ErrorCode.AUTH_UNAUTHORIZED);
+        }
     }
 
     /**
@@ -42,9 +46,9 @@ public class DriverMatchController {
      */
     @GetMapping
     public ResponseEntity<List<MatchResponse>> getOpenMatches(
-            @AuthenticationPrincipal UserDetails userDetails
+            Authentication authentication
     ) {
-        requireDriverId(userDetails);
+        requireDriverId(authentication);
         List<MatchResponse> matches = matchService.getOpenMatches();
         return ResponseEntity.ok(matches);
     }
@@ -55,9 +59,9 @@ public class DriverMatchController {
      */
     @GetMapping("/me")
     public ResponseEntity<List<MatchResponse>> getMyMatches(
-            @AuthenticationPrincipal UserDetails userDetails
+            Authentication authentication
     ) {
-        Long driverId = requireDriverId(userDetails);
+        Long driverId = requireDriverId(authentication);
         List<MatchResponse> matches = matchService.getDriverMatches(driverId);
         return ResponseEntity.ok(matches);
     }
@@ -68,10 +72,10 @@ public class DriverMatchController {
      */
     @PostMapping("/{matchId}/accept")
     public ResponseEntity<MatchResponse> acceptMatch(
-            @AuthenticationPrincipal UserDetails userDetails,
+            Authentication authentication,
             @PathVariable Long matchId
     ) {
-        Long driverId = requireDriverId(userDetails);
+        Long driverId = requireDriverId(authentication);
         MatchResponse response = matchService.acceptMatch(driverId, matchId);
         return ResponseEntity.ok(response);
     }
@@ -82,10 +86,10 @@ public class DriverMatchController {
      */
     @DeleteMapping("/{matchId}")
     public ResponseEntity<Void> cancelMatch(
-            @AuthenticationPrincipal UserDetails userDetails,
+            Authentication authentication,
             @PathVariable Long matchId
     ) {
-        Long userId = requireDriverId(userDetails);
+        Long userId = requireDriverId(authentication);
         matchService.cancelMatch(userId, "ROLE_DRIVER", matchId);
         return ResponseEntity.noContent().build();
     }
@@ -96,10 +100,10 @@ public class DriverMatchController {
      */
     @GetMapping("/{matchId}")
     public ResponseEntity<MatchResponse> getMatch(
-            @AuthenticationPrincipal UserDetails userDetails,
+            Authentication authentication,
             @PathVariable Long matchId
     ) {
-        Long userId = requireDriverId(userDetails);
+        Long userId = requireDriverId(authentication);
         MatchResponse response = matchService.getMatch(matchId, userId, "ROLE_DRIVER");
         return ResponseEntity.ok(response);
     }

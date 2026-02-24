@@ -1,4 +1,4 @@
-/* apps/web/src/index.css */
+/* apps/web/src/shared/styles/index.css */
 @import "@rodia/tokens/dist/index.css";
 
 @tailwind base;
@@ -29,6 +29,23 @@
 
     /* shadcn radius는 토큰에서 생성되는 카드 radius를 그대로 연결 */
     --radius: var(--rd-radius-card);
+
+    /* Semantic colors for Alert/Badge components */
+    --success: #10B981;
+    --success-light: #ECFDF5;
+    --success-border: #A7F3D0;
+    
+    --warning: #F59E0B;
+    --warning-light: #FFFBEB;
+    --warning-border: #FDE68A;
+    
+    --error: #EF4444;
+    --error-light: #FEE2E2;
+    --error-border: #FECACA;
+    
+    --info: #3B82F6;
+    --info-light: #EFF6FF;
+    --info-border: #BFDBFE;
   }
 
   * {

@@ -51,7 +51,6 @@ export default function LoginPage() {
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="border border-border bg-background text-foreground focus:ring-2 focus:ring-primary"
             placeholder="admin@rodia.com"
           />
         </div>
@@ -63,7 +62,6 @@ export default function LoginPage() {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="border border-border bg-background text-foreground focus:ring-2 focus:ring-primary"
             placeholder="비밀번호"
           />
         </div>

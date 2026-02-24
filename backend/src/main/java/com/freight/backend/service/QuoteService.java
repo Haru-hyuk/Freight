@@ -20,6 +20,8 @@ import com.freight.backend.entity.QuoteItem;
 import com.freight.backend.entity.QuoteStop;
 import com.freight.backend.exception.CustomException;
 import com.freight.backend.exception.ErrorCode;
+import com.freight.backend.geocoding.GeocodingResult;
+import com.freight.backend.geocoding.GeocodingService;
 import com.freight.backend.pricing.LoadHandlingMethod;
 import com.freight.backend.pricing.PricingCalculator;
 import com.freight.backend.pricing.PricingResult;
@@ -30,6 +32,8 @@ import com.freight.backend.repository.QuoteChecklistItemRepository;
 import com.freight.backend.repository.QuoteItemRepository;
 import com.freight.backend.repository.QuoteRepository;
 import com.freight.backend.repository.QuoteStopRepository;
+import com.freight.backend.routing.RouteDistanceService;
+import com.freight.backend.routing.RoutePoint;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
@@ -39,6 +43,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -52,6 +57,7 @@ import org.springframework.transaction.annotation.Transactional;
  * - AI 기반 견적 진단
  */
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class QuoteService {
 
@@ -62,13 +68,29 @@ public class QuoteService {
     private final PricingCalculator pricingCalculator;
     private final SurchargeOptionService surchargeOptionService;
     private final DeepSeekClient deepSeekClient;
+    private final GeocodingService geocodingService;
+    private final RouteDistanceService routeDistanceService;
 
     @Transactional
     public QuoteCreateResponse createQuote(QuoteCreateRequest req) {
         Long shipperId = getCurrentShipperId();
+        ResolvedPoint originPoint = resolvePoint(
+                req.getOriginAddress(),
+                req.getOriginLat(),
+                req.getOriginLng(),
+                ErrorCode.ORIGIN_GEOCODE_FAILED
+        );
+        ResolvedPoint destinationPoint = resolvePoint(
+                req.getDestinationAddress(),
+                req.getDestinationLat(),
+                req.getDestinationLng(),
+                ErrorCode.DESTINATION_GEOCODE_FAILED
+        );
+        List<ResolvedStop> resolvedStops = resolveStops(req.getStops());
+        int resolvedDistanceKm = calculateDistanceKm(originPoint, destinationPoint, resolvedStops);
 
         PricingResult pricing = calculatePricing(
-                req.getDistanceKm(),
+                resolvedDistanceKm,
                 req.getVehicleType(),
                 req.getVehicleBodyType(),
                 req.getLoadMethod(),
@@ -86,13 +108,13 @@ public class QuoteService {
         Quote quote = Quote.builder()
                 .shipperId(shipperId)
                 .truckId(req.getTruckId())
-                .originAddress(req.getOriginAddress())
-                .destinationAddress(req.getDestinationAddress())
-                .originLat(req.getOriginLat())
-                .originLng(req.getOriginLng())
-                .destinationLat(req.getDestinationLat())
-                .destinationLng(req.getDestinationLng())
-                .distanceKm(req.getDistanceKm())
+                .originAddress(originPoint.address())
+                .destinationAddress(destinationPoint.address())
+                .originLat(originPoint.lat())
+                .originLng(originPoint.lng())
+                .destinationLat(destinationPoint.lat())
+                .destinationLng(destinationPoint.lng())
+                .distanceKm(resolvedDistanceKm)
                 .weightKg(req.getWeightKg())
                 .volumeCbm(req.getVolumeCbm())
                 .vehicleType(req.getVehicleType())
@@ -117,7 +139,15 @@ public class QuoteService {
         saveQuoteItems(saved.getQuoteId(), req.getQuoteItems());
         saveStops(saved.getQuoteId(), req.getStops());
 
-        return new QuoteCreateResponse(saved.getQuoteId(), saved.getPublicId());
+        return new QuoteCreateResponse(
+                saved.getQuoteId(),
+                saved.getPublicId(),
+                saved.getOriginLat(),
+                saved.getOriginLng(),
+                saved.getDestinationLat(),
+                saved.getDestinationLng(),
+                responseStops
+        );
     }
 
 
@@ -188,9 +218,23 @@ public class QuoteService {
         Long shipperId = getCurrentShipperId();
         Quote quote = getOwnedQuoteByIdentifier(quoteIdentifier, shipperId);
         Long quoteId = quote.getQuoteId();
+        ResolvedPoint originPoint = resolvePoint(
+                req.getOriginAddress(),
+                req.getOriginLat(),
+                req.getOriginLng(),
+                ErrorCode.ORIGIN_GEOCODE_FAILED
+        );
+        ResolvedPoint destinationPoint = resolvePoint(
+                req.getDestinationAddress(),
+                req.getDestinationLat(),
+                req.getDestinationLng(),
+                ErrorCode.DESTINATION_GEOCODE_FAILED
+        );
+        List<ResolvedStop> resolvedStops = resolveStops(req.getStops());
+        int resolvedDistanceKm = calculateDistanceKm(originPoint, destinationPoint, resolvedStops);
 
         PricingResult pricing = calculatePricing(
-                req.getDistanceKm(),
+                resolvedDistanceKm,
                 req.getVehicleType(),
                 req.getVehicleBodyType(),
                 req.getLoadMethod(),
@@ -207,13 +251,13 @@ public class QuoteService {
 
         quote.updateFrom(
                 req.getTruckId(),
-                req.getOriginAddress(),
-                req.getDestinationAddress(),
-                req.getOriginLat(),
-                req.getOriginLng(),
-                req.getDestinationLat(),
-                req.getDestinationLng(),
-                req.getDistanceKm(),
+                originPoint.address(),
+                destinationPoint.address(),
+                originPoint.lat(),
+                originPoint.lng(),
+                destinationPoint.lat(),
+                destinationPoint.lng(),
+                resolvedDistanceKm,
                 req.getWeightKg(),
                 req.getVolumeCbm(),
                 req.getVehicleType(),
@@ -238,7 +282,7 @@ public class QuoteService {
         saveQuoteItems(quoteId, req.getQuoteItems());
 
         quoteStopRepository.deleteByQuoteId(quoteId);
-        saveStops(quoteId, req.getStops());
+        saveStops(quoteId, resolvedStops);
 
         List<QuoteItemResponse> quoteItems = quoteItemRepository.findByQuoteId(quoteId).stream()
                 .map(this::toQuoteItemResponse)
@@ -272,8 +316,9 @@ public class QuoteService {
     /** 견적 유효성 검증 + AI 분석 (가격/적재 안전성/배차 속도 예측) */
     @Transactional(readOnly = true)
     public QuoteValidationResponse validateQuote(QuoteCreateRequest req) {
+        int resolvedDistanceKm = resolveDistanceForValidation(req);
         PricingResult pricing = calculatePricing(
-                req.getDistanceKm(),
+                resolvedDistanceKm,
                 req.getVehicleType(),
                 req.getVehicleBodyType(),
                 req.getLoadMethod(),
@@ -342,7 +387,7 @@ public class QuoteService {
             }
         }
 
-        String prompt = buildAiPrompt(req, pricing, comments);
+        String prompt = buildAiPrompt(req, pricing, comments, resolvedDistanceKm);
         String aiSummary = deepSeekClient.generateAdvice(prompt)
                 .map(s -> {
                     comments.add(s);
@@ -654,7 +699,7 @@ public class QuoteService {
         sb.append("Mention dispatch speed likelihood, load safety, and price adequacy in one concise flow. ");
         sb.append("Avoid absolute guarantees and avoid repeating the same number too many times.\n");
         sb.append("Input summary:\n");
-        sb.append("- Distance (km): ").append(req.getDistanceKm()).append('\n');
+        sb.append("- Distance (km): ").append(resolvedDistanceKm).append('\n');
         sb.append("- Vehicle type: ").append(req.getVehicleType()).append('\n');
         sb.append("- Vehicle option: ").append(req.getVehicleBodyType()).append('\n');
         sb.append("- Cargo name: ").append(req.getCargoName()).append('\n');
@@ -745,23 +790,143 @@ public class QuoteService {
         if (stops == null || stops.isEmpty()) {
             return;
         }
-        for (QuoteStopRequest stop : stops) {
-            if (stop == null || stop.getAddress() == null || stop.getAddress().isBlank()) {
-                continue;
-            }
+        for (ResolvedStop stop : stops) {
             QuoteStop entity = QuoteStop.builder()
                     .quoteId(quoteId)
-                    .seq(stop.getSeq() == null ? 0 : stop.getSeq())
-                    .address(stop.getAddress())
-                    .lat(stop.getLat())
-                    .lng(stop.getLng())
-                    .contactName(stop.getContactName())
-                    .contactPhone(stop.getContactPhone())
-                    .deptName(stop.getDeptName())
-                    .managerName(stop.getManagerName())
+                    .seq(stop.seq())
+                    .address(stop.address())
+                    .lat(stop.lat())
+                    .lng(stop.lng())
+                    .contactName(stop.contactName())
+                    .contactPhone(stop.contactPhone())
+                    .deptName(stop.deptName())
+                    .managerName(stop.managerName())
                     .build();
             quoteStopRepository.save(entity);
         }
+    }
+
+    private int resolveDistanceForValidation(QuoteCreateRequest req) {
+        if (req.getDistanceKm() != null && req.getDistanceKm() > 0) {
+            return req.getDistanceKm();
+        }
+        ResolvedPoint originPoint = resolvePoint(
+                req.getOriginAddress(),
+                req.getOriginLat(),
+                req.getOriginLng(),
+                ErrorCode.ORIGIN_GEOCODE_FAILED
+        );
+        ResolvedPoint destinationPoint = resolvePoint(
+                req.getDestinationAddress(),
+                req.getDestinationLat(),
+                req.getDestinationLng(),
+                ErrorCode.DESTINATION_GEOCODE_FAILED
+        );
+        List<ResolvedStop> resolvedStops = resolveStops(req.getStops());
+        return calculateDistanceKm(originPoint, destinationPoint, resolvedStops);
+    }
+
+    private List<ResolvedStop> resolveStops(List<QuoteStopRequest> stops) {
+        if (stops == null || stops.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<ResolvedStop> resolved = new ArrayList<>();
+        for (QuoteStopRequest stop : stops) {
+            if (stop == null) {
+                throw new CustomException(ErrorCode.INVALID_REQUEST);
+            }
+            ResolvedPoint point = resolvePoint(
+                    stop.getAddress(),
+                    stop.getLat(),
+                    stop.getLng(),
+                    ErrorCode.STOP_GEOCODE_FAILED
+            );
+            resolved.add(new ResolvedStop(
+                    stop.getSeq() == null ? resolved.size() + 1 : stop.getSeq(),
+                    point.address(),
+                    point.lat(),
+                    point.lng(),
+                    stop.getContactName(),
+                    stop.getContactPhone(),
+                    stop.getDeptName(),
+                    stop.getManagerName()
+            ));
+        }
+        return resolved;
+    }
+
+    private ResolvedPoint resolvePoint(String address, Double lat, Double lng, ErrorCode geocodeError) {
+        String normalizedAddress = normalizeAddressOrThrow(address);
+        if (geocodingService.isValidCoordinate(lat, lng)) {
+            return new ResolvedPoint(normalizedAddress, lat, lng);
+        }
+        try {
+            GeocodingResult result = geocodingService.geocode(normalizedAddress);
+            return new ResolvedPoint(result.normalizedAddress(), result.lat(), result.lng());
+        } catch (RuntimeException e) {
+            log.warn("Geocoding failed. address='{}', cause='{}'", normalizedAddress, e.getMessage());
+            throw new CustomException(geocodeError);
+        }
+    }
+
+    private String normalizeAddressOrThrow(String address) {
+        if (address == null || address.isBlank()) {
+            throw new CustomException(ErrorCode.INVALID_REQUEST);
+        }
+        return address.trim().replaceAll("\\s+", " ");
+    }
+
+    private int calculateDistanceKm(
+            ResolvedPoint originPoint,
+            ResolvedPoint destinationPoint,
+            List<ResolvedStop> resolvedStops
+    ) {
+        List<RoutePoint> points = new ArrayList<>();
+        points.add(new RoutePoint(originPoint.lat(), originPoint.lng()));
+        for (ResolvedStop stop : resolvedStops) {
+            points.add(new RoutePoint(stop.lat(), stop.lng()));
+        }
+        points.add(new RoutePoint(destinationPoint.lat(), destinationPoint.lng()));
+        try {
+            int rawDistanceKm = routeDistanceService.calculateDistanceKm(points);
+            int normalizedDistanceKm = normalizeDistanceKm(rawDistanceKm);
+            log.info(
+                    "Route distance resolved. rawDistance={}, normalizedDistanceKm={}, pointsCount={}",
+                    rawDistanceKm,
+                    normalizedDistanceKm,
+                    points.size()
+            );
+            return normalizedDistanceKm;
+        } catch (RuntimeException e) {
+            log.warn("Route distance calculation failed. pointsCount={}, cause='{}'", points.size(), e.getMessage());
+            throw new CustomException(ErrorCode.ROUTE_DISTANCE_FAILED);
+        }
+    }
+
+    private int normalizeDistanceKm(int rawDistanceKm) {
+        if (rawDistanceKm <= 0) {
+            throw new CustomException(ErrorCode.ROUTE_DISTANCE_FAILED);
+        }
+        // Guard against legacy/runtime mismatch where meters can be returned instead of km.
+        if (rawDistanceKm > 500) {
+            return Math.max(1, (int) Math.round(rawDistanceKm / 1000.0d));
+        }
+        return rawDistanceKm;
+    }
+
+    private record ResolvedPoint(String address, Double lat, Double lng) {
+    }
+
+    private record ResolvedStop(
+            Integer seq,
+            String address,
+            Double lat,
+            Double lng,
+            String contactName,
+            String contactPhone,
+            String deptName,
+            String managerName
+    ) {
     }
 
     private Long getCurrentShipperId() {
