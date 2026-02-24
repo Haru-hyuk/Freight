@@ -32,6 +32,10 @@ import {
   normalizeWorkMethodValue,
   toActorOnlyWorkMethod,
 } from "@/features/quote/model/workMethod";
+import {
+  getMockShipperQuoteDetailByCase,
+  getMockShipperQuoteDetailByIdentifierByCase,
+} from "@/features/quote/api/mockShipperQuoteDetails";
 import { listMockShipperQuotesByCase } from "@/features/quote/api/mockShipperQuotes";
 import {
   createMockShipperQuote,
@@ -633,6 +637,10 @@ function createMockQuoteApi(): QuoteApi {
       await waitNetwork();
       const safeQuoteId = normalizeQuoteId(quoteId);
       if (safeQuoteId <= 0) return toQuoteDetail({}, 0);
+
+      const mockDetail = getMockShipperQuoteDetailByCase(safeQuoteId);
+      if (mockDetail) return toQuoteDetail(mockDetail, safeQuoteId);
+
       return toQuoteDetail(getMockShipperQuoteDetail(safeQuoteId), safeQuoteId);
     },
 
@@ -640,6 +648,10 @@ function createMockQuoteApi(): QuoteApi {
       await waitNetwork();
       const safeIdentifier = normalizeQuoteIdentifier(quoteIdentifier);
       const fallbackQuoteId = normalizeQuoteId(Number(safeIdentifier));
+
+      const mockDetail = getMockShipperQuoteDetailByIdentifierByCase(safeIdentifier);
+      if (mockDetail) return toQuoteDetail(mockDetail, fallbackQuoteId);
+
       return toQuoteDetail(getMockShipperQuoteDetailByIdentifier(safeIdentifier), fallbackQuoteId);
     },
 

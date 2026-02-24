@@ -26,9 +26,9 @@ const MOCK_SHIPPER_QUOTES: QuoteListResponse[] = [
     vehicleType: "TON_2_5",
     vehicleBodyType: "WING_BODY",
     cargoName: "패키지 박스",
-    desiredPrice: 232000,
-    finalPrice: 248000,
-    status: "NEGOTIATING",
+    desiredPrice: 0,
+    finalPrice: 0,
+    status: "OPEN",
     createdAt: "2026-02-21T06:35:00.000Z",
   },
   {

@@ -24,6 +24,7 @@ function pickActiveKey(segments: readonly string[] | undefined | null): BottomTa
   if (segs.includes("quotes")) return "quotes";
   if (segs.includes("matchings")) return "matchings";
   if (segs.includes("profile")) return "profile";
+  if (segs.includes("settings")) return "profile";
   if (segs.includes("home")) return "home";
 
   // create/detail 등 하위 라우트에서도 탭 유지되도록 fallback
@@ -34,6 +35,7 @@ function pickActiveKey(segments: readonly string[] | undefined | null): BottomTa
   if (last === "quotes") return "quotes";
   if (last === "matchings") return "matchings";
   if (last === "profile") return "profile";
+  if (last === "settings") return "profile";
   return "home";
 }
 

@@ -10,7 +10,6 @@ import {
   type QuoteActionPolicy,
 } from "@/features/quote/model/quoteActionMatrix";
 import { formatWorkMethodLabel } from "@/features/quote/model/workMethod";
-import { isMockQuoteEnabled } from "@/shared/lib/config/env";
 
 export type QuoteSectionRow = {
   label: string;
@@ -69,8 +68,6 @@ const KRW_FORMAT = (() => {
   }
   return { format: (v: number) => String(v) } as Pick<Intl.NumberFormat, "format">;
 })();
-
-const MOCK_WAYPOINTS_FALLBACK: string[] = ["인천광역시 연수구 (목업 경유지)"];
 
 const QUOTE_STATUS_GUARD: Record<QuoteDetailResponse["status"], true> = {
   OPEN: true,
@@ -336,18 +333,13 @@ function buildSpecificationArchive(quote: QuoteDetailResponse): QuoteSection[] {
 }
 
 function buildWaypointAddresses(resolvedQuote: QuoteDetailResponse): string[] {
-  const fromStops = Array.isArray(resolvedQuote?.stops)
+  return Array.isArray(resolvedQuote?.stops)
     ? resolvedQuote.stops
         .slice()
         .sort((a, b) => toSafeInteger(a?.seq, 0) - toSafeInteger(b?.seq, 0))
         .map((stop) => String(stop?.address ?? "").trim())
         .filter(Boolean)
     : [];
-
-  if (fromStops.length) return fromStops;
-
-  if (!isMockQuoteEnabled()) return [];
-  return MOCK_WAYPOINTS_FALLBACK.filter(Boolean);
 }
 
 export function useQuoteDetail(quoteIdentifier: QuoteId | string, runtimeOverride?: QuoteDetailRuntimeOverride): QuoteDetailViewModel {

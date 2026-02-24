@@ -284,13 +284,31 @@ function resolvePriceSummary(quote: QuoteDetailQuote): PriceSummary {
   const status = toText(quote.status).toUpperCase();
   const desired = toPositiveAmount(quote.desiredPrice);
   const finalPrice = toPositiveAmount(quote.finalPrice);
-  if (status === "DROPOFF" && finalPrice > 0) {
-    return { primaryLabel: "정산 금액", primaryText: formatPriceText(finalPrice), secondaryText: desired > 0 ? `희망 운임 ${formatPriceText(desired)}` : "" };
+  const estimated = toPositiveAmount(quote.basePrice) + toPositiveAmount(quote.distancePrice) + toPositiveAmount(quote.extraPrice);
+  const estimatedAmount = estimated > 0 ? estimated : finalPrice;
+  const isCompleted = status === "DROPOFF" || status === "COMPLETED";
+
+  if (isCompleted && finalPrice > 0) {
+    return {
+      primaryLabel: "정산 금액",
+      primaryText: formatPriceText(finalPrice),
+      secondaryText: desired > 0 ? `희망 운임 ${formatPriceText(desired)}` : "",
+    };
   }
+
   if (desired > 0) {
-    return { primaryLabel: "희망 운임", primaryText: formatPriceText(desired), secondaryText: finalPrice > 0 ? `정산 금액 ${formatPriceText(finalPrice)}` : "" };
+    return {
+      primaryLabel: "희망 운임",
+      primaryText: formatPriceText(desired),
+      secondaryText: estimatedAmount > 0 ? `예상 금액 ${formatPriceText(estimatedAmount)}` : "",
+    };
   }
-  return { primaryLabel: "", primaryText: "-", secondaryText: "" };
+
+  return {
+    primaryLabel: "예상 금액",
+    primaryText: formatPriceText(estimatedAmount),
+    secondaryText: "",
+  };
 }
 
 function normalizeMatchStatus(value: unknown): string {
@@ -420,7 +438,10 @@ function SummaryCard({ view }: { view: QuoteDetailView }) {
   const distanceText = formatDistanceText(view.quote.distanceKm);
   const loadText = toDisplayText(formatWorkMethodLabel(view.quote.loadMethod));
   const unloadText = toDisplayText(formatWorkMethodLabel(view.quote.unloadMethod));
-  const price = React.useMemo(() => resolvePriceSummary(view.quote), [view.quote.desiredPrice, view.quote.finalPrice, view.quote.status]);
+  const price = React.useMemo(
+    () => resolvePriceSummary(view.quote),
+    [view.quote.basePrice, view.quote.desiredPrice, view.quote.distancePrice, view.quote.extraPrice, view.quote.finalPrice, view.quote.status]
+  );
   return (
     <View style={styles.summarySection}>
       <AppCard elevated={false} style={[styles.summaryCard, { borderColor: palette.spotlightBorder, backgroundColor: palette.spotlightBg }]}>
