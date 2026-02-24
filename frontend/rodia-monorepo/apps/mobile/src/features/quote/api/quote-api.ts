@@ -32,12 +32,12 @@ import {
   normalizeWorkMethodValue,
   toActorOnlyWorkMethod,
 } from "@/features/quote/model/workMethod";
+import { listMockShipperQuotesByCase } from "@/features/quote/api/mockShipperQuotes";
 import {
   createMockShipperQuote,
   deleteMockShipperQuote,
   getMockShipperQuoteDetail,
   getMockShipperQuoteDetailByIdentifier,
-  listMockShipperQuotes,
   updateMockShipperQuote,
   waitNetwork,
 } from "@/shared/lib/mock/MockHub";
@@ -626,7 +626,7 @@ function createMockQuoteApi(): QuoteApi {
   return {
     async listShipperQuotes(): Promise<QuoteListItem[]> {
       await waitNetwork();
-      return toQuoteList(listMockShipperQuotes());
+      return toQuoteList(listMockShipperQuotesByCase());
     },
 
     async getShipperQuoteDetail(quoteId: number): Promise<QuoteDetailResponse> {
