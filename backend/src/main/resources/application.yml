@@ -1,11 +1,15 @@
+# [공통 설정]
+# - 모든 환경(dev/prod)에서 공통으로 사용하는 기본값을 둡니다.
+# - 환경별로 달라지는 값은 application-<profile>.yml에서 오버라이드합니다.
+# - 민감정보는 환경변수로 주입하는 것을 기본 원칙으로 합니다.
 server:
   port: ${SERVER_PORT:8080}
 
 spring:
   datasource:
-    url: ${DB_URL}
+    url: ${DB_URL:jdbc:mysql://localhost:3306/transport_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul}
     driver-class-name: ${DB_DRIVER_CLASS_NAME:com.mysql.cj.jdbc.Driver}
-    username: ${DB_USERNAME}
+    username: ${DB_USERNAME:transport}
     password: ${DB_PASSWORD}
 
   jpa:
@@ -17,21 +21,34 @@ spring:
         format_sql: true
 
 jwt:
-  secret: ${JWT_SECRET:}
+  secret: ${JWT_SECRET}
 
-# 토스페이먼츠
-# - 실제 결제 없이 테스트: 개발자센터(https://developers.tosspayments.com) → API 키 → 테스트 키(클라이언트 키/시크릿 키)를
-#   TOSS_PAYMENTS_CLIENT_KEY, TOSS_PAYMENTS_SECRET_KEY 에 설정. 테스트 키로 연동하면 결제창·승인 흐름은 동일하나 실제 청구되지 않음.
-# - 운영(실결제): 동일 API에 라이브 키로 교체.
+kakao:
+  rest-api-key: ${KAKAO_REST_API_KEY:}
+  javascript-appkey: ${KAKAO_JAVASCRIPT_APPKEY:}
+  mobility-base-url: ${KAKAO_MOBILITY_BASE_URL:https://apis-navi.kakaomobility.com}
+
+route:
+  assembly:
+    top-n-real-distance: ${ROUTE_ASSEMBLY_TOP_N_REAL_DISTANCE:10}
+  traffic:
+    live-enabled: ${ROUTE_TRAFFIC_LIVE_ENABLED:false}
+    live-cache-ttl-seconds: ${ROUTE_TRAFFIC_LIVE_CACHE_TTL_SECONDS:180}
+    snapshot-cache-ttl-hours: ${ROUTE_TRAFFIC_SNAPSHOT_CACHE_TTL_HOURS:24}
+    live-bucket-seconds: ${ROUTE_TRAFFIC_LIVE_BUCKET_SECONDS:300}
+    single-flight-enabled: ${ROUTE_TRAFFIC_SINGLE_FLIGHT_ENABLED:true}
+    single-flight-wait-ms: ${ROUTE_TRAFFIC_SINGLE_FLIGHT_WAIT_MS:4000}
+
 toss:
   payments:
-    secret-key: ${TOSS_PAYMENTS_SECRET_KEY:}
-    client-key: ${TOSS_PAYMENTS_CLIENT_KEY:}
+    secret-key: ${TOSS_PAYMENTS_SECRET_KEY}
+    client-key: ${TOSS_PAYMENTS_CLIENT_KEY}
+    test-mode: ${TOSS_PAYMENTS_TEST_MODE:true}
 
 odcloud:
   api:
     base-url: ${ODCLOUD_API_BASE_URL:https://api.odcloud.kr}
-    key: ${ODCLOUD_API_KEY:}
+    key: ${ODCLOUD_API_KEY}
 
 deepseek:
   enabled: ${DEEPSEEK_ENABLED:false}
@@ -52,3 +69,13 @@ springdoc:
     path: /api-docs
   swagger-ui:
     path: /swagger-ui
+
+operations:
+  scheduler:
+    enabled: ${OPERATIONS_SCHEDULER_ENABLED:true}
+  match:
+    payment-timeout-minutes: ${MATCH_PAYMENT_TIMEOUT_MINUTES:60}
+    payment-timeout-check-ms: ${MATCH_PAYMENT_TIMEOUT_CHECK_MS:60000}
+  settlement:
+    auto-confirm-hours: ${SETTLEMENT_AUTO_CONFIRM_HOURS:24}
+    auto-confirm-check-ms: ${SETTLEMENT_AUTO_CONFIRM_CHECK_MS:300000}
