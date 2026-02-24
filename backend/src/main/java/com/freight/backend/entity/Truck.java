@@ -2,8 +2,6 @@ package com.freight.backend.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
@@ -26,7 +24,6 @@ import lombok.NoArgsConstructor;
 public class Truck {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "truck_id")
     private Long truckId;
 
@@ -47,6 +44,15 @@ public class Truck {
 
     @Column(name = "max_volume")
     private BigDecimal maxVolume;
+
+    @Column(name = "cargo_length")
+    private BigDecimal cargoLength;
+
+    @Column(name = "cargo_width")
+    private BigDecimal cargoWidth;
+
+    @Column(name = "cargo_height")
+    private BigDecimal cargoHeight;
 
     @Column(name = "name")
     private String name;
@@ -92,6 +98,9 @@ public class Truck {
             BigDecimal tonnage,
             BigDecimal maxWeight,
             BigDecimal maxVolume,
+            BigDecimal cargoLength,
+            BigDecimal cargoWidth,
+            BigDecimal cargoHeight,
             String name,
             String imageUrl,
             Boolean approved,
@@ -104,6 +113,9 @@ public class Truck {
         this.tonnage = tonnage;
         this.maxWeight = maxWeight;
         this.maxVolume = maxVolume;
+        this.cargoLength = cargoLength;
+        this.cargoWidth = cargoWidth;
+        this.cargoHeight = cargoHeight;
         this.name = name;
         this.imageUrl = imageUrl;
         this.approved = approved;
@@ -111,4 +123,10 @@ public class Truck {
         this.odometerKm = odometerKm;
         this.lastInspectionDate = lastInspectionDate;
     }
+
+    public void setApprovedStatus(Boolean approved) {
+        this.approved = approved;
+        this.updatedAt = LocalDateTime.now();
+    }
 }
+

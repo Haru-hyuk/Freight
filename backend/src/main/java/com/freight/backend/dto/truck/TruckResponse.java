@@ -16,6 +16,9 @@ public class TruckResponse {
     private BigDecimal tonnage;
     private BigDecimal maxWeight;
     private BigDecimal maxVolume;
+    private BigDecimal cargoLength;
+    private BigDecimal cargoWidth;
+    private BigDecimal cargoHeight;
     private String name;
     private String imageUrl;
     private Boolean approved;
