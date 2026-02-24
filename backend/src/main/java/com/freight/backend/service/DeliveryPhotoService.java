@@ -2,12 +2,16 @@ package com.freight.backend.service;
 
 import com.freight.backend.dto.delivery.DeliveryPhotoResponse;
 import com.freight.backend.entity.DeliveryPhoto;
+import com.freight.backend.entity.FcmToken;
 import com.freight.backend.entity.Match;
+import com.freight.backend.entity.Notification;
+import com.freight.backend.entity.Payment;
 import com.freight.backend.entity.Quote;
 import com.freight.backend.exception.CustomException;
 import com.freight.backend.exception.ErrorCode;
 import com.freight.backend.repository.DeliveryPhotoRepository;
 import com.freight.backend.repository.MatchRepository;
+import com.freight.backend.repository.PaymentRepository;
 import com.freight.backend.repository.QuoteRepository;
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -29,6 +33,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+/**
+ * 배송 사진 서비스
+ * - 상하차 사진 업로드/조회
+ * - 운송 상태 자동 전환 트리거
+ */
 @Service
 @RequiredArgsConstructor
 public class DeliveryPhotoService {
@@ -36,10 +45,13 @@ public class DeliveryPhotoService {
     private final DeliveryPhotoRepository deliveryPhotoRepository;
     private final MatchRepository matchRepository;
     private final QuoteRepository quoteRepository;
+    private final PaymentRepository paymentRepository;
+    private final NotificationService notificationService;
 
     @Value("${delivery-photo.storage-dir:uploads/delivery-photos}")
     private String storageDir;
 
+    /** 상하차 사진 업로드 (PICKUP: 운송시작, DELIVERY: 운송완료 트리거) */
     @Transactional
     public DeliveryPhotoResponse uploadByDriver(
             Long driverId,
@@ -63,6 +75,9 @@ public class DeliveryPhotoService {
         if (match.getDriverId() == null || !match.getDriverId().equals(driverId)) {
             throw new CustomException(ErrorCode.AUTH_FORBIDDEN);
         }
+        Quote quote = quoteRepository.findById(match.getQuoteId())
+                .orElseThrow(() -> new CustomException(ErrorCode.INVALID_REQUEST));
+
         validateByStatus(match.getStatus(), type);
 
         String ext = resolveExtension(file.getOriginalFilename(), mimeType);
@@ -84,8 +99,10 @@ public class DeliveryPhotoService {
         DeliveryPhoto saved = deliveryPhotoRepository.save(photo);
         saved.updateFileUrl("/api/delivery-photos/" + saved.getPhotoId() + "/file");
 
+        Match.Status before = match.getStatus();
         updateMatchStatusOnUpload(match, type);
-        matchRepository.save(match);
+        Match persistedMatch = matchRepository.save(match);
+        syncQuoteAndNotifyByStatusChange(before, persistedMatch.getStatus(), quote, persistedMatch.getMatchId());
 
         return DeliveryPhotoResponse.from(saved);
     }
@@ -158,11 +175,45 @@ public class DeliveryPhotoService {
 
     private void updateMatchStatusOnUpload(Match match, DeliveryPhoto.Type type) {
         if (type == DeliveryPhoto.Type.PICKUP && match.getStatus() == Match.Status.READY) {
+            if (!paymentRepository.existsByMatchIdAndStatus(match.getMatchId(), Payment.PaymentStatus.COMPLETED)) {
+                throw new CustomException(ErrorCode.MATCH_PAYMENT_REQUIRED);
+            }
             match.startTransit();
             return;
         }
         if (type == DeliveryPhoto.Type.DELIVERY && match.getStatus() == Match.Status.IN_TRANSIT) {
             match.complete();
+        }
+    }
+
+    private void syncQuoteAndNotifyByStatusChange(Match.Status before, Match.Status after, Quote quote, Long matchId) {
+        if (before == after) {
+            return;
+        }
+
+        if (after == Match.Status.IN_TRANSIT) {
+            quote.markInTransit();
+            quoteRepository.save(quote);
+            notificationService.createNotification(
+                    FcmToken.UserType.SHIPPER,
+                    quote.getShipperId(),
+                    matchId,
+                    Notification.Type.MATCH_UPDATED,
+                    "상차 사진이 등록되어 운송이 시작되었습니다."
+            );
+            return;
+        }
+
+        if (after == Match.Status.COMPLETED) {
+            quote.markDelivered();
+            quoteRepository.save(quote);
+            notificationService.createNotification(
+                    FcmToken.UserType.SHIPPER,
+                    quote.getShipperId(),
+                    matchId,
+                    Notification.Type.MATCH_UPDATED,
+                    "하차 사진이 등록되었습니다. 화주 확인 후 정산을 확정해 주세요."
+            );
         }
     }
 
@@ -210,4 +261,3 @@ public class DeliveryPhotoService {
         return ".jpg";
     }
 }
-
