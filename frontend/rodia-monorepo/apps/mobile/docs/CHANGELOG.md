@@ -1,0 +1,40 @@
+# Mobile Changelog
+
+## 2026-02-24
+- PR/브랜치: `feature/policy-foundation`
+- 범주 태그: `[policy] [infra]`
+- 변경 요약:
+  - `src/shared/lib/policy/`에 uiState-first 정책 모듈 11개 파일을 추가해 상태/CTA/Badge/Toast/API 에러 정책의 단일 진실 소스를 마련함.
+  - UI 소비 기준은 `uiState` 우선으로 설계하고, 레거시/목업 호환을 위한 `BackendStatus -> UiState` 변환 함수는 compat 용도로 제한함.
+  - 상태 정규화는 `normalizeStatus.ts`로 단일화하고 정책 외부에서 새 normalize 로직을 추가하지 않도록 기반을 고정함.
+  - 화면 런타임 동작/디자인/API 응답 구조 변경 없이 정책 기반과 문서 운영 체계만 확장함.
+- 영향 범위:
+  - 사용자 관점: 런타임 동작 변화 없음.
+  - 개발자 관점: 이후 PR에서 정책 import 경로(`@/shared/lib/policy`)를 사용해 중복 상태/CTA 계산 로직을 단계적으로 통합할 수 있음.
+- 파일 변경 목록:
+  - Modified:
+    - 없음
+  - Added:
+    - `src/shared/lib/policy/types.ts`
+    - `src/shared/lib/policy/normalizeStatus.ts`
+    - `src/shared/lib/policy/customerPolicy.ts`
+    - `src/shared/lib/policy/driverPolicy.ts`
+    - `src/shared/lib/policy/photoGatePolicy.ts`
+    - `src/shared/lib/policy/invoicePolicy.ts`
+    - `src/shared/lib/policy/badgePolicy.ts`
+    - `src/shared/lib/policy/progressPolicy.ts`
+    - `src/shared/lib/policy/toastPolicy.ts`
+    - `src/shared/lib/policy/apiErrorPolicy.ts`
+    - `src/shared/lib/policy/index.ts`
+    - `docs/CHANGELOG.md`
+    - `docs/CHANGELOG.template.md`
+    - `docs/CONTRIBUTING_DOCS.md`
+  - Deleted:
+    - 없음
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 실패 (ESLint flat config 파일 `eslint.config.*` 부재)
+- 후속 작업 (다음 PR 후보):
+  - `features/matching/api/shipper-match-api.ts`, `features/counter-offer/api/counter-offer-api.ts`, `features/matching/api/driver-orders-api.ts`의 상태 normalize 중복 정리
+  - `features/quote/model/quoteActionMatrix.ts`와 `pages/shipper/quotes/QuoteDetailPage.tsx`의 CTA 정책 소스 일치화
+  - Driver/Shipper 상세/목록 흐름에서 정책 모듈 적용 범위를 단계적으로 확대
