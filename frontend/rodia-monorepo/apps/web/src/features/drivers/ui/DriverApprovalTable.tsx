@@ -1,75 +1,76 @@
-import * as React from "react";
+import { Button } from "@/shared/ui/shadcn/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/shadcn/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/shared/ui/shadcn/table";
-import { Button } from "@/shared/ui/shadcn/button";
+import { Skeleton } from "@/shared/ui/shadcn/skeleton";
 
-import type { DriverApprovalRow } from "../model/types";
-import { LicenseBadge, ApprovalBadge } from "./DriverApprovalBadges";
-import { DriverApprovalDialog } from "./DriverApprovalDialog";
+import type { DriverApprovalRow } from "@/features/drivers/model/types";
+import { DriverApprovalStatusBadge, DriverLicenseBadge } from "@/features/drivers/ui/DriverApprovalBadges";
 
-const MOCK_ROWS: DriverApprovalRow[] = [
-  {
-    id: "1",
-    requestedAt: "2024-02-05",
-    name: "박신입",
-    vehicle: "1톤 카고 (82가 1234)",
-    licenseStatus: "검증됨",
-    approvalStatus: "승인 대기",
-    phone: "010-1234-5678",
-  },
-];
+type Props = {
+  rows: DriverApprovalRow[];
+  loading: boolean;
+  onOpenReview: (row: DriverApprovalRow) => void;
+};
 
-export function DriverApprovalTable() {
-  const [rows, setRows] = React.useState(MOCK_ROWS);
-  const [selected, setSelected] = React.useState<DriverApprovalRow | null>(null);
-
-  const approve = (id: string) => {
-    setRows((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, approvalStatus: "승인 완료" } : r))
-    );
-    setSelected(null);
-  };
-
+export function DriverApprovalTable({ rows, loading, onOpenReview }: Props) {
   return (
-    <>
-      <Card className="rounded-lg border border-border bg-background">
-        <CardHeader>
-          <CardTitle>가입 요청 목록</CardTitle>
-        </CardHeader>
-        <CardContent>
+    <Card className="rounded-lg border border-border bg-background">
+      <CardHeader>
+        <CardTitle className="text-lg">차주 승인 목록</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="rounded-lg border border-border bg-background">
           <Table>
             <TableHeader>
               <TableRow className="bg-muted">
-                <TableHead>신청일</TableHead>
-                <TableHead>이름</TableHead>
+                <TableHead>신청일시</TableHead>
+                <TableHead>차주</TableHead>
                 <TableHead>차량</TableHead>
-                <TableHead>자격증</TableHead>
-                <TableHead>상태</TableHead>
+                <TableHead>면허상태</TableHead>
+                <TableHead>승인상태</TableHead>
                 <TableHead className="text-right">관리</TableHead>
               </TableRow>
             </TableHeader>
-
             <TableBody>
-              {rows.map((r) => (
-                <TableRow key={r.id}>
-                  <TableCell>{r.requestedAt}</TableCell>
-                  <TableCell className="font-medium">{r.name}</TableCell>
-                  <TableCell>{r.vehicle}</TableCell>
-                  <TableCell><LicenseBadge status={r.licenseStatus} /></TableCell>
-                  <TableCell><ApprovalBadge status={r.approvalStatus} /></TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="secondary" onClick={() => setSelected(r)}>
-                      상세 검토
-                    </Button>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={6}>
+                    <div className="space-y-2 p-2">
+                      <Skeleton className="h-8 w-full" />
+                      <Skeleton className="h-8 w-full" />
+                    </div>
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : rows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="py-10 text-center text-sm text-foreground">
+                    차주 승인 요청이 없습니다.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                rows.map((row) => (
+                  <TableRow key={row.driverId}>
+                    <TableCell>{row.requestedAt}</TableCell>
+                    <TableCell className="font-medium">{row.name}</TableCell>
+                    <TableCell>{row.vehicleSummary}</TableCell>
+                    <TableCell>
+                      <DriverLicenseBadge status={row.licenseStatus} />
+                    </TableCell>
+                    <TableCell>
+                      <DriverApprovalStatusBadge status={row.approvalStatus} />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button type="button" variant="secondary" onClick={() => onOpenReview(row)}>
+                        상세 검토
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
-
-      <DriverApprovalDialog driver={selected} onClose={() => setSelected(null)} onApprove={approve} />
-    </>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

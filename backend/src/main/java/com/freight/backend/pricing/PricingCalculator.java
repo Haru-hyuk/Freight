@@ -28,11 +28,12 @@ public class PricingCalculator {
             LoadHandlingMethod unloadMethod,
             boolean combinedShipment
     ) {
-        String rangeKey = DistanceRangeResolver.resolveKey(distanceKm);
+        int normalizedDistanceKm = normalizeDistanceKm(distanceKm);
+        String rangeKey = DistanceRangeResolver.resolveKey(normalizedDistanceKm);
         if (rangeKey == null) {
             throw new IllegalArgumentException("distanceKm is outside supported ranges");
         }
-        Integer rate = rateTable.getRate(distanceKm, vehicleType);
+        Integer rate = rateTable.getRate(normalizedDistanceKm, vehicleType);
         if (rate == null) {
             throw new IllegalArgumentException("unsupported vehicle type for rate table");
         }
@@ -84,6 +85,17 @@ public class PricingCalculator {
                 combineDiscountWon,
                 finalChargeAfterDiscountWon
         );
+    }
+
+    private int normalizeDistanceKm(int rawDistanceKm) {
+        if (rawDistanceKm <= 0) {
+            return rawDistanceKm;
+        }
+        // Defensive conversion when upstream returns meters.
+        if (rawDistanceKm > 500) {
+            return Math.max(1, (int) Math.round(rawDistanceKm / 1000.0d));
+        }
+        return rawDistanceKm;
     }
 
     private SurchargeSummary calculateSurcharges(

@@ -1,0 +1,145 @@
+[ENV]
+- workspace: c:\lce\Freight\frontend\rodia-monorepo
+- node -v: v24.11.0
+- pnpm -v: 9.0.0
+- pnpm -C apps/mobile exec pnpm -v: 9.0.0
+- preflight typecheck:
+  - command: pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false
+  - result: exit code 0 (stdout 없음)
+
+[GIT STATUS]
+- command: git -C frontend/rodia-monorepo status --porcelain
+- preflight output:
+  - D frontend/rodia-monorepo/_logs/quote-waypoint-address-binding-debug.txt
+  - M frontend/rodia-monorepo/apps/mobile/app/(driver)/_layout.tsx
+
+[API SPEC CHECK]
+OpenAPI source: apps/mobile/.orval/openapi.fixed.json
+
+A) Match 관련
+| Endpoint | Exists | OperationId | Request | Response | Notes |
+|---|---|---|---|---|---|
+| POST /api/shipper/matches | YES | createMatch | MatchCreateRequest(quoteId) | MatchResponse | 배차요청 생성 |
+| GET /api/shipper/matches/me | YES | getMyMatches | - | MatchResponse[] | quoteId 필드 포함 |
+| DELETE /api/shipper/matches/{matchId} | YES | cancelMatch | path: matchId | 200(no body) | 배차요청 취소 |
+| GET /api/driver/matches/me | YES | getMyMatches_1 | - | MatchResponse[] | 기사 본인 매칭 |
+| GET /api/driver/matches | YES | getOpenMatches | - | MatchResponse[] | 기사 오픈 매칭 |
+| POST /api/driver/matches/{matchId}/accept | YES | acceptMatch | path: matchId | MatchResponse | 기사 수락 |
+| DELETE /api/driver/matches/{matchId} | YES | cancelMatch_1 | path: matchId | 200(no body) | 기사 취소 |
+
+B) CounterOffer 관련
+| Endpoint | Exists | OperationId | Request | Response | Notes |
+|---|---|---|---|---|---|
+| GET /api/shipper/quotes/{quoteId}/counter-offers | YES | getCounterOffers | path: quoteId | CounterOfferResponse[] | 화주 화면 조회 |
+| PATCH /api/shipper/counter-offers/{offerId}/accept | YES | acceptCounterOffer | path: offerId | 200(no body) | 화주 수락 |
+| PATCH /api/shipper/counter-offers/{offerId}/reject | YES | rejectCounterOffer | path: offerId | 200(no body) | 화주 거절 |
+| POST /api/driver/quotes/{quoteId}/counter-offers | YES | createCounterOffer | path: quoteId + CounterOfferCreateRequest(proposedPrice,message) | CounterOfferResponse | 기사 역제안 생성 가능 |
+| GET /api/driver/counter-offers/me | YES | getMyCounterOffers | - | CounterOfferResponse[] | 기사 본인 역제안 목록 |
+| GET /api/shipper/quotes/{quoteIdentifier}/counter-offers | NO | - | - | - | 스펙 미존재(quoteId 경로 사용) |
+
+Schema 요약
+- MatchResponse: matchId, quoteId, driverId, accepted, status, acceptedAt, createdAt, updatedAt
+- CounterOfferResponse: counterOfferId, quoteId, driverId, proposedPrice, message, status, createdAt, respondedAt
+
+orval generated controller 확인 (apps/mobile/src/shared/api/generated/**)
+- shipper-match-controller/shipper-match-controller.ts
+  - createMatch(matchCreateRequest), cancelMatch(matchId), getMyMatches()
+- driver-match-controller/driver-match-controller.ts
+  - getOpenMatches(), getMyMatches1(), acceptMatch(matchId), cancelMatch1(matchId)
+- shipper-counter-offer-controller/shipper-counter-offer-controller.ts
+  - getCounterOffers(quoteId), acceptCounterOffer(offerId), rejectCounterOffer(offerId)
+- driver-counter-offer-controller/driver-counter-offer-controller.ts
+  - createCounterOffer(quoteId,counterOfferCreateRequest), getMyCounterOffers()
+
+[DATA TO SHOW IN UI]
+A) 기사 오더/상세(현재 app/(driver)/quotes)
+- quote 핵심
+  - 출/도착지, 거리, 차량/화물, quote status, 생성시간, 화주 제안/현재 금액
+  - 출처: getShipperQuoteDetail(quoteId) via features/quote/api
+- match 상태
+  - matchId, quoteId, status label(OPEN/NEGOTIATING/ASSIGNED/PICKUP/TRANSIT/DROPOFF/CANCELED)
+  - 배차 수락/취소 버튼
+  - 출처: /api/driver/matches + /api/driver/matches/me (features/matching/api)
+- counter-offers
+  - proposedPrice, message, status, createdAt
+  - 기사 역제안 입력(금액+사유) 제출 버튼
+  - 출처: /api/driver/counter-offers/me, /api/driver/quotes/{quoteId}/counter-offers (features/counter-offer/api)
+
+B) 화주 상세(app/(shipper)/quotes/[id])
+- counter-offers 리스트
+  - proposedPrice, message, status, actorRole, createdAt, respondedAt
+  - 수락/거절 버튼(대기 상태에서만)
+  - 출처: /api/shipper/quotes/{quoteId}/counter-offers, /accept, /reject
+- match create/cancel + 상태
+  - 배차 요청 생성(POST), 취소(DELETE), 상태표시(matchId/status/updatedAt)
+  - 출처: /api/shipper/matches, /api/shipper/matches/me, /api/shipper/matches/{matchId}
+- 값 없음 처리: 모든 표시값 기본 "-" 통일, 리스트 비었을 때 안내문구 노출
+
+[IMPLEMENTATION PLAN]
+- Step2 탐색 근거(Select-String 결과 핵심 라인)
+  - app/(driver)/order.tsx:5 -> /(driver)/quotes 로 redirect
+  - app/(driver)/quotes/index.tsx:2-5 -> DriverQuoteBrowsePage 라우트 연결
+  - src/pages/driver/quotes/DriverQuoteBrowsePage.tsx:10(탐색 시점) -> MOCK_ORDERS 정적 데이터 사용 지점
+  - src/features/quote/ui/actions/BottomActionRouter.tsx:179-193(탐색 시점) -> accept/reject Alert 임시 동작 지점
+  - src/pages/shipper/quotes/QuoteDetailPage.tsx:939-956(탐색 시점) -> matches/me 후 quoteId 필터 + cancel API 호출 지점
+  - src/features/matching/api/shipper-match-api.ts:118-129(탐색 시점) -> getMyMatches/cancelMatch 실제 호출 지점
+
+- Match(2순위) 최소요건
+  1) API facade를 features/matching/api로 통일하고 shipper create/list/cancel + driver list/accept/cancel 실제 API 연결
+  2) quoteId 단건 조회 스펙 부재 대응: matches/me 조회 후 프론트 quoteId 필터 적용
+  3) 화주 상세에서 배차요청 생성/취소 버튼 제공
+  4) 성공 시 항상 quote detail + matches/me + counter-offers 재조회
+- CounterOffer(3순위) 최소요건
+  1) API facade를 features/counter-offer/api 신설
+  2) 화주 상세에서 counter-offers 실제 조회 + accept/reject 실제 API 연결
+  3) 기사 오더 화면에서 역제안 생성(금액+사유) 실제 API 연결
+  4) 성공 시 항상 quote detail + matches/me + counter-offers 재조회
+- Refresh 전략 선택: (A) refetch() 기반
+  - useQuoteDetail.refetch를 Promise 반환으로 변경
+  - 액션 성공 콜백에서 await Promise.all([view.refetch(), loadQuoteMatches(), loadCounterOffers()])
+
+[CHANGES]
+- apps/mobile/src/features/matching/api/shipper-match-api.ts
+  - shipper: list/create/cancel 실 API + fallback(apiClient)
+  - driver: open/my list, accept, cancel 추가
+  - 공통 안전 파싱/정규화/취소가능 상태 계산 추가
+- apps/mobile/src/features/counter-offer/api/counter-offer-api.ts (신규)
+  - shipper counter-offers 조회/수락/거절, driver 역제안 생성/내역조회 facade 구현
+  - 안전 파싱 및 status/actor 정규화 유틸 추가
+- apps/mobile/src/features/counter-offer/api/index.ts (신규)
+  - counter-offer facade export
+- apps/mobile/src/features/quote/model/useQuoteDetail.ts
+  - refetch 시 Promise 반환하도록 변경(성공 액션 후 await 가능)
+- apps/mobile/src/features/quote/ui/actions/BottomActionRouter.tsx
+  - onRunAction 콜백 지원(accept/reject 실 API 위임)
+  - 액션 로딩/중복클릭 방지, 오류 메시지 표시 추가
+- apps/mobile/src/pages/shipper/quotes/QuoteDetailPage.tsx
+  - Match 섹션 신설(생성/취소/상태 표시)
+  - CounterOffer 섹션 신설(리스트 + 수락/거절)
+  - 하단 액션(accept/reject) 실제 API 연결
+  - 성공 시 quote detail + matches + counter-offers 항상 재조회
+- apps/mobile/src/pages/driver/quotes/DriverQuoteBrowsePage.tsx
+  - MOCK_ORDERS 제거, driver matches + quote detail + counter-offers 실제 API 기반 렌더링
+  - 배차 수락/취소 + 기사 역제안 제출(금액/사유) 연결 및 refresh 구현
+
+[VERIFY]
+- TypeScript
+  - command: pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false
+  - result: exit code 0
+
+- 수동 테스트 체크리스트
+  1) 기사 로그인 → 오더 리스트/상세에서 화주 견적/제안 금액/협상 상태 표시
+     - 코드 반영 완료, 실기기/실서버 수동 검증 필요
+  2) 기사 역제안 금액+사유 제출 → 리스트 반영(refresh)
+     - 코드 반영 완료, 실기기/실서버 수동 검증 필요
+  3) 화주 로그인 → counter-offer accept/reject 실행 → 즉시 상태 반영(refresh)
+     - 코드 반영 완료, 실기기/실서버 수동 검증 필요
+  4) 화주 상세 match create/cancel 실행 → 상태 변화 + refresh
+     - 코드 반영 완료, 실기기/실서버 수동 검증 필요
+  5) 디버그 로그 민감정보 원문 미노출 확인
+     - apiClient sanitize 체인 유지, 실환경 로그 화면에서 최종 점검 필요
+
+- 실패 시 원인 후보
+  - 백엔드 권한 정책으로 driver가 quote detail 경로 접근 불가(401/403) 가능
+  - 서버 status enum 값이 예상과 다를 경우 버튼 노출 조건 불일치 가능
+  - matches/me 또는 counter-offers 응답 envelope 형태 변경 시 파싱 누락 가능

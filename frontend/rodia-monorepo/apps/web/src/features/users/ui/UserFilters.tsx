@@ -1,22 +1,18 @@
-// src/features/users/ui/UserFilters.tsx
-import * as React from "react";
-
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/shadcn/card";
 import { Label } from "@/shared/ui/shadcn/label";
 import { Input } from "@/shared/ui/shadcn/input";
 import { Tabs, TabsList, TabsTrigger } from "@/shared/ui/shadcn/tabs";
 import { Button } from "@/shared/ui/shadcn/button";
-import { Badge } from "@/shared/ui/shadcn/badge"; // 추가: roleLocked일 때 뱃지로 보여주기
+import { Badge } from "@/shared/ui/shadcn/badge";
 
-import type { UserFilterValue } from "../model/filters"; // 유지
+import type { UserFilterValue } from "../model/filters";
 
 type Props = {
   value: UserFilterValue;
   onChange: (next: UserFilterValue) => void;
   onSubmit?: () => void;
   loading?: boolean;
-
-  roleLocked?: boolean; // 추가: 화주/차주 조회에서 역할 고정(탭 숨김)
+  roleLocked?: boolean;
 };
 
 export function UserFilters({ value, onChange, onSubmit, loading, roleLocked }: Props) {
@@ -26,7 +22,7 @@ export function UserFilters({ value, onChange, onSubmit, loading, roleLocked }: 
     <Card className="rounded-lg border border-border bg-background">
       <CardHeader className="space-y-1">
         <CardTitle className="text-base font-bold">필터</CardTitle>
-        <p className="text-sm opacity-70">구분/상태/검색어로 빠르게 찾기</p>
+        <p className="text-sm text-foreground/70">구분, 상태, 검색어로 사용자 목록을 조회합니다.</p>
       </CardHeader>
 
       <CardContent className="space-y-4">
@@ -34,16 +30,15 @@ export function UserFilters({ value, onChange, onSubmit, loading, roleLocked }: 
           <div className="space-y-2">
             <Label>구분</Label>
 
-            {/* 수정: roleLocked면 탭을 숨기고 “고정 역할”만 보여줌 */}
             {roleLocked ? (
               <div className="flex h-10 items-center rounded-lg border border-border bg-muted px-3 text-sm">
-                <span className="mr-2 opacity-70">고정</span>
+                <span className="mr-2 text-foreground/70">고정</span>
                 <Badge variant="outline">{roleLabel}</Badge>
               </div>
             ) : (
               <Tabs
                 value={value.role}
-                onValueChange={(v) => onChange({ ...value, role: v as UserFilterValue["role"] })}
+                onValueChange={(nextRole) => onChange({ ...value, role: nextRole as UserFilterValue["role"] })}
               >
                 <TabsList className="w-full border border-border bg-muted">
                   <TabsTrigger value="all" className="w-1/3">
@@ -62,7 +57,10 @@ export function UserFilters({ value, onChange, onSubmit, loading, roleLocked }: 
 
           <div className="space-y-2">
             <Label>상태</Label>
-            <Tabs value={value.status} onValueChange={(v) => onChange({ ...value, status: v as UserFilterValue["status"] })}>
+            <Tabs
+              value={value.status}
+              onValueChange={(nextStatus) => onChange({ ...value, status: nextStatus as UserFilterValue["status"] })}
+            >
               <TabsList className="w-full border border-border bg-muted">
                 <TabsTrigger value="all" className="w-1/4">
                   전체
@@ -85,9 +83,8 @@ export function UserFilters({ value, onChange, onSubmit, loading, roleLocked }: 
           <Label>검색</Label>
           <Input
             value={value.q}
-            onChange={(e) => onChange({ ...value, q: e.target.value })}
-            placeholder="이름/회사명/ID로 검색"
-            className="border border-border bg-background text-foreground focus:ring-2 focus:ring-primary"
+            onChange={(event) => onChange({ ...value, q: event.target.value })}
+            placeholder="이름, 회사명, ID 검색" // MODIFIED: 검색 UX 문구 정리
           />
         </div>
 
