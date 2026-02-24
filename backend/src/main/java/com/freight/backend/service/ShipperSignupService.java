@@ -11,6 +11,7 @@ import com.freight.backend.odcloud.OdcloudValidateResponse;
 import com.freight.backend.repository.ShipperRepository;
 import java.math.BigDecimal;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -21,30 +22,34 @@ public class ShipperSignupService {
     private final ShipperRepository shipperRepository;
     private final BCryptPasswordEncoder passwordEncoder;
     private final OdcloudClient odcloudClient;
+    @Value("${odcloud.verify-enabled:false}")
+    private boolean odcloudVerifyEnabled;
 
     public ShipperSignupResponse signup(ShipperSignupRequest req) {
         if (shipperRepository.findByEmail(req.getEmail()).isPresent()) {
             throw new CustomException(ErrorCode.INVALID_INPUT_VALUE);
         }
 
-        OdcloudValidateRequest.Business business = new OdcloudValidateRequest.Business(
-                req.getBizRegNo(),
-                req.getOpenDate(),
-                req.getOwnerName(),
-                null,
-                req.getCompanyName(),
-                null,
-                null,
-                null,
-                req.getAddress()
-        );
-        OdcloudValidateResponse response = odcloudClient.validateBusiness(business);
-        if (response == null
-                || response.getData() == null
-                || response.getData().isEmpty()
-                || response.getData().get(0) == null
-                || !"01".equals(response.getData().get(0).getValid())) {
-            throw new CustomException(ErrorCode.INVALID_INPUT_VALUE);
+        if (odcloudVerifyEnabled) {
+            OdcloudValidateRequest.Business business = new OdcloudValidateRequest.Business(
+                    req.getBizRegNo(),
+                    req.getOpenDate(),
+                    req.getOwnerName(),
+                    null,
+                    req.getCompanyName(),
+                    null,
+                    null,
+                    null,
+                    req.getAddress()
+            );
+            OdcloudValidateResponse response = odcloudClient.validateBusiness(business);
+            if (response == null
+                    || response.getData() == null
+                    || response.getData().isEmpty()
+                    || response.getData().get(0) == null
+                    || !"01".equals(response.getData().get(0).getValid())) {
+                throw new CustomException(ErrorCode.INVALID_INPUT_VALUE);
+            }
         }
 
         Shipper shipper = Shipper.builder()
@@ -59,6 +64,7 @@ public class ShipperSignupService {
                 .bizPhone(req.getBizPhone())
                 .totalOrders(0)
                 .prepaidBalance(BigDecimal.ZERO)
+                .status("ACTIVE")
                 .build();
 
         Shipper saved = shipperRepository.save(shipper);
