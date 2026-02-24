@@ -6,18 +6,18 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Label } from "@/shared/ui/shadcn/label";
 import { Separator } from "@/shared/ui/shadcn/separator";
 import { Textarea } from "@/shared/ui/shadcn/textarea";
-import type { DriverApprovalRow } from "@/features/drivers/model/types";
-import { DocumentPreviewModal } from "./DocumentPreviewModal";
+import type { TruckApprovalRow } from "@/features/trucks/model/types";
+import { DocumentPreviewModal } from "@/features/trucks/ui/DocumentPreviewModal";
 
 type Props = {
-  driver: DriverApprovalRow | null;
+  truck: TruckApprovalRow | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onApprove: (driverId: string) => void;
-  onReject: (driverId: string, reason: string) => void;
+  onApprove: (truckId: string) => void;
+  onReject: (truckId: string, reason: string) => void;
 };
 
-export function DriverApprovalReviewDialog({ driver, open, onOpenChange, onApprove, onReject }: Props) {
+export function TruckApprovalReviewDialog({ truck, open, onOpenChange, onApprove, onReject }: Props) {
   const [reason, setReason] = React.useState("");
   const [selectedDocumentIndex, setSelectedDocumentIndex] = React.useState<number | null>(null);
 
@@ -25,36 +25,40 @@ export function DriverApprovalReviewDialog({ driver, open, onOpenChange, onAppro
     if (!open) setReason("");
   }, [open]);
 
-  const canReject = Boolean(driver) && reason.trim().length > 0;
-  const canApprove = Boolean(driver) && driver?.approvalStatus === "PENDING";
+  const canReject = Boolean(truck) && reason.trim().length > 0;
+  const canApprove = Boolean(truck) && truck?.approvalStatus === "PENDING";
 
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="rounded-lg border border-border bg-background max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>차주 승인 상세 검토</DialogTitle>
+            <DialogTitle>차량 승인 상세 검토</DialogTitle>
           </DialogHeader>
 
-          {driver ? (
+          {truck ? (
             <div className="space-y-4">
               <div className="rounded-lg border border-border bg-muted p-4">
-                <Row label="차주 ID" value={driver.driverId} />
+                <Row label="차량 ID" value={truck.truckId} />
                 <Separator className="my-2" />
-                <Row label="이름" value={driver.name} />
+                <Row label="기사명" value={truck.driverName} />
                 <Separator className="my-2" />
-                <Row label="연락처" value={driver.phone} />
+                <Row label="차량번호" value={truck.plateNumber} />
                 <Separator className="my-2" />
-                <Row label="차량 정보" value={driver.vehicleSummary} />
+                <Row label="차종" value={truck.vehicleType} />
                 <Separator className="my-2" />
-                <Row label="신청 일시" value={driver.requestedAt} />
+                <Row label="적재용량" value={`${truck.capacity}kg`} />
+                <Separator className="my-2" />
+                <Row label="제조년도" value={String(truck.manufacturingYear)} />
+                <Separator className="my-2" />
+                <Row label="신청 일시" value={truck.requestedAt} />
               </div>
 
-              {driver.documents && driver.documents.length > 0 && (
+              {truck.documents && truck.documents.length > 0 && (
                 <div className="space-y-2">
                   <Label>제출 서류</Label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {driver.documents.map((doc, idx) => (
+                  <div className="grid grid-cols-3 gap-2">
+                    {truck.documents.map((doc, idx) => (
                       <div
                         key={idx}
                         className="relative overflow-hidden rounded-lg border border-border bg-muted p-3"
@@ -68,9 +72,11 @@ export function DriverApprovalReviewDialog({ driver, open, onOpenChange, onAppro
                         </div>
                         <div className="text-xs text-foreground mb-2">
                           <div className="font-medium">
-                            {doc.documentType === "driver_cargo_license"
-                              ? "화물운송 자격증"
-                              : "차량등록증"}
+                            {doc.documentType === "truck_registration"
+                              ? "차량등록증"
+                              : doc.documentType === "truck_insurance"
+                              ? "보험증권"
+                              : "정기검사증"}
                           </div>
                           <div className="text-muted-foreground text-xs mt-1">
                             신뢰도: {Math.round(doc.confidence * 100)}%
@@ -93,9 +99,9 @@ export function DriverApprovalReviewDialog({ driver, open, onOpenChange, onAppro
               )}
 
               <div className="space-y-2">
-                <Label htmlFor="driver-review-reason">상세 검토 메모 / 거부 사유</Label>
+                <Label htmlFor="truck-review-reason">상세 검토 메모 / 거부 사유</Label>
                 <Textarea
-                  id="driver-review-reason"
+                  id="truck-review-reason"
                   value={reason}
                   onChange={(event) => setReason(event.target.value)}
                   placeholder="거부 시 사유를 반드시 입력하세요."
@@ -114,8 +120,8 @@ export function DriverApprovalReviewDialog({ driver, open, onOpenChange, onAppro
               variant="secondary"
               disabled={!canApprove}
               onClick={() => {
-                if (!driver) return;
-                onApprove(driver.driverId);
+                if (!truck) return;
+                onApprove(truck.truckId);
                 onOpenChange(false);
               }}
             >
@@ -126,8 +132,8 @@ export function DriverApprovalReviewDialog({ driver, open, onOpenChange, onAppro
               variant="destructive"
               disabled={!canReject}
               onClick={() => {
-                if (!driver) return;
-                onReject(driver.driverId, reason.trim());
+                if (!truck) return;
+                onReject(truck.truckId, reason.trim());
                 onOpenChange(false);
               }}
             >
@@ -138,7 +144,7 @@ export function DriverApprovalReviewDialog({ driver, open, onOpenChange, onAppro
       </Dialog>
 
       <DocumentPreviewModal
-        document={driver && selectedDocumentIndex !== null ? driver.documents?.[selectedDocumentIndex] : undefined}
+        document={truck && selectedDocumentIndex !== null ? truck.documents?.[selectedDocumentIndex] : undefined}
         onClose={() => setSelectedDocumentIndex(null)}
       />
     </>

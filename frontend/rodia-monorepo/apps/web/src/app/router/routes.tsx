@@ -11,8 +11,11 @@ import DeliveryLiveMonitoringPage from "@/pages/delivery/DeliveryLiveMonitoringP
 import DeliveryHistoryPage from "@/pages/delivery/DeliveryHistoryPage";
 import DispatchManagementPage from "@/pages/dispatch/DispatchManagementPage";
 import DriverApprovalPage from "@/pages/drivers/DriverApprovalPage";
+import TruckApprovalPage from "@/pages/drivers/TruckApprovalPage";
 import SettlementApprovalPage from "@/pages/settlement/SettlementApprovalPage";
 import SettlementHistoryPage from "@/pages/settlement/SettlementHistoryPage";
+import SettlementDetailsPage from "@/pages/settlement/SettlementDetailsPage";
+import WithdrawalManagementPage from "@/pages/settlement/WithdrawalManagementPage";
 import QuoteListPage from "@/pages/quotes/QuoteListPage";
 import QuoteDetailPage from "@/pages/quotes/QuoteDetailPage";
 import MatchingListPage from "@/pages/matchings/MatchingListPage";
@@ -26,6 +29,7 @@ import UserDetailPage from "@/pages/users/UserDetailPage";
 
 import SanctionsLogPage from "@/pages/sanctions/SanctionsLogPage";
 import PricingManagementPage from "@/pages/ops/PricingManagementPage";
+import DeviationManagementPage from "@/pages/ops/DeviationManagementPage";
 import ActivityLogPage from "@/pages/ops/ActivityLogPage";
 import NotFoundPage from "@/pages/not-found/NotFoundPage";
 
@@ -54,8 +58,11 @@ export const router = createBrowserRouter([
               { path: "/orders/monitoring", element: <OrdersMonitoringPage /> },
 
               { path: "/drivers/approvals", element: <DriverApprovalPage /> },
+              { path: "/trucks/approvals", element: <TruckApprovalPage /> },
               { path: "/settlement/approvals", element: <SettlementApprovalPage /> },
               { path: "/settlement/history", element: <SettlementHistoryPage /> },
+              { path: "/settlement/details", element: <SettlementDetailsPage /> },
+              { path: "/withdrawals", element: <WithdrawalManagementPage /> },
               { path: "/settlement", element: <Navigate to="/settlement/history" replace /> },
 
               { path: "/quotes", element: <QuoteListPage /> },
@@ -69,6 +76,7 @@ export const router = createBrowserRouter([
               { path: "/users/:userId", element: <UserDetailPage /> },
 
               { path: "/ops/pricing", element: <PricingManagementPage /> },
+              { path: "/ops/deviations", element: <DeviationManagementPage /> },
               { path: "/ops/sanctions/logs", element: <SanctionsLogPage /> },
               { path: "/ops/activity-logs", element: <ActivityLogPage /> },
             ],
