@@ -1,397 +1,535 @@
-import React, { useEffect, useState } from "react";
-import { ScrollView, StyleSheet, View } from "react-native";
+import React from "react";
+import { Alert, Platform, ScrollView, StyleSheet, ToastAndroid, View } from "react-native";
+import { useRouter } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import type { CounterOfferCreateRequest } from "@/shared/api/generated/schemas";
+import CounterOfferModal from "@/features/matching/ui/CounterOfferModal";
 import {
-  applyMockAccept,
-  applyMockCancel,
-  getLatestMockCounterOffer,
-  resolveDriverMatchFromCache,
-  setLatestMockCounterOffer,
-  type DriverMatchSummary,
-} from "@/features/matching/model/driverMatchMockStore";
-import { toDriverMatchStatusLabel } from "@/features/matching/model/driverMatchStatus";
-import { getDriverMatchMode } from "@/shared/lib/config/env";
+  acceptDriverMatch,
+  postCounterOffer,
+} from "@/features/matching/api";
+import {
+  canDriverAcceptMatch,
+  isDriverMatchTerminal,
+  normalizeDriverMatchStatus,
+  toDriverMatchStatusLabel,
+} from "@/features/matching/model/driverMatchStatus";
+import { type MatchDetailRouteSnapshot, useMatchDetail } from "@/features/matching/model/useMatchDetail";
+import { formatWorkMethodLabel } from "@/features/quote/model/workMethod";
+import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
 import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppButton } from "@/shared/ui/kit/AppButton";
 import { AppCard } from "@/shared/ui/kit/AppCard";
 import { AppEmptyState } from "@/shared/ui/kit/AppEmptyState";
-import { AppInput } from "@/shared/ui/kit/AppInput";
+import { AppRequestState } from "@/shared/ui/kit/AppRequestState";
 import { AppText } from "@/shared/ui/kit/AppText";
 import { PageScaffold } from "@/widgets/layout/PageScaffold";
 
-type DriverMatchDetailRouteSnapshot = Partial<DriverMatchSummary>;
-
 type DriverMatchDetailPageProps = {
   matchId: number;
-  routeSnapshot?: DriverMatchDetailRouteSnapshot;
+  routeSnapshot?: MatchDetailRouteSnapshot;
 };
 
-function formatDateTime(value: unknown): string {
-  const text = typeof value === "string" ? value.trim() : "";
-  if (!text) return "-";
-
-  const timestamp = Date.parse(text);
-  if (!Number.isFinite(timestamp)) return "-";
-
-  const date = new Date(timestamp);
-  const month = date.getMonth() + 1;
-  const day = date.getDate();
-  const hour = String(date.getHours()).padStart(2, "0");
-  const minute = String(date.getMinutes()).padStart(2, "0");
-  return `${month}월 ${day}일 ${hour}:${minute}`;
+function toPositiveInt(value: unknown): number {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
 }
 
-function toAcceptedLabel(accepted: boolean | undefined): string {
-  if (accepted === true) return "true";
-  if (accepted === false) return "false";
-  return "-";
+function toText(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
 }
+
+function toDisplayText(value: unknown, fallback = "-"): string {
+  const text = toText(value);
+  return text || fallback;
+}
+
+function formatPrice(value: unknown): string {
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount <= 0) return "-";
+  return `${Math.trunc(amount).toLocaleString("ko-KR")}원`;
+}
+
+function formatDistance(value: unknown): string {
+  const distance = Number(value);
+  if (!Number.isFinite(distance) || distance <= 0) return "-";
+  return `${distance.toFixed(1)}km`;
+}
+
+function normalizeEnumLabel(value: unknown, mapping: Record<string, string>, fallback = "-"): string {
+  const text = toText(value);
+  if (!text) return fallback;
+  const upper = text.toUpperCase();
+  return mapping[upper] ?? text;
+}
+
+function toVehicleTypeLabel(value: unknown): string {
+  return normalizeEnumLabel(value, {
+    TON_1: "1톤",
+    TON_2_5: "2.5톤",
+    TON_5: "5톤",
+  });
+}
+
+function toVehicleBodyTypeLabel(value: unknown): string {
+  return normalizeEnumLabel(value, {
+    CARGO: "카고",
+    WING_BODY: "윙바디",
+    TOP_CAR: "탑차",
+  });
+}
+
+function toCargoTypeLabel(value: unknown): string {
+  return normalizeEnumLabel(value, {
+    GENERAL: "일반",
+    FROZEN: "냉동",
+    REFRIGERATED: "냉장",
+  });
+}
+
+function showToast(message: string) {
+  const safeMessage = toText(message);
+  if (!safeMessage) return;
+
+  if (Platform.OS === "android") {
+    ToastAndroid.show(safeMessage, ToastAndroid.SHORT);
+    return;
+  }
+
+  Alert.alert("", safeMessage);
+}
+
+const ACTIVE_ASSIGN_STATUSES = new Set(["ASSIGNED", "ACCEPTED", "PICKUP", "TRANSIT", "DROPOFF"]);
 
 const useStyles = createThemedStyles((theme) => {
   const spacing = safeNumber(theme?.layout?.spacing?.base, 4);
   const cBorder = safeString(theme?.colors?.borderDefault, "#E2E8F0");
-  const cPrimary = safeString(theme?.colors?.brandPrimary, "#FF6A00");
-  const cDanger = safeString(theme?.colors?.semanticDanger, "#EF4444");
-  const cInfo = safeString(theme?.colors?.semanticInfo, "#2563EB");
-  const cSurface = safeString(theme?.colors?.bgSurface, "#FFFFFF");
+  const cStrong = safeString(theme?.colors?.textMain, "#111827");
+  const cSub = safeString(theme?.colors?.textSub, "#334155");
   const cMuted = safeString(theme?.colors?.textMuted, "#64748B");
+  const cPrimary = safeString(theme?.colors?.brandPrimary, "#FF6A00");
+  const cSurface = safeString(theme?.colors?.bgSurface, "#FFFFFF");
 
   return StyleSheet.create({
-    content: {
+    scrollContent: {
       paddingTop: spacing * 3,
-      paddingBottom: spacing * 20,
+      paddingBottom: spacing * 8,
       gap: spacing * 3,
     },
     card: {
       borderRadius: safeNumber(theme?.components?.card?.radius, 16),
       padding: spacing * 4,
-      gap: spacing * 2,
+      gap: spacing * 3,
     },
-    headerRow: {
+    cardHeading: {
+      color: cStrong,
+      fontSize: safeNumber(theme?.typography?.scale?.heading?.size, 18) + 2,
+      lineHeight: safeNumber(theme?.typography?.scale?.heading?.lineHeight, 26) + 2,
+      fontWeight: "900",
+    },
+
+    statusRow: {
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
-      gap: spacing,
+      gap: spacing * 2,
     },
     statusChip: {
-      paddingHorizontal: spacing * 2,
-      paddingVertical: spacing,
       borderRadius: 999,
       borderWidth: 1,
-      borderColor: tint(cPrimary, 0.25, cBorder),
+      borderColor: tint(cPrimary, 0.2, cBorder),
       backgroundColor: tint(cPrimary, 0.08, cSurface),
+      paddingVertical: spacing,
+      paddingHorizontal: spacing * 2,
     },
     statusChipText: {
       color: cPrimary,
+      fontSize: safeNumber(theme?.typography?.scale?.detail?.size, 14) + 1,
+      lineHeight: safeNumber(theme?.typography?.scale?.detail?.lineHeight, 20) + 2,
+      fontWeight: "900",
+    },
+    statusMeta: {
+      color: cMuted,
+      fontSize: safeNumber(theme?.typography?.scale?.detail?.size, 14),
+      lineHeight: safeNumber(theme?.typography?.scale?.detail?.lineHeight, 20),
+      fontWeight: "700",
+    },
+    routeRow: {
+      flexDirection: "row",
+      alignItems: "stretch",
+      gap: spacing * 2,
+    },
+    routeRail: {
+      width: 20,
+      alignItems: "center",
+    },
+    routeDot: {
+      width: 10,
+      height: 10,
+      borderRadius: 5,
+      marginTop: 8,
+      backgroundColor: cBorder,
+    },
+    routeDotStart: {
+      backgroundColor: cStrong,
+    },
+    routeDotEnd: {
+      backgroundColor: cPrimary,
+    },
+    routeLine: {
+      width: 2,
+      flex: 1,
+      marginTop: 6,
+      backgroundColor: tint(cStrong, 0.12, cBorder),
+    },
+    routeBody: {
+      flex: 1,
+      paddingBottom: spacing * 2,
+    },
+    routeLabel: {
+      color: cMuted,
+      fontSize: safeNumber(theme?.typography?.scale?.detail?.size, 14),
+      lineHeight: safeNumber(theme?.typography?.scale?.detail?.lineHeight, 20),
       fontWeight: "800",
-      fontSize: safeNumber(theme?.typography?.scale?.caption?.size, 12),
-      lineHeight: safeNumber(theme?.typography?.scale?.caption?.lineHeight, 16),
     },
-    divider: {
-      height: 1,
-      backgroundColor: tint(cBorder, 0.8, cBorder),
+    routeAddress: {
+      color: cStrong,
+      fontSize: safeNumber(theme?.typography?.scale?.heading?.size, 18) + 4,
+      lineHeight: safeNumber(theme?.typography?.scale?.heading?.lineHeight, 26) + 4,
+      fontWeight: "900",
+      marginTop: 2,
     },
-    infoRow: {
-      minHeight: 20,
+
+    priceWrap: {
+      gap: spacing,
+    },
+    priceEyebrow: {
+      color: cMuted,
+      fontSize: safeNumber(theme?.typography?.scale?.detail?.size, 14),
+      lineHeight: safeNumber(theme?.typography?.scale?.detail?.lineHeight, 20),
+      fontWeight: "700",
+    },
+    priceText: {
+      color: cStrong,
+      fontSize: safeNumber(theme?.typography?.scale?.display?.size, 28) + 4,
+      lineHeight: safeNumber(theme?.typography?.scale?.display?.lineHeight, 36) + 4,
+      fontWeight: "900",
+      letterSpacing: -0.4,
+    },
+    summaryRow: {
+      minHeight: 32,
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
       gap: spacing * 2,
     },
-    infoLabel: {
+    summaryLabel: {
       color: cMuted,
-      fontSize: safeNumber(theme?.typography?.scale?.caption?.size, 12),
-      lineHeight: safeNumber(theme?.typography?.scale?.caption?.lineHeight, 16),
+      fontSize: safeNumber(theme?.typography?.scale?.detail?.size, 14),
+      lineHeight: safeNumber(theme?.typography?.scale?.detail?.lineHeight, 20),
       fontWeight: "700",
     },
-    infoValue: {
-      flex: 1,
-      textAlign: "right",
+    summaryValue: {
+      color: cSub,
+      fontSize: safeNumber(theme?.typography?.scale?.detail?.size, 14) + 1,
+      lineHeight: safeNumber(theme?.typography?.scale?.detail?.lineHeight, 20) + 2,
+      fontWeight: "800",
+    },
+    chipWrap: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: spacing * 2,
+    },
+    chip: {
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: tint(cPrimary, 0.2, cBorder),
+      backgroundColor: tint(cPrimary, 0.08, cSurface),
+      paddingVertical: spacing + 1,
+      paddingHorizontal: spacing * 3,
+    },
+    chipText: {
+      color: cStrong,
+      fontSize: safeNumber(theme?.typography?.scale?.detail?.size, 14) + 1,
+      lineHeight: safeNumber(theme?.typography?.scale?.detail?.lineHeight, 20) + 2,
+      fontWeight: "800",
+    },
+
+    bottomBar: {
+      borderTopWidth: 1,
+      borderTopColor: cBorder,
+      backgroundColor: cSurface,
+      paddingHorizontal: spacing * 5,
+      paddingTop: spacing * 3,
     },
     actionRow: {
       flexDirection: "row",
       gap: spacing * 2,
     },
     actionButton: {
+      minHeight: 56,
+    },
+    primaryAction: {
+      flex: 1.4,
+    },
+    secondaryAction: {
       flex: 1,
-      minHeight: 38,
     },
-    counterForm: {
-      gap: spacing,
+    statusOnlyButton: {
+      minHeight: 56,
+      width: "100%",
     },
-    helpText: {
-      color: cInfo,
-      fontSize: safeNumber(theme?.typography?.scale?.caption?.size, 12),
-      lineHeight: safeNumber(theme?.typography?.scale?.caption?.lineHeight, 16),
+    guideText: {
+      color: cMuted,
+      fontSize: safeNumber(theme?.typography?.scale?.caption?.size, 12) + 1,
+      lineHeight: safeNumber(theme?.typography?.scale?.caption?.lineHeight, 16) + 2,
       fontWeight: "700",
-    },
-    errorText: {
-      color: cDanger,
-      fontSize: safeNumber(theme?.typography?.scale?.caption?.size, 12),
-      lineHeight: safeNumber(theme?.typography?.scale?.caption?.lineHeight, 16),
-      fontWeight: "700",
-    },
-    successText: {
-      color: cPrimary,
-      fontSize: safeNumber(theme?.typography?.scale?.caption?.size, 12),
-      lineHeight: safeNumber(theme?.typography?.scale?.caption?.lineHeight, 16),
-      fontWeight: "700",
+      textAlign: "center",
+      marginBottom: spacing * 2,
     },
   });
 });
 
 export function DriverMatchDetailPage({ matchId, routeSnapshot }: DriverMatchDetailPageProps) {
+  const router = useRouter();
   const theme = useAppTheme();
+  const insets = useSafeAreaInsets();
   const styles = useStyles();
-  const driverMatchMode = getDriverMatchMode();
-  const isMockMode = driverMatchMode === "mock";
 
-  const [match, setMatch] = useState<DriverMatchSummary | null>(null);
-  const [latestCounterOffer, setLatestCounterOffer] = useState<CounterOfferCreateRequest | null>(null);
-  const [priceInput, setPriceInput] = useState("");
-  const [messageInput, setMessageInput] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const detail = useMatchDetail(matchId, routeSnapshot);
 
+  const [isAccepting, setIsAccepting] = React.useState(false);
+  const [isCounterOfferOpen, setIsCounterOfferOpen] = React.useState(false);
+  const [isCounterSubmitting, setIsCounterSubmitting] = React.useState(false);
+  const [counterErrorMessage, setCounterErrorMessage] = React.useState<string | null>(null);
+  const [bottomBarHeight, setBottomBarHeight] = React.useState(0);
+
+  const spacing = safeNumber(theme?.layout?.spacing?.base, 4);
   const backgroundColor = safeString(theme?.colors?.bgSurfaceAlt, "#F8FAFC");
-  const textMain = safeString(theme?.colors?.textMain, "#111827");
-  const textMuted = safeString(theme?.colors?.textMuted, "#64748B");
+  const normalizedStatus = normalizeDriverMatchStatus(detail.match?.status);
+  const statusLabel = toDriverMatchStatusLabel(detail.match?.status);
+  const canAccept = canDriverAcceptMatch(normalizedStatus);
+  const canCounterOffer = !isDriverMatchTerminal(normalizedStatus) && detail.quoteId > 0;
+  const isAssignedState = ACTIVE_ASSIGN_STATUSES.has(normalizedStatus);
+  const matchMetaText = detail.match ? `#${detail.match.matchId}` : "";
 
-  useEffect(() => {
-    if (matchId <= 0) {
-      setMatch(null);
-      return;
+  const desiredPrice = Number(detail.quote?.desiredPrice);
+  const finalPrice = Number(detail.quote?.finalPrice);
+  const displayPrice = finalPrice > 0 ? finalPrice : desiredPrice;
+
+  const routeOrigin = toDisplayText(detail.quote?.originAddress);
+  const routeDestination = toDisplayText(detail.quote?.destinationAddress);
+  const distanceText = formatDistance(detail.quote?.distanceKm);
+  const loadMethodText = toDisplayText(formatWorkMethodLabel(detail.quote?.loadMethod));
+  const unloadMethodText = toDisplayText(formatWorkMethodLabel(detail.quote?.unloadMethod));
+  const tonLabel = toVehicleTypeLabel(detail.quote?.vehicleType);
+  const bodyLabel = toVehicleBodyTypeLabel(detail.quote?.vehicleBodyType);
+  const cargoTypeLabel = toCargoTypeLabel(detail.quote?.cargoType);
+
+  const chips = [
+    tonLabel !== "-" ? `톤수 ${tonLabel}` : "",
+    bodyLabel !== "-" ? `차종 ${bodyLabel}` : "",
+    cargoTypeLabel !== "-" ? `화물 ${cargoTypeLabel}` : "",
+  ].filter(Boolean);
+
+  const handleAccept = async () => {
+    if (!canAccept || isAccepting) return;
+
+    setIsAccepting(true);
+    try {
+      const result = await acceptDriverMatch(matchId);
+      if (!result) {
+        Alert.alert("배차 수락 실패", "오더 상태를 갱신하지 못했습니다.");
+        return;
+      }
+
+      showToast("배차 완료");
+      router.replace("/(driver)/matches/me");
+    } catch (error) {
+      Alert.alert("배차 수락 실패", readApiErrorMessage(error, "배차 수락에 실패했습니다. 잠시 후 다시 시도해 주세요."));
+    } finally {
+      setIsAccepting(false);
     }
+  };
 
-    const resolved = resolveDriverMatchFromCache(matchId, routeSnapshot);
-    setMatch(resolved ?? { matchId });
-    setLatestCounterOffer(getLatestMockCounterOffer(matchId));
-  }, [matchId, routeSnapshot]);
+  const submitCounterOffer = async (amount: number) => {
+    if (!canCounterOffer || isCounterSubmitting) return;
 
-  if (matchId <= 0) {
+    setCounterErrorMessage(null);
+    setIsCounterSubmitting(true);
+    try {
+      const result = await postCounterOffer(matchId, { proposedPrice: amount }, detail.quoteId);
+      if (!result) {
+        setCounterErrorMessage("역제안을 전송할 수 없습니다. 잠시 후 다시 시도해 주세요.");
+        return;
+      }
+
+      showToast("운임 제안을 전송했습니다.");
+      setIsCounterOfferOpen(false);
+      await detail.refetch();
+    } catch (error) {
+      setCounterErrorMessage(readApiErrorMessage(error, "역제안 전송에 실패했습니다."));
+    } finally {
+      setIsCounterSubmitting(false);
+    }
+  };
+
+  if (toPositiveInt(matchId) <= 0) {
     return (
-      <PageScaffold title="오더 상세" backgroundColor={backgroundColor}>
+      <PageScaffold
+        title="오더 상세"
+        backgroundColor={backgroundColor}
+        onPressBack={() => router.back()}
+        backLabel="이전"
+      >
         <AppEmptyState title="유효한 오더 ID가 없습니다." description="목록에서 다시 선택해 주세요." />
       </PageScaffold>
     );
   }
 
-  if (!match) {
-    return (
-      <PageScaffold title="오더 상세" backgroundColor={backgroundColor}>
-        <AppEmptyState title="오더 정보를 찾을 수 없습니다." description="목록에서 다시 선택해 주세요." />
-      </PageScaffold>
-    );
-  }
-
-  const submitAccept = () => {
-    if (!isMockMode || submitting) return;
-    setSubmitting(true);
-    setErrorMessage(null);
-    setSuccessMessage(null);
-
-    const next = applyMockAccept(match.matchId);
-    if (!next) {
-      setErrorMessage("오더 상태를 갱신할 수 없습니다.");
-      setSubmitting(false);
-      return;
-    }
-
-    setMatch(next);
-    setSuccessMessage("수락이 반영되었습니다.");
-    setSubmitting(false);
-  };
-
-  const submitCancel = () => {
-    if (!isMockMode || submitting) return;
-    setSubmitting(true);
-    setErrorMessage(null);
-    setSuccessMessage(null);
-
-    const next = applyMockCancel(match.matchId);
-    if (!next) {
-      setErrorMessage("오더 상태를 갱신할 수 없습니다.");
-      setSubmitting(false);
-      return;
-    }
-
-    setMatch(next);
-    setSuccessMessage("취소가 반영되었습니다.");
-    setSubmitting(false);
-  };
-
-  const submitCounterOffer = () => {
-    if (!isMockMode || submitting) return;
-
-    const proposedPrice = Number(priceInput);
-    const safePrice = Number.isFinite(proposedPrice) && Math.trunc(proposedPrice) > 0 ? Math.trunc(proposedPrice) : undefined;
-    const message = messageInput.trim() || undefined;
-
-    if (!safePrice && !message) {
-      setErrorMessage("금액 또는 사유를 입력해 주세요.");
-      setSuccessMessage(null);
-      return;
-    }
-
-    setSubmitting(true);
-    setErrorMessage(null);
-    setSuccessMessage(null);
-
-    const nextOffer = setLatestMockCounterOffer(match.matchId, {
-      proposedPrice: safePrice,
-      message,
-    });
-
-    if (!nextOffer) {
-      setErrorMessage("역제안을 저장할 수 없습니다.");
-      setSubmitting(false);
-      return;
-    }
-
-    setLatestCounterOffer(nextOffer);
-    setPriceInput("");
-    setMessageInput("");
-    setSuccessMessage("역제안이 제출되었습니다.");
-    setSubmitting(false);
-  };
+  const bottomBar = (
+    <View
+      style={[styles.bottomBar, { paddingBottom: insets.bottom + spacing * 2 }]}
+      onLayout={(event) => setBottomBarHeight(event.nativeEvent.layout.height)}
+    >
+      {isAssignedState ? (
+        <AppButton
+          title="배차 진행 중"
+          variant="secondary"
+          disabled
+          style={styles.statusOnlyButton}
+          textStyle={{ fontSize: 16, fontWeight: "900" }}
+        />
+      ) : (
+        <View style={styles.actionRow}>
+          <AppButton
+            title="이 오더 수행하기"
+            variant="primary"
+            loading={isAccepting}
+            disabled={!canAccept || isAccepting}
+            onPress={() => {
+              void handleAccept();
+            }}
+            style={[styles.actionButton, styles.primaryAction]}
+            textStyle={{ fontSize: 16, fontWeight: "900" }}
+          />
+          <AppButton
+            title="운임 제안하기"
+            variant="secondary"
+            disabled={!canCounterOffer || isCounterSubmitting}
+            onPress={() => {
+              setCounterErrorMessage(null);
+              setIsCounterOfferOpen(true);
+            }}
+            style={[styles.actionButton, styles.secondaryAction]}
+            textStyle={{ fontSize: 16, fontWeight: "900" }}
+          />
+        </View>
+      )}
+    </View>
+  );
 
   return (
-    <PageScaffold title="오더 상세" backgroundColor={backgroundColor} scroll={false}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <AppCard outlined style={styles.card}>
-          <View style={styles.headerRow}>
-            <AppText variant="heading" weight="800" color={textMain}>
-              {`오더 #${match.matchId}`}
-            </AppText>
-            <View style={styles.statusChip}>
-              <AppText style={styles.statusChipText}>{toDriverMatchStatusLabel(match.status)}</AppText>
-            </View>
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.infoRow}>
-            <AppText style={styles.infoLabel}>matchId</AppText>
-            <AppText variant="caption" color={textMuted} style={styles.infoValue}>
-              {match.matchId}
-            </AppText>
-          </View>
-          <View style={styles.infoRow}>
-            <AppText style={styles.infoLabel}>quoteId</AppText>
-            <AppText variant="caption" color={textMuted} style={styles.infoValue}>
-              {typeof match.quoteId === "number" && match.quoteId > 0 ? match.quoteId : "-"}
-            </AppText>
-          </View>
-          <View style={styles.infoRow}>
-            <AppText style={styles.infoLabel}>status</AppText>
-            <AppText variant="caption" color={textMuted} style={styles.infoValue}>
-              {match.status || "-"}
-            </AppText>
-          </View>
-          <View style={styles.infoRow}>
-            <AppText style={styles.infoLabel}>accepted</AppText>
-            <AppText variant="caption" color={textMuted} style={styles.infoValue}>
-              {toAcceptedLabel(match.accepted)}
-            </AppText>
-          </View>
-          <View style={styles.infoRow}>
-            <AppText style={styles.infoLabel}>createdAt</AppText>
-            <AppText variant="caption" color={textMuted} style={styles.infoValue}>
-              {formatDateTime(match.createdAt)}
-            </AppText>
-          </View>
-          <View style={styles.infoRow}>
-            <AppText style={styles.infoLabel}>updatedAt</AppText>
-            <AppText variant="caption" color={textMuted} style={styles.infoValue}>
-              {formatDateTime(match.updatedAt)}
-            </AppText>
-          </View>
-        </AppCard>
-
-        <AppCard outlined style={styles.card}>
-          <AppText variant="heading" weight="800" color={textMain}>
-            액션
-          </AppText>
-
-          {!isMockMode ? (
-            <AppText style={styles.helpText}>서버 권한/연동 준비중</AppText>
-          ) : null}
-
-          <View style={styles.actionRow}>
-            <AppButton
-              title="수락"
-              variant="primary"
-              style={styles.actionButton}
-              loading={submitting && isMockMode}
-              disabled={!isMockMode || submitting}
-              onPress={submitAccept}
-            />
-            <AppButton
-              title="취소"
-              variant="destructive"
-              style={styles.actionButton}
-              loading={submitting && isMockMode}
-              disabled={!isMockMode || submitting}
-              onPress={submitCancel}
-            />
-          </View>
-
-          <View style={styles.counterForm}>
-            <AppInput
-              label="역제안 금액"
-              placeholder="예) 120000"
-              value={priceInput}
-              keyboardType="number-pad"
-              editable={isMockMode && !submitting}
-              onChangeText={(text) => {
-                setPriceInput(text.replace(/[^0-9]/g, ""));
-              }}
-            />
-            <AppInput
-              label="사유"
-              placeholder="선택 입력"
-              value={messageInput}
-              editable={isMockMode && !submitting}
-              onChangeText={setMessageInput}
-              multiline
-              numberOfLines={3}
-              textAlignVertical="top"
-            />
-            <AppButton
-              title="역제안 제출"
-              variant="primary"
-              loading={submitting && isMockMode}
-              disabled={!isMockMode || submitting}
-              onPress={submitCounterOffer}
-            />
-          </View>
-
-          {latestCounterOffer ? <View style={styles.divider} /> : null}
-          {latestCounterOffer ? (
-            <>
-              <View style={styles.infoRow}>
-                <AppText style={styles.infoLabel}>최근 금액</AppText>
-                <AppText variant="caption" color={textMuted} style={styles.infoValue}>
-                  {typeof latestCounterOffer.proposedPrice === "number" ? latestCounterOffer.proposedPrice : "-"}
-                </AppText>
+    <>
+      <PageScaffold
+        title="오더 상세"
+        backgroundColor={backgroundColor}
+        scroll={false}
+        onPressBack={() => router.back()}
+        backLabel="이전"
+        contentStyle={{ paddingBottom: bottomBarHeight + spacing * 3 }}
+        bottomBar={bottomBar}
+      >
+        <AppRequestState
+          isLoading={detail.isLoading}
+          loadingLabel="오더 상세를 불러오는 중입니다."
+          errorMessage={detail.errorMessage}
+          errorTitle="오더 상세를 불러오지 못했어요"
+          retryLabel="다시 시도"
+          onRetry={() => {
+            void detail.refetch();
+          }}
+          fullScreen={false}
+        >
+          <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            <AppCard outlined style={styles.card}>
+              <View style={styles.statusRow}>
+                <AppText style={styles.cardHeading}>운송 경로</AppText>
+                <View style={styles.statusChip}>
+                  <AppText style={styles.statusChipText}>{statusLabel}</AppText>
+                </View>
               </View>
-              <View style={styles.infoRow}>
-                <AppText style={styles.infoLabel}>최근 사유</AppText>
-                <AppText variant="caption" color={textMuted} style={styles.infoValue}>
-                  {latestCounterOffer.message || "-"}
-                </AppText>
-              </View>
-            </>
-          ) : null}
+              {matchMetaText ? <AppText style={styles.statusMeta}>{matchMetaText}</AppText> : null}
 
-          {errorMessage ? <AppText style={styles.errorText}>{errorMessage}</AppText> : null}
-          {successMessage ? <AppText style={styles.successText}>{successMessage}</AppText> : null}
-        </AppCard>
-      </ScrollView>
-    </PageScaffold>
+              <View style={styles.routeRow}>
+                <View style={styles.routeRail}>
+                  <View style={[styles.routeDot, styles.routeDotStart]} />
+                  <View style={styles.routeLine} />
+                </View>
+                <View style={styles.routeBody}>
+                  <AppText style={styles.routeLabel}>출발지</AppText>
+                  <AppText style={styles.routeAddress}>{routeOrigin}</AppText>
+                </View>
+              </View>
+
+              <View style={styles.routeRow}>
+                <View style={styles.routeRail}>
+                  <View style={[styles.routeDot, styles.routeDotEnd]} />
+                </View>
+                <View style={styles.routeBody}>
+                  <AppText style={styles.routeLabel}>도착지</AppText>
+                  <AppText style={styles.routeAddress}>{routeDestination}</AppText>
+                </View>
+              </View>
+            </AppCard>
+
+            <AppCard outlined style={styles.card}>
+              <AppText style={styles.cardHeading}>수익/업무 요약</AppText>
+              <View style={styles.priceWrap}>
+                <AppText style={styles.priceEyebrow}>예상 운임</AppText>
+                <AppText style={styles.priceText}>{formatPrice(displayPrice)}</AppText>
+              </View>
+
+              <View style={styles.summaryRow}>
+                <AppText style={styles.summaryLabel}>운송 거리</AppText>
+                <AppText style={styles.summaryValue}>{distanceText}</AppText>
+              </View>
+              <View style={styles.summaryRow}>
+                <AppText style={styles.summaryLabel}>상차 방식</AppText>
+                <AppText style={styles.summaryValue}>{loadMethodText}</AppText>
+              </View>
+              <View style={styles.summaryRow}>
+                <AppText style={styles.summaryLabel}>하차 방식</AppText>
+                <AppText style={styles.summaryValue}>{unloadMethodText}</AppText>
+              </View>
+
+              {chips.length > 0 ? (
+                <View style={styles.chipWrap}>
+                  {chips.map((chip) => (
+                    <View key={chip} style={styles.chip}>
+                      <AppText style={styles.chipText}>{chip}</AppText>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+            </AppCard>
+          </ScrollView>
+        </AppRequestState>
+      </PageScaffold>
+
+      <CounterOfferModal
+        visible={isCounterOfferOpen}
+        isSubmitting={isCounterSubmitting}
+        errorMessage={counterErrorMessage}
+        onClose={() => {
+          if (isCounterSubmitting) return;
+          setIsCounterOfferOpen(false);
+          setCounterErrorMessage(null);
+        }}
+        onSubmit={submitCounterOffer}
+      />
+    </>
   );
 }
 

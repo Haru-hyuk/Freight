@@ -172,7 +172,7 @@ export function DriverQuoteBrowsePage() {
 
     return (
       <Pressable
-        onPress={() => router.push({ pathname: "/(driver)/run/[id]", params: buildDetailParams(item) })}
+        onPress={() => router.push({ pathname: "/(driver)/matches/[id]", params: buildDetailParams(item) })}
         style={({ pressed }) => (pressed ? styles.pressed : undefined)}
       >
         <AppCard outlined style={styles.card}>

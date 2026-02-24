@@ -464,7 +464,7 @@ export function acceptMockDriverMatch(matchId: number): MatchResponse | null {
   const next: MatchResponse = {
     ...current,
     accepted: true,
-    status: "ACCEPTED",
+    status: "ASSIGNED",
     driverId: toPositiveInt(current.driverId) || 1,
     acceptedAt: now,
     updatedAt: now,

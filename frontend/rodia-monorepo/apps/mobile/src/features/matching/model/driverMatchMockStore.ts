@@ -95,7 +95,7 @@ export function applyMockAccept(matchId: number): DriverMatchSummary | null {
   return persistSummary({
     ...current,
     accepted: true,
-    status: "ACCEPTED",
+    status: "ASSIGNED",
     updatedAt: new Date().toISOString(),
   });
 }

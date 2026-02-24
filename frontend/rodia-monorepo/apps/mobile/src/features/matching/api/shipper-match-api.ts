@@ -6,6 +6,11 @@ import {
   getOpenMatches as getOpenDriverMatchesGenerated,
 } from "@/shared/api/generated/driver-match-controller/driver-match-controller";
 import {
+  createDriverCounterOffer,
+  type CounterOfferItem,
+  type DriverCounterOfferCreateInput,
+} from "@/features/counter-offer/api";
+import {
   cancelMatch as cancelShipperMatchGenerated,
   createMatch as createShipperMatchGenerated,
   getMyMatches as getMyShipperMatchesGenerated,
@@ -40,6 +45,7 @@ export type ShipperMatchItem = MatchResponseItem & {
 };
 
 export type DriverMatchItem = MatchResponseItem;
+export type MatchCounterOfferInput = DriverCounterOfferCreateInput;
 
 export type DriverMatchActionGuard = {
   enabled: boolean;
@@ -271,6 +277,26 @@ export async function acceptDriverMatch(matchId: number): Promise<DriverMatchIte
 
   const data = await acceptDriverMatchGenerated(String(safeMatchId));
   return toSingleDriverMatch(data);
+}
+
+export async function postCounterOffer(
+  matchId: number,
+  input: MatchCounterOfferInput,
+  quoteIdHint?: number
+): Promise<CounterOfferItem | null> {
+  const safeMatchId = toPositiveInt(matchId);
+  if (safeMatchId <= 0) return null;
+
+  const safeQuoteIdHint = toPositiveInt(quoteIdHint);
+  if (safeQuoteIdHint > 0) {
+    return createDriverCounterOffer(safeQuoteIdHint, input ?? {});
+  }
+
+  const match = await getDriverMatch(safeMatchId);
+  const safeQuoteId = toPositiveInt(match?.quoteId);
+  if (safeQuoteId <= 0) return null;
+
+  return createDriverCounterOffer(safeQuoteId, input ?? {});
 }
 
 export async function cancelDriverMatch(matchId: number): Promise<void> {
