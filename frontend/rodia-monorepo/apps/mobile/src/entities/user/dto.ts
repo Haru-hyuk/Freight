@@ -6,6 +6,7 @@ export type AuthLoginRequestDTO = {
 
 export type AuthTokenResponseDTO = {
   accessToken: string;
+  refreshToken?: string;
   tokenType: string; // "Bearer"
   expiresIn: number; // seconds
 };

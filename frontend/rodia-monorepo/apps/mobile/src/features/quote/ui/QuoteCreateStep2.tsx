@@ -14,7 +14,7 @@ import {
 } from "@/features/quote/ui/QuoteCreateUiPrimitives";
 import {
   CARGO_ITEM_CATEGORIES,
-  getDropOffTargets,
+  makeWaypointDropOffKey,
   useQuoteCreateDraft,
   type CargoItemCategory,
   DROP_OFF_END,
@@ -175,9 +175,17 @@ const useStyles = createThemedStyles((theme: AppTheme) => {
       flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, height: 38,
       borderRadius: 10, borderWidth: 1, borderColor: c.borderDefault, backgroundColor: c.bgSurface, gap: 6
     },
+    dropoffChipContent: {
+      flexDirection: "column",
+      justifyContent: "center",
+      gap: 0,
+      maxWidth: 170,
+    },
     dropoffChipActive: { backgroundColor: c.brandPrimary, borderColor: c.brandPrimary },
     dropoffText: { fontSize: 12, fontWeight: '600', color: c.textSub },
+    dropoffSubText: { fontSize: 11, fontWeight: "500", color: c.textMuted },
     dropoffTextActive: { color: c.textOnBrand },
+    dropoffSubTextActive: { color: tint(c.textOnBrand, 0.82, c.textOnBrand) },
 
     // Add Button
     addBtn: {
@@ -201,7 +209,31 @@ export function QuoteCreateStep2() {
   });
   const [manualModeIds, setManualModeIds] = useState<Set<number>>(new Set());
 
-  const dropOffTargets = useMemo(() => getDropOffTargets(draft), [draft?.waypoints, draft?.endAddr]);
+  const dropOffTargets = useMemo(() => {
+    const waypoints = Array.isArray(draft?.waypoints) ? draft.waypoints : [];
+
+    const stopTargets = waypoints.map((waypoint, idx) => {
+      const safeId = Number.isFinite(waypoint?.id) ? Math.max(1, Math.trunc(waypoint.id)) : idx + 1;
+      const address = String(waypoint?.addr ?? "").trim();
+      return {
+        uiKey: `STOP_${safeId}`,
+        key: makeWaypointDropOffKey(safeId),
+        label: `경유지 ${idx + 1}`,
+        sub: address || "주소 미입력",
+      };
+    });
+
+    const destinationAddress = String(draft?.endAddr ?? "").trim();
+    return [
+      ...stopTargets,
+      {
+        uiKey: "DESTINATION",
+        key: DROP_OFF_END,
+        label: "도착지",
+        sub: destinationAddress || "주소 미입력",
+      },
+    ];
+  }, [draft?.waypoints, draft?.endAddr]);
 
   // 화물이 새로 추가되면 해당 화물을 자동으로 열어줌
   useEffect(() => {
@@ -283,8 +315,8 @@ export function QuoteCreateStep2() {
         const isManual = manualModeIds.has(cargo.id) || category === "FURNITURE";
         
         const cbmValue = calculateCBM(cargo.lengthCm, cargo.widthCm, cargo.heightCm, cargo.quantity);
-        const currentTarget = dropOffTargets.find(t => t.key === cargo.dropOffKey);
-        const dropOffLabel = currentTarget ? currentTarget.label : "도착지";
+        const currentTarget = dropOffTargets.find((target) => target.key === (cargo.dropOffKey || DROP_OFF_END));
+        const dropOffLabel = currentTarget ? `${currentTarget.label} · ${currentTarget.sub}` : "도착지 · 주소 미입력";
 
         return (
           <View key={cargo.id} style={styles.cargoCard}>
@@ -423,12 +455,23 @@ export function QuoteCreateStep2() {
                         const iconName = target.key === DROP_OFF_END ? "flag" : "location";
                         return (
                             <Pressable
-                                key={target.key}
+                                key={target.uiKey}
                                 onPress={() => updateCargo(cargo.id, "dropOffKey", target.key as string)}
                                 style={[styles.dropoffChip, isActive && styles.dropoffChipActive]}
                             >
                                 <Ionicons name={iconName} size={14} color={isActive ? theme.colors.textOnBrand : theme.colors.textMuted} />
-                                <AppText style={[styles.dropoffText, isActive && styles.dropoffTextActive]}>{target.label}</AppText>
+                                <View style={styles.dropoffChipContent}>
+                                  <AppText style={[styles.dropoffText, isActive && styles.dropoffTextActive]}>{target.label}</AppText>
+                                  <AppText
+                                    style={[
+                                      styles.dropoffSubText,
+                                      isActive && styles.dropoffSubTextActive,
+                                    ]}
+                                    numberOfLines={1}
+                                  >
+                                    {target.sub}
+                                  </AppText>
+                                </View>
                             </Pressable>
                         );
                     })}

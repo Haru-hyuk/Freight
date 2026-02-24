@@ -245,13 +245,14 @@ function extractAuthTokenResponse(data: unknown): AuthTokenResponseDTO | null {
   const d = (data ?? {}) as AnyObj;
 
   const root =
-    d?.data?.accessToken || d?.data?.tokenType || d?.data?.expiresIn
+    d?.data?.accessToken || d?.data?.tokenType || d?.data?.expiresIn || d?.data?.refreshToken
       ? d?.data
-      : d?.result?.accessToken || d?.result?.tokenType || d?.result?.expiresIn
+      : d?.result?.accessToken || d?.result?.tokenType || d?.result?.expiresIn || d?.result?.refreshToken
         ? d?.result
         : d;
 
   const accessToken = pickString(root?.accessToken, root?.access_token, root?.token);
+  const refreshToken = pickString(root?.refreshToken, root?.refresh_token);
   const tokenType = pickString(root?.tokenType, root?.token_type) ?? "Bearer";
 
   const expiresInRaw = root?.expiresIn ?? root?.expires_in;
@@ -261,15 +262,17 @@ function extractAuthTokenResponse(data: unknown): AuthTokenResponseDTO | null {
 
   return {
     accessToken,
+    refreshToken,
     tokenType,
     expiresIn: Number.isFinite(expiresInNum) ? expiresInNum : 0,
   };
 }
 
-function buildTokensFromAccessToken(accessToken: string): AuthTokens {
-  const at = accessToken.trim();
-  // 서버 스펙은 refreshToken이 없으므로 accessToken을 refreshToken으로 저장(앱 셧다운 방지)
-  return { accessToken: at, refreshToken: at };
+function buildTokensFromAuthTokenResponse(tokenRes: AuthTokenResponseDTO): AuthTokens {
+  const access = pickString(tokenRes?.accessToken)?.trim() ?? "";
+  const refresh = pickString(tokenRes?.refreshToken)?.trim() ?? "";
+  if (!access) return { accessToken: "", refreshToken: "" };
+  return { accessToken: access, refreshToken: refresh || access };
 }
 
 function base64UrlToBase64(input: string): string {
@@ -536,7 +539,7 @@ async function loginByRole(role: AuthRole, email: string, password: string): Pro
   const tokenRes = extractAuthTokenResponse(data);
   if (!tokenRes?.accessToken) return { user: null, tokens: null, tokenType: null, expiresIn: null };
 
-  const tokens = buildTokensFromAccessToken(tokenRes.accessToken);
+  const tokens = buildTokensFromAuthTokenResponse(tokenRes);
   const user = buildFallbackUser(role, email, tokenRes.accessToken);
 
   return {

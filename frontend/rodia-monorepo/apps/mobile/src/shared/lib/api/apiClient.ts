@@ -25,6 +25,15 @@ type ApiTimingMeta = {
 
 type InternalConfig = InternalAxiosRequestConfig & { _retry?: boolean; meta?: ApiMeta; __timing?: ApiTimingMeta };
 
+type SessionExpiredApiError = Error & {
+  code: "SESSION_EXPIRED";
+  status: 401;
+  isSessionExpired: true;
+  originalError?: unknown;
+};
+
+export const SESSION_EXPIRED_MESSAGE = "세션이 만료되었습니다. 다시 로그인해 주세요.";
+
 function isTruthyString(v: unknown): v is string {
   return typeof v === "string" && v.trim().length > 0;
 }
@@ -48,13 +57,51 @@ function extractTokens(data: unknown): Partial<AuthTokens> | null {
 
 let refreshInFlight: Promise<string | null> | null = null;
 
-function safeGetRefreshPath(): string {
+function safeGetRefreshPaths(): string[] {
+  const candidates: string[] = [];
+
+  function pushCandidate(value: unknown) {
+    const normalized = String(value ?? "").trim();
+    if (!normalized) return;
+    if (candidates.includes(normalized)) return;
+    candidates.push(normalized);
+  }
+
   try {
     const p = getAuthRefreshPath?.();
-    return isTruthyString(p) ? p.trim() : "";
+    pushCandidate(p);
   } catch {
-    return "";
+    // ignore
   }
+
+  // 환경값이 비어 있거나 스펙과 다른 경우를 대비한 안전 후보.
+  pushCandidate("/api/auth/refresh");
+  pushCandidate("/auth/refresh");
+  return candidates;
+}
+
+function buildSessionExpiredError(originalError?: unknown): SessionExpiredApiError {
+  const err = new Error(SESSION_EXPIRED_MESSAGE) as SessionExpiredApiError;
+  err.name = "SessionExpiredError";
+  err.code = "SESSION_EXPIRED";
+  err.status = 401;
+  err.isSessionExpired = true;
+  err.originalError = originalError;
+  return err;
+}
+
+export function isSessionExpiredApiError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const e = error as {
+    code?: unknown;
+    status?: unknown;
+    isSessionExpired?: unknown;
+    response?: { status?: unknown };
+  };
+  if (e.isSessionExpired === true) return true;
+  if (String(e.code ?? "").toUpperCase() === "SESSION_EXPIRED") return true;
+  const status = Number(e.status ?? e.response?.status ?? 0);
+  return status === 401;
 }
 
 function stripQueryAndHash(input: string): string {
@@ -192,10 +239,8 @@ function addApiLog(entry: {
   );
 }
 
-async function refreshAccessToken(baseURL: string): Promise<string | null> {
-  const refreshPath = safeGetRefreshPath();
-  if (!refreshPath) return null;
-
+async function refreshAccessToken(baseURL: string, refreshPaths: string[]): Promise<string | null> {
+  if (!Array.isArray(refreshPaths) || refreshPaths.length <= 0) return null;
   const refreshToken = await tokenStorage.getRefreshToken();
   const accessToken = await tokenStorage.getAccessToken();
 
@@ -208,24 +253,31 @@ async function refreshAccessToken(baseURL: string): Promise<string | null> {
     headers: { "Content-Type": "application/json" },
   });
 
-  try {
-    const res = await refreshClient.post(refreshPath, { refreshToken: refreshToken.trim() });
-    const tokens = extractTokens((res as AxiosResponse)?.data);
+  for (const refreshPathRaw of refreshPaths) {
+    const refreshPath = (refreshPathRaw ?? "").trim();
+    if (!refreshPath) continue;
 
-    const nextAccess = (tokens?.accessToken ?? "").trim();
-    const nextRefresh = (tokens?.refreshToken ?? "").trim();
+    try {
+      const res = await refreshClient.post(refreshPath, { refreshToken: refreshToken.trim() });
+      const tokens = extractTokens((res as AxiosResponse)?.data);
 
-    if (!nextAccess) return null;
+      const nextAccess = (tokens?.accessToken ?? "").trim();
+      const nextRefresh = (tokens?.refreshToken ?? "").trim();
 
-    await tokenStorage.setTokens({
-      accessToken: nextAccess,
-      refreshToken: nextRefresh || refreshToken.trim(),
-    });
+      if (!nextAccess) continue;
 
-    return nextAccess;
-  } catch {
-    return null;
+      await tokenStorage.setTokens({
+        accessToken: nextAccess,
+        refreshToken: nextRefresh || refreshToken.trim(),
+      });
+
+      return nextAccess;
+    } catch {
+      // 다음 후보 경로를 시도한다.
+    }
   }
+
+  return null;
 }
 
 function setAuthHeader(config: InternalAxiosRequestConfig, accessToken: string, force: boolean) {
@@ -385,10 +437,10 @@ export function createApiClient(): AxiosInstance {
       if (original._retry) return Promise.reject(error);
       original._retry = true;
 
-      const refreshPath = safeGetRefreshPath();
-      if (!refreshPath) {
+      const refreshPaths = safeGetRefreshPaths();
+      if (refreshPaths.length <= 0) {
         await tokenStorage.clearTokens();
-        return Promise.reject(error);
+        return Promise.reject(buildSessionExpiredError(error));
       }
 
       const refreshToken = await tokenStorage.getRefreshToken();
@@ -396,16 +448,16 @@ export function createApiClient(): AxiosInstance {
 
       if (!isTruthyString(refreshToken)) {
         await tokenStorage.clearTokens();
-        return Promise.reject(error);
+        return Promise.reject(buildSessionExpiredError(error));
       }
 
       if (isTruthyString(accessToken) && refreshToken.trim() === accessToken.trim()) {
         await tokenStorage.clearTokens();
-        return Promise.reject(error);
+        return Promise.reject(buildSessionExpiredError(error));
       }
 
       if (!refreshInFlight) {
-        refreshInFlight = refreshAccessToken(baseURL).finally(() => {
+        refreshInFlight = refreshAccessToken(baseURL, refreshPaths).finally(() => {
           refreshInFlight = null;
         });
       }
@@ -414,7 +466,7 @@ export function createApiClient(): AxiosInstance {
 
       if (!isTruthyString(nextAccess)) {
         await tokenStorage.clearTokens();
-        return Promise.reject(error);
+        return Promise.reject(buildSessionExpiredError(error));
       }
 
       setAuthHeader(original, nextAccess, true);

@@ -7,10 +7,10 @@ import com.freight.backend.exception.ErrorCode;
 import com.freight.backend.service.MatchService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -27,15 +27,27 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/shipper/matches")
 @RequiredArgsConstructor
+@Slf4j
 public class ShipperMatchController {
 
     private final MatchService matchService;
 
-    private static Long requireShipperId(UserDetails userDetails) {
-        if (userDetails == null || !userDetails.getAuthorities().contains(new SimpleGrantedAuthority("ROLE_SHIPPER"))) {
+    private static Long requireShipperId(Authentication authentication) {
+        if (authentication == null
+                || !authentication.getAuthorities().contains(new SimpleGrantedAuthority("ROLE_SHIPPER"))) {
             throw new CustomException(ErrorCode.AUTH_FORBIDDEN);
         }
-        return Long.parseLong(userDetails.getUsername());
+        try {
+            Long shipperId = Long.parseLong(authentication.getName());
+            log.debug(
+                    "Shipper auth resolved. principal='{}', authorities={}",
+                    authentication.getName(),
+                    authentication.getAuthorities()
+            );
+            return shipperId;
+        } catch (NumberFormatException e) {
+            throw new CustomException(ErrorCode.AUTH_UNAUTHORIZED);
+        }
     }
 
     /**
@@ -44,10 +56,10 @@ public class ShipperMatchController {
      */
     @PostMapping
     public ResponseEntity<MatchResponse> createMatch(
-            @AuthenticationPrincipal UserDetails userDetails,
+            Authentication authentication,
             @RequestBody MatchCreateRequest request
     ) {
-        Long shipperId = requireShipperId(userDetails);
+        Long shipperId = requireShipperId(authentication);
         MatchResponse response = matchService.createMatch(shipperId, request.getQuoteId());
         return ResponseEntity.ok(response);
     }
@@ -58,9 +70,9 @@ public class ShipperMatchController {
      */
     @GetMapping("/me")
     public ResponseEntity<List<MatchResponse>> getMyMatches(
-            @AuthenticationPrincipal UserDetails userDetails
+            Authentication authentication
     ) {
-        Long shipperId = requireShipperId(userDetails);
+        Long shipperId = requireShipperId(authentication);
         List<MatchResponse> matches = matchService.getShipperMatches(shipperId);
         return ResponseEntity.ok(matches);
     }
@@ -71,10 +83,10 @@ public class ShipperMatchController {
      */
     @DeleteMapping("/{matchId}")
     public ResponseEntity<Void> cancelMatch(
-            @AuthenticationPrincipal UserDetails userDetails,
+            Authentication authentication,
             @PathVariable Long matchId
     ) {
-        Long userId = requireShipperId(userDetails);
+        Long userId = requireShipperId(authentication);
         matchService.cancelMatch(userId, "ROLE_SHIPPER", matchId);
         return ResponseEntity.noContent().build();
     }
@@ -85,10 +97,10 @@ public class ShipperMatchController {
      */
     @GetMapping("/{matchId}")
     public ResponseEntity<MatchResponse> getMatch(
-            @AuthenticationPrincipal UserDetails userDetails,
+            Authentication authentication,
             @PathVariable Long matchId
     ) {
-        Long userId = requireShipperId(userDetails);
+        Long userId = requireShipperId(authentication);
         MatchResponse response = matchService.getMatch(matchId, userId, "ROLE_SHIPPER");
         return ResponseEntity.ok(response);
     }

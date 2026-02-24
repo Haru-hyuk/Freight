@@ -1,0 +1,23 @@
+{
+  "truckId": 1,
+  "originAddress": "서울 강북구 삼양로123가길 5 (수유동) 1",
+  "destinationAddress": "서울 송파구 올림픽로 300",
+  "originLat": 0,
+  "originLng": 0,
+  "destinationLat": 0,
+  "destinationLng": 0,
+  "distanceKm": 0,
+  "weightKg": 300,
+  "volumeCbm": 1,
+  "vehicleType": "TON_1",
+  "vehicleBodyType": "WINGBODY",
+  "cargoName": "테스트 화물",
+  "cargoType": "GENERAL",
+  "cargoDesc": "상세주소 절단 테스트",
+  "desiredPrice": 90000,
+  "allowCombine": false,
+  "loadMethod": "SHIPPER",
+  "unloadMethod": "DRIVER",
+  "checklistItems": [],
+  "stops": []
+}

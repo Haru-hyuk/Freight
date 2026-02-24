@@ -129,7 +129,7 @@ export function buildQuoteCreateRequest(draft: QuoteCreateDraft): QuoteCreateReq
     originLng: toNumber(draft.originLng, 0),
     destinationLat: toNumber(draft.destinationLat, 0),
     destinationLng: toNumber(draft.destinationLng, 0),
-    distanceKm: Math.max(0, Math.trunc(toNumber(draft.distanceKm, 0))),
+    distanceKm: Math.max(1, Math.trunc(toNumber(draft.distanceKm, 0))),
     weightKg: calculateWeightKg(draft),
     volumeCbm: calculateVolumeCbm(draft),
     vehicleType: mapVehicleType(draft.tonIdx),
