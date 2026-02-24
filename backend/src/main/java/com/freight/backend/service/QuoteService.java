@@ -137,7 +137,21 @@ public class QuoteService {
 
         saveChecklistItems(saved.getQuoteId(), req.getChecklistItems());
         saveQuoteItems(saved.getQuoteId(), req.getQuoteItems());
-        saveStops(saved.getQuoteId(), req.getStops());
+        saveStops(saved.getQuoteId(), resolvedStops);
+
+        List<QuoteStopResponse> responseStops = resolvedStops.stream()
+                .map(stop -> new QuoteStopResponse(
+                        null,
+                        stop.seq(),
+                        stop.address(),
+                        stop.lat(),
+                        stop.lng(),
+                        stop.contactName(),
+                        stop.contactPhone(),
+                        stop.deptName(),
+                        stop.managerName()
+                ))
+                .collect(Collectors.toList());
 
         return new QuoteCreateResponse(
                 saved.getQuoteId(),
@@ -692,7 +706,12 @@ public class QuoteService {
     }
 
     /** DeepSeek AI용 프롬프트 생성 (견적 진단 조언) */
-    private String buildAiPrompt(QuoteCreateRequest req, PricingResult pricing, List<String> existingComments) {
+    private String buildAiPrompt(
+            QuoteCreateRequest req,
+            PricingResult pricing,
+            List<String> existingComments,
+            int resolvedDistanceKm
+    ) {
         StringBuilder sb = new StringBuilder();
         sb.append("Task: write Korean shipper-facing advice for freight quote validation. ");
         sb.append("Output must be plain text in Korean, 1-2 sentences only, no markdown. ");
@@ -786,7 +805,7 @@ public class QuoteService {
         }
     }
 
-    private void saveStops(Long quoteId, List<QuoteStopRequest> stops) {
+    private void saveStops(Long quoteId, List<ResolvedStop> stops) {
         if (stops == null || stops.isEmpty()) {
             return;
         }
