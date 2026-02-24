@@ -1,0 +1,29 @@
+import {
+  CUSTOMER_UI_STATE,
+  INVOICE_UI_STATE,
+  type CustomerUiState,
+  type InvoiceUiState,
+} from "./types";
+
+const INVOICE_UI_STATE_MAP: Readonly<Record<CustomerUiState, InvoiceUiState>> = {
+  [CUSTOMER_UI_STATE.REQUESTED]: INVOICE_UI_STATE.PENDING,
+  [CUSTOMER_UI_STATE.NEGOTIATION_REQUIRED]: INVOICE_UI_STATE.PENDING,
+  [CUSTOMER_UI_STATE.PAYMENT_REQUIRED]: INVOICE_UI_STATE.PENDING,
+  [CUSTOMER_UI_STATE.PICKUP_IN_PROGRESS]: INVOICE_UI_STATE.PENDING,
+  [CUSTOMER_UI_STATE.TRANSIT_IN_PROGRESS]: INVOICE_UI_STATE.PENDING,
+  [CUSTOMER_UI_STATE.COMPLETED]: INVOICE_UI_STATE.ISSUED,
+  [CUSTOMER_UI_STATE.CANCELED]: INVOICE_UI_STATE.UNAVAILABLE,
+  [CUSTOMER_UI_STATE.UNKNOWN]: INVOICE_UI_STATE.UNAVAILABLE,
+};
+
+export function getInvoiceUiState(uiState: CustomerUiState): InvoiceUiState {
+  return INVOICE_UI_STATE_MAP[uiState] ?? INVOICE_UI_STATE.UNAVAILABLE;
+}
+
+export function canIssueInvoice(uiState: CustomerUiState): boolean {
+  return uiState === CUSTOMER_UI_STATE.COMPLETED;
+}
+
+export function canDownloadInvoice(uiState: CustomerUiState): boolean {
+  return getInvoiceUiState(uiState) === INVOICE_UI_STATE.ISSUED;
+}
