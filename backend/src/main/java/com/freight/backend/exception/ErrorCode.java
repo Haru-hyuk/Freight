@@ -19,6 +19,7 @@ public enum ErrorCode {
     INVALID_INPUT_VALUE(HttpStatus.BAD_REQUEST, "Invalid input value."),
     DUPLICATE_EMAIL(HttpStatus.CONFLICT, "Email already in use."),
     INVALID_BUSINESS_INFO(HttpStatus.BAD_REQUEST, "Invalid business information."),
+    DRIVER_TRUCK_REQUIRED(HttpStatus.BAD_REQUEST, "Register a truck first to use route/load optimization."),
 
     /* =========================
        MATCHING
@@ -26,6 +27,7 @@ public enum ErrorCode {
     MATCH_NOT_FOUND(HttpStatus.NOT_FOUND, "Match not found."),
     MATCH_ALREADY_ACCEPTED(HttpStatus.CONFLICT, "Match already accepted."),
     MATCH_ALREADY_EXISTS(HttpStatus.CONFLICT, "Match already exists for this quote."),
+    MATCH_PAYMENT_REQUIRED(HttpStatus.BAD_REQUEST, "Payment is required before starting transit."),
     QUOTE_NOT_OPEN(HttpStatus.BAD_REQUEST, "Quote is not open."),
 
     /* =========================
