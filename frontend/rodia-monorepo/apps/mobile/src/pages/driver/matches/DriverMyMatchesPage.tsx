@@ -3,7 +3,7 @@ import { FlatList, Pressable, RefreshControl, StyleSheet, View } from "react-nat
 import { useRouter } from "expo-router";
 
 import type { QuoteDetailResponse } from "@/entities/quote/model/quote.types";
-import { listOpenDriverMatches, type DriverMatchItem } from "@/features/matching/api";
+import { listMyDriverMatches, type DriverMatchItem } from "@/features/matching/api";
 import { toDriverMatchStatusLabel } from "@/features/matching/model/driverMatchStatus";
 import { getShipperQuoteDetail } from "@/features/quote/api";
 import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
@@ -17,7 +17,7 @@ import { PageScaffold } from "@/widgets/layout/PageScaffold";
 
 const NETWORK_ERROR_TEXT = "네트워크 요청에 실패했습니다. 잠시 후 다시 시도해 주세요.";
 
-type OpenMatchListItem = {
+type MyMatchListItem = {
   match: DriverMatchItem;
   quote: QuoteDetailResponse | null;
 };
@@ -116,12 +116,12 @@ const useStyles = createThemedStyles((theme) => {
   });
 });
 
-export function DriverQuoteBrowsePage() {
+export function DriverMyMatchesPage() {
   const router = useRouter();
   const theme = useAppTheme();
   const styles = useStyles();
 
-  const [items, setItems] = useState<OpenMatchListItem[]>([]);
+  const [items, setItems] = useState<MyMatchListItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -130,7 +130,7 @@ export function DriverQuoteBrowsePage() {
   const textMain = safeString(theme?.colors?.textMain, "#111827");
   const textMuted = safeString(theme?.colors?.textMuted, "#64748B");
 
-  const loadOpenMatches = useCallback(async (mode: "initial" | "refresh" = "initial") => {
+  const loadMyMatches = useCallback(async (mode: "initial" | "refresh" = "initial") => {
     if (mode === "refresh") {
       setIsRefreshing(true);
     } else {
@@ -138,7 +138,7 @@ export function DriverQuoteBrowsePage() {
     }
 
     try {
-      const matches = await listOpenDriverMatches();
+      const matches = await listMyDriverMatches();
       const quoteIds = Array.from(
         new Set(
           matches
@@ -176,17 +176,17 @@ export function DriverQuoteBrowsePage() {
   }, []);
 
   useEffect(() => {
-    void loadOpenMatches("initial");
-  }, [loadOpenMatches]);
+    void loadMyMatches("initial");
+  }, [loadMyMatches]);
 
   const renderItem = useCallback(
-    ({ item }: { item: OpenMatchListItem }) => {
+    ({ item }: { item: MyMatchListItem }) => {
       const statusLabel = toDriverMatchStatusLabel(item.match.status);
       const quote = item.quote;
       const matchId = item.match.matchId;
       const quoteId = item.match.quoteId;
-      const amountText = formatPrice(quote?.desiredPrice ?? quote?.finalPrice);
-      const requestedAt = formatDateTime(item.match.createdAt ?? quote?.createdAt);
+      const amountText = formatPrice(quote?.finalPrice ?? quote?.desiredPrice);
+      const updatedAt = formatDateTime(item.match.updatedAt ?? quote?.updatedAt);
 
       return (
         <Pressable
@@ -224,9 +224,9 @@ export function DriverQuoteBrowsePage() {
               </AppText>
             </View>
             <View style={styles.infoRow}>
-              <AppText style={styles.infoLabel}>요청 시각</AppText>
+              <AppText style={styles.infoLabel}>최근 변경</AppText>
               <AppText variant="caption" color={textMuted} style={styles.infoValue}>
-                {requestedAt}
+                {updatedAt}
               </AppText>
             </View>
             <View style={styles.infoRow}>
@@ -243,21 +243,21 @@ export function DriverQuoteBrowsePage() {
   );
 
   const emptyState = useMemo(
-    () => <AppEmptyState title="오픈 매칭이 없습니다." description="새로운 오더가 등록되면 이 화면에 표시됩니다." />,
+    () => <AppEmptyState title="내 매칭이 없습니다." description="오더를 수락하면 이 화면에 표시됩니다." />,
     []
   );
 
   return (
-    <PageScaffold title="오더" backgroundColor={backgroundColor} scroll={false}>
+    <PageScaffold title="운행" backgroundColor={backgroundColor} scroll={false}>
       {isLoading ? (
-        <AppSpinner label="오더 목록을 불러오는 중입니다." />
+        <AppSpinner label="내 매칭을 불러오는 중입니다." />
       ) : errorMessage ? (
         <AppErrorState
-          title="오더 목록을 불러오지 못했어요"
+          title="내 매칭을 불러오지 못했어요"
           description={errorMessage}
           retryLabel="다시 시도"
           onRetry={() => {
-            void loadOpenMatches("initial");
+            void loadMyMatches("initial");
           }}
           fullScreen={false}
         />
@@ -271,7 +271,7 @@ export function DriverQuoteBrowsePage() {
             <RefreshControl
               refreshing={isRefreshing}
               onRefresh={() => {
-                void loadOpenMatches("refresh");
+                void loadMyMatches("refresh");
               }}
             />
           }
@@ -283,4 +283,4 @@ export function DriverQuoteBrowsePage() {
   );
 }
 
-export default DriverQuoteBrowsePage;
+export default DriverMyMatchesPage;
