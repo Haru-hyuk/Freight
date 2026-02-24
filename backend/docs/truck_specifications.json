@@ -1,0 +1,1028 @@
+{
+  "trucks": [
+    {
+      "type": "DAMAS",
+      "type_kr": "다마스",
+      "category": "카고",
+      "cargo_dimensions": {
+        "length_mm": 1700,
+        "width_mm": 1100,
+        "height_mm": 1100
+      },
+      "max_weight_kg": 400,
+      "max_weight_display": "0.4t",
+      "pallet": {
+        "count": 0,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "LABO",
+      "type_kr": "라보",
+      "category": "카고",
+      "cargo_dimensions": {
+        "length_mm": 2200,
+        "width_mm": 1400,
+        "height_mm": 1400
+      },
+      "max_weight_kg": 500,
+      "max_weight_display": "0.5t",
+      "pallet": {
+        "count": 1,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_1",
+      "type_kr": "1톤",
+      "category": "카고",
+      "cargo_dimensions": {
+        "length_mm": 2850,
+        "width_mm": 1600,
+        "height_mm": 1700
+      },
+      "max_weight_kg": 1000,
+      "max_weight_display": "1t",
+      "pallet": {
+        "count": 2,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_1",
+      "type_kr": "1톤",
+      "category": "윙바디",
+      "cargo_dimensions": {
+        "length_mm": 2800,
+        "width_mm": 1600,
+        "height_mm": 1700
+      },
+      "max_weight_kg": 1000,
+      "max_weight_display": "1t",
+      "pallet": {
+        "count": 2,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_1",
+      "type_kr": "1톤",
+      "category": "리프트",
+      "cargo_dimensions": {
+        "length_mm": 2800,
+        "width_mm": 1600,
+        "height_mm": 1700
+      },
+      "max_weight_kg": 1000,
+      "max_weight_display": "1t",
+      "pallet": {
+        "count": 2,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_1",
+      "type_kr": "1톤",
+      "category": "냉동/탑",
+      "cargo_dimensions": {
+        "length_mm": 2800,
+        "width_mm": 1600,
+        "height_mm": 1700
+      },
+      "max_weight_kg": 1000,
+      "max_weight_display": "1t",
+      "pallet": {
+        "count": 2,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_1",
+      "type_kr": "1톤",
+      "category": "무진동",
+      "cargo_dimensions": {
+        "length_mm": 2800,
+        "width_mm": 1600,
+        "height_mm": 1700
+      },
+      "max_weight_kg": 1000,
+      "max_weight_display": "1t",
+      "pallet": {
+        "count": 2,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_1_4",
+      "type_kr": "1.4톤",
+      "category": "카고",
+      "cargo_dimensions": {
+        "length_mm": 3300,
+        "width_mm": 1700,
+        "height_mm": 1800
+      },
+      "max_weight_kg": 1400,
+      "max_weight_display": "1.4t",
+      "pallet": {
+        "count": 3,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_1_4",
+      "type_kr": "1.4톤",
+      "category": "윙바디",
+      "cargo_dimensions": {
+        "length_mm": 3300,
+        "width_mm": 1700,
+        "height_mm": 1800
+      },
+      "max_weight_kg": 1400,
+      "max_weight_display": "1.4t",
+      "pallet": {
+        "count": 3,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_1_4",
+      "type_kr": "1.4톤",
+      "category": "리프트",
+      "cargo_dimensions": {
+        "length_mm": 3300,
+        "width_mm": 1700,
+        "height_mm": 1800
+      },
+      "max_weight_kg": 1400,
+      "max_weight_display": "1.4t",
+      "pallet": {
+        "count": 3,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_1_4",
+      "type_kr": "1.4톤",
+      "category": "냉동/탑",
+      "cargo_dimensions": {
+        "length_mm": 3300,
+        "width_mm": 1700,
+        "height_mm": 1800
+      },
+      "max_weight_kg": 1400,
+      "max_weight_display": "1.4t",
+      "pallet": {
+        "count": 3,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_1_4",
+      "type_kr": "1.4톤",
+      "category": "무진동",
+      "cargo_dimensions": {
+        "length_mm": 3300,
+        "width_mm": 1700,
+        "height_mm": 1800
+      },
+      "max_weight_kg": 1400,
+      "max_weight_display": "1.4t",
+      "pallet": {
+        "count": 3,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_2_5",
+      "type_kr": "2.5톤",
+      "category": "카고",
+      "cargo_dimensions": {
+        "length_mm": 4300,
+        "width_mm": 1800,
+        "height_mm": 2000
+      },
+      "max_weight_kg": 2500,
+      "max_weight_display": "2.5t",
+      "pallet": {
+        "count": 3,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_2_5",
+      "type_kr": "2.5톤",
+      "category": "윙바디",
+      "cargo_dimensions": {
+        "length_mm": 4300,
+        "width_mm": 1800,
+        "height_mm": 2000
+      },
+      "max_weight_kg": 2500,
+      "max_weight_display": "2.5t",
+      "pallet": {
+        "count": 3,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_2_5",
+      "type_kr": "2.5톤",
+      "category": "리프트",
+      "cargo_dimensions": {
+        "length_mm": 4300,
+        "width_mm": 1800,
+        "height_mm": 2000
+      },
+      "max_weight_kg": 2500,
+      "max_weight_display": "2.5t",
+      "pallet": {
+        "count": 3,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_2_5",
+      "type_kr": "2.5톤",
+      "category": "냉동/탑",
+      "cargo_dimensions": {
+        "length_mm": 4300,
+        "width_mm": 1800,
+        "height_mm": 2000
+      },
+      "max_weight_kg": 2500,
+      "max_weight_display": "2.5t",
+      "pallet": {
+        "count": 3,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_2_5",
+      "type_kr": "2.5톤",
+      "category": "무진동",
+      "cargo_dimensions": {
+        "length_mm": 4300,
+        "width_mm": 1800,
+        "height_mm": 2000
+      },
+      "max_weight_kg": 2500,
+      "max_weight_display": "2.5t",
+      "pallet": {
+        "count": 3,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_3_5",
+      "type_kr": "3.5톤",
+      "category": "카고",
+      "cargo_dimensions": {
+        "length_mm": 5100,
+        "width_mm": 2100,
+        "height_mm": 2200
+      },
+      "max_weight_kg": 3500,
+      "max_weight_display": "3.5t",
+      "pallet": {
+        "count": 4,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_3_5",
+      "type_kr": "3.5톤",
+      "category": "윙바디",
+      "cargo_dimensions": {
+        "length_mm": 5100,
+        "width_mm": 2100,
+        "height_mm": 2200
+      },
+      "max_weight_kg": 3500,
+      "max_weight_display": "3.5t",
+      "pallet": {
+        "count": 4,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_3_5",
+      "type_kr": "3.5톤",
+      "category": "리프트",
+      "cargo_dimensions": {
+        "length_mm": 5100,
+        "width_mm": 2100,
+        "height_mm": 2200
+      },
+      "max_weight_kg": 3500,
+      "max_weight_display": "3.5t",
+      "pallet": {
+        "count": 4,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_3_5",
+      "type_kr": "3.5톤",
+      "category": "냉동/탑",
+      "cargo_dimensions": {
+        "length_mm": 5100,
+        "width_mm": 2100,
+        "height_mm": 2200
+      },
+      "max_weight_kg": 3500,
+      "max_weight_display": "3.5t",
+      "pallet": {
+        "count": 4,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_3_5",
+      "type_kr": "3.5톤",
+      "category": "무진동",
+      "cargo_dimensions": {
+        "length_mm": 5100,
+        "width_mm": 2100,
+        "height_mm": 2200
+      },
+      "max_weight_kg": 3500,
+      "max_weight_display": "3.5t",
+      "pallet": {
+        "count": 4,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_5",
+      "type_kr": "5톤",
+      "category": "카고",
+      "cargo_dimensions": {
+        "length_mm": 6200,
+        "width_mm": 2350,
+        "height_mm": 2400
+      },
+      "max_weight_kg": 5000,
+      "max_weight_display": "5t",
+      "pallet": {
+        "count": 8,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_5",
+      "type_kr": "5톤",
+      "category": "윙바디",
+      "cargo_dimensions": {
+        "length_mm": 6200,
+        "width_mm": 2350,
+        "height_mm": 2400
+      },
+      "max_weight_kg": 5000,
+      "max_weight_display": "5t",
+      "pallet": {
+        "count": 8,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_5",
+      "type_kr": "5톤",
+      "category": "리프트",
+      "cargo_dimensions": {
+        "length_mm": 6200,
+        "width_mm": 2350,
+        "height_mm": 2400
+      },
+      "max_weight_kg": 5000,
+      "max_weight_display": "5t",
+      "pallet": {
+        "count": 8,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_5",
+      "type_kr": "5톤",
+      "category": "냉동/탑",
+      "cargo_dimensions": {
+        "length_mm": 6200,
+        "width_mm": 2350,
+        "height_mm": 2400
+      },
+      "max_weight_kg": 5000,
+      "max_weight_display": "5t",
+      "pallet": {
+        "count": 8,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_5",
+      "type_kr": "5톤",
+      "category": "무진동",
+      "cargo_dimensions": {
+        "length_mm": 6200,
+        "width_mm": 2350,
+        "height_mm": 2400
+      },
+      "max_weight_kg": 5000,
+      "max_weight_display": "5t",
+      "pallet": {
+        "count": 8,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_5_AXLE",
+      "type_kr": "5톤 축차",
+      "category": "카고",
+      "cargo_dimensions": {
+        "length_mm": 8500,
+        "width_mm": 2350,
+        "height_mm": 2400
+      },
+      "max_weight_kg": 5000,
+      "max_weight_display": "5t",
+      "pallet": {
+        "count": 12,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_5_AXLE",
+      "type_kr": "5톤 축차",
+      "category": "윙바디",
+      "cargo_dimensions": {
+        "length_mm": 8500,
+        "width_mm": 2350,
+        "height_mm": 2400
+      },
+      "max_weight_kg": 5000,
+      "max_weight_display": "5t",
+      "pallet": {
+        "count": 12,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_5_AXLE",
+      "type_kr": "5톤 축차",
+      "category": "리프트",
+      "cargo_dimensions": {
+        "length_mm": 8500,
+        "width_mm": 2350,
+        "height_mm": 2400
+      },
+      "max_weight_kg": 5000,
+      "max_weight_display": "5t",
+      "pallet": {
+        "count": 12,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_5_AXLE",
+      "type_kr": "5톤 축차",
+      "category": "냉동/탑",
+      "cargo_dimensions": {
+        "length_mm": 8500,
+        "width_mm": 2350,
+        "height_mm": 2400
+      },
+      "max_weight_kg": 5000,
+      "max_weight_display": "5t",
+      "pallet": {
+        "count": 12,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_5_AXLE",
+      "type_kr": "5톤 축차",
+      "category": "무진동",
+      "cargo_dimensions": {
+        "length_mm": 8500,
+        "width_mm": 2350,
+        "height_mm": 2400
+      },
+      "max_weight_kg": 5000,
+      "max_weight_display": "5t",
+      "pallet": {
+        "count": 12,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_8",
+      "type_kr": "8톤",
+      "category": "카고",
+      "cargo_dimensions": {
+        "length_mm": 7200,
+        "width_mm": 2350,
+        "height_mm": 2400
+      },
+      "max_weight_kg": 8000,
+      "max_weight_display": "8t",
+      "pallet": {
+        "count": 10,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_8",
+      "type_kr": "8톤",
+      "category": "윙바디",
+      "cargo_dimensions": {
+        "length_mm": 7200,
+        "width_mm": 2350,
+        "height_mm": 2400
+      },
+      "max_weight_kg": 8000,
+      "max_weight_display": "8t",
+      "pallet": {
+        "count": 10,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_8",
+      "type_kr": "8톤",
+      "category": "리프트",
+      "cargo_dimensions": {
+        "length_mm": 7200,
+        "width_mm": 2350,
+        "height_mm": 2400
+      },
+      "max_weight_kg": 8000,
+      "max_weight_display": "8t",
+      "pallet": {
+        "count": 10,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_8",
+      "type_kr": "8톤",
+      "category": "냉동/탑",
+      "cargo_dimensions": {
+        "length_mm": 7200,
+        "width_mm": 2350,
+        "height_mm": 2400
+      },
+      "max_weight_kg": 8000,
+      "max_weight_display": "8t",
+      "pallet": {
+        "count": 10,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_8",
+      "type_kr": "8톤",
+      "category": "무진동",
+      "cargo_dimensions": {
+        "length_mm": 7200,
+        "width_mm": 2350,
+        "height_mm": 2400
+      },
+      "max_weight_kg": 8000,
+      "max_weight_display": "8t",
+      "pallet": {
+        "count": 10,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_11",
+      "type_kr": "11톤",
+      "category": "카고",
+      "cargo_dimensions": {
+        "length_mm": 9100,
+        "width_mm": 2350,
+        "height_mm": 2400
+      },
+      "max_weight_kg": 11000,
+      "max_weight_display": "11t",
+      "pallet": {
+        "count": 14,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_11",
+      "type_kr": "11톤",
+      "category": "윙바디",
+      "cargo_dimensions": {
+        "length_mm": 9100,
+        "width_mm": 2350,
+        "height_mm": 2400
+      },
+      "max_weight_kg": 11000,
+      "max_weight_display": "11t",
+      "pallet": {
+        "count": 14,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_11",
+      "type_kr": "11톤",
+      "category": "리프트",
+      "cargo_dimensions": {
+        "length_mm": 9100,
+        "width_mm": 2350,
+        "height_mm": 2400
+      },
+      "max_weight_kg": 11000,
+      "max_weight_display": "11t",
+      "pallet": {
+        "count": 14,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_11",
+      "type_kr": "11톤",
+      "category": "냉동/탑",
+      "cargo_dimensions": {
+        "length_mm": 9100,
+        "width_mm": 2350,
+        "height_mm": 2400
+      },
+      "max_weight_kg": 11000,
+      "max_weight_display": "11t",
+      "pallet": {
+        "count": 14,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_11",
+      "type_kr": "11톤",
+      "category": "무진동",
+      "cargo_dimensions": {
+        "length_mm": 9100,
+        "width_mm": 2350,
+        "height_mm": 2400
+      },
+      "max_weight_kg": 11000,
+      "max_weight_display": "11t",
+      "pallet": {
+        "count": 14,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_14",
+      "type_kr": "14톤",
+      "category": "카고",
+      "cargo_dimensions": {
+        "length_mm": 9100,
+        "width_mm": 2400,
+        "height_mm": 2500
+      },
+      "max_weight_kg": 14000,
+      "max_weight_display": "14t",
+      "pallet": {
+        "count": 16,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_14",
+      "type_kr": "14톤",
+      "category": "윙바디",
+      "cargo_dimensions": {
+        "length_mm": 9100,
+        "width_mm": 2400,
+        "height_mm": 2500
+      },
+      "max_weight_kg": 14000,
+      "max_weight_display": "14t",
+      "pallet": {
+        "count": 16,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_14",
+      "type_kr": "14톤",
+      "category": "리프트",
+      "cargo_dimensions": {
+        "length_mm": 9100,
+        "width_mm": 2400,
+        "height_mm": 2500
+      },
+      "max_weight_kg": 14000,
+      "max_weight_display": "14t",
+      "pallet": {
+        "count": 16,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_14",
+      "type_kr": "14톤",
+      "category": "냉동/탑",
+      "cargo_dimensions": {
+        "length_mm": 9100,
+        "width_mm": 2400,
+        "height_mm": 2500
+      },
+      "max_weight_kg": 14000,
+      "max_weight_display": "14t",
+      "pallet": {
+        "count": 16,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_14",
+      "type_kr": "14톤",
+      "category": "무진동",
+      "cargo_dimensions": {
+        "length_mm": 9100,
+        "width_mm": 2400,
+        "height_mm": 2500
+      },
+      "max_weight_kg": 14000,
+      "max_weight_display": "14t",
+      "pallet": {
+        "count": 16,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_15",
+      "type_kr": "15톤",
+      "category": "카고",
+      "cargo_dimensions": {
+        "length_mm": 9100,
+        "width_mm": 2400,
+        "height_mm": 2500
+      },
+      "max_weight_kg": 15000,
+      "max_weight_display": "16t",
+      "pallet": {
+        "count": 16,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_15",
+      "type_kr": "15톤",
+      "category": "윙바디",
+      "cargo_dimensions": {
+        "length_mm": 9100,
+        "width_mm": 2400,
+        "height_mm": 2500
+      },
+      "max_weight_kg": 15000,
+      "max_weight_display": "16t",
+      "pallet": {
+        "count": 16,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_15",
+      "type_kr": "15톤",
+      "category": "리프트",
+      "cargo_dimensions": {
+        "length_mm": 9100,
+        "width_mm": 2400,
+        "height_mm": 2500
+      },
+      "max_weight_kg": 15000,
+      "max_weight_display": "16t",
+      "pallet": {
+        "count": 16,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_15",
+      "type_kr": "15톤",
+      "category": "냉동/탑",
+      "cargo_dimensions": {
+        "length_mm": 9100,
+        "width_mm": 2400,
+        "height_mm": 2500
+      },
+      "max_weight_kg": 15000,
+      "max_weight_display": "16t",
+      "pallet": {
+        "count": 16,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_15",
+      "type_kr": "15톤",
+      "category": "무진동",
+      "cargo_dimensions": {
+        "length_mm": 9100,
+        "width_mm": 2400,
+        "height_mm": 2500
+      },
+      "max_weight_kg": 15000,
+      "max_weight_display": "16t",
+      "pallet": {
+        "count": 16,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_18",
+      "type_kr": "18톤",
+      "category": "카고",
+      "cargo_dimensions": {
+        "length_mm": 10000,
+        "width_mm": 2400,
+        "height_mm": 2500
+      },
+      "max_weight_kg": 18000,
+      "max_weight_display": "19t",
+      "pallet": {
+        "count": 18,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_18",
+      "type_kr": "18톤",
+      "category": "윙바디",
+      "cargo_dimensions": {
+        "length_mm": 10000,
+        "width_mm": 2400,
+        "height_mm": 2500
+      },
+      "max_weight_kg": 18000,
+      "max_weight_display": "19t",
+      "pallet": {
+        "count": 18,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_18",
+      "type_kr": "18톤",
+      "category": "리프트",
+      "cargo_dimensions": {
+        "length_mm": 10000,
+        "width_mm": 2400,
+        "height_mm": 2500
+      },
+      "max_weight_kg": 18000,
+      "max_weight_display": "19t",
+      "pallet": {
+        "count": 18,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_18",
+      "type_kr": "18톤",
+      "category": "냉동/탑",
+      "cargo_dimensions": {
+        "length_mm": 10000,
+        "width_mm": 2400,
+        "height_mm": 2500
+      },
+      "max_weight_kg": 18000,
+      "max_weight_display": "19t",
+      "pallet": {
+        "count": 18,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_18",
+      "type_kr": "18톤",
+      "category": "무진동",
+      "cargo_dimensions": {
+        "length_mm": 10000,
+        "width_mm": 2400,
+        "height_mm": 2500
+      },
+      "max_weight_kg": 18000,
+      "max_weight_display": "19t",
+      "pallet": {
+        "count": 18,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_25",
+      "type_kr": "25톤",
+      "category": "카고",
+      "cargo_dimensions": {
+        "length_mm": 10000,
+        "width_mm": 2400,
+        "height_mm": 2500
+      },
+      "max_weight_kg": 25000,
+      "max_weight_display": "27t",
+      "pallet": {
+        "count": 18,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_25",
+      "type_kr": "25톤",
+      "category": "윙바디",
+      "cargo_dimensions": {
+        "length_mm": 10000,
+        "width_mm": 2400,
+        "height_mm": 2500
+      },
+      "max_weight_kg": 25000,
+      "max_weight_display": "27t",
+      "pallet": {
+        "count": 18,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_25",
+      "type_kr": "25톤",
+      "category": "리프트",
+      "cargo_dimensions": {
+        "length_mm": 10000,
+        "width_mm": 2400,
+        "height_mm": 2500
+      },
+      "max_weight_kg": 25000,
+      "max_weight_display": "27t",
+      "pallet": {
+        "count": 18,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_25",
+      "type_kr": "25톤",
+      "category": "냉동/탑",
+      "cargo_dimensions": {
+        "length_mm": 10000,
+        "width_mm": 2400,
+        "height_mm": 2500
+      },
+      "max_weight_kg": 25000,
+      "max_weight_display": "27t",
+      "pallet": {
+        "count": 18,
+        "standard_mm": "1100 x 1100"
+      }
+    },
+    {
+      "type": "TON_25",
+      "type_kr": "25톤",
+      "category": "무진동",
+      "cargo_dimensions": {
+        "length_mm": 10000,
+        "width_mm": 2400,
+        "height_mm": 2500
+      },
+      "max_weight_kg": 25000,
+      "max_weight_display": "27t",
+      "pallet": {
+        "count": 18,
+        "standard_mm": "1100 x 1100"
+      }
+    }
+  ],
+  "vehicle_types": [
+    "DAMAS",
+    "LABO",
+    "TON_1",
+    "TON_1_4",
+    "TON_2_5",
+    "TON_3_5",
+    "TON_5",
+    "TON_5_AXLE",
+    "TON_8",
+    "TON_11",
+    "TON_14",
+    "TON_15",
+    "TON_18",
+    "TON_25"
+  ],
+  "categories": [
+    "카고",
+    "윙바디",
+    "리프트",
+    "냉동/탑",
+    "무진동"
+  ],
+  "pallet_standard": {
+    "name": "T11 표준 팔레트",
+    "length_mm": 1100,
+    "width_mm": 1100
+  },
+  "notes": {
+    "height_0": "높이가 0mm인 경우는 카고(평판) 트럭으로 지붕이 없는 형태입니다",
+    "source": "한국 표준 화물차 규격 기준"
+  }
+}
