@@ -1,5 +1,5 @@
 const TERMINAL_MATCH_STATUSES = new Set(["CANCELED", "COMPLETED", "DROPOFF", "DELIVERED"]);
-const ACCEPTABLE_MATCH_STATUSES = new Set(["OPEN", "NEGOTIATING"]);
+const ACCEPTABLE_MATCH_STATUSES = new Set(["READY", "OPEN", "NEGOTIATING"]);
 
 export function normalizeDriverMatchStatus(status: unknown): string {
   const text = typeof status === "string" ? status.trim().toUpperCase() : "";
@@ -18,6 +18,7 @@ export function canDriverAcceptMatch(status: unknown): boolean {
 
 export function toDriverMatchStatusLabel(status: unknown): string {
   const normalized = normalizeDriverMatchStatus(status);
+  if (normalized === "READY") return "요청 접수";
   if (normalized === "OPEN") return "요청 접수";
   if (normalized === "NEGOTIATING") return "협상 중";
   if (normalized === "ASSIGNED") return "배차 완료";

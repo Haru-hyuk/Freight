@@ -46,6 +46,12 @@ export type ShipperMatchItem = MatchResponseItem & {
 
 export type DriverMatchItem = MatchResponseItem;
 export type MatchCounterOfferInput = DriverCounterOfferCreateInput;
+export type DriverMatchDetailBadgeKey = "AI_RECOMMENDED" | "URGENT";
+
+export type DriverMatchDetailBadge = {
+  key: DriverMatchDetailBadgeKey;
+  label: string;
+};
 
 export type DriverMatchActionGuard = {
   enabled: boolean;
@@ -167,6 +173,27 @@ function toSingleDriverMatch(value: unknown): DriverMatchItem | null {
 
 export function getDriverMatchActionGuard(): DriverMatchActionGuard {
   return isMockMode() ? DRIVER_ACTION_GUARD_MOCK : DRIVER_ACTION_GUARD_SERVER;
+}
+
+export function getDriverMatchDetailBadges(match: DriverMatchItem | null): DriverMatchDetailBadge[] {
+  if (!isMockMode()) return [];
+  if (!match) return [];
+
+  const safeMatchId = toPositiveInt(match.matchId);
+  const status = normalizeStatus(match.status);
+  if (safeMatchId <= 0) return [];
+
+  const badges: DriverMatchDetailBadge[] = [];
+
+  if (safeMatchId % 2 === 0) {
+    badges.push({ key: "AI_RECOMMENDED", label: "AI 추천" });
+  }
+
+  if ((status === "OPEN" || status === "NEGOTIATING") && safeMatchId % 3 === 0) {
+    badges.push({ key: "URGENT", label: "긴급 배차" });
+  }
+
+  return badges;
 }
 
 export async function listMyShipperMatches(): Promise<ShipperMatchItem[]> {

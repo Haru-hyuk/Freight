@@ -3,7 +3,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { QuoteDetailResponse } from "@/entities/quote/model/quote.types";
 import { type DriverMatchItem, getDriverMatch } from "@/features/matching/api";
 import { getShipperQuoteDetailByIdentifier } from "@/features/quote/api";
-import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
 
 export type MatchDetailRouteSnapshot = Partial<DriverMatchItem>;
 
@@ -15,6 +14,8 @@ type UseMatchDetailViewModel = {
   errorMessage: string | null;
   refetch: () => Promise<void>;
 };
+
+const NETWORK_ERROR_TEXT = "네트워크 요청에 실패했습니다. 잠시 후 다시 시도해 주세요.";
 
 function toPositiveInt(value: unknown): number {
   const parsed = Number(value);
@@ -103,6 +104,23 @@ export function useMatchDetail(matchId: number, routeSnapshot?: MatchDetailRoute
   useEffect(() => {
     let mounted = true;
 
+    const loadQuoteDetail = async (quoteId: unknown) => {
+      const safeQuoteId = toPositiveInt(quoteId);
+      if (safeQuoteId <= 0) {
+        if (mounted) setQuote(null);
+        return;
+      }
+
+      try {
+        const quoteDetail = await getShipperQuoteDetailByIdentifier(String(safeQuoteId));
+        if (!mounted) return;
+        setQuote(quoteDetail ?? null);
+      } catch {
+        if (!mounted) return;
+        setQuote(null);
+      }
+    };
+
     if (safeMatchId <= 0) {
       setMatch(null);
       setQuote(null);
@@ -134,26 +152,18 @@ export function useMatchDetail(matchId: number, routeSnapshot?: MatchDetailRoute
           return;
         }
 
-        const safeQuoteId = toPositiveInt(resolvedMatch.quoteId);
-        if (safeQuoteId <= 0) {
-          setQuote(null);
+        await loadQuoteDetail(resolvedMatch.quoteId);
+      })
+      .catch(async () => {
+        if (!mounted) return;
+
+        if (bootstrapMatch) {
+          setMatch(bootstrapMatch);
+          await loadQuoteDetail(bootstrapMatch.quoteId);
           return;
         }
 
-        try {
-          const quoteDetail = await getShipperQuoteDetailByIdentifier(String(safeQuoteId));
-          if (!mounted) return;
-          setQuote(quoteDetail ?? null);
-        } catch {
-          if (!mounted) return;
-          setQuote(null);
-        }
-      })
-      .catch((error: unknown) => {
-        if (!mounted) return;
-        if (!bootstrapMatch) {
-          setErrorMessage(readApiErrorMessage(error, "오더 상세를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요."));
-        }
+        setErrorMessage(NETWORK_ERROR_TEXT);
       })
       .finally(() => {
         if (!mounted) return;

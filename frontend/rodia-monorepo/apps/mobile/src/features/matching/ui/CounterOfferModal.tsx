@@ -14,12 +14,17 @@ import { AppButton } from "@/shared/ui/kit/AppButton";
 import { AppInput } from "@/shared/ui/kit/AppInput";
 import { AppText } from "@/shared/ui/kit/AppText";
 
+export type CounterOfferSubmitPayload = {
+  amount: number;
+  message?: string;
+};
+
 type CounterOfferModalProps = {
   visible: boolean;
   isSubmitting?: boolean;
   errorMessage?: string | null;
   onClose: () => void;
-  onSubmit: (amount: number) => void | Promise<void>;
+  onSubmit: (payload: CounterOfferSubmitPayload) => void | Promise<void>;
 };
 
 function parseAmount(value: string): number {
@@ -36,6 +41,7 @@ const useStyles = createThemedStyles((theme) => {
   const cBorder = safeString(theme?.colors?.borderDefault, "#E2E8F0");
   const cOverlay = tint("#000000", 0.44, "#000000");
   const cDanger = safeString(theme?.colors?.semanticDanger, "#EF4444");
+  const cPrimary = safeString(theme?.colors?.brandPrimary, "#FF6A00");
 
   return StyleSheet.create({
     overlay: {
@@ -73,6 +79,35 @@ const useStyles = createThemedStyles((theme) => {
     input: {
       minHeight: 56,
     },
+    amountInput: {
+      fontSize: safeNumber(theme?.typography?.scale?.title?.size, 22),
+      fontWeight: "900",
+    },
+    quickChipRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: spacing * 2,
+    },
+    quickChip: {
+      minHeight: 34,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: tint(cPrimary, 0.32, cBorder),
+      backgroundColor: tint(cPrimary, 0.1, cSurface),
+      paddingHorizontal: spacing * 3,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    quickChipText: {
+      color: cPrimary,
+      fontSize: safeNumber(theme?.typography?.scale?.caption?.size, 12) + 1,
+      lineHeight: safeNumber(theme?.typography?.scale?.caption?.lineHeight, 16) + 2,
+      fontWeight: "800",
+    },
+    messageInput: {
+      minHeight: 100,
+      alignItems: "flex-start",
+    },
     helper: {
       color: cTextMuted,
       fontSize: safeNumber(theme?.typography?.scale?.caption?.size, 12) + 1,
@@ -103,14 +138,15 @@ export function CounterOfferModal({
   onClose,
   onSubmit,
 }: CounterOfferModalProps) {
-  const theme = useAppTheme();
   const styles = useStyles();
   const [amountInput, setAmountInput] = useState("");
+  const [messageInput, setMessageInput] = useState("");
   const [localErrorMessage, setLocalErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!visible) {
       setAmountInput("");
+      setMessageInput("");
       setLocalErrorMessage(null);
     }
   }, [visible]);
@@ -131,7 +167,10 @@ export function CounterOfferModal({
     }
 
     setLocalErrorMessage(null);
-    void onSubmit(amount);
+    void onSubmit({
+      amount,
+      message: messageInput.trim() || undefined,
+    });
   };
 
   return (
@@ -158,12 +197,40 @@ export function CounterOfferModal({
               keyboardType="number-pad"
               editable={!isSubmitting}
               shellStyle={styles.input}
-              inputStyle={{
-                fontSize: safeNumber(theme?.typography?.scale?.title?.size, 22),
-                fontWeight: "900",
-              }}
+              inputStyle={styles.amountInput}
             />
-            <AppText style={styles.helper}>숫자만 입력됩니다.</AppText>
+
+            <View style={styles.quickChipRow}>
+              {[10000, 30000, 50000].map((unit) => (
+                <Pressable
+                  key={unit}
+                  style={styles.quickChip}
+                  onPress={() => {
+                    if (isSubmitting) return;
+                    const current = parseAmount(amountInput);
+                    const next = current + unit;
+                    setAmountInput(String(next));
+                    setLocalErrorMessage(null);
+                  }}
+                >
+                  <AppText style={styles.quickChipText}>{`+${unit.toLocaleString("ko-KR")}`}</AppText>
+                </Pressable>
+              ))}
+            </View>
+
+            <AppInput
+              label="메시지(선택)"
+              value={messageInput}
+              onChangeText={setMessageInput}
+              placeholder="예) 상차 대기 시간이 있어 운임 조정 요청드립니다."
+              editable={!isSubmitting}
+              multiline
+              numberOfLines={3}
+              textAlignVertical="top"
+              shellStyle={styles.messageInput}
+            />
+
+            <AppText style={styles.helper}>숫자만 입력되며, 메시지는 선택 항목입니다.</AppText>
             {mergedErrorMessage ? <AppText style={styles.error}>{mergedErrorMessage}</AppText> : null}
 
             <View style={styles.actions}>

@@ -678,6 +678,8 @@ export function DriverOrdersBoard({ activeTab, onChangeTab }: DriverOrdersBoardP
   const [showAiTooltip, setShowAiTooltip] = useState(false);
 
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cardNavLockRef = useRef(false);
+  const lastCardNavIdRef = useRef(0);
 
   const showToast = useCallback((message: string) => {
     if (toastTimerRef.current) {
@@ -768,9 +770,19 @@ export function DriverOrdersBoard({ activeTab, onChangeTab }: DriverOrdersBoardP
 
   const handlePressCard = useCallback(
     async (card: DriverOrderCard) => {
+      if (cardNavLockRef.current && lastCardNavIdRef.current === card.matchId) return;
+      cardNavLockRef.current = true;
+      lastCardNavIdRef.current = card.matchId;
+
       const access = await probeDriverOrderDetailAccess(card.matchId);
       if (access === "forbidden") {
         showToast("상세 접근 불가(권한)");
+        cardNavLockRef.current = false;
+        return;
+      }
+      if (access !== "ok") {
+        showToast(NETWORK_ERROR_TEXT);
+        cardNavLockRef.current = false;
         return;
       }
 
@@ -778,6 +790,10 @@ export function DriverOrdersBoard({ activeTab, onChangeTab }: DriverOrdersBoardP
         pathname: "/(driver)/matches/[id]",
         params: buildDriverOrderDetailParams(card),
       });
+
+      setTimeout(() => {
+        cardNavLockRef.current = false;
+      }, 450);
     },
     [router, showToast]
   );
