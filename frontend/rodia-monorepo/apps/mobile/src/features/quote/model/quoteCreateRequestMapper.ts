@@ -6,7 +6,7 @@ import type {
   QuoteVehicleType,
   QuoteWorkMethod,
 } from "@/entities/quote/dto";
-import { computeQuotePricing, type QuoteCreateDraft } from "@/features/quote/model/quoteCreateDraft";
+import { EXTRA_OPTIONS, type QuoteCreateDraft } from "@/features/quote/model/quoteCreateDraft";
 
 const VEHICLE_TYPE_BY_TON_INDEX: QuoteVehicleType[] = ["TON_1", "TON_2_5", "TON_5"];
 const VEHICLE_BODY_BY_TYPE_INDEX: QuoteVehicleBodyType[] = ["CARGO", "WING_BODY", "TOP_CAR"];
@@ -83,8 +83,8 @@ function buildStops(draft: QuoteCreateDraft): QuoteStopRequestDto[] {
       return {
         seq: index + 1,
         address,
-        lat: 0,
-        lng: 0,
+        lat: toNumber(waypoint?.lat, 0),
+        lng: toNumber(waypoint?.lng, 0),
         contactName: (waypoint?.name ?? "").trim(),
         contactPhone: (waypoint?.phone ?? "").trim(),
         deptName: "",
@@ -113,8 +113,24 @@ function calculateWeightKg(draft: QuoteCreateDraft) {
 function resolveDesiredPrice(draft: QuoteCreateDraft) {
   const input = toInt(draft.budget, 0);
   if (input > 0) return input;
-  const pricing = computeQuotePricing(draft);
-  return Math.max(0, toNumber(pricing.finalPrice, 0));
+  return 0;
+}
+
+function buildChecklistItems(draft: QuoteCreateDraft): QuoteCreateRequestDto["checklistItems"] {
+  const selected = Array.isArray(draft?.selectedOpts) ? draft.selectedOpts : [];
+  if (selected.length === 0) return [];
+
+  return selected.map((optionId, index) => {
+    const option = EXTRA_OPTIONS.find((item) => item?.id === optionId);
+    const title = String(option?.title ?? optionId ?? "").trim();
+    const extraFee = Math.max(0, toInt(option?.price, 0));
+
+    return {
+      checklistItemId: index + 1,
+      extraInput: title || `옵션 ${index + 1}`,
+      extraFee,
+    };
+  });
 }
 
 export function buildQuoteCreateRequest(draft: QuoteCreateDraft): QuoteCreateRequestDto {
@@ -141,7 +157,7 @@ export function buildQuoteCreateRequest(draft: QuoteCreateDraft): QuoteCreateReq
     allowCombine: !!draft.isPool,
     loadMethod: mapWorkMethod(draft.loadMethod),
     unloadMethod: mapWorkMethod(draft.unloadMethod),
-    checklistItems: [],
+    checklistItems: buildChecklistItems(draft),
     stops: buildStops(draft),
   };
 }
