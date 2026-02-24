@@ -36,8 +36,6 @@ export const EXTRA_OPTIONS = [
   { id: "shock", title: "충격주의", price: 5000 },
 ] as const;
 
-export const WORK_METHODS = ["수작업", "지게차", "사다리차", "허리베어"] as const;
-
 export const DROP_OFF_END = "END" as const;
 export type DropOffKey = typeof DROP_OFF_END | `WP:${number}`;
 
@@ -190,8 +188,8 @@ export function createInitialQuoteCreateDraft(): QuoteCreateDraft {
 
     waypoints: [],
 
-    loadMethod: "수작업",
-    unloadMethod: "수작업",
+    loadMethod: "SHIPPER:MANUAL",
+    unloadMethod: "DRIVER:MANUAL",
 
     date: new Date(),
     time: createDefaultTime(),
@@ -261,4 +259,3 @@ export function computeQuotePricing(draft: QuoteCreateDraft) {
 }
 
 export { QuoteCreateDraftProvider, useQuoteCreateDraft, type QuoteCreateDraftStore } from "./useQuoteCreateDraft";
-

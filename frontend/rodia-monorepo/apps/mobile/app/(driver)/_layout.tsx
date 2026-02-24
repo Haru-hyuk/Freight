@@ -18,7 +18,7 @@ function pickActiveKey(segments: readonly string[] | undefined | null): BottomTa
   const segs = Array.isArray(segments) ? segments : [];
 
   if (segs.includes("quotes")) return "quotes";
-  if (segs.includes("run")) return "run";
+  if (segs.includes("run") || segs.includes("matches")) return "run";
   if (segs.includes("settlement")) return "settlement";
   if (segs.includes("profile")) return "profile";
   if (segs.includes("home")) return "home";
@@ -28,7 +28,7 @@ function pickActiveKey(segments: readonly string[] | undefined | null): BottomTa
     .slice(-1)[0];
 
   if (last === "quotes") return "quotes";
-  if (last === "run") return "run";
+  if (last === "run" || last === "matches") return "run";
   if (last === "settlement") return "settlement";
   if (last === "profile") return "profile";
   return "home";

@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { QuoteDetailResponse } from "@/entities/quote/model/quote.types";
 import { getShipperQuoteDetailByIdentifier, updateShipperQuote } from "@/features/quote/api/quote-api";
 import { buildQuoteCreateRequest } from "@/features/quote/model/quoteCreateRequestMapper";
+import { toDraftLoadMethod, toDraftUnloadMethod } from "@/features/quote/model/workMethod";
 import {
   computeQuotePricing,
   createInitialQuoteCreateDraft,
@@ -21,12 +22,12 @@ import QuoteCreateStep2 from "@/features/quote/ui/QuoteCreateStep2";
 import QuoteCreateStep3 from "@/features/quote/ui/QuoteCreateStep3";
 import { getQuoteFlatCardStyle, QUOTE_PROGRESS_TOKENS } from "@/features/quote/ui/QuoteCreateUiPrimitives";
 import { estimateRouteKm, isValidCoord, type LatLng } from "@/shared/lib/geo/distance";
+import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
 import { safeNumber, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
 import type { AppTheme } from "@/shared/theme/types";
 import { AppButton } from "@/shared/ui/kit/AppButton";
-import { AppErrorState } from "@/shared/ui/kit/AppErrorState";
-import { AppSpinner } from "@/shared/ui/kit/AppSpinner";
+import { AppRequestState } from "@/shared/ui/kit/AppRequestState";
 import { AppText } from "@/shared/ui/kit/AppText";
 import { PageScaffold } from "@/widgets/layout/PageScaffold";
 
@@ -77,16 +78,6 @@ function resolveBodyIndex(vehicleBodyType: unknown): number {
   if (normalized === "WING_BODY") return 1;
   if (normalized === "TOP_CAR") return 2;
   return 0;
-}
-
-function resolveDraftWorkMethod(value: unknown): string {
-  const raw = String(value ?? "").trim();
-  const normalized = raw.toUpperCase();
-
-  if (normalized === "SHIPPER") return "수작업";
-  if (normalized === "DRIVER") return "지게차";
-  if (raw) return raw;
-  return "수작업";
 }
 
 function toDraftDate(raw: unknown): Date {
@@ -162,8 +153,8 @@ function mapDetailToDraft(detail: QuoteDetailResponse): QuoteCreateDraft {
           lat: toSafeNumber(stop?.lat, 0),
           lng: toSafeNumber(stop?.lng, 0),
         })),
-    loadMethod: resolveDraftWorkMethod(detail?.loadMethod),
-    unloadMethod: resolveDraftWorkMethod(detail?.unloadMethod),
+    loadMethod: toDraftLoadMethod(detail?.loadMethod),
+    unloadMethod: toDraftUnloadMethod(detail?.unloadMethod),
     date: createdDate,
     time: updatedDate,
     truckId: Math.max(1, toSafeInt(detail?.truckId, 1)),
@@ -359,21 +350,6 @@ function QuoteEditPageInner() {
     router.replace("/(shipper)/quotes");
   }, [navigation, quoteId, quoteIdentifier, resolvedQuoteId, resolvedQuoteIdentifier, router, step]);
 
-  const readErrorMessage = useCallback((error: unknown) => {
-    const fallback = "네트워크 또는 요청 값을 확인해주세요.";
-    if (!error || typeof error !== "object") return fallback;
-
-    const e = error as {
-      response?: { data?: { message?: string; error?: string } };
-      message?: string;
-    };
-
-    const serverMessage = e.response?.data?.message ?? e.response?.data?.error;
-    if (typeof serverMessage === "string" && serverMessage.trim()) return serverMessage.trim();
-    if (typeof e.message === "string" && e.message.trim()) return e.message.trim();
-    return fallback;
-  }, []);
-
   const submitQuoteUpdate = useCallback(async () => {
     if (isSubmitting) return;
 
@@ -448,7 +424,7 @@ function QuoteEditPageInner() {
         },
       ]);
     } catch (error) {
-      Alert.alert("견적 수정 실패", readErrorMessage(error));
+      Alert.alert("견적 수정 실패", readApiErrorMessage(error));
     } finally {
       setIsSubmitting(false);
     }
@@ -457,7 +433,6 @@ function QuoteEditPageInner() {
     isSubmitting,
     quoteId,
     quoteIdentifier,
-    readErrorMessage,
     resolvedQuoteId,
     resolvedQuoteIdentifier,
     router,
@@ -542,17 +517,17 @@ function QuoteEditPageInner() {
       contentStyle={StyleSheet.flatten([styles.content, { paddingBottom: bottomBarHeight + 20 }])}
       bottomBar={bottomBar}
     >
-      {isLoading ? (
-        <AppSpinner label="견적 정보를 불러오는 중입니다." />
-      ) : errorMessage ? (
-        <AppErrorState
-          title="견적 정보를 불러오지 못했어요"
-          description={errorMessage}
-          retryLabel="다시 시도"
-          onRetry={loadDetail}
-          fullScreen={false}
-        />
-      ) : (
+      <AppRequestState
+        isLoading={isLoading}
+        loadingLabel="견적 정보를 불러오는 중입니다."
+        errorMessage={errorMessage}
+        errorTitle="견적 정보를 불러오지 못했어요"
+        retryLabel="다시 시도"
+        onRetry={() => {
+          void loadDetail();
+        }}
+        fullScreen={false}
+      >
         <>
           <View style={styles.stepBarContainer}>
             <View style={styles.stepBar}>
@@ -584,7 +559,7 @@ function QuoteEditPageInner() {
           {step === 2 && <QuoteCreateStep2 />}
           {step === 3 && <QuoteCreateStep3 />}
         </>
-      )}
+      </AppRequestState>
     </PageScaffold>
   );
 }

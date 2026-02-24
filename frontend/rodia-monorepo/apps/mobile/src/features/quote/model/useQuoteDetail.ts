@@ -9,7 +9,7 @@ import {
   getQuoteStatusLabel,
   type QuoteActionPolicy,
 } from "@/features/quote/model/quoteActionMatrix";
-import { isMockQuoteEnabled } from "@/shared/lib/config/env";
+import { formatWorkMethodLabel } from "@/features/quote/model/workMethod";
 
 export type QuoteSectionRow = {
   label: string;
@@ -69,8 +69,6 @@ const KRW_FORMAT = (() => {
   return { format: (v: number) => String(v) } as Pick<Intl.NumberFormat, "format">;
 })();
 
-const MOCK_WAYPOINTS_FALLBACK: string[] = ["인천광역시 연수구 (목업 경유지)"];
-
 const QUOTE_STATUS_GUARD: Record<QuoteDetailResponse["status"], true> = {
   OPEN: true,
   NEGOTIATING: true,
@@ -123,18 +121,15 @@ function toVehicleBodyTypeLabel(value: unknown): string {
   });
 }
 
-function toCargoTypeLabel(value: unknown): string {
-  return mapEnumLabel(value, {
-    GENERAL: "일반",
-    FROZEN: "냉장/냉동",
-  });
+function toCargoTypeIcon(value: unknown): string {
+  const normalized = String(value ?? "").trim().toUpperCase();
+  if (normalized === "FROZEN") return "❄";
+  return "📦";
 }
 
-function toWorkMethodLabel(value: unknown): string {
-  return mapEnumLabel(value, {
-    SHIPPER: "화주",
-    DRIVER: "기사",
-  });
+function formatCargoHeadline(cargoName: unknown, cargoType: unknown): string {
+  const name = toDisplayText(cargoName, "화물");
+  return `${toCargoTypeIcon(cargoType)} ${name}`;
 }
 
 function formatDateTime(iso: unknown): string {
@@ -282,24 +277,6 @@ function applyRuntimeOverride(quote: QuoteDetailResponse, override?: QuoteDetail
   };
 }
 
-function formatStopValue(stop: QuoteDetailResponse["stops"][number]): string {
-  const address = String(stop?.address ?? "").trim();
-  const contactName = String(stop?.contactName ?? "").trim();
-  const contactPhone = String(stop?.contactPhone ?? "").trim();
-  const deptName = String(stop?.deptName ?? "").trim();
-  const managerName = String(stop?.managerName ?? "").trim();
-
-  const metaParts = [
-    deptName ? `부서 ${deptName}` : "",
-    managerName ? `담당 ${managerName}` : "",
-    contactName ? `연락처 ${contactName}` : "",
-    contactPhone ? contactPhone : "",
-  ].filter(Boolean);
-
-  if (!metaParts.length) return address || "-";
-  return `${address || "-"} (${metaParts.join(" · ")})`;
-}
-
 function formatPositiveKrw(value: unknown): string {
   const amount = toSafeNumber(value);
   if (!(amount > 0)) return "-";
@@ -318,94 +295,29 @@ function formatPositiveVolumeCbm(value: unknown): string {
   return `${volume.toFixed(1)}cbm`;
 }
 
-function formatPositiveDistanceKm(value: unknown): string {
-  const distance = toSafeNumber(value);
-  if (!(distance > 0)) return "-";
-  return `${distance.toFixed(1)}km`;
-}
-
-function buildDropOffSummary(quote: QuoteDetailResponse): string {
-  const stops = Array.isArray(quote?.stops) ? quote.stops : [];
-  const stopTexts = stops
-    .slice()
-    .sort((a, b) => toSafeInteger(a?.seq, 0) - toSafeInteger(b?.seq, 0))
-    .map((stop, index) => {
-      const seq = Math.max(1, toSafeInteger(stop?.seq, index + 1));
-      const address = String(stop?.address ?? "").trim();
-      if (!address) return "";
-      return `경유지 ${seq} (${address})`;
-    })
-    .filter(Boolean);
-
-  const destinationAddress = String(quote?.destinationAddress ?? "").trim();
-  const destinationText = destinationAddress ? `도착지 (${destinationAddress})` : "";
-  const parts = destinationText ? [...stopTexts, destinationText] : stopTexts;
-
-  return parts.length ? parts.join(" / ") : "-";
-}
-
 function buildSpecificationArchive(quote: QuoteDetailResponse): QuoteSection[] {
   const vehicleType = toVehicleTypeLabel(quote?.vehicleType);
   const vehicleBodyType = toVehicleBodyTypeLabel(quote?.vehicleBodyType);
   const isCompleted = (quote?.status ?? "") === "DROPOFF";
   const finalAmountLabel = isCompleted ? "정산 금액" : "예상 금액";
 
-  const stops = Array.isArray(quote?.stops) ? quote.stops : [];
-  const stopRows: QuoteSectionRow[] = stops.length
-    ? stops.map((stop) => ({
-        label: `경유지 ${Math.max(1, toSafeInteger(stop?.seq, 1))}`,
-        value: formatStopValue(stop),
-      }))
-    : [{ label: "경유지", value: "-" }];
-
   return [
-    {
-      title: "출발지 정보",
-      rows: [
-        { label: "주소", value: toDisplayText(quote?.originAddress) },
-        { label: "상세주소", value: toDisplayText(quote?.originAddressDetail) },
-        { label: "발송인", value: toDisplayText(quote?.senderName) },
-        { label: "연락처", value: toDisplayText(quote?.senderPhone) },
-      ],
-    },
-    {
-      title: "도착지 정보",
-      rows: [
-        { label: "주소", value: toDisplayText(quote?.destinationAddress) },
-        { label: "상세주소", value: toDisplayText(quote?.destinationAddressDetail) },
-        { label: "수취인", value: toDisplayText(quote?.receiverName) },
-        { label: "연락처", value: toDisplayText(quote?.receiverPhone) },
-      ],
-    },
-    {
-      title: "경유지",
-      rows: stopRows,
-    },
-    {
-      title: "운송 일정",
-      rows: [
-        { label: "운송 날짜", value: "-" },
-        { label: "상차 시간", value: "-" },
-      ],
-    },
     {
       title: "차량/화물",
       rows: [
         { label: "톤수", value: toDisplayText(vehicleType) },
         { label: "차종", value: toDisplayText(vehicleBodyType) },
-        { label: "화물명", value: toDisplayText(quote?.cargoName) },
-        { label: "화물 구분", value: toDisplayText(toCargoTypeLabel(quote?.cargoType)) },
+        { label: "화물", value: formatCargoHeadline(quote?.cargoName, quote?.cargoType) },
         { label: "화물 설명", value: toDisplayText(quote?.cargoDesc) },
         { label: "중량", value: formatPositiveWeightKg(quote?.weightKg) },
         { label: "부피", value: formatPositiveVolumeCbm(quote?.volumeCbm) },
-        { label: "하차 위치", value: buildDropOffSummary(quote) },
       ],
     },
     {
       title: "상차/하차",
       rows: [
-        { label: "상차 방식", value: toDisplayText(toWorkMethodLabel(quote?.loadMethod)) },
-        { label: "하차 방식", value: toDisplayText(toWorkMethodLabel(quote?.unloadMethod)) },
+        { label: "상차 방식", value: toDisplayText(formatWorkMethodLabel(quote?.loadMethod)) },
+        { label: "하차 방식", value: toDisplayText(formatWorkMethodLabel(quote?.unloadMethod)) },
         { label: "합짐 여부", value: quote?.allowCombine ? "허용" : "단독 운송" },
         { label: "추가 옵션/요청", value: formatChecklistItems(quote?.checklistItems) },
       ],
@@ -415,28 +327,19 @@ function buildSpecificationArchive(quote: QuoteDetailResponse): QuoteSection[] {
       rows: [
         { label: "희망 운임", value: formatPositiveKrw(quote?.desiredPrice) },
         { label: finalAmountLabel, value: formatPositiveKrw(quote?.finalPrice) },
-        { label: "기본 요금", value: formatPositiveKrw(quote?.basePrice) },
-        { label: "거리 요금", value: formatPositiveKrw(quote?.distancePrice) },
-        { label: "추가 요금", value: formatPositiveKrw(quote?.extraPrice) },
-        { label: "운송 거리", value: formatPositiveDistanceKm(quote?.distanceKm) },
       ],
     },
   ];
 }
 
 function buildWaypointAddresses(resolvedQuote: QuoteDetailResponse): string[] {
-  const fromStops = Array.isArray(resolvedQuote?.stops)
+  return Array.isArray(resolvedQuote?.stops)
     ? resolvedQuote.stops
         .slice()
         .sort((a, b) => toSafeInteger(a?.seq, 0) - toSafeInteger(b?.seq, 0))
         .map((stop) => String(stop?.address ?? "").trim())
         .filter(Boolean)
     : [];
-
-  if (fromStops.length) return fromStops;
-
-  if (!isMockQuoteEnabled()) return [];
-  return MOCK_WAYPOINTS_FALLBACK.filter(Boolean);
 }
 
 export function useQuoteDetail(quoteIdentifier: QuoteId | string, runtimeOverride?: QuoteDetailRuntimeOverride): QuoteDetailViewModel {

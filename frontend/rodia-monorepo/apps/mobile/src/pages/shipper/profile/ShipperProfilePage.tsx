@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import { Alert, Image, Pressable, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -274,6 +274,8 @@ export function ShipperProfilePage() {
   const theme = useAppTheme();
   const styles = useStyles();
   const auth = useAuth();
+  const navLockRef = useRef(false);
+  const navUnlockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const cBg = safeString(theme?.colors?.bgSurfaceAlt, "#F8FAFC");
   const cText = safeString(theme?.colors?.textMain, "#111827");
@@ -284,6 +286,31 @@ export function ShipperProfilePage() {
   const profileName = safeString(user?.name, "로디아 화주");
   const email = safeString(user?.email, "shipper@rodia.co.kr");
   const isVerified = auth.pendingVerificationRole !== "shipper";
+
+  useEffect(() => {
+    return () => {
+      if (navUnlockTimerRef.current) {
+        clearTimeout(navUnlockTimerRef.current);
+      }
+    };
+  }, []);
+
+  const pushRouteOnce = useCallback((path: string) => {
+    if (navLockRef.current) return;
+    navLockRef.current = true;
+    router.push(path as never);
+    if (navUnlockTimerRef.current) {
+      clearTimeout(navUnlockTimerRef.current);
+    }
+    navUnlockTimerRef.current = setTimeout(() => {
+      navLockRef.current = false;
+      navUnlockTimerRef.current = null;
+    }, 300);
+  }, [router]);
+
+  const pushSettingsOnce = useCallback(() => {
+    pushRouteOnce("/(shipper)/settings");
+  }, [pushRouteOnce]);
 
   const avatarBg = cBrand.replace("#", "");
   const avatarFg = cOnBrand.replace("#", "");
@@ -319,31 +346,37 @@ export function ShipperProfilePage() {
   const businessMenus = useMemo<MenuAction[]>(
     () => [
       {
+        id: "settings-home",
+        title: "설정/내 정보 관리",
+        icon: "settings-outline",
+        onPress: pushSettingsOnce,
+      },
+      {
         id: "biz-verification",
         title: "사업자 정보 및 인증 관리",
         icon: "business-outline",
-        onPress: () => Alert.alert("사업자 인증", "사업자 정보 관리 화면을 준비 중입니다."),
+        onPress: () => pushRouteOnce("/(shipper)/settings/business"),
       },
       {
         id: "addresses",
         title: "상하차지 주소 관리",
         icon: "map-outline",
-        onPress: () => Alert.alert("주소 관리", "주소 관리 화면을 준비 중입니다."),
+        onPress: () => pushRouteOnce("/(shipper)/settings/addresses"),
       },
       {
         id: "payment",
         title: "운임 결제 수단 관리",
         icon: "card-outline",
-        onPress: () => Alert.alert("결제 수단", "결제 수단 관리 화면을 준비 중입니다."),
+        onPress: () => pushRouteOnce("/(shipper)/settings/payments"),
       },
       {
         id: "tax-invoice",
         title: "세금계산서 발행 내역",
         icon: "receipt-outline",
-        onPress: () => Alert.alert("세금계산서", "세금계산서 화면을 준비 중입니다."),
+        onPress: () => pushRouteOnce("/(shipper)/settings/tax-invoices"),
       },
     ],
-    []
+    [pushRouteOnce, pushSettingsOnce]
   );
 
   const supportMenus = useMemo<MenuAction[]>(
@@ -402,7 +435,7 @@ export function ShipperProfilePage() {
           size="icon"
           variant="secondary"
           accessibilityLabel="설정"
-          onPress={() => Alert.alert("설정", "설정 화면을 준비 중입니다.")}
+          onPress={pushSettingsOnce}
         >
           <Ionicons name="settings-outline" size={24} color={cText} />
         </AppButton>

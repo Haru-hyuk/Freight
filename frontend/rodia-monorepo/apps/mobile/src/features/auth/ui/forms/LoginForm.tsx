@@ -6,9 +6,10 @@ import { AppButton } from "@/shared/ui/kit/AppButton";
 import { AppInput } from "@/shared/ui/kit/AppInput";
 import { AppText } from "@/shared/ui/kit/AppText";
 import { useAuth } from "@/features/auth/model/useAuth";
-import { MOCK_EMAIL_BY_ROLE, MOCK_PASSWORD } from "@/features/auth/model/auth.consts";
 import type { AuthUserRole } from "@/features/auth/model/auth.types";
 import { AuthRoleTabs } from "@/features/auth/ui/AuthRoleTabs";
+import { LOGIN_DRIVER, LOGIN_SHIPPER } from "@/shared/lib/dev/mockPayloads";
+import { MockAutofillButton } from "@/shared/ui/dev/MockAutofillButton";
 
 type Props = {
   role: AuthUserRole;
@@ -119,8 +120,9 @@ export function LoginForm({ role, onRoleChange, onSuccess, onFocusInput, onSubmi
 
   useEffect(() => {
     if (!auth.isMockAuth) return;
-    setEmail(role === "driver" ? (MOCK_EMAIL_BY_ROLE.driver ?? "") : (MOCK_EMAIL_BY_ROLE.shipper ?? ""));
-    setPassword(MOCK_PASSWORD ?? "");
+    const payload = role === "driver" ? LOGIN_DRIVER : LOGIN_SHIPPER;
+    setEmail(payload.email);
+    setPassword(payload.password);
   }, [auth.isMockAuth, role]);
 
   const scrollIntoView = useCallback(
@@ -203,6 +205,13 @@ export function LoginForm({ role, onRoleChange, onSuccess, onFocusInput, onSubmi
     [clearLocalError]
   );
 
+  const handleMockAutofill = useCallback(() => {
+    clearLocalError();
+    const payload = role === "driver" ? LOGIN_DRIVER : LOGIN_SHIPPER;
+    setEmail(payload.email);
+    setPassword(payload.password);
+  }, [clearLocalError, role]);
+
   const isValid = useMemo(() => {
     return isEmailValid(normalizeEmail(email)) && (password?.length ?? 0) >= 6;
   }, [email, password]);
@@ -224,6 +233,7 @@ export function LoginForm({ role, onRoleChange, onSuccess, onFocusInput, onSubmi
 
         <View style={s.formContainer}>
           <AuthRoleTabs role={role} onChange={onRoleChange} onBeforeChange={clearLocalError} disabled={auth.isBusy} />
+          <MockAutofillButton onFill={handleMockAutofill} label={role === "driver" ? "Fill Driver Login" : "Fill Shipper Login"} />
 
           <View style={s.inputs}>
             <AppInput

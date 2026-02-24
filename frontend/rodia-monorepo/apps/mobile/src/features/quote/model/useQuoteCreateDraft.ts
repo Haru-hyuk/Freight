@@ -83,8 +83,8 @@ function createInitialQuoteCreateDraft(): QuoteCreateDraft {
 
     waypoints: [],
 
-    loadMethod: "수작업",
-    unloadMethod: "수작업",
+    loadMethod: "SHIPPER:MANUAL",
+    unloadMethod: "DRIVER:MANUAL",
 
     date: new Date(),
     time: createDefaultTime(),
@@ -196,4 +196,3 @@ export function useQuoteCreateDraft() {
 }
 
 export type { QuoteCreateDraftStore };
-
