@@ -7,6 +7,7 @@ import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface QuoteRepository extends JpaRepository<Quote, Long> {
+    List<Quote> findByStatus(String status);
     List<Quote> findByShipperId(Long shipperId);
 
     Optional<Quote> findByPublicId(UUID publicId);
