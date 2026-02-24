@@ -2,15 +2,14 @@ package com.freight.backend.controller;
 
 import com.freight.backend.dto.match.MatchCreateRequest;
 import com.freight.backend.dto.match.MatchResponse;
-import com.freight.backend.exception.CustomException;
-import com.freight.backend.exception.ErrorCode;
 import com.freight.backend.service.MatchService;
+import com.freight.backend.util.SecurityUtils;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -32,34 +31,16 @@ public class ShipperMatchController {
 
     private final MatchService matchService;
 
-    private static Long requireShipperId(Authentication authentication) {
-        if (authentication == null
-                || !authentication.getAuthorities().contains(new SimpleGrantedAuthority("ROLE_SHIPPER"))) {
-            throw new CustomException(ErrorCode.AUTH_FORBIDDEN);
-        }
-        try {
-            Long shipperId = Long.parseLong(authentication.getName());
-            log.debug(
-                    "Shipper auth resolved. principal='{}', authorities={}",
-                    authentication.getName(),
-                    authentication.getAuthorities()
-            );
-            return shipperId;
-        } catch (NumberFormatException e) {
-            throw new CustomException(ErrorCode.AUTH_UNAUTHORIZED);
-        }
-    }
-
     /**
      * 매칭 생성 (화주)
      * POST /api/shipper/matches
      */
     @PostMapping
     public ResponseEntity<MatchResponse> createMatch(
-            Authentication authentication,
+            @AuthenticationPrincipal UserDetails userDetails,
             @RequestBody MatchCreateRequest request
     ) {
-        Long shipperId = requireShipperId(authentication);
+        Long shipperId = SecurityUtils.requireShipperId(userDetails);
         MatchResponse response = matchService.createMatch(shipperId, request.getQuoteId());
         return ResponseEntity.ok(response);
     }
@@ -70,9 +51,9 @@ public class ShipperMatchController {
      */
     @GetMapping("/me")
     public ResponseEntity<List<MatchResponse>> getMyMatches(
-            Authentication authentication
+            @AuthenticationPrincipal UserDetails userDetails
     ) {
-        Long shipperId = requireShipperId(authentication);
+        Long shipperId = SecurityUtils.requireShipperId(userDetails);
         List<MatchResponse> matches = matchService.getShipperMatches(shipperId);
         return ResponseEntity.ok(matches);
     }
@@ -83,10 +64,10 @@ public class ShipperMatchController {
      */
     @DeleteMapping("/{matchId}")
     public ResponseEntity<Void> cancelMatch(
-            Authentication authentication,
+            @AuthenticationPrincipal UserDetails userDetails,
             @PathVariable Long matchId
     ) {
-        Long userId = requireShipperId(authentication);
+        Long userId = SecurityUtils.requireShipperId(userDetails);
         matchService.cancelMatch(userId, "ROLE_SHIPPER", matchId);
         return ResponseEntity.noContent().build();
     }
@@ -97,10 +78,10 @@ public class ShipperMatchController {
      */
     @GetMapping("/{matchId}")
     public ResponseEntity<MatchResponse> getMatch(
-            Authentication authentication,
+            @AuthenticationPrincipal UserDetails userDetails,
             @PathVariable Long matchId
     ) {
-        Long userId = requireShipperId(authentication);
+        Long userId = SecurityUtils.requireShipperId(userDetails);
         MatchResponse response = matchService.getMatch(matchId, userId, "ROLE_SHIPPER");
         return ResponseEntity.ok(response);
     }
