@@ -114,6 +114,13 @@ export function isMockQuoteEnabled(): boolean {
   return baseMockMode();
 }
 
+export type DriverMatchMode = "mock" | "server";
+
+export function getDriverMatchMode(): DriverMatchMode {
+  const raw = readString("EXPO_PUBLIC_DRIVER_MATCH_MODE", "mock").toLowerCase();
+  return raw === "server" ? "server" : "mock";
+}
+
 // auth 디버그 로그 출력 여부(개발 환경에서만 반영)
 export function isAuthDebugLogsEnabled(): boolean {
   if (!__DEV__) return false;

@@ -1,50 +1,41 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import React, { useEffect, useState } from "react";
+import { ScrollView, StyleSheet, View } from "react-native";
 
-import type { QuoteDetailResponse } from "@/entities/quote/model/quote.types";
+import type { CounterOfferCreateRequest } from "@/shared/api/generated/schemas";
 import {
-  createDriverCounterOffer,
-  listDriverCounterOffersByQuote,
-  normalizeCounterOfferStatus,
-  type CounterOfferItem,
-} from "@/features/counter-offer/api";
-import {
-  acceptDriverMatch,
-  cancelDriverMatch,
-  getDriverMatch,
-  type DriverMatchItem,
-} from "@/features/matching/api";
-import { canDriverAcceptMatch, toDriverMatchStatusLabel } from "@/features/matching/model/driverMatchStatus";
-import { getShipperQuoteDetail } from "@/features/quote/api";
+  applyMockAccept,
+  applyMockCancel,
+  getLatestMockCounterOffer,
+  resolveDriverMatchFromCache,
+  setLatestMockCounterOffer,
+  type DriverMatchSummary,
+} from "@/features/matching/model/driverMatchMockStore";
+import { toDriverMatchStatusLabel } from "@/features/matching/model/driverMatchStatus";
+import { getDriverMatchMode } from "@/shared/lib/config/env";
 import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppButton } from "@/shared/ui/kit/AppButton";
 import { AppCard } from "@/shared/ui/kit/AppCard";
 import { AppEmptyState } from "@/shared/ui/kit/AppEmptyState";
-import { AppErrorState } from "@/shared/ui/kit/AppErrorState";
 import { AppInput } from "@/shared/ui/kit/AppInput";
-import { AppSpinner } from "@/shared/ui/kit/AppSpinner";
 import { AppText } from "@/shared/ui/kit/AppText";
 import { PageScaffold } from "@/widgets/layout/PageScaffold";
 
-const NETWORK_ERROR_TEXT = "네트워크 요청에 실패했습니다. 잠시 후 다시 시도해 주세요.";
+type DriverMatchDetailRouteSnapshot = Partial<DriverMatchSummary>;
 
-type PendingAction = "accept" | "cancel" | "counter-offer" | null;
-
-function formatPrice(value: unknown): string {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed <= 0) return "-";
-  return `${Math.trunc(parsed).toLocaleString("ko-KR")}원`;
-}
+type DriverMatchDetailPageProps = {
+  matchId: number;
+  routeSnapshot?: DriverMatchDetailRouteSnapshot;
+};
 
 function formatDateTime(value: unknown): string {
   const text = typeof value === "string" ? value.trim() : "";
   if (!text) return "-";
 
-  const parsed = Date.parse(text);
-  if (!Number.isFinite(parsed)) return "-";
+  const timestamp = Date.parse(text);
+  if (!Number.isFinite(timestamp)) return "-";
 
-  const date = new Date(parsed);
+  const date = new Date(timestamp);
   const month = date.getMonth() + 1;
   const day = date.getDate();
   const hour = String(date.getHours()).padStart(2, "0");
@@ -52,22 +43,20 @@ function formatDateTime(value: unknown): string {
   return `${month}월 ${day}일 ${hour}:${minute}`;
 }
 
-function toCounterOfferStatusLabel(status: string): string {
-  const normalized = normalizeCounterOfferStatus(status);
-  if (normalized === "PENDING" || normalized === "OPEN") return "대기";
-  if (normalized.includes("ACCEPT")) return "수락됨";
-  if (normalized.includes("REJECT")) return "거절됨";
-  if (normalized.includes("CANCEL")) return "취소됨";
-  return normalized;
+function toAcceptedLabel(accepted: boolean | undefined): string {
+  if (accepted === true) return "true";
+  if (accepted === false) return "false";
+  return "-";
 }
 
 const useStyles = createThemedStyles((theme) => {
   const spacing = safeNumber(theme?.layout?.spacing?.base, 4);
   const cBorder = safeString(theme?.colors?.borderDefault, "#E2E8F0");
   const cPrimary = safeString(theme?.colors?.brandPrimary, "#FF6A00");
+  const cDanger = safeString(theme?.colors?.semanticDanger, "#EF4444");
+  const cInfo = safeString(theme?.colors?.semanticInfo, "#2563EB");
   const cSurface = safeString(theme?.colors?.bgSurface, "#FFFFFF");
   const cMuted = safeString(theme?.colors?.textMuted, "#64748B");
-  const cDanger = safeString(theme?.colors?.semanticDanger, "#EF4444");
 
   return StyleSheet.create({
     content: {
@@ -100,13 +89,9 @@ const useStyles = createThemedStyles((theme) => {
       fontSize: safeNumber(theme?.typography?.scale?.caption?.size, 12),
       lineHeight: safeNumber(theme?.typography?.scale?.caption?.lineHeight, 16),
     },
-    routeRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing,
-    },
-    routeText: {
-      flex: 1,
+    divider: {
+      height: 1,
+      backgroundColor: tint(cBorder, 0.8, cBorder),
     },
     infoRow: {
       minHeight: 20,
@@ -133,26 +118,23 @@ const useStyles = createThemedStyles((theme) => {
       flex: 1,
       minHeight: 38,
     },
-    divider: {
-      height: 1,
-      backgroundColor: tint(cBorder, 0.8, cBorder),
-    },
-    counterList: {
-      gap: spacing * 2,
-    },
-    counterItem: {
-      borderWidth: 1,
-      borderColor: tint(cBorder, 0.9, cBorder),
-      borderRadius: 12,
-      padding: spacing * 2,
-      gap: spacing,
-      backgroundColor: tint(cSurface, 0.96, cSurface),
-    },
     counterForm: {
       gap: spacing,
     },
-    actionErrorText: {
+    helpText: {
+      color: cInfo,
+      fontSize: safeNumber(theme?.typography?.scale?.caption?.size, 12),
+      lineHeight: safeNumber(theme?.typography?.scale?.caption?.lineHeight, 16),
+      fontWeight: "700",
+    },
+    errorText: {
       color: cDanger,
+      fontSize: safeNumber(theme?.typography?.scale?.caption?.size, 12),
+      lineHeight: safeNumber(theme?.typography?.scale?.caption?.lineHeight, 16),
+      fontWeight: "700",
+    },
+    successText: {
+      color: cPrimary,
       fontSize: safeNumber(theme?.typography?.scale?.caption?.size, 12),
       lineHeight: safeNumber(theme?.typography?.scale?.caption?.lineHeight, 16),
       fontWeight: "700",
@@ -160,365 +142,254 @@ const useStyles = createThemedStyles((theme) => {
   });
 });
 
-type DriverMatchDetailPageProps = {
-  matchId: number;
-};
-
-export function DriverMatchDetailPage({ matchId }: DriverMatchDetailPageProps) {
+export function DriverMatchDetailPage({ matchId, routeSnapshot }: DriverMatchDetailPageProps) {
   const theme = useAppTheme();
   const styles = useStyles();
+  const driverMatchMode = getDriverMatchMode();
+  const isMockMode = driverMatchMode === "mock";
 
-  const [match, setMatch] = useState<DriverMatchItem | null>(null);
-  const [quote, setQuote] = useState<QuoteDetailResponse | null>(null);
-  const [counterOffers, setCounterOffers] = useState<CounterOfferItem[]>([]);
-
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [actionErrorMessage, setActionErrorMessage] = useState<string | null>(null);
-  const [lastSuccessMessage, setLastSuccessMessage] = useState<string | null>(null);
-  const [pendingAction, setPendingAction] = useState<PendingAction>(null);
-
+  const [match, setMatch] = useState<DriverMatchSummary | null>(null);
+  const [latestCounterOffer, setLatestCounterOffer] = useState<CounterOfferCreateRequest | null>(null);
   const [priceInput, setPriceInput] = useState("");
   const [messageInput, setMessageInput] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const backgroundColor = safeString(theme?.colors?.bgSurfaceAlt, "#F8FAFC");
   const textMain = safeString(theme?.colors?.textMain, "#111827");
   const textMuted = safeString(theme?.colors?.textMuted, "#64748B");
 
-  const loadDetail = useCallback(async (mode: "initial" | "refresh" = "initial") => {
+  useEffect(() => {
     if (matchId <= 0) {
       setMatch(null);
-      setQuote(null);
-      setCounterOffers([]);
-      setErrorMessage("유효한 오더 ID가 없습니다.");
-      setIsLoading(false);
-      setIsRefreshing(false);
       return;
     }
 
-    if (mode === "refresh") {
-      setIsRefreshing(true);
-    } else {
-      setIsLoading(true);
+    const resolved = resolveDriverMatchFromCache(matchId, routeSnapshot);
+    setMatch(resolved ?? { matchId });
+    setLatestCounterOffer(getLatestMockCounterOffer(matchId));
+  }, [matchId, routeSnapshot]);
+
+  if (matchId <= 0) {
+    return (
+      <PageScaffold title="오더 상세" backgroundColor={backgroundColor}>
+        <AppEmptyState title="유효한 오더 ID가 없습니다." description="목록에서 다시 선택해 주세요." />
+      </PageScaffold>
+    );
+  }
+
+  if (!match) {
+    return (
+      <PageScaffold title="오더 상세" backgroundColor={backgroundColor}>
+        <AppEmptyState title="오더 정보를 찾을 수 없습니다." description="목록에서 다시 선택해 주세요." />
+      </PageScaffold>
+    );
+  }
+
+  const submitAccept = () => {
+    if (!isMockMode || submitting) return;
+    setSubmitting(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    const next = applyMockAccept(match.matchId);
+    if (!next) {
+      setErrorMessage("오더 상태를 갱신할 수 없습니다.");
+      setSubmitting(false);
+      return;
     }
 
-    try {
-      const matchData = await getDriverMatch(matchId);
-      if (!matchData) {
-        setMatch(null);
-        setQuote(null);
-        setCounterOffers([]);
-        setErrorMessage(null);
-        return;
-      }
+    setMatch(next);
+    setSuccessMessage("수락이 반영되었습니다.");
+    setSubmitting(false);
+  };
 
-      const quoteId = matchData.quoteId;
-      const [quoteData, offers] = await Promise.all([
-        quoteId > 0
-          ? getShipperQuoteDetail(quoteId).catch(() => null)
-          : Promise.resolve(null),
-        quoteId > 0
-          ? listDriverCounterOffersByQuote(quoteId).catch(() => [])
-          : Promise.resolve([]),
-      ]);
+  const submitCancel = () => {
+    if (!isMockMode || submitting) return;
+    setSubmitting(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
 
-      setMatch(matchData);
-      setQuote(quoteData);
-      setCounterOffers(offers);
-      setErrorMessage(null);
-    } catch {
-      setMatch(null);
-      setQuote(null);
-      setCounterOffers([]);
-      setErrorMessage(NETWORK_ERROR_TEXT);
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
+    const next = applyMockCancel(match.matchId);
+    if (!next) {
+      setErrorMessage("오더 상태를 갱신할 수 없습니다.");
+      setSubmitting(false);
+      return;
     }
-  }, [matchId]);
 
-  useEffect(() => {
-    void loadDetail("initial");
-  }, [loadDetail]);
+    setMatch(next);
+    setSuccessMessage("취소가 반영되었습니다.");
+    setSubmitting(false);
+  };
 
-  const runAccept = useCallback(async () => {
-    if (!match || pendingAction !== null) return;
-
-    setActionErrorMessage(null);
-    setLastSuccessMessage(null);
-    setPendingAction("accept");
-
-    try {
-      await acceptDriverMatch(match.matchId);
-      await loadDetail("refresh");
-      setLastSuccessMessage("수락이 완료되었습니다.");
-    } catch {
-      setActionErrorMessage(NETWORK_ERROR_TEXT);
-    } finally {
-      setPendingAction(null);
-    }
-  }, [loadDetail, match, pendingAction]);
-
-  const runCancel = useCallback(async () => {
-    if (!match || pendingAction !== null) return;
-
-    setActionErrorMessage(null);
-    setLastSuccessMessage(null);
-    setPendingAction("cancel");
-
-    try {
-      await cancelDriverMatch(match.matchId);
-      await loadDetail("refresh");
-      setLastSuccessMessage("취소가 완료되었습니다.");
-    } catch {
-      setActionErrorMessage(NETWORK_ERROR_TEXT);
-    } finally {
-      setPendingAction(null);
-    }
-  }, [loadDetail, match, pendingAction]);
-
-  const runCounterOfferSubmit = useCallback(async () => {
-    if (!match || pendingAction !== null) return;
-    if (match.quoteId <= 0) return;
+  const submitCounterOffer = () => {
+    if (!isMockMode || submitting) return;
 
     const proposedPrice = Number(priceInput);
-    const hasPrice = Number.isFinite(proposedPrice) && Math.trunc(proposedPrice) > 0;
-    const message = messageInput.trim();
+    const safePrice = Number.isFinite(proposedPrice) && Math.trunc(proposedPrice) > 0 ? Math.trunc(proposedPrice) : undefined;
+    const message = messageInput.trim() || undefined;
 
-    if (!hasPrice && !message) {
-      setActionErrorMessage("금액 또는 사유를 입력해 주세요.");
+    if (!safePrice && !message) {
+      setErrorMessage("금액 또는 사유를 입력해 주세요.");
+      setSuccessMessage(null);
       return;
     }
 
-    setActionErrorMessage(null);
-    setLastSuccessMessage(null);
-    setPendingAction("counter-offer");
+    setSubmitting(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
 
-    try {
-      await createDriverCounterOffer(match.quoteId, {
-        proposedPrice: hasPrice ? Math.trunc(proposedPrice) : undefined,
-        message: message || undefined,
-      });
-      await loadDetail("refresh");
-      setPriceInput("");
-      setMessageInput("");
-      setLastSuccessMessage("역제안이 제출되었습니다.");
-    } catch {
-      setActionErrorMessage(NETWORK_ERROR_TEXT);
-    } finally {
-      setPendingAction(null);
+    const nextOffer = setLatestMockCounterOffer(match.matchId, {
+      proposedPrice: safePrice,
+      message,
+    });
+
+    if (!nextOffer) {
+      setErrorMessage("역제안을 저장할 수 없습니다.");
+      setSubmitting(false);
+      return;
     }
-  }, [loadDetail, match, messageInput, pendingAction, priceInput]);
 
-  const detailSummary = useMemo(() => {
-    if (!match) return null;
-    return {
-      statusLabel: toDriverMatchStatusLabel(match.status),
-      canAccept: canDriverAcceptMatch(match.status),
-      canCancel: match.cancelable,
-      requestedAt: formatDateTime(match.createdAt ?? quote?.createdAt),
-      updatedAt: formatDateTime(match.updatedAt ?? quote?.updatedAt),
-      amountText: formatPrice(quote?.finalPrice ?? quote?.desiredPrice),
-      originAddress: quote?.originAddress || "-",
-      destinationAddress: quote?.destinationAddress || "-",
-      quoteIdText: match.quoteId > 0 ? `#${match.quoteId}` : "-",
-      matchIdText: `#${match.matchId}`,
-    };
-  }, [match, quote?.createdAt, quote?.desiredPrice, quote?.destinationAddress, quote?.finalPrice, quote?.originAddress, quote?.updatedAt]);
-
-  if (isLoading) {
-    return (
-      <PageScaffold title="오더 상세" backgroundColor={backgroundColor}>
-        <AppSpinner label="오더 상세를 불러오는 중입니다." />
-      </PageScaffold>
-    );
-  }
-
-  if (errorMessage) {
-    return (
-      <PageScaffold title="오더 상세" backgroundColor={backgroundColor}>
-        <AppErrorState
-          title="오더 상세를 불러오지 못했어요"
-          description={errorMessage}
-          retryLabel="다시 시도"
-          onRetry={() => {
-            void loadDetail("initial");
-          }}
-          fullScreen={false}
-        />
-      </PageScaffold>
-    );
-  }
-
-  if (!detailSummary || !match) {
-    return (
-      <PageScaffold title="오더 상세" backgroundColor={backgroundColor}>
-        <AppEmptyState title="오더를 찾을 수 없습니다." description="목록에서 다시 선택해 주세요." />
-      </PageScaffold>
-    );
-  }
-
-  const isAcceptLoading = pendingAction === "accept";
-  const isCancelLoading = pendingAction === "cancel";
-  const isCounterOfferLoading = pendingAction === "counter-offer";
-  const isActionPending = pendingAction !== null;
+    setLatestCounterOffer(nextOffer);
+    setPriceInput("");
+    setMessageInput("");
+    setSuccessMessage("역제안이 제출되었습니다.");
+    setSubmitting(false);
+  };
 
   return (
     <PageScaffold title="오더 상세" backgroundColor={backgroundColor} scroll={false}>
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={isRefreshing}
-            onRefresh={() => {
-              void loadDetail("refresh");
-            }}
-          />
-        }
-      >
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <AppCard outlined style={styles.card}>
           <View style={styles.headerRow}>
             <AppText variant="heading" weight="800" color={textMain}>
-              {`오더 ${detailSummary.matchIdText}`}
+              {`오더 #${match.matchId}`}
             </AppText>
             <View style={styles.statusChip}>
-              <AppText style={styles.statusChipText}>{detailSummary.statusLabel}</AppText>
+              <AppText style={styles.statusChipText}>{toDriverMatchStatusLabel(match.status)}</AppText>
             </View>
-          </View>
-
-          <View style={styles.routeRow}>
-            <AppText variant="detail" weight="700" color={textMain} style={styles.routeText} numberOfLines={1}>
-              {detailSummary.originAddress}
-            </AppText>
-            <AppText variant="caption" color={textMuted}>
-              →
-            </AppText>
-            <AppText variant="detail" weight="700" color={textMain} style={styles.routeText} numberOfLines={1}>
-              {detailSummary.destinationAddress}
-            </AppText>
           </View>
 
           <View style={styles.divider} />
 
           <View style={styles.infoRow}>
-            <AppText style={styles.infoLabel}>견적 ID</AppText>
+            <AppText style={styles.infoLabel}>matchId</AppText>
             <AppText variant="caption" color={textMuted} style={styles.infoValue}>
-              {detailSummary.quoteIdText}
+              {match.matchId}
             </AppText>
           </View>
           <View style={styles.infoRow}>
-            <AppText style={styles.infoLabel}>요청 시각</AppText>
+            <AppText style={styles.infoLabel}>quoteId</AppText>
             <AppText variant="caption" color={textMuted} style={styles.infoValue}>
-              {detailSummary.requestedAt}
+              {typeof match.quoteId === "number" && match.quoteId > 0 ? match.quoteId : "-"}
             </AppText>
           </View>
           <View style={styles.infoRow}>
-            <AppText style={styles.infoLabel}>최근 변경</AppText>
+            <AppText style={styles.infoLabel}>status</AppText>
             <AppText variant="caption" color={textMuted} style={styles.infoValue}>
-              {detailSummary.updatedAt}
+              {match.status || "-"}
             </AppText>
           </View>
           <View style={styles.infoRow}>
-            <AppText style={styles.infoLabel}>금액</AppText>
+            <AppText style={styles.infoLabel}>accepted</AppText>
             <AppText variant="caption" color={textMuted} style={styles.infoValue}>
-              {detailSummary.amountText}
+              {toAcceptedLabel(match.accepted)}
             </AppText>
           </View>
+          <View style={styles.infoRow}>
+            <AppText style={styles.infoLabel}>createdAt</AppText>
+            <AppText variant="caption" color={textMuted} style={styles.infoValue}>
+              {formatDateTime(match.createdAt)}
+            </AppText>
+          </View>
+          <View style={styles.infoRow}>
+            <AppText style={styles.infoLabel}>updatedAt</AppText>
+            <AppText variant="caption" color={textMuted} style={styles.infoValue}>
+              {formatDateTime(match.updatedAt)}
+            </AppText>
+          </View>
+        </AppCard>
+
+        <AppCard outlined style={styles.card}>
+          <AppText variant="heading" weight="800" color={textMain}>
+            액션
+          </AppText>
+
+          {!isMockMode ? (
+            <AppText style={styles.helpText}>서버 권한/연동 준비중</AppText>
+          ) : null}
 
           <View style={styles.actionRow}>
             <AppButton
-              title="배차 수락"
+              title="수락"
               variant="primary"
               style={styles.actionButton}
-              onPress={() => {
-                void runAccept();
-              }}
-              loading={isAcceptLoading}
-              disabled={!detailSummary.canAccept || (isActionPending && !isAcceptLoading)}
+              loading={submitting && isMockMode}
+              disabled={!isMockMode || submitting}
+              onPress={submitAccept}
             />
             <AppButton
-              title="배차 취소"
+              title="취소"
               variant="destructive"
               style={styles.actionButton}
-              onPress={() => {
-                void runCancel();
-              }}
-              loading={isCancelLoading}
-              disabled={!detailSummary.canCancel || (isActionPending && !isCancelLoading)}
+              loading={submitting && isMockMode}
+              disabled={!isMockMode || submitting}
+              onPress={submitCancel}
             />
           </View>
 
-          {actionErrorMessage ? (
-            <AppText style={styles.actionErrorText}>{actionErrorMessage}</AppText>
-          ) : null}
-          {lastSuccessMessage ? (
-            <AppText variant="caption" color={textMuted}>
-              {lastSuccessMessage}
-            </AppText>
-          ) : null}
-        </AppCard>
+          <View style={styles.counterForm}>
+            <AppInput
+              label="역제안 금액"
+              placeholder="예) 120000"
+              value={priceInput}
+              keyboardType="number-pad"
+              editable={isMockMode && !submitting}
+              onChangeText={(text) => {
+                setPriceInput(text.replace(/[^0-9]/g, ""));
+              }}
+            />
+            <AppInput
+              label="사유"
+              placeholder="선택 입력"
+              value={messageInput}
+              editable={isMockMode && !submitting}
+              onChangeText={setMessageInput}
+              multiline
+              numberOfLines={3}
+              textAlignVertical="top"
+            />
+            <AppButton
+              title="역제안 제출"
+              variant="primary"
+              loading={submitting && isMockMode}
+              disabled={!isMockMode || submitting}
+              onPress={submitCounterOffer}
+            />
+          </View>
 
-        {match.quoteId > 0 ? (
-          <AppCard outlined style={styles.card}>
-            <AppText variant="heading" weight="800" color={textMain}>
-              역제안
-            </AppText>
-
-            {counterOffers.length > 0 ? (
-              <View style={styles.counterList}>
-                {counterOffers.map((offer) => (
-                  <View key={offer.counterOfferId} style={styles.counterItem}>
-                    <AppText variant="detail" weight="700" color={textMain}>
-                      {`${formatPrice(offer.proposedPrice)} · ${toCounterOfferStatusLabel(offer.status)}`}
-                    </AppText>
-                    <AppText variant="caption" color={textMuted}>
-                      {offer.message || "-"}
-                    </AppText>
-                    <AppText variant="caption" color={textMuted}>
-                      {formatDateTime(offer.createdAt)}
-                    </AppText>
-                  </View>
-                ))}
+          {latestCounterOffer ? <View style={styles.divider} /> : null}
+          {latestCounterOffer ? (
+            <>
+              <View style={styles.infoRow}>
+                <AppText style={styles.infoLabel}>최근 금액</AppText>
+                <AppText variant="caption" color={textMuted} style={styles.infoValue}>
+                  {typeof latestCounterOffer.proposedPrice === "number" ? latestCounterOffer.proposedPrice : "-"}
+                </AppText>
               </View>
-            ) : (
-              <AppText variant="caption" color={textMuted}>
-                제출된 역제안이 없습니다.
-              </AppText>
-            )}
+              <View style={styles.infoRow}>
+                <AppText style={styles.infoLabel}>최근 사유</AppText>
+                <AppText variant="caption" color={textMuted} style={styles.infoValue}>
+                  {latestCounterOffer.message || "-"}
+                </AppText>
+              </View>
+            </>
+          ) : null}
 
-            <View style={styles.counterForm}>
-              <AppInput
-                label="역제안 금액"
-                placeholder="예) 120000"
-                value={priceInput}
-                keyboardType="number-pad"
-                onChangeText={(text) => {
-                  setPriceInput(text.replace(/[^0-9]/g, ""));
-                }}
-              />
-              <AppInput
-                label="사유"
-                placeholder="선택 입력"
-                value={messageInput}
-                onChangeText={setMessageInput}
-                multiline
-                numberOfLines={3}
-                textAlignVertical="top"
-              />
-              <AppButton
-                title="역제안 제출"
-                variant="primary"
-                loading={isCounterOfferLoading}
-                disabled={isActionPending && !isCounterOfferLoading}
-                onPress={() => {
-                  void runCounterOfferSubmit();
-                }}
-              />
-            </View>
-          </AppCard>
-        ) : null}
+          {errorMessage ? <AppText style={styles.errorText}>{errorMessage}</AppText> : null}
+          {successMessage ? <AppText style={styles.successText}>{successMessage}</AppText> : null}
+        </AppCard>
       </ScrollView>
     </PageScaffold>
   );

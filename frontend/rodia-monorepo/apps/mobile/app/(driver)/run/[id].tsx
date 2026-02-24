@@ -9,15 +9,30 @@ function readParam(value: string | string[] | undefined): string {
   return typeof raw === "string" ? raw.trim() : "";
 }
 
-function toPositiveInt(value: string): number {
-  const parsed = Number(value);
+function toPositiveInt(text: string): number {
+  const parsed = Number(text);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
 }
 
-export default function DriverRunRoute() {
-  const params = useLocalSearchParams<{ id?: string | string[] }>();
-  const idText = readParam(params?.id);
+function toOptionalBoolean(text: string): boolean | undefined {
+  if (!text) return undefined;
+  if (text === "true") return true;
+  if (text === "false") return false;
+  return undefined;
+}
 
+export default function DriverRunRoute() {
+  const params = useLocalSearchParams<{
+    id?: string | string[];
+    matchId?: string | string[];
+    quoteId?: string | string[];
+    status?: string | string[];
+    createdAt?: string | string[];
+    updatedAt?: string | string[];
+    accepted?: string | string[];
+  }>();
+
+  const idText = readParam(params?.id) || readParam(params?.matchId);
   if (!idText || idText === "current") {
     return <DriverMyMatchesPage />;
   }
@@ -27,5 +42,24 @@ export default function DriverRunRoute() {
     return <Redirect href="/(driver)/run/current" />;
   }
 
-  return <DriverMatchDetailPage matchId={matchId} />;
+  const quoteIdText = readParam(params?.quoteId);
+  const status = readParam(params?.status) || undefined;
+  const createdAt = readParam(params?.createdAt) || undefined;
+  const updatedAt = readParam(params?.updatedAt) || undefined;
+  const accepted = toOptionalBoolean(readParam(params?.accepted));
+  const quoteId = toPositiveInt(quoteIdText);
+
+  return (
+    <DriverMatchDetailPage
+      matchId={matchId}
+      routeSnapshot={{
+        matchId,
+        quoteId: quoteId > 0 ? quoteId : undefined,
+        status,
+        createdAt,
+        updatedAt,
+        accepted,
+      }}
+    />
+  );
 }
