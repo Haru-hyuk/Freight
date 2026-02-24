@@ -19,6 +19,11 @@ public class MatchResponse {
     private Long driverId;
     private Boolean accepted;
     private String status;
+    private String matchGroupKey;
+    private String matchGroupType;
+    private Integer matchGroupOrder;
+    private Boolean locationSharingEnabled;
+    private LocalDateTime locationSharingUpdatedAt;
     private LocalDateTime acceptedAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -33,6 +38,11 @@ public class MatchResponse {
                 .driverId(match.getDriverId())
                 .accepted(match.getAccepted())
                 .status(match.getStatus().name())
+                .matchGroupKey(match.getMatchGroupKey())
+                .matchGroupType(match.getMatchGroupType())
+                .matchGroupOrder(match.getMatchGroupOrder())
+                .locationSharingEnabled(match.getLocationSharingEnabled())
+                .locationSharingUpdatedAt(match.getLocationSharingUpdatedAt())
                 .acceptedAt(match.getAcceptedAt())
                 .createdAt(match.getCreatedAt())
                 .updatedAt(match.getUpdatedAt())
