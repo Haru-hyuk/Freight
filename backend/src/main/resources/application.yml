@@ -25,6 +25,9 @@ spring:
     properties:
       hibernate:
         format_sql: true
+  redis:
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
 
 jwt:
   secret: ${JWT_SECRET}
@@ -76,6 +79,19 @@ springdoc:
 operations:
   swagger-ui:
     path: /swagger-ui
+  scheduler:
+    enabled: ${OPERATIONS_SCHEDULER_ENABLED:true}
+  match:
+    payment-timeout-minutes: ${MATCH_PAYMENT_TIMEOUT_MINUTES:60}
+    payment-timeout-check-ms: ${MATCH_PAYMENT_TIMEOUT_CHECK_MS:60000}
+  settlement:
+    auto-confirm-hours: ${SETTLEMENT_AUTO_CONFIRM_HOURS:24}
+    auto-confirm-check-ms: ${SETTLEMENT_AUTO_CONFIRM_CHECK_MS:300000}
+
+algorithm:
+  gateway:
+    default-max-pickup-distance-km: ${ALGORITHM_MAX_PICKUP_KM:25.0}
+    max-candidate-quotes: ${ALGORITHM_MAX_CANDIDATES:80}
 
 geocoding:
   kakao:
