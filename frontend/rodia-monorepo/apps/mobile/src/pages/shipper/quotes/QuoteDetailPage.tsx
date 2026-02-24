@@ -3,20 +3,19 @@ import React from "react";
 import { Alert, InteractionManager, LayoutAnimation, Pressable, StyleSheet, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { cancelShipperMatch, createShipperMatch, listMyShipperMatches, type ShipperMatchItem } from "@/features/matching/api";
-import { resolveTonePalette, type BottomActionId } from "@/features/quote/model/quoteActionMatrix";
+import { resolveTonePalette } from "@/features/quote/model/quoteActionMatrix";
 import { useQuoteDetail } from "@/features/quote/model/useQuoteDetail";
+import { formatWorkMethodLabel } from "@/features/quote/model/workMethod";
 import { deleteShipperQuote } from "@/features/quote/api";
-import { BottomActionRouter } from "@/features/quote/ui/actions/BottomActionRouter";
+import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
 import { initLayoutAnimationForAndroid } from "@/shared/lib/ui/layoutAnimationInit";
 import { safeNumber, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppButton } from "@/shared/ui/kit/AppButton";
 import { AppCard } from "@/shared/ui/kit/AppCard";
-import { AppErrorState } from "@/shared/ui/kit/AppErrorState";
-import { AppSpinner } from "@/shared/ui/kit/AppSpinner";
+import { AppRequestState } from "@/shared/ui/kit/AppRequestState";
 import { AppText } from "@/shared/ui/kit/AppText";
 import { PageScaffold } from "@/widgets/layout/PageScaffold";
 
@@ -24,6 +23,15 @@ type QuoteDetailView = ReturnType<typeof useQuoteDetail>;
 type MatchSnapshot = {
   cancelableMatch: ShipperMatchItem | null;
   nonCanceledMatch: ShipperMatchItem | null;
+};
+type QuoteDetailQuote = QuoteDetailView["quote"];
+type RouteFlowNode = {
+  key: string;
+  title: string;
+  address: string;
+  contactName: string;
+  contactPhone: string;
+  kind: "origin" | "stop" | "destination";
 };
 
 const EMPTY_MATCH_SNAPSHOT: MatchSnapshot = {
@@ -39,7 +47,7 @@ const useStyles = createThemedStyles((theme) => {
     pageContent: {
       paddingTop: spacing * 2,
       paddingHorizontal: spacing * 5,
-      paddingBottom: spacing * 28,
+      paddingBottom: spacing * 8,
       backgroundColor: c.bgMain,
     },
 
@@ -48,10 +56,36 @@ const useStyles = createThemedStyles((theme) => {
       marginBottom: spacing * 3,
       gap: spacing,
     },
-    headerActionButton: {
-      minHeight: 36,
-      width: 36,
-      borderRadius: 10,
+    manageCard: {
+      marginBottom: spacing * 3,
+    },
+    manageInner: {
+      padding: spacing * 4,
+      gap: spacing * 2,
+    },
+    manageTitle: {
+      color: c.textMain,
+      fontSize: safeNumber(theme.typography.scale.detail.size, 14),
+      lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20),
+      fontWeight: "900",
+    },
+    manageDesc: {
+      color: c.textMuted,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
+      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
+      fontWeight: "600",
+    },
+    manageActionsRow: {
+      flexDirection: "row",
+      gap: spacing * 2,
+    },
+    manageEditButton: {
+      flex: 1,
+      minHeight: 42,
+    },
+    manageDeleteButton: {
+      flex: 1,
+      minHeight: 42,
     },
     statusRow: {
       minHeight: 44,
@@ -149,42 +183,6 @@ const useStyles = createThemedStyles((theme) => {
       lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
       fontWeight: "900",
     },
-    routeRow: {
-      minHeight: 44,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing + 2,
-    },
-    routeAddress: {
-      flex: 1,
-      color: c.textMain,
-      fontSize: safeNumber(theme.typography.scale.detail.size, 14) + 1,
-      lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20) + 1,
-      fontWeight: "900",
-      letterSpacing: -0.2,
-    },
-    routeArrow: {
-      color: c.borderStrong,
-      fontSize: 14,
-    },
-    waypointRow: {
-      minHeight: 24,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing,
-    },
-    waypointIcon: {
-      color: c.textSub,
-      fontSize: 14,
-    },
-    waypointText: {
-      flex: 1,
-      color: c.textSub,
-      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
-      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
-      fontWeight: "700",
-    },
-
     divider: {
       height: 1,
       backgroundColor: tint(c.textMain, 0.06, c.borderDefault),
@@ -234,15 +232,87 @@ const useStyles = createThemedStyles((theme) => {
       fontWeight: "600",
       marginTop: spacing,
     },
-    matchBottomWrap: {
-      backgroundColor: c.bgSurface,
-      borderTopWidth: 1,
-      borderTopColor: c.borderDefault,
-      paddingHorizontal: spacing * 5,
-      paddingTop: spacing * 3,
+    overviewActionRow: {
+      marginTop: spacing * 2,
     },
-    matchBottomButton: {
+    overviewActionButton: {
       minHeight: 44,
+    },
+    routeFlowSection: {
+      marginBottom: spacing * 3,
+      gap: spacing * 2,
+    },
+    routeFlowTitle: {
+      color: c.textMain,
+      fontSize: safeNumber(theme.typography.scale.detail.size, 14),
+      lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20),
+      fontWeight: "900",
+    },
+    routeFlowCardInner: {
+      padding: spacing * 4,
+      gap: spacing,
+    },
+    routeFlowRow: {
+      flexDirection: "row",
+      alignItems: "stretch",
+      gap: spacing,
+    },
+    routeFlowRail: {
+      width: 20,
+      alignItems: "center",
+    },
+    routeFlowDot: {
+      width: 10,
+      height: 10,
+      borderRadius: 5,
+      backgroundColor: c.borderStrong,
+      marginTop: 6,
+    },
+    routeFlowDotOrigin: {
+      backgroundColor: c.textMain,
+    },
+    routeFlowDotStop: {
+      backgroundColor: c.brandPrimary,
+    },
+    routeFlowDotDestination: {
+      backgroundColor: c.semanticSuccess,
+    },
+    routeFlowLine: {
+      width: 2,
+      flex: 1,
+      marginTop: 4,
+      backgroundColor: tint(c.textMain, 0.14, c.borderDefault),
+    },
+    routeFlowBody: {
+      flex: 1,
+      paddingBottom: spacing * 2,
+    },
+    routeFlowHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: spacing,
+    },
+    routeFlowNodeTitle: {
+      color: c.textMain,
+      fontSize: safeNumber(theme.typography.scale.detail.size, 14),
+      lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20),
+      fontWeight: "800",
+    },
+    routeFlowContact: {
+      color: c.textSub,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
+      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
+      fontWeight: "700",
+      maxWidth: "58%",
+      textAlign: "right",
+    },
+    routeFlowAddress: {
+      color: c.textMain,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
+      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
+      fontWeight: "600",
+      marginTop: 2,
     },
     accordionHeader: {
       minHeight: 44,
@@ -347,24 +417,80 @@ function parsePositiveIntParam(value: string | string[] | undefined): number {
   return parsePositiveInt(readRouteParamText(value));
 }
 
-function buildWaypointText(waypoints: string[]): string {
-  const list = Array.isArray(waypoints) ? waypoints.filter(Boolean) : [];
-  if (list.length === 0) return "";
-  if (list.length === 1) return `경유지 1곳: ${list[0]}`;
-  return `경유지 ${list.length}곳: ${list[0]} 외 ${list.length - 1}곳`;
-}
-
 function toTrimmedText(value: unknown): string {
   return String(value ?? "").trim();
 }
 
-function toWorkMethodLabel(value: unknown): string {
-  const raw = toTrimmedText(value);
-  const normalized = raw.toUpperCase();
-  if (normalized === "SHIPPER") return "화주";
-  if (normalized === "DRIVER") return "기사";
-  if (!raw) return "-";
-  return raw;
+function formatContactLine(name: unknown, phone: unknown): string {
+  const safeName = toTrimmedText(name);
+  const safePhone = toTrimmedText(phone);
+  if (safeName && safePhone) return `${safeName} · ${safePhone}`;
+  if (safeName) return safeName;
+  if (safePhone) return safePhone;
+  return "-";
+}
+
+function buildRouteFlowNodes(quote: QuoteDetailQuote): RouteFlowNode[] {
+  const originAddress = toTrimmedText(quote?.originAddress);
+  const destinationAddress = toTrimmedText(quote?.destinationAddress);
+
+  const nodes: RouteFlowNode[] = [
+    {
+      key: "origin",
+      title: "출발지 · 발송인",
+      address: originAddress || "-",
+      contactName: toTrimmedText(quote?.senderName),
+      contactPhone: toTrimmedText(quote?.senderPhone),
+      kind: "origin",
+    },
+  ];
+
+  const stops = Array.isArray(quote?.stops)
+    ? quote.stops
+        .slice()
+        .sort((a, b) => parsePositiveInt(a?.seq) - parsePositiveInt(b?.seq))
+    : [];
+
+  const stopNodes: RouteFlowNode[] = stops
+    .map((stop, index) => {
+      const seq = Math.max(1, parsePositiveInt(stop?.seq) || index + 1);
+      const address = toTrimmedText(stop?.address);
+      if (!address) return null;
+
+      return {
+        key: `stop-${seq}`,
+        title: `경유지 ${seq}`,
+        address,
+        contactName: toTrimmedText(stop?.contactName),
+        contactPhone: toTrimmedText(stop?.contactPhone),
+        kind: "stop",
+      } as RouteFlowNode;
+    })
+    .filter((item): item is RouteFlowNode => Boolean(item));
+
+  nodes.push(...stopNodes);
+
+  nodes.push({
+    key: "destination",
+    title: "도착지 · 도착 관리자",
+    address: destinationAddress || "-",
+    contactName: toTrimmedText(quote?.receiverName),
+    contactPhone: toTrimmedText(quote?.receiverPhone),
+    kind: "destination",
+  });
+
+  if (nodes.length > 0) return nodes;
+
+  return [
+    {
+      key: "route-fallback",
+      title: "경로",
+      address: "-",
+      contactName: "",
+      contactPhone: "",
+      kind: "destination",
+    },
+  ];
 }
 
 function formatPriceText(value: unknown): string {
@@ -387,10 +513,6 @@ function formatDistanceText(value: unknown): string {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed <= 0) return "-";
   return `${parsed.toFixed(1)}km`;
-}
-
-function isSupportedBottomAction(action?: BottomActionId): action is BottomActionId {
-  return action === "pay" || action === "reRequestRoute";
 }
 
 function normalizeMatchStatus(value: unknown): string {
@@ -445,31 +567,6 @@ function resolveMatchSnapshotForQuote(matches: unknown, quoteId: number): MatchS
   };
 }
 
-function normalizeArchiveKey(value: unknown): string {
-  return toTrimmedText(value).replace(/\s+/g, "").replace(/[·•]/g, "/");
-}
-
-const VEHICLE_CARGO_TITLE_SET = new Set(["차량/화물", "차량,화물", "차량화물", "차량/화물정보"]);
-const CARGO_INFO_LABEL_SET = new Set(["화물", "화물명", "화물구분", "화물설명", "중량", "부피", "하차위치", "적재방식", "품목"]);
-const CARGO_INFO_KEYWORD_SET = new Set(["화물", "중량", "부피", "하차", "적재", "품목"]);
-
-function isVehicleCargoCombinedSectionTitle(title: unknown): boolean {
-  const normalized = normalizeArchiveKey(title);
-  if (!normalized) return false;
-  if (VEHICLE_CARGO_TITLE_SET.has(normalized)) return true;
-  return normalized.includes("차량") && normalized.includes("화물");
-}
-
-function isCargoInfoLabel(label: unknown): boolean {
-  const normalized = normalizeArchiveKey(label);
-  if (!normalized) return false;
-  if (CARGO_INFO_LABEL_SET.has(normalized)) return true;
-  for (const keyword of CARGO_INFO_KEYWORD_SET) {
-    if (normalized.includes(keyword)) return true;
-  }
-  return false;
-}
-
 function normalizeArchiveRowValue(value: unknown): string {
   return toDisplayDash(value);
 }
@@ -486,11 +583,10 @@ function resolveArchiveRowIconName(
     normalizedSectionTitle === "화물 정보";
   if (!vehicleCargoSection) return null;
 
+  if (normalizedLabel === "화물") return "cube-outline";
   if (normalizedLabel === "차량") return "bus-outline";
   if (normalizedLabel === "차종") return "car-sport-outline";
   if (normalizedLabel === "차량 번호") return "car-outline";
-  if (normalizedLabel === "화물명") return "cube-outline";
-  if (normalizedLabel === "화물 구분") return "pricetag-outline";
   if (normalizedLabel === "화물 설명") return "document-text-outline";
   if (normalizedLabel === "중량") return "git-network-outline";
   if (normalizedLabel === "부피") return "layers-outline";
@@ -498,19 +594,22 @@ function resolveArchiveRowIconName(
   return null;
 }
 
-function OverviewCard({ view }: { view: QuoteDetailView }) {
+type OverviewMatchAction = {
+  title: string;
+  variant: "primary" | "destructive";
+  loading: boolean;
+  disabled: boolean;
+  onPress: () => void;
+};
+
+function OverviewCard({ view, matchAction }: { view: QuoteDetailView; matchAction?: OverviewMatchAction | null }) {
   const styles = useStyles();
   const theme = useAppTheme();
   const palette = resolveTonePalette(theme, view.policy);
   const iconName: keyof typeof Ionicons.glyphMap = "information-circle-outline";
-  const waypoints = view.coreSummary?.waypointAddresses ?? [];
-  const waypointText = buildWaypointText(waypoints);
-
-  const origin = view.coreSummary?.originAddress ?? "";
-  const dest = view.coreSummary?.destinationAddress ?? "";
   const distanceText = formatDistanceText(view.quote?.distanceKm);
-  const loadMethodText = toWorkMethodLabel(view.quote?.loadMethod);
-  const unloadMethodText = toWorkMethodLabel(view.quote?.unloadMethod);
+  const loadMethodText = formatWorkMethodLabel(view.quote?.loadMethod);
+  const unloadMethodText = formatWorkMethodLabel(view.quote?.unloadMethod);
   const completedAtText = (view.coreSummary?.completedAtText ?? "").trim();
   const isCompleted = (view.quote?.status ?? "") === "DROPOFF";
 
@@ -573,27 +672,6 @@ function OverviewCard({ view }: { view: QuoteDetailView }) {
           <AppText style={[styles.eyebrow, { color: palette.badgeText }]}>운송 요약</AppText>
         </View>
 
-        <View style={styles.routeRow}>
-          <AppText style={styles.routeAddress} numberOfLines={1}>
-            {toDisplayDash(origin)}
-          </AppText>
-          <Ionicons name="arrow-forward" style={styles.routeArrow} />
-          <AppText style={styles.routeAddress} numberOfLines={1}>
-            {toDisplayDash(dest)}
-          </AppText>
-        </View>
-
-        {waypointText ? (
-          <View style={styles.waypointRow}>
-            <Ionicons name="navigate-outline" style={styles.waypointIcon} />
-            <AppText style={styles.waypointText} numberOfLines={1}>
-              {waypointText}
-            </AppText>
-          </View>
-        ) : null}
-
-        <View style={styles.divider} />
-
         <View style={styles.metricRow}>
           <View style={styles.metricLeft}>
             <Ionicons name="git-network-outline" style={styles.metricIcon} />
@@ -632,14 +710,109 @@ function OverviewCard({ view }: { view: QuoteDetailView }) {
           {supportText ? <AppText style={styles.note}>{supportText}</AppText> : null}
         </View>
 
+        {matchAction ? (
+          <View style={styles.overviewActionRow}>
+            <AppButton
+              title={matchAction.title}
+              variant={matchAction.variant}
+              style={styles.overviewActionButton}
+              onPress={matchAction.onPress}
+              loading={matchAction.loading}
+              disabled={matchAction.disabled}
+            />
+          </View>
+        ) : null}
       </View>
     </AppCard>
   );
 }
 
+function ShipperManagementCard({
+  disabled,
+  isDeleting,
+  onPressEdit,
+  onPressDelete,
+}: {
+  disabled: boolean;
+  isDeleting: boolean;
+  onPressEdit: () => void;
+  onPressDelete: () => void;
+}) {
+  const styles = useStyles();
+
+  return (
+    <AppCard outlined elevated={false} style={styles.manageCard}>
+      <View style={styles.manageInner}>
+        <AppText style={styles.manageTitle}>견적 관리</AppText>
+        <AppText style={styles.manageDesc}>수정 또는 삭제를 바로 실행할 수 있습니다.</AppText>
+        <View style={styles.manageActionsRow}>
+          <AppButton
+            title="견적 수정"
+            variant="secondary"
+            style={styles.manageEditButton}
+            onPress={onPressEdit}
+            disabled={disabled || isDeleting}
+          />
+          <AppButton
+            title="견적 삭제"
+            variant="destructive"
+            style={styles.manageDeleteButton}
+            onPress={onPressDelete}
+            disabled={disabled}
+            loading={isDeleting}
+          />
+        </View>
+      </View>
+    </AppCard>
+  );
+}
+
+function RouteFlowCard({ quote }: { quote: QuoteDetailQuote }) {
+  const styles = useStyles();
+  const nodes = React.useMemo(() => buildRouteFlowNodes(quote), [quote]);
+
+  return (
+    <View style={styles.routeFlowSection}>
+      <AppText style={styles.routeFlowTitle}>운송 경로</AppText>
+      <AppCard outlined elevated={false}>
+        <View style={styles.routeFlowCardInner}>
+          {nodes.map((node, index) => {
+            const isLast = index === nodes.length - 1;
+            const contactLine = formatContactLine(node.contactName, node.contactPhone);
+            return (
+              <View key={node.key} style={styles.routeFlowRow}>
+                <View style={styles.routeFlowRail}>
+                  <View
+                    style={[
+                      styles.routeFlowDot,
+                      node.kind === "origin" && styles.routeFlowDotOrigin,
+                      node.kind === "stop" && styles.routeFlowDotStop,
+                      node.kind === "destination" && styles.routeFlowDotDestination,
+                    ]}
+                  />
+                  {!isLast ? <View style={styles.routeFlowLine} /> : null}
+                </View>
+                <View style={styles.routeFlowBody}>
+                  <View style={styles.routeFlowHeader}>
+                    <AppText style={styles.routeFlowNodeTitle}>{node.title}</AppText>
+                    <AppText style={styles.routeFlowContact} numberOfLines={1}>
+                      {contactLine}
+                    </AppText>
+                  </View>
+                  <AppText style={styles.routeFlowAddress}>{toDisplayDash(node.address)}</AppText>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      </AppCard>
+    </View>
+  );
+}
+
 function SpecificationArchive({ view }: { view: QuoteDetailView }) {
   const styles = useStyles();
-  const [open, setOpen] = React.useState(true);
+  const [open, setOpen] = React.useState(false);
   type ArchiveRowItem = { label: string; value: string };
   type ArchiveSectionItem = { key: string; title: string; rows: ArchiveRowItem[] };
 
@@ -650,9 +823,7 @@ function SpecificationArchive({ view }: { view: QuoteDetailView }) {
 
   const groupedSections = React.useMemo<ArchiveSectionItem[]>(() => {
     const sections = Array.isArray(view.specificationArchive) ? view.specificationArchive : [];
-    const next: ArchiveSectionItem[] = [];
-
-    sections.forEach((section, sectionIndex) => {
+    return sections.map((section, sectionIndex) => {
       const title = toDisplayDash((section as { title?: unknown })?.title);
       const rows = Array.isArray((section as { rows?: unknown })?.rows) ? ((section as { rows?: unknown[] }).rows ?? []) : [];
       const normalizedRows = rows.map((row) => ({
@@ -660,43 +831,12 @@ function SpecificationArchive({ view }: { view: QuoteDetailView }) {
         value: normalizeArchiveRowValue((row as { value?: unknown })?.value),
       }));
 
-      if (!isVehicleCargoCombinedSectionTitle(title)) {
-        next.push({
-          key: `${title}-${sectionIndex}`,
-          title,
-          rows: normalizedRows,
-        });
-        return;
-      }
-
-      const vehicleRows: ArchiveRowItem[] = [];
-      const cargoRows: ArchiveRowItem[] = [];
-      normalizedRows.forEach((row) => {
-        if (isCargoInfoLabel(row.label)) {
-          cargoRows.push(row);
-          return;
-        }
-        vehicleRows.push(row);
-      });
-
-      if (vehicleRows.length > 0) {
-        next.push({
-          key: `vehicle-${sectionIndex}`,
-          title: "차량 정보",
-          rows: vehicleRows,
-        });
-      }
-
-      if (cargoRows.length > 0) {
-        next.push({
-          key: `cargo-${sectionIndex}`,
-          title: "화물 정보",
-          rows: cargoRows,
-        });
-      }
+      return {
+        key: `${title}-${sectionIndex}`,
+        title,
+        rows: normalizedRows,
+      };
     });
-
-    return next;
   }, [view.specificationArchive]);
 
   return (
@@ -745,7 +885,6 @@ export default function QuoteDetailPage() {
   const styles = useStyles();
   const theme = useAppTheme();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const [isDeleting, setIsDeleting] = React.useState(false);
   const [matchSnapshot, setMatchSnapshot] = React.useState<MatchSnapshot>(EMPTY_MATCH_SNAPSHOT);
@@ -763,33 +902,6 @@ export default function QuoteDetailPage() {
   }, [quoteId, view.quote?.quoteId]);
   const isBlockedByFetchState = view.isLoading || Boolean(view.errorMessage);
   const palette = isBlockedByFetchState ? null : resolveTonePalette(theme, view.policy);
-  const bottomBarWithoutCancel = React.useMemo(() => {
-    if (isBlockedByFetchState) return null;
-
-    const original = view.policy.bottomBar;
-    if (!original) return null;
-
-    const nextPrimary = isSupportedBottomAction(original.primary) ? original.primary : undefined;
-    const nextSecondary = isSupportedBottomAction(original.secondary) ? original.secondary : undefined;
-
-    if (!nextPrimary && !nextSecondary) return null;
-    if (!nextPrimary && nextSecondary) return { primary: nextSecondary, secondary: undefined };
-    return { primary: nextPrimary, secondary: nextSecondary };
-  }, [view.policy.bottomBar, isBlockedByFetchState]);
-  const readErrorMessage = React.useCallback((error: unknown) => {
-    const fallback = "네트워크 또는 요청 값을 확인해주세요.";
-    if (!error || typeof error !== "object") return fallback;
-
-    const e = error as {
-      response?: { data?: { message?: string; error?: string } };
-      message?: string;
-    };
-
-    const serverMessage = e.response?.data?.message ?? e.response?.data?.error;
-    if (typeof serverMessage === "string" && serverMessage.trim()) return serverMessage.trim();
-    if (typeof e.message === "string" && e.message.trim()) return e.message.trim();
-    return fallback;
-  }, []);
   const loadMatchSnapshot = React.useCallback(async (targetQuoteId: number): Promise<MatchSnapshot> => {
     const safeQuoteId = parsePositiveInt(targetQuoteId);
     if (safeQuoteId <= 0) {
@@ -863,11 +975,11 @@ export default function QuoteDetailPage() {
       await refreshQuoteAndMatchData();
       Alert.alert("배차 요청", "배차 요청이 생성되었습니다.");
     } catch (error) {
-      Alert.alert("배차 요청 실패", readErrorMessage(error));
+      Alert.alert("배차 요청 실패", readApiErrorMessage(error));
     } finally {
       setIsMatchSubmitting(false);
     }
-  }, [actionQuoteId, isMatchSubmitting, readErrorMessage, refreshQuoteAndMatchData]);
+  }, [actionQuoteId, isMatchSubmitting, refreshQuoteAndMatchData]);
 
   const handleCancelMatchDirect = React.useCallback(async () => {
     if (isMatchSubmitting) return;
@@ -882,92 +994,34 @@ export default function QuoteDetailPage() {
       await refreshQuoteAndMatchData();
       Alert.alert("배차 취소", "배차 요청을 취소했습니다.");
     } catch (error) {
-      Alert.alert("배차 취소 실패", readErrorMessage(error));
+      Alert.alert("배차 취소 실패", readApiErrorMessage(error));
     } finally {
       setIsMatchSubmitting(false);
     }
-  }, [cancelTargetMatchId, isMatchSubmitting, readErrorMessage, refreshQuoteAndMatchData]);
-
-  const handleBottomAction = React.useCallback(
-    async (action: BottomActionId) => {
-      if (action === "pay") {
-        const amount = Number.isFinite(view.actionsContext?.finalPrice) ? view.actionsContext.finalPrice : 0;
-        Alert.alert("결제 진행", `${Math.max(0, Math.trunc(amount)).toLocaleString("ko-KR")}원 결제를 진행합니다.`);
-        return;
-      }
-
-      if (action === "reRequestRoute") {
-        router.push("/(shipper)/quotes/create");
-        return;
-      }
-
-      Alert.alert("안내", "준비 중인 기능입니다.");
-    },
-    [router, view.actionsContext?.finalPrice]
-  );
-  const handlePressMatchBottomCta = React.useCallback(() => {
-    if (hasActiveQuoteMatch) {
-      void handleCancelMatchDirect();
-      return;
-    }
-    void handleCreateMatch();
-  }, [handleCancelMatchDirect, handleCreateMatch, hasActiveQuoteMatch]);
-  const matchBottomPadding = React.useMemo(() => {
-    const spacing = safeNumber(theme.layout.spacing.base, 4);
-    if (bottomBarWithoutCancel) return spacing * 3;
-    return Math.max(safeNumber(insets.bottom, 0) + 12, 18);
-  }, [bottomBarWithoutCancel, insets.bottom, theme.layout.spacing.base]);
-  const shouldRenderMatchBottomCta = matchHydrated && actionQuoteId > 0;
-  const isMatchBottomLoading = isMatchSubmitting;
-  const isMatchBottomDisabled = isMatchSubmitting || (hasActiveQuoteMatch && cancelTargetMatchId <= 0);
-  const matchBottomTitle = hasActiveQuoteMatch ? "배차 취소" : "배차 요청";
-  const matchBottomVariant = hasActiveQuoteMatch ? "destructive" : "primary";
-  const matchBottomWrapStyle = React.useMemo(
-    () => [styles.matchBottomWrap, { paddingBottom: matchBottomPadding }],
-    [matchBottomPadding, styles.matchBottomWrap]
-  );
-  const bottomBarContent = React.useMemo(() => {
-    if (isBlockedByFetchState) return null;
-    if (!shouldRenderMatchBottomCta && !bottomBarWithoutCancel) return null;
-    return (
-      <View>
-        {shouldRenderMatchBottomCta ? (
-          <View style={matchBottomWrapStyle}>
-            <AppButton
-              title={matchBottomTitle}
-              variant={matchBottomVariant}
-              style={styles.matchBottomButton}
-              onPress={handlePressMatchBottomCta}
-              loading={isMatchBottomLoading}
-              disabled={isMatchBottomDisabled}
-            />
-          </View>
-        ) : null}
-
-        {bottomBarWithoutCancel ? (
-          <BottomActionRouter
-            ctx={view.actionsContext}
-            bottomBar={bottomBarWithoutCancel}
-            guards={view.policy.guards}
-            onRunAction={handleBottomAction}
-          />
-        ) : null}
-      </View>
-    );
+  }, [cancelTargetMatchId, isMatchSubmitting, refreshQuoteAndMatchData]);
+  const shouldRenderOverviewMatchAction = matchHydrated && actionQuoteId > 0;
+  const overviewMatchAction = React.useMemo<OverviewMatchAction | null>(() => {
+    if (!shouldRenderOverviewMatchAction) return null;
+    return {
+      title: hasActiveQuoteMatch ? "요청 취소" : "배차 요청",
+      variant: hasActiveQuoteMatch ? "destructive" : "primary",
+      loading: isMatchSubmitting,
+      disabled: isMatchSubmitting || (hasActiveQuoteMatch && cancelTargetMatchId <= 0),
+      onPress: () => {
+        if (hasActiveQuoteMatch) {
+          void handleCancelMatchDirect();
+          return;
+        }
+        void handleCreateMatch();
+      },
+    };
   }, [
-    bottomBarWithoutCancel,
-    handleBottomAction,
-    handlePressMatchBottomCta,
-    isBlockedByFetchState,
-    isMatchBottomDisabled,
-    isMatchBottomLoading,
-    matchBottomTitle,
-    matchBottomVariant,
-    matchBottomWrapStyle,
-    shouldRenderMatchBottomCta,
-    styles.matchBottomButton,
-    view.actionsContext,
-    view.policy.guards,
+    cancelTargetMatchId,
+    handleCancelMatchDirect,
+    handleCreateMatch,
+    hasActiveQuoteMatch,
+    isMatchSubmitting,
+    shouldRenderOverviewMatchAction,
   ]);
 
   const handlePressEdit = React.useCallback(() => {
@@ -995,11 +1049,11 @@ export default function QuoteDetailPage() {
       await deleteShipperQuote(actionQuoteId);
       router.replace("/(shipper)/quotes");
     } catch (error) {
-      Alert.alert("견적 삭제 실패", readErrorMessage(error));
+      Alert.alert("견적 삭제 실패", readApiErrorMessage(error));
     } finally {
       setIsDeleting(false);
     }
-  }, [actionQuoteId, isBlockedByFetchState, isDeleting, readErrorMessage, router]);
+  }, [actionQuoteId, isBlockedByFetchState, isDeleting, router]);
   const handlePressDelete = React.useCallback(() => {
     if (isBlockedByFetchState || isDeleting) return;
 
@@ -1014,25 +1068,6 @@ export default function QuoteDetailPage() {
       },
     ]);
   }, [isBlockedByFetchState, isDeleting, runDelete]);
-  const handlePressHeaderActions = React.useCallback(() => {
-    if (isBlockedByFetchState || isDeleting) return;
-
-    Alert.alert("견적 관리", "원하는 작업을 선택하세요.", [
-      {
-        text: "수정",
-        onPress: handlePressEdit,
-      },
-      {
-        text: "삭제",
-        style: "destructive",
-        onPress: handlePressDelete,
-      },
-      {
-        text: "취소",
-        style: "cancel",
-      },
-    ]);
-  }, [handlePressDelete, handlePressEdit, isBlockedByFetchState, isDeleting]);
 
   React.useEffect(() => {
     initLayoutAnimationForAndroid();
@@ -1043,7 +1078,7 @@ export default function QuoteDetailPage() {
       router.replace("/(auth)/login");
       return;
     }
-    view.refetch();
+    void view.refetch();
   }, [router, view.isSessionExpired, view.refetch]);
 
   return (
@@ -1051,35 +1086,18 @@ export default function QuoteDetailPage() {
       title="견적 상세"
       backgroundColor={theme.colors.bgMain}
       contentStyle={styles.pageContent}
-      bottomBar={bottomBarContent}
       onPressBack={() => router.back()}
       backLabel="이전"
-      headerRight={
-        !isBlockedByFetchState ? (
-          <AppButton
-            size="icon"
-            variant="secondary"
-            style={styles.headerActionButton}
-            accessibilityLabel="견적 관리 액션 열기"
-            onPress={handlePressHeaderActions}
-            loading={isDeleting}
-          >
-            <Ionicons name="ellipsis-horizontal" size={18} color={theme?.colors?.textMain ?? "#0F172A"} />
-          </AppButton>
-        ) : undefined
-      }
     >
-      {view.isLoading ? (
-        <AppSpinner label="견적 상세를 불러오는 중입니다." />
-      ) : view.errorMessage ? (
-        <AppErrorState
-          title={view.isSessionExpired ? "세션이 만료되었습니다" : "견적 상세를 불러오지 못했어요"}
-          description={view.isSessionExpired ? "세션이 만료되었습니다. 다시 로그인해 주세요." : view.errorMessage}
-          retryLabel={view.isSessionExpired ? "로그인으로 이동" : "다시 시도"}
-          onRetry={handleDetailErrorRetry}
-          fullScreen={false}
-        />
-      ) : (
+      <AppRequestState
+        isLoading={view.isLoading}
+        loadingLabel="견적 상세를 불러오는 중입니다."
+        errorMessage={view.isSessionExpired ? "세션이 만료되었습니다. 다시 로그인해 주세요." : view.errorMessage}
+        errorTitle={view.isSessionExpired ? "세션이 만료되었습니다" : "견적 상세를 불러오지 못했어요"}
+        retryLabel={view.isSessionExpired ? "로그인으로 이동" : "다시 시도"}
+        onRetry={handleDetailErrorRetry}
+        fullScreen={false}
+      >
         <>
           <View style={styles.commandCenter}>
             <View style={styles.statusRow}>
@@ -1120,11 +1138,20 @@ export default function QuoteDetailPage() {
             ) : null}
           </View>
 
-          <OverviewCard view={view} />
+          <OverviewCard view={view} matchAction={overviewMatchAction} />
+
+          <ShipperManagementCard
+            disabled={isBlockedByFetchState}
+            isDeleting={isDeleting}
+            onPressEdit={handlePressEdit}
+            onPressDelete={handlePressDelete}
+          />
+
+          <RouteFlowCard quote={view.quote} />
 
           <SpecificationArchive view={view} />
         </>
-      )}
+      </AppRequestState>
     </PageScaffold>
   );
 }

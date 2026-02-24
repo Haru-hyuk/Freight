@@ -7,6 +7,16 @@ import {
   getCounterOffers as getShipperCounterOffersGenerated,
   rejectCounterOffer as rejectShipperCounterOfferGenerated,
 } from "@/shared/api/generated/shipper-counter-offer-controller/shipper-counter-offer-controller";
+import { isMockMode } from "@/shared/lib/config/env";
+import {
+  acceptMockShipperCounterOffer,
+  createMockDriverCounterOffer,
+  listMockDriverCounterOffersByQuote,
+  listMockMyDriverCounterOffers,
+  listMockShipperCounterOffers,
+  rejectMockShipperCounterOffer,
+  waitNetwork,
+} from "@/shared/lib/mock/MockHub";
 
 type AnyObject = Record<string, unknown>;
 
@@ -44,8 +54,7 @@ function toPositiveInt(value: unknown): number {
 function toNonNegativeInt(value: unknown): number {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return 0;
-  const intValue = Math.trunc(parsed);
-  return intValue > 0 ? intValue : 0;
+  return Math.max(0, Math.trunc(parsed));
 }
 
 function toOptionalText(value: unknown): string | undefined {
@@ -54,12 +63,8 @@ function toOptionalText(value: unknown): string | undefined {
   return text ? text : undefined;
 }
 
-function toText(value: unknown): string {
-  return toOptionalText(value) ?? "";
-}
-
 function normalizeStatus(value: unknown): string {
-  const text = toText(value).toUpperCase();
+  const text = toOptionalText(value)?.toUpperCase() ?? "";
   if (!text) return "UNKNOWN";
   if (text === "CANCELLED") return "CANCELED";
   return text;
@@ -89,14 +94,15 @@ function toCounterOfferItem(value: unknown): CounterOfferItem | null {
   const counterOfferId = toPositiveInt(source.counterOfferId);
   if (counterOfferId <= 0) return null;
 
+  const quoteId = toPositiveInt(source.quoteId);
   const driverId = toPositiveInt(source.driverId);
 
   return {
     counterOfferId,
-    quoteId: toPositiveInt(source.quoteId),
+    quoteId,
     driverId,
     proposedPrice: toNonNegativeInt(source.proposedPrice),
-    message: toText(source.message),
+    message: toOptionalText(source.message) ?? "",
     status: normalizeStatus(source.status),
     createdAt: toOptionalText(source.createdAt),
     respondedAt: toOptionalText(source.respondedAt),
@@ -105,18 +111,17 @@ function toCounterOfferItem(value: unknown): CounterOfferItem | null {
 }
 
 function toCounterOfferList(value: unknown): CounterOfferItem[] {
-  const mapped = unwrapListPayload(value)
+  return unwrapListPayload(value)
     .map((item) => toCounterOfferItem(item))
-    .filter((item): item is CounterOfferItem => item !== null);
-
-  return mapped.sort((a, b) => {
-    const aTs = Date.parse(a.createdAt ?? "");
-    const bTs = Date.parse(b.createdAt ?? "");
-    if (Number.isFinite(aTs) && Number.isFinite(bTs)) return bTs - aTs;
-    if (Number.isFinite(bTs)) return 1;
-    if (Number.isFinite(aTs)) return -1;
-    return b.counterOfferId - a.counterOfferId;
-  });
+    .filter((item): item is CounterOfferItem => item !== null)
+    .sort((a, b) => {
+      const aTs = Date.parse(a.createdAt ?? "");
+      const bTs = Date.parse(b.createdAt ?? "");
+      if (Number.isFinite(aTs) && Number.isFinite(bTs)) return bTs - aTs;
+      if (Number.isFinite(bTs)) return 1;
+      if (Number.isFinite(aTs)) return -1;
+      return b.counterOfferId - a.counterOfferId;
+    });
 }
 
 function toSingleCounterOffer(value: unknown): CounterOfferItem | null {
@@ -133,6 +138,11 @@ export async function listShipperCounterOffers(quoteId: number): Promise<Counter
   const safeQuoteId = toPositiveInt(quoteId);
   if (safeQuoteId <= 0) return [];
 
+  if (isMockMode()) {
+    await waitNetwork();
+    return toCounterOfferList(listMockShipperCounterOffers(safeQuoteId));
+  }
+
   const data = await getShipperCounterOffersGenerated(String(safeQuoteId));
   return toCounterOfferList(data);
 }
@@ -141,12 +151,24 @@ export async function acceptShipperCounterOffer(offerId: number): Promise<void> 
   const safeOfferId = toPositiveInt(offerId);
   if (safeOfferId <= 0) return;
 
+  if (isMockMode()) {
+    await waitNetwork();
+    acceptMockShipperCounterOffer(safeOfferId);
+    return;
+  }
+
   await acceptShipperCounterOfferGenerated(String(safeOfferId));
 }
 
 export async function rejectShipperCounterOffer(offerId: number): Promise<void> {
   const safeOfferId = toPositiveInt(offerId);
   if (safeOfferId <= 0) return;
+
+  if (isMockMode()) {
+    await waitNetwork();
+    rejectMockShipperCounterOffer(safeOfferId);
+    return;
+  }
 
   await rejectShipperCounterOfferGenerated(String(safeOfferId));
 }
@@ -160,7 +182,6 @@ export async function createDriverCounterOffer(
 
   const proposedPrice = toNonNegativeInt(input?.proposedPrice);
   const message = toOptionalText(input?.message);
-
   if (proposedPrice <= 0 && !message) return null;
 
   const payload = {
@@ -168,11 +189,21 @@ export async function createDriverCounterOffer(
     ...(message ? { message } : {}),
   };
 
+  if (isMockMode()) {
+    await waitNetwork();
+    return toSingleCounterOffer(createMockDriverCounterOffer(safeQuoteId, payload));
+  }
+
   const data = await createDriverCounterOfferGenerated(String(safeQuoteId), payload);
   return toSingleCounterOffer(data);
 }
 
 export async function listMyDriverCounterOffers(): Promise<CounterOfferItem[]> {
+  if (isMockMode()) {
+    await waitNetwork();
+    return toCounterOfferList(listMockMyDriverCounterOffers());
+  }
+
   const data = await getMyDriverCounterOffersGenerated();
   return toCounterOfferList(data);
 }
@@ -180,6 +211,11 @@ export async function listMyDriverCounterOffers(): Promise<CounterOfferItem[]> {
 export async function listDriverCounterOffersByQuote(quoteId: number): Promise<CounterOfferItem[]> {
   const safeQuoteId = toPositiveInt(quoteId);
   if (safeQuoteId <= 0) return [];
+
+  if (isMockMode()) {
+    await waitNetwork();
+    return toCounterOfferList(listMockDriverCounterOffersByQuote(safeQuoteId));
+  }
 
   const list = await listMyDriverCounterOffers();
   return list.filter((item) => item.quoteId === safeQuoteId);
@@ -200,7 +236,6 @@ export async function listMyDriverCounterOffersByQuotes(quoteIds: number[]): Pro
   const list = await listMyDriverCounterOffers();
   list.forEach((item) => {
     if (!safeQuoteIds.includes(item.quoteId)) return;
-    if (!grouped[item.quoteId]) grouped[item.quoteId] = [];
     grouped[item.quoteId].push(item);
   });
 

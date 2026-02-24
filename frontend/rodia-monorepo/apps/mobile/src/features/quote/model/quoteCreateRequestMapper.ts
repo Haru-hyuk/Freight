@@ -4,9 +4,9 @@ import type {
   QuoteStopRequestDto,
   QuoteVehicleBodyType,
   QuoteVehicleType,
-  QuoteWorkMethod,
 } from "@/entities/quote/dto";
 import { EXTRA_OPTIONS, type QuoteCreateDraft } from "@/features/quote/model/quoteCreateDraft";
+import { DEFAULT_LOAD_METHOD, DEFAULT_UNLOAD_METHOD, normalizeWorkMethodValue } from "@/features/quote/model/workMethod";
 
 const VEHICLE_TYPE_BY_TON_INDEX: QuoteVehicleType[] = ["TON_1", "TON_2_5", "TON_5"];
 const VEHICLE_BODY_BY_TYPE_INDEX: QuoteVehicleBodyType[] = ["CARGO", "WING_BODY", "TOP_CAR"];
@@ -38,10 +38,6 @@ function joinAddress(addr?: string, detail?: string) {
   if (!left) return "";
   if (!right) return left;
   return `${left} ${right}`.trim();
-}
-
-function mapWorkMethod(method?: string): QuoteWorkMethod {
-  return method === "수작업" ? "SHIPPER" : "DRIVER";
 }
 
 function mapCargoType(isFrozen?: boolean): QuoteCargoType {
@@ -155,8 +151,8 @@ export function buildQuoteCreateRequest(draft: QuoteCreateDraft): QuoteCreateReq
     cargoDesc: summarizeCargoDesc(draft),
     desiredPrice: resolveDesiredPrice(draft),
     allowCombine: !!draft.isPool,
-    loadMethod: mapWorkMethod(draft.loadMethod),
-    unloadMethod: mapWorkMethod(draft.unloadMethod),
+    loadMethod: normalizeWorkMethodValue(draft.loadMethod, DEFAULT_LOAD_METHOD),
+    unloadMethod: normalizeWorkMethodValue(draft.unloadMethod, DEFAULT_UNLOAD_METHOD),
     checklistItems: buildChecklistItems(draft),
     stops: buildStops(draft),
   };

@@ -13,8 +13,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { safeNumber, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
 import type { AppTheme } from "@/shared/theme/types";
+import { QUOTE_CREATE_STEP3 } from "@/shared/lib/dev/mockPayloads";
 import { AppInput } from "@/shared/ui/kit/AppInput";
 import { AppText } from "@/shared/ui/kit/AppText";
+import { MockAutofillButton } from "@/shared/ui/dev/MockAutofillButton";
 import {
   getQuoteFlatCardStyle,
   QUOTE_PRESS_EFFECT,
@@ -71,6 +73,7 @@ const useStyles = createThemedStyles((theme: AppTheme) => {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: c.bgMain },
     scrollContent: { gap: spacing * 2, paddingHorizontal: spacing, paddingTop: spacing, paddingBottom: spacing * 6 },
+    devToolsWrap: { alignItems: "flex-end" },
 
     card: { ...flatCard, padding: 20 },
     cardHeader: { flexDirection: "row", alignItems: "center", marginBottom: 18, gap: 8 },
@@ -242,6 +245,9 @@ export function QuoteCreateStep3() {
   return (
     <View style={styles.container}>
       <ScrollView {...QUOTE_SCROLL_VIEW_PROPS} contentContainerStyle={styles.scrollContent}>
+        <View style={styles.devToolsWrap}>
+          <MockAutofillButton onFill={() => patchDraft(QUOTE_CREATE_STEP3)} label="Fill Quote Step 3" />
+        </View>
         
         {/* 1. 차량 및 조건 카드 */}
         <View style={styles.card}>

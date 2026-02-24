@@ -6,9 +6,10 @@ import { AppButton } from "@/shared/ui/kit/AppButton";
 import { AppInput } from "@/shared/ui/kit/AppInput";
 import { AppText } from "@/shared/ui/kit/AppText";
 import { useAuth } from "@/features/auth/model/useAuth";
-import { MOCK_EMAIL_BY_ROLE, MOCK_PASSWORD } from "@/features/auth/model/auth.consts";
 import type { AuthUserRole } from "@/features/auth/model/auth.types";
 import { AuthRoleTabs } from "@/features/auth/ui/AuthRoleTabs";
+import { SIGNUP_DRIVER, SIGNUP_SHIPPER } from "@/shared/lib/dev/mockPayloads";
+import { MockAutofillButton } from "@/shared/ui/dev/MockAutofillButton";
 
 type SignUpParams = {
   email: string;
@@ -227,20 +228,30 @@ export function SignUpForm({
 
   useEffect(() => {
     if (!auth.isMockAuth) return;
-    const mockName = role === "driver" ? "Mock Driver" : "Mock Shipper";
-    const mockPhone = role === "driver" ? "010-1234-5678" : "010-9876-5432";
-    setName(mockName);
-    setEmail(role === "driver" ? (MOCK_EMAIL_BY_ROLE.driver ?? "") : (MOCK_EMAIL_BY_ROLE.shipper ?? ""));
-    setPassword(MOCK_PASSWORD ?? "");
-    setConfirmPassword(MOCK_PASSWORD ?? "");
-    setPhone(mockPhone);
-    if (role === "shipper") {
-      setCompanyName("로디아 화주");
-      setOwnerName(mockName);
-      setBizRegNo("123-45-67890");
-      setBizPhone(mockPhone);
-      setOpenDate("2020-01-01");
+    if (role === "driver") {
+      setName(SIGNUP_DRIVER.name);
+      setEmail(SIGNUP_DRIVER.email);
+      setPassword(SIGNUP_DRIVER.password);
+      setConfirmPassword(SIGNUP_DRIVER.confirmPassword);
+      setPhone(SIGNUP_DRIVER.phone);
+      setCompanyName("");
+      setOwnerName("");
+      setBizRegNo("");
+      setBizPhone("");
+      setOpenDate("");
+      return;
     }
+
+    setName(SIGNUP_SHIPPER.name);
+    setEmail(SIGNUP_SHIPPER.email);
+    setPassword(SIGNUP_SHIPPER.password);
+    setConfirmPassword(SIGNUP_SHIPPER.confirmPassword);
+    setPhone(SIGNUP_SHIPPER.phone);
+    setCompanyName(SIGNUP_SHIPPER.companyName);
+    setOwnerName(SIGNUP_SHIPPER.ownerName);
+    setBizRegNo(SIGNUP_SHIPPER.bizRegNo);
+    setBizPhone(SIGNUP_SHIPPER.bizPhone);
+    setOpenDate(SIGNUP_SHIPPER.openDate);
   }, [auth.isMockAuth, role]);
 
   const scrollIntoView = useCallback(
@@ -304,6 +315,35 @@ export function SignUpForm({
     },
     [clearLocalError]
   );
+
+  const handleMockAutofill = useCallback(() => {
+    clearLocalError();
+
+    if (role === "driver") {
+      setName(SIGNUP_DRIVER.name);
+      setEmail(SIGNUP_DRIVER.email);
+      setPassword(SIGNUP_DRIVER.password);
+      setConfirmPassword(SIGNUP_DRIVER.confirmPassword);
+      setPhone(SIGNUP_DRIVER.phone);
+      setCompanyName("");
+      setOwnerName("");
+      setBizRegNo("");
+      setBizPhone("");
+      setOpenDate("");
+      return;
+    }
+
+    setName(SIGNUP_SHIPPER.name);
+    setEmail(SIGNUP_SHIPPER.email);
+    setPassword(SIGNUP_SHIPPER.password);
+    setConfirmPassword(SIGNUP_SHIPPER.confirmPassword);
+    setPhone(SIGNUP_SHIPPER.phone);
+    setCompanyName(SIGNUP_SHIPPER.companyName);
+    setOwnerName(SIGNUP_SHIPPER.ownerName);
+    setBizRegNo(SIGNUP_SHIPPER.bizRegNo);
+    setBizPhone(SIGNUP_SHIPPER.bizPhone);
+    setOpenDate(SIGNUP_SHIPPER.openDate);
+  }, [clearLocalError, role]);
 
   const isValid = useMemo(() => {
     const safeName = name?.trim() ?? "";
@@ -477,6 +517,7 @@ export function SignUpForm({
 
         <View style={s.formContainer}>
           <AuthRoleTabs role={role} onChange={onRoleChange} onBeforeChange={clearLocalError} disabled={auth.isBusy} />
+          <MockAutofillButton onFill={handleMockAutofill} label={role === "driver" ? "Fill Driver Signup" : "Fill Shipper Signup"} />
 
           <View style={s.inputs}>
             <AppInput

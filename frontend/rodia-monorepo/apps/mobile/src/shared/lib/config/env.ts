@@ -101,24 +101,29 @@ export function getAuthRefreshPath(): string {
   return readString("EXPO_PUBLIC_AUTH_REFRESH_PATH", "/auth/refresh");
 }
 
-// 목업 모드는 EXPO_PUBLIC_MOCK_MODE 하나로 통합해서 사용한다.
-function baseMockMode(): boolean {
-  return readBool("EXPO_PUBLIC_MOCK_MODE", false);
+export type ApiMode = "mock" | "server";
+
+export function getApiMode(): ApiMode {
+  const mode = readString("EXPO_PUBLIC_API_MODE", "server").toLowerCase();
+  return mode === "mock" ? "mock" : "server";
+}
+
+export type DriverMatchMode = ApiMode;
+
+export function getDriverMatchMode(): DriverMatchMode {
+  return getApiMode();
+}
+
+export function isMockMode(): boolean {
+  return getApiMode() === "mock";
 }
 
 export function isMockAuthEnabled(): boolean {
-  return baseMockMode();
+  return isMockMode();
 }
 
 export function isMockQuoteEnabled(): boolean {
-  return baseMockMode();
-}
-
-export type DriverMatchMode = "mock" | "server";
-
-export function getDriverMatchMode(): DriverMatchMode {
-  const raw = readString("EXPO_PUBLIC_DRIVER_MATCH_MODE", "mock").toLowerCase();
-  return raw === "server" ? "server" : "mock";
+  return isMockMode();
 }
 
 // auth 디버그 로그 출력 여부(개발 환경에서만 반영)

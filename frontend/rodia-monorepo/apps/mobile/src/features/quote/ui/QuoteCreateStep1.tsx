@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import {
   LayoutAnimation,
   Modal,
@@ -17,9 +17,9 @@ import {
 } from "@/features/quote/api/quote-address-geocode";
 import {
   useQuoteCreateDraft,
-  WORK_METHODS,
   type Waypoint,
 } from "@/features/quote/model/quoteCreateDraft";
+import { LOAD_METHOD_OPTIONS, UNLOAD_METHOD_OPTIONS, type WorkMethodOption } from "@/features/quote/model/workMethod";
 import { PostcodeModal } from "@/features/quote/ui/PostcodeModal";
 import {
   getQuoteFlatCardStyle,
@@ -27,12 +27,12 @@ import {
   QUOTE_SCROLL_VIEW_PROPS,
 } from "@/features/quote/ui/QuoteCreateUiPrimitives";
 import { initLayoutAnimationForAndroid } from "@/shared/lib/ui/layoutAnimationInit";
+import { QUOTE_CREATE_STEP1 } from "@/shared/lib/dev/mockPayloads";
 import { safeNumber, tint } from "@/shared/theme/colorUtils";
 import type { AppTheme } from "@/shared/theme/types";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
-import { AppErrorState } from "@/shared/ui/kit/AppErrorState";
+import { MockAutofillButton } from "@/shared/ui/dev/MockAutofillButton";
 import { AppInput } from "@/shared/ui/kit/AppInput";
-import { AppSpinner } from "@/shared/ui/kit/AppSpinner";
 import { AppText } from "@/shared/ui/kit/AppText";
 
 initLayoutAnimationForAndroid();
@@ -74,6 +74,7 @@ const useStyles = createThemedStyles((theme: AppTheme) => {
 
   return StyleSheet.create({
     container: { gap: spacing * 3, paddingBottom: spacing * 8 },
+    devToolsWrap: { alignItems: "flex-end", marginBottom: spacing },
 
     sectionHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4, paddingHorizontal: 4 },
     sectionTitle: { fontSize: 16, fontWeight: "700", color: c.textMain },
@@ -195,19 +196,10 @@ export function QuoteCreateStep1() {
 
   const [pickerMode, setPickerMode] = useState<"date" | "time" | null>(null);
   const [iosPickerValue, setIosPickerValue] = useState<Date | null>(null);
-  const [isResolvingCoords, setIsResolvingCoords] = useState(false);
-  const [coordError, setCoordError] = useState<string | null>(null);
-  const [coordTask, setCoordTask] = useState<CoordinateResolveTask | null>(null);
   const coordRequestIdRef = useRef(0);
 
   const waypoints = draft?.waypoints ?? [];
   const canAddWaypoint = waypoints.length < MAX_WAYPOINTS;
-  const hasAnySelectedAddress = useMemo(() => {
-    const hasStart = (draft?.startAddr ?? "").trim().length > 0;
-    const hasEnd = (draft?.endAddr ?? "").trim().length > 0;
-    const hasWaypoint = waypoints.some((waypoint) => (waypoint?.addr ?? "").trim().length > 0);
-    return hasStart || hasEnd || hasWaypoint;
-  }, [draft?.endAddr, draft?.startAddr, waypoints]);
 
   const openPostcode = (type: "start" | "end" | number) => {
     setTargetField(type);
@@ -292,8 +284,6 @@ export function QuoteCreateStep1() {
     async (task: CoordinateResolveTask) => {
       const requestId = coordRequestIdRef.current + 1;
       coordRequestIdRef.current = requestId;
-      setIsResolvingCoords(true);
-      setCoordError(null);
 
       const input: ResolveAddressCoordinatesInput = {
         addressText: task?.addressText,
@@ -311,29 +301,14 @@ export function QuoteCreateStep1() {
 
         if (hasCoordinates) {
           applyCoordinatesToTarget(task.target, Number(lat), Number(lng));
-          setCoordError(null);
           return;
         }
-
-        setCoordError(
-          (result?.errorMessage ?? "").trim() || "선택한 주소의 좌표를 찾지 못했습니다. 다시 시도해 주세요."
-        );
       } catch {
         if (coordRequestIdRef.current !== requestId) return;
-        setCoordError("주소 좌표 조회 중 오류가 발생했습니다. 다시 시도해 주세요.");
-      } finally {
-        if (coordRequestIdRef.current === requestId) {
-          setIsResolvingCoords(false);
-        }
       }
     },
     [applyCoordinatesToTarget]
   );
-
-  const retryResolveCoordinates = useCallback(() => {
-    if (!coordTask) return;
-    void resolveCoordinatesForTask(coordTask);
-  }, [coordTask, resolveCoordinatesForTask]);
 
   const handleAddressSelected = useCallback((data: AddressSelectionPayload) => {
     const selectedAddress = String(data?.address ?? data?.roadAddress ?? data?.jibunAddress ?? "").trim();
@@ -357,7 +332,6 @@ export function QuoteCreateStep1() {
       placeId: placeId || undefined,
       details: data?.details,
     };
-    setCoordTask(task);
     void resolveCoordinatesForTask(task);
   }, [applyAddressToTarget, closePostcode, resolveCoordinatesForTask, targetField]);
 
@@ -382,19 +356,29 @@ export function QuoteCreateStep1() {
 
   // --- Components ---
   // 💡 title 프롭을 받도록 수정된 컴포넌트
-  const WorkMethodSelector = ({ title, current, onChange }: { title: string, current: string, onChange: (v: string) => void }) => (
+  const WorkMethodSelector = ({
+    title,
+    current,
+    options,
+    onChange,
+  }: {
+    title: string;
+    current: string;
+    options: readonly WorkMethodOption[];
+    onChange: (v: string) => void;
+  }) => (
     <View>
       <AppText style={styles.workLabel}>{title}</AppText>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
-        {WORK_METHODS.map((method) => {
-          const active = current === method;
+        {options.map((option) => {
+          const active = current === option.value;
           return (
             <Pressable
-              key={method}
-              onPress={() => onChange(method)}
+              key={option.value}
+              onPress={() => onChange(option.value)}
               style={[styles.workChip, active && styles.workChipActive]}
             >
-              <AppText style={[styles.workChipText, active && styles.workChipTextActive]}>{method}</AppText>
+              <AppText style={[styles.workChipText, active && styles.workChipTextActive]}>{option.label}</AppText>
             </Pressable>
           );
         })}
@@ -426,6 +410,10 @@ export function QuoteCreateStep1() {
   return (
     <>
       <ScrollView {...QUOTE_SCROLL_VIEW_PROPS} contentContainerStyle={styles.container}>
+        <View style={styles.devToolsWrap}>
+          <MockAutofillButton onFill={() => patchDraft(QUOTE_CREATE_STEP1)} label="Fill Quote Step 1" />
+        </View>
+
         {/* 1. 경로 입력 (타임라인) */}
         <View>
           <View style={styles.routeCard}>
@@ -623,6 +611,7 @@ export function QuoteCreateStep1() {
               <WorkMethodSelector 
                 title="출발지 (상차) 작업 방식" 
                 current={draft?.loadMethod} 
+                options={LOAD_METHOD_OPTIONS}
                 onChange={v => patchDraft({ loadMethod: v as any })} 
               />
 
@@ -631,6 +620,7 @@ export function QuoteCreateStep1() {
               <WorkMethodSelector 
                 title="도착지 (하차) 작업 방식" 
                 current={draft?.unloadMethod} 
+                options={UNLOAD_METHOD_OPTIONS}
                 onChange={v => patchDraft({ unloadMethod: v as any })} 
               />
            </View>
