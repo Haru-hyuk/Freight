@@ -22,13 +22,31 @@ function toPositiveInt(value: unknown): number {
   return Math.trunc(numeric);
 }
 
-export function formatKrwAmount(value: unknown, fallback = "-"): string {
+function toPositiveNumber(value: unknown): number {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) return 0;
+  return numeric;
+}
+
+export function formatKrw(value: unknown, fallback = "-"): string {
   const amount = toPositiveInt(value);
   if (amount <= 0) return fallback;
   return `${KRW_NUMBER_FORMAT.format(amount)}원`;
 }
 
-export function formatShortDateTime(value: unknown, fallback = "-"): string {
+export function formatKrwAmount(value: unknown, fallback = "-"): string {
+  return formatKrw(value, fallback);
+}
+
+export function formatDistance(value: unknown, fallback = "-", fractionDigits = 1): string {
+  const distanceKm = toPositiveNumber(value);
+  if (distanceKm <= 0) return fallback;
+
+  const safeFractionDigits = Number.isInteger(fractionDigits) && fractionDigits >= 0 ? fractionDigits : 1;
+  return `${distanceKm.toFixed(safeFractionDigits)}km`;
+}
+
+export function formatDateTime(value: unknown, fallback = "-"): string {
   const raw = typeof value === "string" ? value.trim() : "";
   if (!raw) return fallback;
 
@@ -41,4 +59,8 @@ export function formatShortDateTime(value: unknown, fallback = "-"): string {
   const hour = String(date.getHours()).padStart(2, "0");
   const minute = String(date.getMinutes()).padStart(2, "0");
   return `${month}/${day} ${hour}:${minute}`;
+}
+
+export function formatShortDateTime(value: unknown, fallback = "-"): string {
+  return formatDateTime(value, fallback);
 }
