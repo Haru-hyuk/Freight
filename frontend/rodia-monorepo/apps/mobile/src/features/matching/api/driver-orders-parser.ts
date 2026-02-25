@@ -33,6 +33,7 @@ export type ParsedDriverOrderSource = {
   quoteId?: number;
   status: string;
   createdAt?: string;
+  updatedAt?: string;
   quote: ParsedDriverOrderQuote | null;
 };
 
@@ -100,6 +101,7 @@ export function parseDriverOrderSource(input: {
     quoteId: quoteId > 0 ? quoteId : undefined,
     status: normalizeStatus(match.status ?? ""),
     createdAt: toOptionalText(match.createdAt),
+    updatedAt: toOptionalText(match.updatedAt),
     quote: parseDriverOrderQuote(quote),
   };
 }
