@@ -58,6 +58,9 @@ public class Driver {
     @Column(name = "profile_image_url")
     private String profileImageUrl;
 
+    @Column(name = "status", nullable = false)
+    private String status;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
@@ -68,10 +71,18 @@ public class Driver {
     protected void onCreate() {
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();
+        if (status == null || status.isBlank()) {
+            status = "ACTIVE";
+        }
     }
 
     @PreUpdate
     protected void onUpdate() {
         updatedAt = LocalDateTime.now();
+    }
+
+    public void updateStatus(String status) {
+        this.status = status;
+        this.updatedAt = LocalDateTime.now();
     }
 }
