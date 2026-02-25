@@ -1,7 +1,6 @@
 import React from "react";
+import { Redirect } from "expo-router";
 
-import DriverMyMatchesPage from "@/pages/driver/matches/DriverMyMatchesPage";
-
-export default function DriverMyMatchesRoute() {
-  return <DriverMyMatchesPage />;
+export default function DriverMyMatchesLegacyRoute() {
+  return <Redirect href="/(driver)/run/current" />;
 }

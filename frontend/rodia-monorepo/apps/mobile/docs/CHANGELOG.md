@@ -1,6 +1,35 @@
 # Mobile Changelog
 
 ## 2026-02-25
+- PR/브랜치: `fix/driver-drive-route-wiring`
+- 범주 태그: `[routing] [ui] [policy]`
+- 변경 요약:
+  - driver 운행 상세 진입 경로를 `/(driver)/run/[id]`로 고정하고, 목록 카드 상세 이동 경로도 동일 경로를 사용하도록 정리함.
+  - `/(driver)/drive`와 `/(driver)/matches/*`는 레거시 alias로 유지하되 모두 `/(driver)/run/*`으로 리다이렉트하도록 통일함.
+  - 미연결 상태였던 `DriverDrivePage.tsx`를 제거해 운행 화면 구현 소스를 `DriverMatchDetailPage` 단일 경로로 정리함.
+  - 운행 상세(`DriverMatchDetailPage`)의 상태/CTA 계산은 기존대로 policy(`getDriverUiStateFromBackendStatus`, `getDriverCta`) 소비 경로를 유지함.
+- 영향 범위:
+  - 사용자 관점: drive/matches 경로 진입 시 동일한 run 화면으로 수렴하며 404 없이 일관되게 동작.
+  - 개발자 관점: 운행 화면 라우팅 중복과 미사용 페이지가 정리되어 유지보수 난이도 감소.
+- 파일 변경 목록:
+  - Modified:
+    - `app/(driver)/drive.tsx`
+    - `app/(driver)/matches/[id].tsx`
+    - `app/(driver)/matches/me.tsx`
+    - `src/widgets/driver-orders/DriverOrdersBoard.tsx`
+    - `docs/CHANGELOG.md`
+  - Added:
+    - 없음
+  - Deleted:
+    - `src/pages/driver/drive/DriverDrivePage.tsx`
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+- 후속 작업 (다음 PR 후보):
+  - driver routes에서 `run` canonical 정책을 문서화하고 필요 시 `matches` alias 제거 시점 확정
+  - 운행 목록 카드 상태 스트립 색상/문구 계산의 policy 기반 일원화 검토
+
+## 2026-02-25
 - PR/브랜치: `refactor/shipper-match-parsing-boundary`
 - 범주 태그: `[api] [mock] [infra] [routing]`
 - 변경 요약:
