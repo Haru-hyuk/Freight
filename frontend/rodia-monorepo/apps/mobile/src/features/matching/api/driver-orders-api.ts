@@ -2,6 +2,12 @@ import type { QuoteDetailResponse } from "@/entities/quote/model/quote.types";
 import { getShipperQuoteDetailByIdentifier } from "@/features/quote/api";
 import { formatWorkMethodLabel } from "@/features/quote/model/workMethod";
 import { getDriverMatchMode } from "@/shared/lib/config/env";
+import {
+  BACKEND_STATUS,
+  getDriverBadge,
+  getDriverUiStateFromBackendStatus,
+  normalizeStatus,
+} from "@/shared/lib/policy";
 
 import {
   getDriverMatch,
@@ -9,7 +15,6 @@ import {
   listOpenDriverMatches,
   type DriverMatchItem,
 } from "./shipper-match-api";
-import { normalizeDriverMatchStatus, toDriverMatchStatusLabel } from "../model/driverMatchStatus";
 
 type DriverOrderTagKey = "AI_RECOMMENDED" | "COMBINED" | "WAYPOINT" | "URGENT";
 
@@ -267,8 +272,8 @@ function mapDriverOrderCard(
   const safeQuoteId = toPositiveInt(match.quoteId);
   const seed = safeMatchId || safeQuoteId || index + 1;
 
-  const status = normalizeDriverMatchStatus(match.status);
-  const statusLabel = toDriverMatchStatusLabel(match.status);
+  const status = normalizeStatus(toText(match.status));
+  const statusLabel = getDriverBadge(getDriverUiStateFromBackendStatus(status)).label;
 
   const requestedAtText = formatDateTime(match.createdAt);
   const defaultOrigin = mode === "mock" ? pickMockText(MOCK_ORIGIN_POOL, seed) : "";
@@ -339,11 +344,11 @@ function resolveAvailableFilters(capability: DriverOrdersCapability, marketOrder
 function sortByStatusAndUpdatedAt(items: DriverOrderCard[]): DriverOrderCard[] {
   return [...items].sort((a, b) => {
     const statusWeight = (status: string): number => {
-      if (status === "OPEN") return 0;
-      if (status === "NEGOTIATING") return 1;
-      if (status === "ASSIGNED") return 2;
-      if (status === "PICKUP") return 3;
-      if (status === "TRANSIT") return 4;
+      if (status === BACKEND_STATUS.READY || status === BACKEND_STATUS.OPEN) return 0;
+      if (status === BACKEND_STATUS.NEGOTIATING) return 1;
+      if (status === BACKEND_STATUS.ASSIGNED || status === BACKEND_STATUS.ACCEPTED) return 2;
+      if (status === BACKEND_STATUS.PICKUP) return 3;
+      if (status === BACKEND_STATUS.TRANSIT) return 4;
       return 5;
     };
 
@@ -463,4 +468,3 @@ export async function probeDriverOrderDetailAccess(matchId: number): Promise<Dri
     return "error";
   }
 }
-

@@ -9,6 +9,7 @@ import {
   getQuoteStatusLabel,
   type QuoteActionPolicy,
 } from "@/features/quote/model/quoteActionMatrix";
+import { CUSTOMER_UI_STATE, getCustomerUiStateFromBackendStatus } from "@/shared/lib/policy";
 import { formatWorkMethodLabel } from "@/features/quote/model/workMethod";
 
 export type QuoteSectionRow = {
@@ -298,7 +299,8 @@ function formatPositiveVolumeCbm(value: unknown): string {
 function buildSpecificationArchive(quote: QuoteDetailResponse): QuoteSection[] {
   const vehicleType = toVehicleTypeLabel(quote?.vehicleType);
   const vehicleBodyType = toVehicleBodyTypeLabel(quote?.vehicleBodyType);
-  const isCompleted = (quote?.status ?? "") === "DROPOFF";
+  const uiState = getCustomerUiStateFromBackendStatus(quote?.status ?? "");
+  const isCompleted = uiState === CUSTOMER_UI_STATE.COMPLETED;
   const finalAmountLabel = isCompleted ? "정산 금액" : "예상 금액";
 
   return [
@@ -429,6 +431,7 @@ export function useQuoteDetail(quoteIdentifier: QuoteId | string, runtimeOverrid
 
     const resolvedQuote = applyRuntimeOverride(safeQuote, normalizedOverride);
     const policy = getQuoteActionPolicy(resolvedQuote?.status ?? "");
+    const uiState = getCustomerUiStateFromBackendStatus(resolvedQuote?.status ?? "");
     const waypointAddresses = buildWaypointAddresses(resolvedQuote);
 
     const statusLabel = policy?.badgeLabel || getQuoteStatusLabel(resolvedQuote?.status ?? "");
@@ -436,7 +439,7 @@ export function useQuoteDetail(quoteIdentifier: QuoteId | string, runtimeOverrid
     const destinationAddress = String(resolvedQuote?.destinationAddress ?? "");
     const finalPrice = toSafeNumber(resolvedQuote?.finalPrice);
 
-    const isCanceled = (resolvedQuote?.status ?? "") === "CANCELED";
+    const isCanceled = uiState === CUSTOMER_UI_STATE.CANCELED;
     const updatedAtText = formatDateTime(resolvedQuote?.updatedAt);
     const metaText =
       isCanceled
@@ -449,7 +452,7 @@ export function useQuoteDetail(quoteIdentifier: QuoteId | string, runtimeOverrid
 
     const canceledAtText = isCanceled ? formatDateTime(overrideCanceledAt ?? resolvedQuote?.updatedAt) : "";
 
-    const completedAtText = (resolvedQuote?.status ?? "") === "DROPOFF" ? formatDateTime(resolvedQuote?.updatedAt) : "";
+    const completedAtText = uiState === CUSTOMER_UI_STATE.COMPLETED ? formatDateTime(resolvedQuote?.updatedAt) : "";
 
     return {
       quote: resolvedQuote,

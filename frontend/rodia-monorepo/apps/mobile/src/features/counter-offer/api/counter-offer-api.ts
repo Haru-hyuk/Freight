@@ -17,6 +17,7 @@ import {
   rejectMockFlowShipperCounterOffer,
   waitRandom,
 } from "@/shared/lib/mock-flow";
+import { BACKEND_STATUS, normalizeStatus } from "@/shared/lib/policy";
 
 type AnyObject = Record<string, unknown>;
 
@@ -63,10 +64,12 @@ function toOptionalText(value: unknown): string | undefined {
   return text ? text : undefined;
 }
 
-function normalizeStatus(value: unknown): string {
-  const text = toOptionalText(value)?.toUpperCase() ?? "";
-  if (!text) return "UNKNOWN";
-  if (text === "CANCELLED") return "CANCELED";
+function normalizeCounterOfferStatusValue(value: unknown): string {
+  const text = toOptionalText(value);
+  if (!text) return BACKEND_STATUS.UNKNOWN;
+
+  const normalized = normalizeStatus(text);
+  if (normalized !== BACKEND_STATUS.UNKNOWN) return normalized;
   return text;
 }
 
@@ -103,7 +106,7 @@ function toCounterOfferItem(value: unknown): CounterOfferItem | null {
     driverId,
     proposedPrice: toNonNegativeInt(source.proposedPrice),
     message: toOptionalText(source.message) ?? "",
-    status: normalizeStatus(source.status),
+    status: normalizeCounterOfferStatusValue(source.status),
     createdAt: toOptionalText(source.createdAt),
     respondedAt: toOptionalText(source.respondedAt),
     actorRole: driverId > 0 ? "DRIVER" : "UNKNOWN",
@@ -243,14 +246,14 @@ export async function listMyDriverCounterOffersByQuotes(quoteIds: number[]): Pro
 }
 
 export function isCounterOfferPending(status: string): boolean {
-  const normalized = normalizeStatus(status);
-  if (normalized.includes("ACCEPT")) return false;
-  if (normalized.includes("REJECT")) return false;
-  if (normalized.includes("CANCEL")) return false;
-  if (normalized === "UNKNOWN") return false;
+  const normalized = normalizeCounterOfferStatusValue(status);
+  if (normalized === BACKEND_STATUS.UNKNOWN) return false;
+  if (/ACCEPT/i.test(normalized)) return false;
+  if (/REJECT/i.test(normalized)) return false;
+  if (/CANCEL/i.test(normalized)) return false;
   return true;
 }
 
 export function normalizeCounterOfferStatus(status: string): string {
-  return normalizeStatus(status);
+  return normalizeCounterOfferStatusValue(status);
 }

@@ -11,9 +11,17 @@ import {
   getDriverMatchDetailBadges,
   postCounterOffer,
 } from "@/features/matching/api";
-import { normalizeDriverMatchStatus, toDriverMatchStatusLabel } from "@/features/matching/model/driverMatchStatus";
 import { type MatchDetailRouteSnapshot, useMatchDetail } from "@/features/matching/model/useMatchDetail";
 import { formatWorkMethodLabel } from "@/features/quote/model/workMethod";
+import {
+  DRIVER_CTA_ID,
+  DRIVER_UI_STATE,
+  getDriverBadge,
+  getDriverCta,
+  getDriverUiStateFromBackendStatus,
+  type DriverUiState,
+  normalizeStatus,
+} from "@/shared/lib/policy";
 import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppButton } from "@/shared/ui/kit/AppButton";
@@ -36,8 +44,16 @@ type ToastState = {
 const NETWORK_ERROR_TEXT = "네트워크 요청에 실패했습니다. 잠시 후 다시 시도해 주세요.";
 const TOAST_DURATION_MS = 2000;
 
-const READY_ACTION_STATUSES = new Set(["READY", "OPEN", "NEGOTIATING"]);
-const ASSIGNED_FLOW_STATUSES = new Set(["ACCEPTED", "ASSIGNED", "PICKUP", "TRANSIT", "DROPOFF"]);
+const READY_ACTION_UI_STATES = new Set<DriverUiState>([
+  DRIVER_UI_STATE.READY_TO_ACCEPT,
+  DRIVER_UI_STATE.NEGOTIATING,
+]);
+const ASSIGNED_FLOW_UI_STATES = new Set<DriverUiState>([
+  DRIVER_UI_STATE.ASSIGNED,
+  DRIVER_UI_STATE.PICKUP_IN_PROGRESS,
+  DRIVER_UI_STATE.TRANSIT_IN_PROGRESS,
+  DRIVER_UI_STATE.COMPLETED,
+]);
 
 function toPositiveInt(value: unknown): number {
   const parsed = Number(value);
@@ -536,11 +552,16 @@ export function DriverMatchDetailPage({ matchId, routeSnapshot }: DriverMatchDet
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const spacing = safeNumber(theme?.layout?.spacing?.base, 4);
-  const normalizedStatus = normalizeDriverMatchStatus(detail.match?.status);
-  const statusLabel = toDriverMatchStatusLabel(detail.match?.status);
+  const backendStatus = normalizeStatus(toText(detail.match?.status));
+  const uiState = getDriverUiStateFromBackendStatus(backendStatus);
+  const statusLabel = getDriverBadge(uiState).label;
+  const ctaPolicy = getDriverCta(uiState, true, backendStatus);
 
-  const isReadyAction = READY_ACTION_STATUSES.has(normalizedStatus) && detail.match?.accepted !== true;
-  const isAcceptedFlow = ASSIGNED_FLOW_STATUSES.has(normalizedStatus) || detail.match?.accepted === true;
+  const isReadyAction =
+    READY_ACTION_UI_STATES.has(uiState) &&
+    detail.match?.accepted !== true &&
+    (ctaPolicy.id === DRIVER_CTA_ID.ACCEPT_MATCH || ctaPolicy.id === DRIVER_CTA_ID.SEND_OFFER);
+  const isAcceptedFlow = ASSIGNED_FLOW_UI_STATES.has(uiState) || detail.match?.accepted === true;
 
   const badges = useMemo(() => getDriverMatchDetailBadges(detail.match), [detail.match]);
 

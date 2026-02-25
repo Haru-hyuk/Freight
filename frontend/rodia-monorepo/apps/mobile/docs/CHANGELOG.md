@@ -1,6 +1,38 @@
 # Mobile Changelog
 
 ## 2026-02-25
+- PR/브랜치: `feature/policy-apply-core`
+- 범주 태그: `[policy] [api] [ui]`
+- 변경 요약:
+  - `matching/counter-offer` API 레이어의 상태 normalize 중복을 제거하고 `@/shared/lib/policy/normalizeStatus` 기반으로 통일함.
+  - `quoteActionMatrix`를 customer policy(`uiState`) 기반으로 재구성해 배지/CTA 라벨/상태 해석 소스를 정책 SSOT로 일치시킴.
+  - `QuoteListPage`, `QuoteDetailPage`, `DriverMatchDetailPage`에서 상태 분기 기준을 raw status 비교 대신 uiState/policy 소비로 전환함.
+- 영향 범위:
+  - 사용자 관점: 기존 목록/상세 플로우와 UI 구조는 유지되며 상태/CTA 표시 기준의 일관성이 올라감.
+  - 개발자 관점: 정책 외부 status 문자열 가공 지점을 줄여 후속 화면 확장 시 분기 중복과 불일치 위험이 감소함.
+- 파일 변경 목록:
+  - Modified:
+    - `src/features/counter-offer/api/counter-offer-api.ts`
+    - `src/features/matching/api/driver-orders-api.ts`
+    - `src/features/matching/api/shipper-match-api.ts`
+    - `src/features/quote/model/quoteActionMatrix.ts`
+    - `src/features/quote/model/useQuoteDetail.ts`
+    - `src/pages/driver/matches/DriverMatchDetailPage.tsx`
+    - `src/pages/shipper/quotes/QuoteDetailPage.tsx`
+    - `src/pages/shipper/quotes/QuoteListPage.tsx`
+    - `docs/CHANGELOG.md`
+  - Added:
+    - 없음
+  - Deleted:
+    - 없음
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+- 후속 작업 (다음 PR 후보):
+  - `driverMatchStatus.ts` 등 잔존 레거시 상태 유틸을 policy 기반으로 정리
+  - Quote/Driver 상세의 실제 액션 처리(결제/협상/재요청)를 정책 CTA ID 중심으로 연결
+
+## 2026-02-25
 - PR/브랜치: `feature/mock-flow-e2e-driver-shipper`
 - 범주 태그: `[infra]`
 - 변경 요약:

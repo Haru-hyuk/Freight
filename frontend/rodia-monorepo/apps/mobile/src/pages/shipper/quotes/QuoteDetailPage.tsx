@@ -10,6 +10,7 @@ import { resolveTonePalette } from "@/features/quote/model/quoteActionMatrix";
 import { useQuoteDetail } from "@/features/quote/model/useQuoteDetail";
 import { formatWorkMethodLabel } from "@/features/quote/model/workMethod";
 import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
+import { BACKEND_STATUS, CUSTOMER_UI_STATE, getCustomerUiStateFromBackendStatus, normalizeStatus } from "@/shared/lib/policy";
 import { initLayoutAnimationForAndroid } from "@/shared/lib/ui/layoutAnimationInit";
 import { safeNumber, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
@@ -281,12 +282,12 @@ function formatDistanceText(value: unknown): string {
 }
 
 function resolvePriceSummary(quote: QuoteDetailQuote): PriceSummary {
-  const status = toText(quote.status).toUpperCase();
+  const uiState = getCustomerUiStateFromBackendStatus(toText(quote.status));
   const desired = toPositiveAmount(quote.desiredPrice);
   const finalPrice = toPositiveAmount(quote.finalPrice);
   const estimated = toPositiveAmount(quote.basePrice) + toPositiveAmount(quote.distancePrice) + toPositiveAmount(quote.extraPrice);
   const estimatedAmount = estimated > 0 ? estimated : finalPrice;
-  const isCompleted = status === "DROPOFF" || status === "COMPLETED";
+  const isCompleted = uiState === CUSTOMER_UI_STATE.COMPLETED;
 
   if (isCompleted && finalPrice > 0) {
     return {
@@ -312,14 +313,14 @@ function resolvePriceSummary(quote: QuoteDetailQuote): PriceSummary {
 }
 
 function normalizeMatchStatus(value: unknown): string {
-  const normalized = toText(value).toUpperCase();
-  if (!normalized) return "";
-  if (normalized === "CANCELLED") return "CANCELED";
-  return normalized;
+  const text = toText(value);
+  if (!text) return "";
+  const normalized = normalizeStatus(text);
+  return normalized === BACKEND_STATUS.UNKNOWN ? "" : normalized;
 }
 
 function isCanceledMatchStatus(value: unknown): boolean {
-  return normalizeMatchStatus(value) === "CANCELED";
+  return normalizeMatchStatus(value) === BACKEND_STATUS.CANCELED;
 }
 
 function toUpdatedAtTime(value: unknown): number {

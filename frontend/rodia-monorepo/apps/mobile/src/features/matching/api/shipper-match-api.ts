@@ -26,6 +26,7 @@ import {
   listMockFlowShipperMatches,
   waitRandom,
 } from "@/shared/lib/mock-flow";
+import { BACKEND_STATUS, normalizeStatus } from "@/shared/lib/policy";
 
 type AnyObject = Record<string, unknown>;
 
@@ -90,12 +91,11 @@ function toOptionalBoolean(value: unknown): boolean | undefined {
   return value;
 }
 
-function normalizeStatus(value: unknown): string | undefined {
+function toNormalizedMatchStatus(value: unknown): string | undefined {
   const text = toOptionalText(value);
   if (!text) return undefined;
-  const upper = text.toUpperCase();
-  if (upper === "CANCELLED") return "CANCELED";
-  return upper;
+  const normalized = normalizeStatus(text);
+  return normalized === BACKEND_STATUS.UNKNOWN ? undefined : normalized;
 }
 
 function unwrapPayload(value: unknown): unknown {
@@ -130,7 +130,7 @@ function toMatchResponseItem(value: unknown): MatchResponseItem | null {
     quoteId: quoteId > 0 ? quoteId : undefined,
     driverId: driverId > 0 ? driverId : undefined,
     accepted: toOptionalBoolean(source.accepted),
-    status: normalizeStatus(source.status),
+    status: toNormalizedMatchStatus(source.status),
     acceptedAt: toOptionalText(source.acceptedAt),
     createdAt: toOptionalText(source.createdAt),
     updatedAt: toOptionalText(source.updatedAt),
@@ -153,8 +153,7 @@ function toDriverMatchList(value: unknown): DriverMatchItem[] {
 
 function toShipperMatchList(value: unknown): ShipperMatchItem[] {
   return toDriverMatchList(value).map((item) => {
-    const status = normalizeStatus(item.status);
-    const cancelable = status !== "CANCELED";
+    const cancelable = normalizeStatus(item.status ?? "") !== BACKEND_STATUS.CANCELED;
     return {
       ...item,
       cancelable,
@@ -180,7 +179,7 @@ export function getDriverMatchDetailBadges(match: DriverMatchItem | null): Drive
   if (!match) return [];
 
   const safeMatchId = toPositiveInt(match.matchId);
-  const status = normalizeStatus(match.status);
+  const status = normalizeStatus(match.status ?? "");
   if (safeMatchId <= 0) return [];
 
   const badges: DriverMatchDetailBadge[] = [];
@@ -189,7 +188,7 @@ export function getDriverMatchDetailBadges(match: DriverMatchItem | null): Drive
     badges.push({ key: "AI_RECOMMENDED", label: "AI 추천" });
   }
 
-  if ((status === "OPEN" || status === "NEGOTIATING") && safeMatchId % 3 === 0) {
+  if ((status === BACKEND_STATUS.OPEN || status === BACKEND_STATUS.NEGOTIATING) && safeMatchId % 3 === 0) {
     badges.push({ key: "URGENT", label: "긴급 배차" });
   }
 
@@ -224,7 +223,7 @@ export async function createShipperMatch(quoteId: number): Promise<ShipperMatchI
   if (!item) return null;
   return {
     ...item,
-    cancelable: normalizeStatus(item.status) !== "CANCELED",
+    cancelable: normalizeStatus(item.status ?? "") !== BACKEND_STATUS.CANCELED,
   };
 }
 
