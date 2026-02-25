@@ -28,6 +28,7 @@ import {
   readDriverOrdersAiTooltipSeen,
   writeDriverOrdersAiTooltipSeen,
 } from "@/shared/lib/storage/driverOrdersStorage";
+import { BADGE_TONE, type BadgeTone } from "@/shared/lib/policy";
 import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppButton } from "@/shared/ui/kit/AppButton";
@@ -62,12 +63,43 @@ const EMPTY_OVERVIEW: DriverOrdersOverview = {
   },
 };
 
-function resolveStatusStripColor(status: string, colors: Record<string, string>): string {
-  if (status === "OPEN" || status === "NEGOTIATING") return colors.brandPrimary;
-  if (status === "ASSIGNED" || status === "PICKUP" || status === "TRANSIT") return colors.semanticSuccess;
-  if (status === "DROPOFF") return colors.semanticInfo;
-  if (status === "CANCELED") return colors.semanticDanger;
-  return colors.borderStrong;
+function resolveStatusStripPalette(
+  tone: BadgeTone,
+  colors: Record<string, string>
+): { strip: string; chipBg: string; chipBorder: string; chipText: string } {
+  if (tone === BADGE_TONE.ATTENTION) {
+    return {
+      strip: colors.brandPrimary,
+      chipBg: tint(colors.brandPrimary, 0.12, colors.bgSurface),
+      chipBorder: tint(colors.brandPrimary, 0.3, colors.borderDefault),
+      chipText: colors.brandPrimary,
+    };
+  }
+
+  if (tone === BADGE_TONE.PROGRESS) {
+    return {
+      strip: colors.semanticSuccess,
+      chipBg: tint(colors.semanticSuccess, 0.12, colors.bgSurface),
+      chipBorder: tint(colors.semanticSuccess, 0.3, colors.borderDefault),
+      chipText: colors.semanticSuccess,
+    };
+  }
+
+  if (tone === BADGE_TONE.CLOSED) {
+    return {
+      strip: colors.semanticInfo,
+      chipBg: tint(colors.semanticInfo, 0.12, colors.bgSurface),
+      chipBorder: tint(colors.semanticInfo, 0.3, colors.borderDefault),
+      chipText: colors.semanticInfo,
+    };
+  }
+
+  return {
+    strip: colors.borderStrong,
+    chipBg: tint(colors.textMuted, 0.12, colors.bgSurface),
+    chipBorder: tint(colors.textMuted, 0.3, colors.borderDefault),
+    chipText: colors.textMuted,
+  };
 }
 
 function resolveTagPalette(tagKey: string, colors: Record<string, string>): { bg: string; border: string; text: string } {
@@ -264,6 +296,20 @@ const useStyles = createThemedStyles((theme) => {
       fontSize: safeNumber(theme?.typography?.scale?.caption?.size, 12),
       lineHeight: safeNumber(theme?.typography?.scale?.caption?.lineHeight, 16),
       fontWeight: "700",
+    },
+    statusChip: {
+      minHeight: 24,
+      borderRadius: 999,
+      borderWidth: 1,
+      paddingHorizontal: spacing * 2,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    statusChipText: {
+      fontSize: safeNumber(theme?.typography?.scale?.caption?.size, 12),
+      lineHeight: safeNumber(theme?.typography?.scale?.caption?.lineHeight, 16),
+      fontWeight: "900",
+      letterSpacing: -0.2,
     },
     routeWrap: {
       borderWidth: 1,
@@ -578,14 +624,14 @@ function DriverOrderCardView({
   const styles = useStyles();
   const colors = theme.colors as Record<string, string>;
 
-  const statusStripColor = resolveStatusStripColor(item.status, colors);
+  const statusStripPalette = resolveStatusStripPalette(item.statusTone, colors);
 
   return (
     <Pressable
       onPress={() => onPress(item)}
       style={({ pressed }) => [styles.cardPressable, pressed ? styles.cardPressed : null]}
     >
-      <View style={[styles.cardStrip, { backgroundColor: statusStripColor }]} />
+      <View style={[styles.cardStrip, { backgroundColor: statusStripPalette.strip }]} />
       <AppCard outlined style={styles.card}>
         <View style={styles.topRow}>
           <View style={styles.tagsRow}>
@@ -604,6 +650,19 @@ function DriverOrderCardView({
           <View style={styles.topMeta}>
             <AppText style={styles.topMetaText}>{item.requestedAtText || ""}</AppText>
             {item.pickupTimeText ? <AppText style={styles.topMetaText}>{item.pickupTimeText}</AppText> : null}
+            <View
+              style={[
+                styles.statusChip,
+                {
+                  backgroundColor: statusStripPalette.chipBg,
+                  borderColor: statusStripPalette.chipBorder,
+                },
+              ]}
+            >
+              <AppText style={[styles.statusChipText, { color: statusStripPalette.chipText }]}>
+                {item.statusLabel}
+              </AppText>
+            </View>
           </View>
         </View>
 
@@ -653,7 +712,7 @@ function DriverOrderCardView({
           )}
 
           <View style={styles.priceBlock}>
-            <AppText style={styles.priceLabel}>{item.statusLabel}</AppText>
+            <AppText style={styles.priceLabel}>운임</AppText>
             <AppText style={styles.priceText}>{item.priceText || "-"}</AppText>
           </View>
         </View>

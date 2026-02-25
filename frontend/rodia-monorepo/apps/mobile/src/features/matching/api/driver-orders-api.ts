@@ -1,6 +1,7 @@
 import type { QuoteDetailResponse } from "@/entities/quote/model/quote.types";
 import { getShipperQuoteDetailByIdentifier } from "@/features/quote/api";
 import { getDriverMatchMode } from "@/shared/lib/config/env";
+import type { BadgeTone } from "@/shared/lib/policy";
 import {
   selectMockFlowAiRecommendedDecoration,
   waitRandom,
@@ -40,6 +41,7 @@ export type DriverOrderCard = {
   quoteId?: number;
   status: string;
   statusLabel: string;
+  statusTone: BadgeTone;
   requestedAtText?: string;
   pickupTimeText?: string;
   originAddress?: string;
