@@ -9,6 +9,7 @@ type LegacyParams = {
   createdAt?: string | string[];
   updatedAt?: string | string[];
   accepted?: string | string[];
+  acceptedAt?: string | string[];
 };
 
 function readFirst(value: string | string[] | undefined): string {
@@ -29,6 +30,7 @@ export default function DriverMatchesLegacyDetailRoute() {
   const createdAt = readFirst(params?.createdAt);
   const updatedAt = readFirst(params?.updatedAt);
   const accepted = readFirst(params?.accepted);
+  const acceptedAt = readFirst(params?.acceptedAt);
 
   // Legacy alias: canonical driver run detail route is `/(driver)/run/[id]`.
   return (
@@ -42,6 +44,7 @@ export default function DriverMatchesLegacyDetailRoute() {
           ...(createdAt ? { createdAt } : {}),
           ...(updatedAt ? { updatedAt } : {}),
           ...(accepted ? { accepted } : {}),
+          ...(acceptedAt ? { acceptedAt } : {}),
         },
       }}
     />

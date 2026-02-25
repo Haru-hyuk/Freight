@@ -5,12 +5,25 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { cancelShipperMatch, createShipperMatch, listMyShipperMatches, type ShipperMatchItem } from "@/features/matching/api";
+import {
+  acceptShipperCounterOffer,
+  isCounterOfferPending,
+  listShipperCounterOffers,
+  rejectShipperCounterOffer,
+} from "@/features/counter-offer/api";
 import { deleteShipperQuote } from "@/features/quote/api";
-import { resolveTonePalette } from "@/features/quote/model/quoteActionMatrix";
-import { useQuoteDetail } from "@/features/quote/model/useQuoteDetail";
+import { resolveTonePalette, type DecisionActionId } from "@/features/quote/model/quoteActionMatrix";
+import { useQuoteDetail, type QuoteActionsContext } from "@/features/quote/model/useQuoteDetail";
 import { formatWorkMethodLabel } from "@/features/quote/model/workMethod";
+import { BottomActionRouter } from "@/features/quote/ui/actions/BottomActionRouter";
 import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
-import { BACKEND_STATUS, CUSTOMER_UI_STATE, getCustomerUiStateFromBackendStatus, normalizeStatus } from "@/shared/lib/policy";
+import {
+  BACKEND_STATUS,
+  CUSTOMER_UI_STATE,
+  getCustomerUiStateFromBackendStatus,
+  normalizeStatus,
+  type CustomerUiState,
+} from "@/shared/lib/policy";
 import { initLayoutAnimationForAndroid } from "@/shared/lib/ui/layoutAnimationInit";
 import { safeNumber, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
@@ -28,6 +41,14 @@ type RouteNode = { key: string; title: string; address: string; kind: "origin" |
 type ArchiveRow = { label: string; value: string };
 type ArchiveSection = { key: string; title: string; rows: ArchiveRow[] };
 type PriceSummary = { primaryLabel: string; primaryText: string; secondaryText: string };
+type QuoteDecisionAction = Exclude<DecisionActionId, "cancelRequest">;
+
+const POLICY_ACTION_UI_STATES: ReadonlySet<CustomerUiState> = new Set([
+  CUSTOMER_UI_STATE.NEGOTIATION_REQUIRED,
+  CUSTOMER_UI_STATE.PAYMENT_REQUIRED,
+  CUSTOMER_UI_STATE.COMPLETED,
+  CUSTOMER_UI_STATE.CANCELED,
+]);
 
 const EMPTY_MATCH_SNAPSHOT: MatchSnapshot = { cancelableMatch: null, nonCanceledMatch: null };
 const VEHICLE_SECTION_TITLES = new Set(["차량/화물", "차량 정보", "화물 정보"]);
@@ -553,6 +574,10 @@ export default function QuoteDetailPage() {
   }, [routeQuoteId, view.quote.quoteId]);
 
   const isBlockedByFetchState = view.isLoading || Boolean(view.errorMessage);
+  const quoteUiState = React.useMemo(
+    () => getCustomerUiStateFromBackendStatus(toText(view.quote.status)),
+    [view.quote.status]
+  );
   const palette = resolveTonePalette(theme, view.policy);
   const activeQuoteMatch = React.useMemo(
     () => matchSnapshot.cancelableMatch ?? matchSnapshot.nonCanceledMatch ?? null,
@@ -645,6 +670,74 @@ export default function QuoteDetailPage() {
     }
   }, [cancelTargetMatchId, isMatchSubmitting, refreshQuoteAndMatchData]);
 
+  const resolvePendingCounterOfferId = React.useCallback(async () => {
+    if (actionQuoteId <= 0) return 0;
+    const offers = await listShipperCounterOffers(actionQuoteId);
+    const pendingOffer = offers.find((offer) => isCounterOfferPending(offer.status));
+    return parsePositiveInt(pendingOffer?.counterOfferId);
+  }, [actionQuoteId]);
+
+  const runPolicyAction = React.useCallback(
+    async (action: QuoteDecisionAction, _ctx: QuoteActionsContext) => {
+      if (isMatchSubmitting) return;
+
+      if (action === "acceptOffer") {
+        try {
+          setIsMatchSubmitting(true);
+          const offerId = await resolvePendingCounterOfferId();
+          if (offerId <= 0) {
+            Alert.alert("Offer Accept", "No pending counter-offer was found.");
+            return;
+          }
+          await acceptShipperCounterOffer(offerId);
+          await refreshQuoteAndMatchData();
+          Alert.alert("Offer Accept", "Counter-offer was accepted.");
+        } catch (error) {
+          Alert.alert("Offer Accept Failed", readApiErrorMessage(error));
+        } finally {
+          setIsMatchSubmitting(false);
+        }
+        return;
+      }
+
+      if (action === "rejectOffer") {
+        try {
+          setIsMatchSubmitting(true);
+          const offerId = await resolvePendingCounterOfferId();
+          if (offerId <= 0) {
+            Alert.alert("Offer Reject", "No pending counter-offer was found.");
+            return;
+          }
+          await rejectShipperCounterOffer(offerId);
+          await refreshQuoteAndMatchData();
+          Alert.alert("Offer Reject", "Counter-offer was rejected.");
+        } catch (error) {
+          Alert.alert("Offer Reject Failed", readApiErrorMessage(error));
+        } finally {
+          setIsMatchSubmitting(false);
+        }
+        return;
+      }
+
+      if (action === "reRequestRoute") {
+        router.push("/(shipper)/quotes/create");
+        return;
+      }
+
+      if (action === "pay") {
+        Alert.alert("Payment", "Payment flow will be connected in the next step.");
+      }
+    },
+    [isMatchSubmitting, refreshQuoteAndMatchData, resolvePendingCounterOfferId, router]
+  );
+
+  const handlePolicyCancelRequest = React.useCallback(
+    (_payload: { quoteId: number; reason: string }) => {
+      void handleCancelMatch();
+    },
+    [handleCancelMatch]
+  );
+
   const handlePressEdit = React.useCallback(() => {
     if (isBlockedByFetchState) return;
     const preferredIdentifier = toText(view.quote.quotePublicId || quoteIdentifier);
@@ -703,6 +796,7 @@ export default function QuoteDetailPage() {
   }, []);
 
   const spacing = safeNumber(theme.layout.spacing.base, 4);
+  const shouldUsePolicyActionBar = POLICY_ACTION_UI_STATES.has(quoteUiState) && Boolean(view.policy.bottomBar);
   const bottomTitle = hasActiveQuoteMatch ? "배차 요청 취소" : "배차 요청";
   const bottomVariant = hasActiveQuoteMatch ? "destructive" : "primary";
   const handlePressBottomAction = React.useCallback(() => {
@@ -719,6 +813,14 @@ export default function QuoteDetailPage() {
         <View style={styles.bottomPlaceholder}>
           <AppText style={styles.bottomPlaceholderText}>배차 상태 확인 중...</AppText>
         </View>
+      ) : shouldUsePolicyActionBar ? (
+        <BottomActionRouter
+          ctx={view.actionsContext}
+          bottomBar={view.policy.bottomBar}
+          guards={view.policy.guards}
+          onCancelRequest={handlePolicyCancelRequest}
+          onRunAction={(action, ctx) => runPolicyAction(action, ctx)}
+        />
       ) : (
         <AppButton
           title={bottomTitle}

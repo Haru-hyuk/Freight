@@ -2,9 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { QuoteDetailResponse } from "@/entities/quote/model/quote.types";
 import { type DriverMatchItem, getDriverMatch } from "@/features/matching/api";
+import { parseMatchPositiveInt } from "@/features/matching/api/shipper-match-parser";
 import { getShipperQuoteDetailByIdentifier } from "@/features/quote/api";
+import {
+  getMatchDetailRouteSnapshotKey,
+  normalizeMatchDetailRouteSnapshot,
+  type MatchDetailRouteSnapshot,
+} from "./matchDetailRouteSnapshot";
 
-export type MatchDetailRouteSnapshot = Partial<DriverMatchItem>;
+export type { MatchDetailRouteSnapshot } from "./matchDetailRouteSnapshot";
 
 type UseMatchDetailViewModel = {
   match: DriverMatchItem | null;
@@ -15,62 +21,11 @@ type UseMatchDetailViewModel = {
   refetch: () => Promise<void>;
 };
 
-const NETWORK_ERROR_TEXT = "네트워크 요청에 실패했습니다. 잠시 후 다시 시도해 주세요.";
-
-function toPositiveInt(value: unknown): number {
-  const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
-}
-
-function toOptionalText(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
-  const text = value.trim();
-  return text ? text : undefined;
-}
-
-function toOptionalBoolean(value: unknown): boolean | undefined {
-  if (typeof value !== "boolean") return undefined;
-  return value;
-}
-
-function normalizeMatch(value: Partial<DriverMatchItem> | null | undefined): DriverMatchItem | null {
-  if (!value) return null;
-
-  const matchId = toPositiveInt(value.matchId);
-  if (matchId <= 0) return null;
-
-  const quoteId = toPositiveInt(value.quoteId);
-  const driverId = toPositiveInt(value.driverId);
-
-  return {
-    matchId,
-    quoteId: quoteId > 0 ? quoteId : undefined,
-    driverId: driverId > 0 ? driverId : undefined,
-    accepted: toOptionalBoolean(value.accepted),
-    status: toOptionalText(value.status),
-    acceptedAt: toOptionalText(value.acceptedAt),
-    createdAt: toOptionalText(value.createdAt),
-    updatedAt: toOptionalText(value.updatedAt),
-  };
-}
-
-function snapshotKey(snapshot?: MatchDetailRouteSnapshot): string {
-  if (!snapshot) return "";
-  return [
-    toPositiveInt(snapshot.matchId),
-    toPositiveInt(snapshot.quoteId),
-    toPositiveInt(snapshot.driverId),
-    typeof snapshot.accepted === "boolean" ? String(snapshot.accepted) : "",
-    toOptionalText(snapshot.status) ?? "",
-    toOptionalText(snapshot.createdAt) ?? "",
-    toOptionalText(snapshot.updatedAt) ?? "",
-    toOptionalText(snapshot.acceptedAt) ?? "",
-  ].join("|");
-}
+const NETWORK_ERROR_TEXT = "?ㅽ듃?뚰겕 ?붿껌???ㅽ뙣?덉뒿?덈떎. ?좎떆 ???ㅼ떆 ?쒕룄??二쇱꽭??";
 
 export function useMatchDetail(matchId: number, routeSnapshot?: MatchDetailRouteSnapshot): UseMatchDetailViewModel {
-  const safeMatchId = toPositiveInt(matchId);
-  const routeSnapshotHash = snapshotKey(routeSnapshot);
+  const safeMatchId = parseMatchPositiveInt(matchId);
+  const routeSnapshotHash = getMatchDetailRouteSnapshotKey(routeSnapshot);
   const [match, setMatch] = useState<DriverMatchItem | null>(null);
   const [quote, setQuote] = useState<QuoteDetailResponse | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -79,19 +34,8 @@ export function useMatchDetail(matchId: number, routeSnapshot?: MatchDetailRoute
   const pendingRefetchResolversRef = useRef<Array<() => void>>([]);
 
   const bootstrapMatch = useMemo(
-    () => normalizeMatch({ matchId: safeMatchId, ...(routeSnapshot ?? {}) }),
-    [
-      safeMatchId,
-      routeSnapshotHash,
-      routeSnapshot?.accepted,
-      routeSnapshot?.acceptedAt,
-      routeSnapshot?.createdAt,
-      routeSnapshot?.driverId,
-      routeSnapshot?.matchId,
-      routeSnapshot?.quoteId,
-      routeSnapshot?.status,
-      routeSnapshot?.updatedAt,
-    ]
+    () => normalizeMatchDetailRouteSnapshot(routeSnapshot, safeMatchId),
+    [safeMatchId, routeSnapshot, routeSnapshotHash]
   );
 
   const refetch = useCallback(() => {
@@ -105,7 +49,7 @@ export function useMatchDetail(matchId: number, routeSnapshot?: MatchDetailRoute
     let mounted = true;
 
     const loadQuoteDetail = async (quoteId: unknown) => {
-      const safeQuoteId = toPositiveInt(quoteId);
+      const safeQuoteId = parseMatchPositiveInt(quoteId);
       if (safeQuoteId <= 0) {
         if (mounted) setQuote(null);
         return;
@@ -125,7 +69,7 @@ export function useMatchDetail(matchId: number, routeSnapshot?: MatchDetailRoute
       setMatch(null);
       setQuote(null);
       setIsLoading(false);
-      setErrorMessage("유효한 오더 ID가 아닙니다.");
+      setErrorMessage("?좏슚???ㅻ뜑 ID媛 ?꾨떃?덈떎.");
 
       const resolvers = pendingRefetchResolversRef.current.splice(0);
       resolvers.forEach((resolve) => resolve());
@@ -143,12 +87,12 @@ export function useMatchDetail(matchId: number, routeSnapshot?: MatchDetailRoute
       .then(async (remoteMatch) => {
         if (!mounted) return;
 
-        const normalizedRemote = normalizeMatch(remoteMatch);
+        const normalizedRemote = normalizeMatchDetailRouteSnapshot(remoteMatch, safeMatchId);
         const resolvedMatch = normalizedRemote ?? bootstrapMatch;
         setMatch(resolvedMatch ?? null);
 
         if (!resolvedMatch) {
-          setErrorMessage("오더 정보를 찾을 수 없습니다.");
+          setErrorMessage("?ㅻ뜑 ?뺣낫瑜?李얠쓣 ???놁뒿?덈떎.");
           return;
         }
 
@@ -179,9 +123,9 @@ export function useMatchDetail(matchId: number, routeSnapshot?: MatchDetailRoute
   }, [bootstrapMatch, reloadTick, routeSnapshotHash, safeMatchId]);
 
   const quoteId = useMemo(() => {
-    const fromQuote = toPositiveInt(quote?.quoteId);
+    const fromQuote = parseMatchPositiveInt(quote?.quoteId);
     if (fromQuote > 0) return fromQuote;
-    return toPositiveInt(match?.quoteId);
+    return parseMatchPositiveInt(match?.quoteId);
   }, [match?.quoteId, quote?.quoteId]);
 
   return useMemo(
