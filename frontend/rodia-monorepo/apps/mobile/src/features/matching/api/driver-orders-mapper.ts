@@ -1,7 +1,7 @@
 import { formatWorkMethodLabel } from "@/features/quote/model/workMethod";
 import {
-  BACKEND_STATUS,
   getDriverBadge,
+  getDriverOrderSortPriority,
   getDriverUiStateFromBackendStatus,
 } from "@/shared/lib/policy";
 import {
@@ -177,16 +177,9 @@ export function mapDriverOrderCard(input: DriverOrderCardMapperInput): DriverOrd
 
 export function sortDriverOrderCards(items: DriverOrderCard[]): DriverOrderCard[] {
   return [...items].sort((a, b) => {
-    const statusWeight = (status: string): number => {
-      if (status === BACKEND_STATUS.READY || status === BACKEND_STATUS.OPEN) return 0;
-      if (status === BACKEND_STATUS.NEGOTIATING) return 1;
-      if (status === BACKEND_STATUS.ASSIGNED || status === BACKEND_STATUS.ACCEPTED) return 2;
-      if (status === BACKEND_STATUS.PICKUP) return 3;
-      if (status === BACKEND_STATUS.TRANSIT) return 4;
-      return 5;
-    };
-
-    const byStatus = statusWeight(a.status) - statusWeight(b.status);
+    const byStatus =
+      getDriverOrderSortPriority(getDriverUiStateFromBackendStatus(a.status)) -
+      getDriverOrderSortPriority(getDriverUiStateFromBackendStatus(b.status));
     if (byStatus !== 0) return byStatus;
     return b.matchId - a.matchId;
   });
