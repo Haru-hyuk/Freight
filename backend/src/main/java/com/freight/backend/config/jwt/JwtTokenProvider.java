@@ -34,14 +34,17 @@ public class JwtTokenProvider {
     private final Key key;
     private final long accessTokenExpirationMs;
     private final String secretKey;
+    private final long refreshTokenExpirationMs;
 
     public JwtTokenProvider(
             @Value("${jwt.secret}") String secretKey,
-            @Value("${jwt.access-token-expiration-seconds:3600}") long expirationSeconds
+            @Value("${jwt.access-token-expiration-seconds:3600}") long accessExpirationSeconds,
+            @Value("${jwt.refresh-token-expiration-seconds:1209600}") long refreshExpirationSeconds
     ) {
         this.secretKey = secretKey;
         this.key = Keys.hmacShaKeyFor(secretKey.getBytes(StandardCharsets.UTF_8));
-        this.accessTokenExpirationMs = expirationSeconds * 1000L;
+        this.accessTokenExpirationMs = accessExpirationSeconds * 1000L;
+        this.refreshTokenExpirationMs = refreshExpirationSeconds * 1000L;
     }
 
     @PostConstruct
@@ -65,25 +68,6 @@ public class JwtTokenProvider {
         return accessTokenExpirationMs / 1000L;
     }
 
-    public String generateRefreshToken(Long userId, String email, String role) {
-        Date now = new Date();
-        // Refresh token expires in 7 days
-        long refreshTokenExpirationMs = 7 * 24 * 60 * 60 * 1000L;
-
-        Map<String, Object> claims = new HashMap<>();
-        claims.put("email", email);
-        claims.put("role", role);
-        claims.put("type", "refresh");
-
-        return Jwts.builder()
-                .setClaims(claims)
-                .setSubject(String.valueOf(userId))
-                .setIssuedAt(now)
-                .setExpiration(new Date(now.getTime() + refreshTokenExpirationMs))
-                .signWith(key, SignatureAlgorithm.HS256)
-                .compact();
-    }
-
     public String resolveToken(HttpServletRequest request) {
         String bearer = request.getHeader("Authorization");
         if (bearer != null && bearer.startsWith("Bearer ")) {
@@ -103,6 +87,22 @@ public class JwtTokenProvider {
                 .setSubject(String.valueOf(userId))
                 .setIssuedAt(now)
                 .setExpiration(new Date(now.getTime() + accessTokenExpirationMs))
+                .signWith(key, SignatureAlgorithm.HS256)
+                .compact();
+    }
+
+    public String generateRefreshToken(Long userId, String email, String role) {
+        Date now = new Date();
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("email", email);
+        claims.put("role", role);
+        claims.put("type", "refresh");
+
+        return Jwts.builder()
+                .setClaims(claims)
+                .setSubject(String.valueOf(userId))
+                .setIssuedAt(now)
+                .setExpiration(new Date(now.getTime() + refreshTokenExpirationMs))
                 .signWith(key, SignatureAlgorithm.HS256)
                 .compact();
     }
