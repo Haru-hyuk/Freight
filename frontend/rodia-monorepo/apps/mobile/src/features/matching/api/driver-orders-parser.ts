@@ -3,6 +3,13 @@ import { normalizeStatus } from "@/shared/lib/policy";
 
 import type { DriverMatchItem } from "./shipper-match-api";
 
+/**
+ * Driver orders parser boundary
+ * - Generated/API 응답에서 들어온 match/quote 원본을 최소 정규화한다.
+ * - nullable/basic coercion(id, status, date source, 숫자 안전값)만 담당한다.
+ * - 카드 문구/태그/정렬 같은 표현 정책은 mapper로 넘긴다.
+ * - parser는 UI 파생값을 만들지 않는다.
+ */
 export type DriverOrderScope = "market" | "my";
 
 export type ParsedDriverOrderQuote = {

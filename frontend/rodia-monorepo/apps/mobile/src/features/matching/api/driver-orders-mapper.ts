@@ -12,6 +12,13 @@ import {
 import type { DriverOrderCard, DriverOrderTag, DriverOrderTagKey } from "./driver-orders-api";
 import type { ParsedDriverOrderQuote, ParsedDriverOrderSource } from "./driver-orders-parser";
 
+/**
+ * Driver orders mapper boundary
+ * - parser가 정규화한 source를 UI 카드 모델로 변환한다.
+ * - 상태 배지, 카드 텍스트, 태그, 정렬 순서 같은 표현/파생 계산을 담당한다.
+ * - 입력 안전성 보정은 parser 책임으로 유지한다.
+ * TODO: 거리/시간/가격 포맷 공통 유틸 후보는 중복 확인 후 별도 PR에서 분리한다.
+ */
 type DriverOrderTagLabelMap = Readonly<Record<DriverOrderTagKey, string>>;
 
 type DriverOrderCardMapperInput = {

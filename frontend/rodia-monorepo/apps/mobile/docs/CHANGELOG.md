@@ -1,6 +1,45 @@
 # Mobile Changelog
 
 ## 2026-02-25
+- PR/브랜치: `refactor/shipper-match-parsing-boundary`
+- 범주 태그: `[api] [mock] [infra] [routing]`
+- 변경 요약:
+  - `shipper-match-parser.ts`를 추가해 매칭 응답의 payload unwrap, id coercion, nullable/status 정규화를 parser 경계로 분리함.
+  - `shipper-match-api.ts`는 mock/server 데이터 조회 뒤 parser 결과를 소비해 목록/단건/도메인 로직을 처리하는 구조로 정리함.
+  - mock/server 모두 동일 parser 파이프라인(`parseMatchListResponse`, `parseSingleMatchResponse`)을 사용하도록 통일함.
+  - `pages/shipper/settings/_mock.ts`를 `features/shipper-settings/api/shipper-settings-mock.ts`로 이동해 pages 레이어 mock 의존을 제거함.
+  - `src/shared/lib/mock/` 빈 폴더를 정리했고, `src/shared/lib/geo/distance.ts`는 실제 사용처 확인 후 유지함.
+  - parser/mapper 경계 혼동을 줄이기 위해 `driver-orders-parser.ts`, `driver-orders-mapper.ts`, `shipper-match-parser.ts` 상단에 역할 정의를 추가함.
+- 영향 범위:
+  - 사용자 관점: 매칭/설정 화면 UI 동작 변화 없이 import 경로 정리 및 내부 구조 개선만 반영됨.
+  - 개발자 관점: API 파싱 책임과 pages mock 위치가 정리되어 경계/응집도가 개선됨.
+- 파일 변경 목록:
+  - Modified:
+    - `src/features/matching/api/driver-orders-mapper.ts`
+    - `src/features/matching/api/driver-orders-parser.ts`
+    - `src/features/matching/api/shipper-match-api.ts`
+    - `src/pages/shipper/settings/ShipperSettingsHomePage.tsx`
+    - `src/pages/shipper/settings/ShipperBusinessInfoPage.tsx`
+    - `src/pages/shipper/settings/ShipperVerificationManagePage.tsx`
+    - `src/pages/shipper/settings/ShipperAccountEditPage.tsx`
+    - `src/pages/shipper/settings/ShipperAddressBookPage.tsx`
+    - `src/pages/shipper/settings/ShipperPaymentMethodsPage.tsx`
+    - `src/pages/shipper/settings/ShipperTaxInvoiceHistoryPage.tsx`
+    - `docs/CHANGELOG.md`
+  - Added:
+    - `src/features/matching/api/shipper-match-parser.ts`
+    - `src/features/shipper-settings/api/shipper-settings-mock.ts`
+  - Deleted:
+    - `src/pages/shipper/settings/_mock.ts`
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+- 후속 작업 (다음 PR 후보):
+  - `app/(driver)/drive.tsx`가 `/(driver)/run/[id]`로 리다이렉트되고 `DriverDrivePage.tsx`가 미연결 상태이므로 라우팅/정책 소비 정합성 재검토
+  - `useMatchDetail.ts` 내부 route snapshot 정규화 보조 로직의 parser/공통 유틸 정리 검토
+  - driver orders/quote detail의 시간·금액 포맷 함수 중복을 공통 유틸로 분리할지 별도 PR에서 확정
+
+## 2026-02-25
 - PR/브랜치: `refactor/driver-orders-parsing-boundary`
 - 범주 태그: `[api] [mock] [infra]`
 - 변경 요약:
