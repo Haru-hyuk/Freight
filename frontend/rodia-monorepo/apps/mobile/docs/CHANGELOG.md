@@ -8,10 +8,12 @@
   - 기존 `formatKrwAmount`, `formatShortDateTime`는 호환용으로 유지해 기존 사용처 회귀 없이 단계적 이관이 가능하도록 정리함.
   - `driver-orders-mapper`, `DriverMatchDetailPage`, `QuoteDetailPage`의 로컬 포맷 함수를 제거하고 공통 display 유틸로 치환함.
   - `QuoteListPage`, `useQuoteDetail`, `ShipperTaxInvoiceHistoryPage`의 잔여 원화/거리/날짜 포맷 중복을 공통 display 유틸로 추가 이관함.
+  - `apps/mobile/docs/CODEX_RULES.md`를 추가해 PowerShell 한 줄 실행(`&&` 금지), 한국어 인코딩 검증/원복 절차를 작업 규칙으로 문서화함.
+  - 로컬 PowerShell 프로필(`$PROFILE`)에 UTF-8 출력/입력 설정을 적용하고 새 세션에서 한글 출력 동작을 확인함.
   - 포맷 결과는 기존 화면 기준(원화 쉼표+원, 거리 소수 1자리, 날짜 `M/D HH:mm`)을 유지하도록 맞춤.
 - 영향 범위:
   - 사용자 관점: Driver/Quote 주요 화면과 세금계산서 발행내역의 거리·금액·시간 표기가 기존과 동일한 형태로 일관되게 노출됨.
-  - 개발자 관점: 중복 포맷 함수가 줄어 포맷 변경 시 수정 지점이 `shared/lib/format`로 수렴됨.
+  - 개발자 관점: 중복 포맷 함수가 줄어 포맷 변경 시 수정 지점이 `shared/lib/format`로 수렴되고, PowerShell/인코딩 실수 방지 규칙이 문서로 고정됨.
 - 파일 변경 목록:
   - 수정:
     - `src/shared/lib/format/display.ts`
@@ -21,6 +23,7 @@
     - `src/pages/shipper/quotes/QuoteListPage.tsx`
     - `src/features/quote/model/useQuoteDetail.ts`
     - `src/pages/shipper/settings/ShipperTaxInvoiceHistoryPage.tsx`
+    - `docs/CODEX_RULES.md`
     - `docs/CHANGELOG.md`
   - 추가:
     - 없음
