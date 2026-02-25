@@ -1,6 +1,34 @@
 # Mobile Changelog
 
 ## 2026-02-25
+- PR/Branch: `work/driver-complete`
+- Tags: `[routing] [policy] [ui] [docs]`
+- Summary:
+  - Re-checked driver canonical routing and kept `/(driver)/run/[id]` as the single detail destination.
+  - Kept legacy aliases (`/(driver)/drive`, `/(driver)/matches/*`) as redirect-only paths with no duplicated detail implementation.
+  - Added driver orders tie-break sort for stable ordering within the same `uiState` group:
+    priority by policy `uiState`, then timestamp (`updatedAt`/`createdAt`) descending, then `matchId` descending.
+  - Removed legacy `driverMatchStatus.ts` utility after confirming zero usage.
+- Impact:
+  - User-facing order list no longer flips unpredictably when multiple cards share the same `uiState`.
+  - Driver routing remains canonical and easier to maintain.
+- File changes:
+  - Modified:
+    - `src/features/matching/api/driver-orders-parser.ts`
+    - `src/features/matching/api/driver-orders-mapper.ts`
+    - `src/features/matching/api/driver-orders-api.ts`
+    - `docs/CHANGELOG.md`
+  - Added:
+    - none
+  - Deleted:
+    - `src/features/matching/model/driverMatchStatus.ts`
+- Verification:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: pass
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: pass
+- Follow-ups:
+  - Keep alias removal decision aligned with `docs/DRIVER_RUN_CANONICAL.md` checklist and monitoring window.
+
+## 2026-02-25
 - PR/브랜치: `refactor/driver-orders-sort-uistate`
 - 범주 태그: `[policy] [ui] [routing] [docs]`
 - 변경 요약:
