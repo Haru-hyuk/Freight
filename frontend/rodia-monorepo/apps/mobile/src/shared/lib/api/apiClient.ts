@@ -1,6 +1,6 @@
 // apps/mobile/src/shared/lib/api/apiClient.ts
 import axios, {
-  AxiosError,
+  type AxiosError,
   type AxiosInstance,
   type AxiosResponse,
   type InternalAxiosRequestConfig,

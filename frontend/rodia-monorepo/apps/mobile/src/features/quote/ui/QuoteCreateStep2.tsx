@@ -59,7 +59,6 @@ function digitsOnly(input: string) {
 const useStyles = createThemedStyles((theme: AppTheme) => {
   const c = theme.colors;
   const spacing = safeNumber(theme.layout.spacing.base, 4);
-  const radiusControl = safeNumber(theme.layout.radii.control, 12);
   const flatCard = getQuoteFlatCardStyle(theme);
 
   return StyleSheet.create({

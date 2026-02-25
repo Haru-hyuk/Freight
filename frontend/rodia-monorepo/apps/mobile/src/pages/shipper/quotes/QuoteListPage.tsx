@@ -11,6 +11,7 @@ import {
   type QuoteActionPolicy,
   type QuoteTonePaletteKey,
 } from "@/features/quote/model/quoteActionMatrix";
+import { CUSTOMER_UI_STATE, getCustomerUiStateFromBackendStatus, type CustomerUiState } from "@/shared/lib/policy";
 import { safeNumber, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppCard } from "@/shared/ui/kit/AppCard";
@@ -26,6 +27,7 @@ type QuoteListSort = "LATEST" | "PRICE";
 
 type QuoteListViewItem = {
   quote: QuoteListItem;
+  uiState: CustomerUiState;
   policy: QuoteActionPolicy;
   statusLabel: string;
   ctaText: string;
@@ -80,8 +82,8 @@ type QuoteListSectionProps = {
 
 const KRW = new Intl.NumberFormat("ko-KR");
 
-const COMPLETED_STATUSES: QuoteStatusApi[] = ["DROPOFF"];
-const CANCELED_STATUSES: QuoteStatusApi[] = ["CANCELED"];
+const COMPLETED_UI_STATES = new Set<CustomerUiState>([CUSTOMER_UI_STATE.COMPLETED]);
+const CANCELED_UI_STATES = new Set<CustomerUiState>([CUSTOMER_UI_STATE.CANCELED]);
 
 const TAB_OPTIONS: Array<{ key: QuoteListTab; label: string }> = [
   { key: "ALL", label: "전체" },
@@ -475,11 +477,13 @@ function getPriceValue(quote: QuoteListItem): number {
 }
 
 function toViewItem(quote: QuoteListItem): QuoteListViewItem {
+  const uiState = getCustomerUiStateFromBackendStatus(quote.status);
   const policy = getQuoteActionPolicy(quote.status);
   const priceValue = getPriceValue(quote);
 
   return {
     quote,
+    uiState,
     policy,
     statusLabel: policy.badgeLabel,
     ctaText: policy.ctaLabel,
@@ -492,12 +496,12 @@ function toViewItem(quote: QuoteListItem): QuoteListViewItem {
   };
 }
 
-function isCompletedStatus(status: QuoteStatusApi): boolean {
-  return COMPLETED_STATUSES.includes(status);
+function isCompletedUiState(uiState: CustomerUiState): boolean {
+  return COMPLETED_UI_STATES.has(uiState);
 }
 
-function isCanceledStatus(status: QuoteStatusApi): boolean {
-  return CANCELED_STATUSES.includes(status);
+function isCanceledUiState(uiState: CustomerUiState): boolean {
+  return CANCELED_UI_STATES.has(uiState);
 }
 
 function sortLatest(a: QuoteListViewItem, b: QuoteListViewItem): number {
@@ -524,10 +528,10 @@ function useQuoteList(quotes: QuoteListItem[], activeTab: QuoteListTab, activeSo
 
   const groupedSorted = useMemo(() => {
     const inProgress = allItems.filter(
-      (item) => !isCompletedStatus(item.quote.status) && !isCanceledStatus(item.quote.status)
+      (item) => !isCompletedUiState(item.uiState) && !isCanceledUiState(item.uiState)
     );
-    const completed = allItems.filter((item) => isCompletedStatus(item.quote.status));
-    const canceled = allItems.filter((item) => isCanceledStatus(item.quote.status));
+    const completed = allItems.filter((item) => isCompletedUiState(item.uiState));
+    const canceled = allItems.filter((item) => isCanceledUiState(item.uiState));
 
     if (activeSort === "PRICE") {
       return {

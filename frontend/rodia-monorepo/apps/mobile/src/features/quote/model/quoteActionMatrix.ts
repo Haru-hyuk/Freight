@@ -1,5 +1,13 @@
 // features/quote/model/quoteActionMatrix.ts
 import type { QuoteStatusApi } from "@/entities/quote/model/quote.types";
+import {
+  BADGE_TONE,
+  CUSTOMER_UI_STATE,
+  getCustomerBadge,
+  getCustomerCta,
+  getCustomerUiStateFromBackendStatus,
+  type CustomerUiState,
+} from "@/shared/lib/policy";
 import { tint } from "@/shared/theme/colorUtils";
 import type { AppTheme } from "@/shared/theme/types";
 
@@ -52,25 +60,20 @@ export type QuoteTonePalette = {
 
 const DEFAULT_STATUS_LABEL = "진행 상태";
 
-export const DEFAULT_QUOTE_ACTION_POLICY: QuoteActionPolicy = {
-  category: "inProgress",
-  tone: "neutral",
-  stageOrder: 50,
-  badgeLabel: DEFAULT_STATUS_LABEL,
-  ctaLabel: "상세 보기",
-  listCtaKind: "nav",
-  detailTop: { title: "진행 상태를 확인해주세요" },
-  highlightCard: { type: "none", quickActions: [] },
-  bottomBar: null,
+type QuotePolicyBehavior = {
+  category: QuotePolicyCategory;
+  stageOrder: number;
+  listCtaKind: QuoteListCtaKind;
+  detailTop: QuoteActionPolicy["detailTop"];
+  highlightCard: QuoteActionPolicy["highlightCard"];
+  bottomBar: QuoteActionPolicy["bottomBar"];
+  guards?: QuoteActionPolicy["guards"];
 };
 
-export const QUOTE_ACTION_MATRIX: Record<QuoteStatusApi, QuoteActionPolicy> = {
-  OPEN: {
+const UI_STATE_BEHAVIOR_MAP: Readonly<Record<CustomerUiState, QuotePolicyBehavior>> = {
+  [CUSTOMER_UI_STATE.REQUESTED]: {
     category: "inProgress",
-    tone: "neutral",
     stageOrder: 10,
-    badgeLabel: "요청 접수",
-    ctaLabel: "상세 보기",
     listCtaKind: "nav",
     detailTop: {
       title: "요청이 접수되었습니다",
@@ -80,12 +83,9 @@ export const QUOTE_ACTION_MATRIX: Record<QuoteStatusApi, QuoteActionPolicy> = {
     bottomBar: { primary: "cancelRequest" },
     guards: { confirmPrimary: true },
   },
-  NEGOTIATING: {
+  [CUSTOMER_UI_STATE.NEGOTIATION_REQUIRED]: {
     category: "actionRequired",
-    tone: "attention",
     stageOrder: 5,
-    badgeLabel: "협의 필요",
-    ctaLabel: "제안 확인",
     listCtaKind: "action",
     detailTop: {
       title: "운임 제안이 도착했습니다",
@@ -95,12 +95,9 @@ export const QUOTE_ACTION_MATRIX: Record<QuoteStatusApi, QuoteActionPolicy> = {
     bottomBar: { primary: "acceptOffer", secondary: "rejectOffer" },
     guards: { confirmPrimary: true, confirmSecondary: true },
   },
-  ASSIGNED: {
+  [CUSTOMER_UI_STATE.PAYMENT_REQUIRED]: {
     category: "actionRequired",
-    tone: "attention",
     stageOrder: 15,
-    badgeLabel: "결제 필요",
-    ctaLabel: "결제하기",
     listCtaKind: "action",
     detailTop: {
       title: "배차가 완료되었습니다",
@@ -110,12 +107,9 @@ export const QUOTE_ACTION_MATRIX: Record<QuoteStatusApi, QuoteActionPolicy> = {
     bottomBar: { primary: "pay", secondary: "cancelRequest" },
     guards: { confirmSecondary: true },
   },
-  PICKUP: {
+  [CUSTOMER_UI_STATE.PICKUP_IN_PROGRESS]: {
     category: "inProgress",
-    tone: "progress",
     stageOrder: 20,
-    badgeLabel: "상차 중",
-    ctaLabel: "상차 현황",
     listCtaKind: "nav",
     detailTop: {
       title: "상차가 진행 중입니다",
@@ -124,12 +118,9 @@ export const QUOTE_ACTION_MATRIX: Record<QuoteStatusApi, QuoteActionPolicy> = {
     highlightCard: { type: "miniMap", quickActions: ["viewPickupPhotos", "callDriver"] },
     bottomBar: null,
   },
-  TRANSIT: {
+  [CUSTOMER_UI_STATE.TRANSIT_IN_PROGRESS]: {
     category: "inProgress",
-    tone: "progress",
     stageOrder: 30,
-    badgeLabel: "운송 중",
-    ctaLabel: "위치 확인",
     listCtaKind: "nav",
     detailTop: {
       title: "화물이 이동 중입니다",
@@ -138,12 +129,9 @@ export const QUOTE_ACTION_MATRIX: Record<QuoteStatusApi, QuoteActionPolicy> = {
     highlightCard: { type: "miniMap", quickActions: ["viewLiveLocation", "callDriver"] },
     bottomBar: null,
   },
-  DROPOFF: {
+  [CUSTOMER_UI_STATE.COMPLETED]: {
     category: "closed",
-    tone: "closed",
     stageOrder: 90,
-    badgeLabel: "운송 완료",
-    ctaLabel: "운임 확인",
     listCtaKind: "price",
     detailTop: {
       title: "운송이 완료되었습니다",
@@ -152,12 +140,9 @@ export const QUOTE_ACTION_MATRIX: Record<QuoteStatusApi, QuoteActionPolicy> = {
     highlightCard: { type: "proof", quickActions: ["viewPOD"] },
     bottomBar: { primary: "reRequestRoute" },
   },
-  CANCELED: {
+  [CUSTOMER_UI_STATE.CANCELED]: {
     category: "closed",
-    tone: "closed",
     stageOrder: 99,
-    badgeLabel: "요청 취소",
-    ctaLabel: "다시 요청",
     listCtaKind: "nav",
     detailTop: {
       title: "요청이 취소되었습니다",
@@ -166,11 +151,64 @@ export const QUOTE_ACTION_MATRIX: Record<QuoteStatusApi, QuoteActionPolicy> = {
     highlightCard: { type: "none", quickActions: [] },
     bottomBar: { primary: "reRequestRoute" },
   },
+  [CUSTOMER_UI_STATE.UNKNOWN]: {
+    category: "inProgress",
+    stageOrder: 50,
+    listCtaKind: "nav",
+    detailTop: { title: "진행 상태를 확인해주세요" },
+    highlightCard: { type: "none", quickActions: [] },
+    bottomBar: null,
+  },
+};
+
+function toQuoteTone(tone: ReturnType<typeof getCustomerBadge>["tone"]): QuotePolicyTone {
+  if (tone === BADGE_TONE.ATTENTION) return "attention";
+  if (tone === BADGE_TONE.PROGRESS) return "progress";
+  if (tone === BADGE_TONE.CLOSED) return "closed";
+  return "neutral";
+}
+
+function buildQuoteActionPolicyByUiState(uiState: CustomerUiState): QuoteActionPolicy {
+  const behavior = UI_STATE_BEHAVIOR_MAP[uiState] ?? UI_STATE_BEHAVIOR_MAP[CUSTOMER_UI_STATE.UNKNOWN];
+  const badge = getCustomerBadge(uiState);
+  const cta = getCustomerCta(uiState);
+
+  return {
+    category: behavior.category,
+    tone: toQuoteTone(badge.tone),
+    stageOrder: behavior.stageOrder,
+    badgeLabel: badge.label || DEFAULT_STATUS_LABEL,
+    ctaLabel: cta.label,
+    listCtaKind: behavior.listCtaKind,
+    detailTop: behavior.detailTop,
+    highlightCard: behavior.highlightCard,
+    bottomBar: behavior.bottomBar,
+    guards: behavior.guards,
+  };
+}
+
+function toCustomerUiState(status: QuoteStatusApi | string): CustomerUiState {
+  return getCustomerUiStateFromBackendStatus(String(status ?? ""));
+}
+
+export const DEFAULT_QUOTE_ACTION_POLICY: QuoteActionPolicy = {
+  ...buildQuoteActionPolicyByUiState(CUSTOMER_UI_STATE.UNKNOWN),
+  badgeLabel: DEFAULT_STATUS_LABEL,
+};
+
+export const QUOTE_ACTION_MATRIX: Record<QuoteStatusApi, QuoteActionPolicy> = {
+  OPEN: buildQuoteActionPolicyByUiState(CUSTOMER_UI_STATE.REQUESTED),
+  NEGOTIATING: buildQuoteActionPolicyByUiState(CUSTOMER_UI_STATE.NEGOTIATION_REQUIRED),
+  ASSIGNED: buildQuoteActionPolicyByUiState(CUSTOMER_UI_STATE.PAYMENT_REQUIRED),
+  PICKUP: buildQuoteActionPolicyByUiState(CUSTOMER_UI_STATE.PICKUP_IN_PROGRESS),
+  TRANSIT: buildQuoteActionPolicyByUiState(CUSTOMER_UI_STATE.TRANSIT_IN_PROGRESS),
+  DROPOFF: buildQuoteActionPolicyByUiState(CUSTOMER_UI_STATE.COMPLETED),
+  CANCELED: buildQuoteActionPolicyByUiState(CUSTOMER_UI_STATE.CANCELED),
 };
 
 export function getQuoteActionPolicy(status: QuoteStatusApi | string): QuoteActionPolicy {
-  const policy = (QUOTE_ACTION_MATRIX as Record<string, QuoteActionPolicy>)[status];
-  return policy ?? DEFAULT_QUOTE_ACTION_POLICY;
+  const uiState = toCustomerUiState(status);
+  return buildQuoteActionPolicyByUiState(uiState);
 }
 
 export function getQuoteStatusLabel(status: QuoteStatusApi | string): string {

@@ -266,7 +266,6 @@ function QuoteCreatePageInner() {
           await createShipperMatch(nextQuoteId);
         } catch (error) {
           if (__DEV__) {
-            // eslint-disable-next-line no-console
             console.warn("[quote-create] auto-create-match failed", error);
           }
         }

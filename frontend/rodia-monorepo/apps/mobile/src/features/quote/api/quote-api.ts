@@ -33,18 +33,14 @@ import {
   toActorOnlyWorkMethod,
 } from "@/features/quote/model/workMethod";
 import {
-  getMockShipperQuoteDetailByCase,
-  getMockShipperQuoteDetailByIdentifierByCase,
-} from "@/features/quote/api/mockShipperQuoteDetails";
-import { listMockShipperQuotesByCase } from "@/features/quote/api/mockShipperQuotes";
-import {
-  createMockShipperQuote,
-  deleteMockShipperQuote,
-  getMockShipperQuoteDetail,
-  getMockShipperQuoteDetailByIdentifier,
-  updateMockShipperQuote,
-  waitNetwork,
-} from "@/shared/lib/mock/MockHub";
+  createMockFlowShipperQuote,
+  deleteMockFlowShipperQuote,
+  getMockFlowShipperQuoteDetail,
+  getMockFlowShipperQuoteDetailByIdentifier,
+  listMockFlowShipperQuotes,
+  updateMockFlowShipperQuote,
+  waitRandom,
+} from "@/shared/lib/mock-flow";
 
 export type QuotePricePreview = {
   estimatedWeightedPrice?: number;
@@ -629,34 +625,28 @@ function createRealQuoteApi(): QuoteApi {
 function createMockQuoteApi(): QuoteApi {
   return {
     async listShipperQuotes(): Promise<QuoteListItem[]> {
-      await waitNetwork();
-      return toQuoteList(listMockShipperQuotesByCase());
+      await waitRandom();
+      return toQuoteList(listMockFlowShipperQuotes());
     },
 
     async getShipperQuoteDetail(quoteId: number): Promise<QuoteDetailResponse> {
-      await waitNetwork();
+      await waitRandom();
       const safeQuoteId = normalizeQuoteId(quoteId);
       if (safeQuoteId <= 0) return toQuoteDetail({}, 0);
 
-      const mockDetail = getMockShipperQuoteDetailByCase(safeQuoteId);
-      if (mockDetail) return toQuoteDetail(mockDetail, safeQuoteId);
-
-      return toQuoteDetail(getMockShipperQuoteDetail(safeQuoteId), safeQuoteId);
+      return toQuoteDetail(getMockFlowShipperQuoteDetail(safeQuoteId), safeQuoteId);
     },
 
     async getShipperQuoteDetailByIdentifier(quoteIdentifier: string): Promise<QuoteDetailResponse> {
-      await waitNetwork();
+      await waitRandom();
       const safeIdentifier = normalizeQuoteIdentifier(quoteIdentifier);
       const fallbackQuoteId = normalizeQuoteId(Number(safeIdentifier));
 
-      const mockDetail = getMockShipperQuoteDetailByIdentifierByCase(safeIdentifier);
-      if (mockDetail) return toQuoteDetail(mockDetail, fallbackQuoteId);
-
-      return toQuoteDetail(getMockShipperQuoteDetailByIdentifier(safeIdentifier), fallbackQuoteId);
+      return toQuoteDetail(getMockFlowShipperQuoteDetailByIdentifier(safeIdentifier), fallbackQuoteId);
     },
 
     async previewShipperQuote(payload: QuoteCreateRequestDto): Promise<QuotePricePreview | null> {
-      await waitNetwork();
+      await waitRandom();
       const safePayload = sanitizeQuotePayload((payload ?? {}) as QuoteCreateRequestDto, false);
       const desiredPrice = Math.max(0, safeInt(safePayload?.desiredPrice, 0));
       const fallbackPrice = desiredPrice > 0 ? desiredPrice : 100000;
@@ -669,26 +659,26 @@ function createMockQuoteApi(): QuoteApi {
     },
 
     async createShipperQuote(payload: QuoteCreateRequestDto): Promise<QuoteCreateResponseDto> {
-      await waitNetwork();
+      await waitRandom();
       const safePayload = sanitizeQuotePayload((payload ?? {}) as QuoteCreateRequestDto, true);
-      return toQuoteCreateResponse(createMockShipperQuote(toMockQuoteCreateRequest(safePayload)));
+      return toQuoteCreateResponse(createMockFlowShipperQuote(toMockQuoteCreateRequest(safePayload)));
     },
 
     async updateShipperQuote(quoteId: number, payload: QuoteUpdateRequestDto): Promise<QuoteUpdateResponse> {
-      await waitNetwork();
+      await waitRandom();
       const safeQuoteId = normalizeQuoteId(quoteId);
       if (safeQuoteId <= 0) return toQuoteDetail({}, 0);
 
       const safePayload = sanitizeQuotePayload((payload ?? {}) as QuoteUpdateRequestDto, true);
-      const updated = updateMockShipperQuote(safeQuoteId, toMockQuoteCreateRequest(safePayload));
+      const updated = updateMockFlowShipperQuote(safeQuoteId, toMockQuoteCreateRequest(safePayload));
       return toQuoteDetail(updated, safeQuoteId);
     },
 
     async deleteShipperQuote(quoteId: number): Promise<void> {
-      await waitNetwork();
+      await waitRandom();
       const safeQuoteId = normalizeQuoteId(quoteId);
       if (safeQuoteId <= 0) return;
-      deleteMockShipperQuote(safeQuoteId);
+      deleteMockFlowShipperQuote(safeQuoteId);
       return;
     },
   };

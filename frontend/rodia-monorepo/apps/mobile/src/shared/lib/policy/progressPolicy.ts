@@ -1,7 +1,7 @@
 import { normalizeStatus } from "./normalizeStatus";
 import { BACKEND_STATUS, type BackendStatus, type ProgressStep } from "./types";
 
-const DELIVERY_PROGRESS_STEPS: readonly ProgressStep[] = [
+export const DELIVERY_PROGRESS_STEPS: readonly ProgressStep[] = [
   { key: "REQUEST", label: "요청 접수" },
   { key: "ASSIGNED", label: "배차 확정" },
   { key: "PICKUP", label: "상차" },

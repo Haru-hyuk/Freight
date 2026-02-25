@@ -1,5 +1,95 @@
 # Mobile Changelog
 
+## 2026-02-25
+- PR/브랜치: `feature/policy-apply-core`
+- 범주 태그: `[policy] [api] [ui]`
+- 변경 요약:
+  - `matching/counter-offer` API 레이어의 상태 normalize 중복을 제거하고 `@/shared/lib/policy/normalizeStatus` 기반으로 통일함.
+  - `quoteActionMatrix`를 customer policy(`uiState`) 기반으로 재구성해 배지/CTA 라벨/상태 해석 소스를 정책 SSOT로 일치시킴.
+  - `QuoteListPage`, `QuoteDetailPage`, `DriverMatchDetailPage`에서 상태 분기 기준을 raw status 비교 대신 uiState/policy 소비로 전환함.
+- 영향 범위:
+  - 사용자 관점: 기존 목록/상세 플로우와 UI 구조는 유지되며 상태/CTA 표시 기준의 일관성이 올라감.
+  - 개발자 관점: 정책 외부 status 문자열 가공 지점을 줄여 후속 화면 확장 시 분기 중복과 불일치 위험이 감소함.
+- 파일 변경 목록:
+  - Modified:
+    - `src/features/counter-offer/api/counter-offer-api.ts`
+    - `src/features/matching/api/driver-orders-api.ts`
+    - `src/features/matching/api/shipper-match-api.ts`
+    - `src/features/quote/model/quoteActionMatrix.ts`
+    - `src/features/quote/model/useQuoteDetail.ts`
+    - `src/pages/driver/matches/DriverMatchDetailPage.tsx`
+    - `src/pages/shipper/quotes/QuoteDetailPage.tsx`
+    - `src/pages/shipper/quotes/QuoteListPage.tsx`
+    - `docs/CHANGELOG.md`
+  - Added:
+    - 없음
+  - Deleted:
+    - 없음
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+- 후속 작업 (다음 PR 후보):
+  - `driverMatchStatus.ts` 등 잔존 레거시 상태 유틸을 policy 기반으로 정리
+  - Quote/Driver 상세의 실제 액션 처리(결제/협상/재요청)를 정책 CTA ID 중심으로 연결
+
+## 2026-02-25
+- PR/브랜치: `feature/mock-flow-e2e-driver-shipper`
+- 범주 태그: `[infra]`
+- 변경 요약:
+  - `apps/mobile` 패키지 루트에 Flat Config(`eslint.config.cjs`)를 추가해 `pnpm -C ... exec eslint .` 실행 시 설정 탐색 실패가 나지 않도록 정리함.
+  - TypeScript 파서를 명시하고 경고 중심 규칙으로 조정해, 기존 레거시 코드베이스에서도 lint가 즉시 중단되지 않게 기본선을 맞춤.
+  - generated 코드/스크립트/설정 파일을 lint 대상에서 제외해 실개발 대상 소스 위주로 신호를 받도록 스코프를 정리함.
+- 영향 범위:
+  - 사용자 관점: 런타임 영향 없음.
+  - 개발자 관점: lint가 “config not found/파싱 실패” 단계에서 “실제 규칙 경고” 단계로 전환되어 후속 리팩토링/정책 적용 작업 착수가 쉬워짐.
+- 파일 변경 목록:
+  - Modified:
+    - `docs/CHANGELOG.md`
+  - Added:
+    - `apps/mobile/eslint.config.cjs`
+  - Deleted:
+    - 없음
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과(0 errors, warnings only)
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+- 후속 작업 (다음 PR 후보):
+  - 남은 warning(미사용 변수/unused eslint-disable/console)를 우선순위별로 정리
+  - 공통 eslint flat config를 monorepo base로 승격하고 앱별 override만 유지
+
+## 2026-02-25
+- PR/브랜치: `feature/mock-flow-e2e-driver-shipper`
+- 범주 태그: `[mock] [api] [infra]`
+- 변경 요약:
+  - `src/shared/lib/mock-flow/`를 신규 추가해 화주 견적/상세, 기사 매칭(open/my/detail), 역제안 데이터를 단일 인메모리 SSOT로 통합함.
+  - `features/quote/api/quote-api.ts`, `features/matching/api/shipper-match-api.ts`, `features/counter-offer/api/counter-offer-api.ts`의 mock 분기를 `mock-flow`로 연결해 UI/훅 분기 없이 동일 상태 흐름을 공유하도록 정리함.
+  - mock 모드에서 `GET /api/driver/matches/{id}`가 store 기반으로 항상 조회 가능해져 상세 화면 개발 시 403으로 막히던 흐름을 우회 검증할 수 있게 함(서버 모드는 기존 동작 유지).
+  - mock fetch/mutation 지연을 `waitRandom(500~900ms)` 공통 유틸로 통일해 실서버 체감과 로딩/중복클릭 방어 시나리오를 유지함.
+- 영향 범위:
+  - 사용자 관점: mock 모드에서 Shipper ↔ Driver 매칭 생성/수락/상태 반영 흐름을 끝까지 수동 검증 가능.
+  - 개발자 관점: 기존 분산 mock 파일 의존도를 줄이고, API 레이어만 교체해 목록/상세/역제안의 상태 동기화 포인트를 단일 스토어로 고정.
+- 파일 변경 목록:
+  - Modified:
+    - `src/features/quote/api/quote-api.ts`
+    - `src/features/matching/api/shipper-match-api.ts`
+    - `src/features/counter-offer/api/counter-offer-api.ts`
+    - `docs/CHANGELOG.md`
+  - Added:
+    - `src/shared/lib/mock-flow/types.ts`
+    - `src/shared/lib/mock-flow/delay.ts`
+    - `src/shared/lib/mock-flow/seed.ts`
+    - `src/shared/lib/mock-flow/store.ts`
+    - `src/shared/lib/mock-flow/selectors.ts`
+    - `src/shared/lib/mock-flow/mutations.ts`
+    - `src/shared/lib/mock-flow/index.ts`
+  - Deleted:
+    - 없음
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+- 후속 작업 (다음 PR 후보):
+  - 기존 `MockHub`/`mockShipperQuotes`/`mockShipperQuoteDetails` 미사용 경로 정리 및 제거
+  - dev 전용 `mock-flow` 상태 제어 라우트(`app/(dev)/mock-flow.tsx`) 추가
+  - driver-orders-api 내부의 개별 지연/가공 로직을 필요 시 `mock-flow` selector 계층으로 단계적 이관
+
 ## 2026-02-24
 - PR/브랜치: `feature/policy-foundation`
 - 범주 태그: `[policy] [infra]`

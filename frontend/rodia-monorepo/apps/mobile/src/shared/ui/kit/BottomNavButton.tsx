@@ -1,6 +1,6 @@
 // apps/mobile/src/shared/ui/kit/BottomNavButton.tsx
 import React, { useMemo } from "react";
-import { Pressable, StyleSheet, View, type TextStyle, type ViewStyle } from "react-native";
+import { Pressable, StyleSheet, type TextStyle, type ViewStyle } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import { safeString, tint } from "@/shared/theme/colorUtils";
