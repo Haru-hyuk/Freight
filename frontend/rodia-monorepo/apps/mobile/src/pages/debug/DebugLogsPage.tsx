@@ -303,6 +303,7 @@ export default function DebugLogsPage() {
         <View style={styles.topRow}>
           <AppText style={styles.hint}>requestId 그룹 단위로 API 흐름(→/←/✕)을 확인합니다.</AppText>
           <View style={styles.topButtons}>
+            <AppButton title="Mock Flow Control" variant="secondary" onPress={() => router.push("/mock-flow")} />
             <AppButton title="전체 삭제" variant="secondary" onPress={clearAll} />
           </View>
         </View>

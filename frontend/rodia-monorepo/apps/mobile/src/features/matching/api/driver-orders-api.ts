@@ -8,6 +8,12 @@ import {
   getDriverUiStateFromBackendStatus,
   normalizeStatus,
 } from "@/shared/lib/policy";
+import {
+  selectMockFlowAiRecommendedDecoration,
+  selectMockFlowDriverOrderDecoration,
+  waitRandom,
+  type MockFlowDriverOrderTagKey,
+} from "@/shared/lib/mock-flow";
 
 import {
   getDriverMatch,
@@ -61,13 +67,6 @@ export type DriverOrdersOverview = {
 
 export type DriverOrderDetailAccess = "ok" | "forbidden" | "error";
 
-type DriverOrderFlags = {
-  aiRecommended?: boolean;
-  combined?: boolean;
-  waypoint?: boolean;
-  urgent?: boolean;
-};
-
 const FILTER_LABELS: Record<DriverOrderFilterKey, string> = {
   ALL: "전체",
   AI_RECOMMENDED: "AI추천",
@@ -75,27 +74,6 @@ const FILTER_LABELS: Record<DriverOrderFilterKey, string> = {
   WAYPOINT: "경유",
   URGENT: "긴급",
 };
-
-const MOCK_ORIGIN_POOL = [
-  "경기 화성시 향남읍",
-  "인천 연수구 송도동",
-  "서울 강서구 마곡동",
-  "경기 안산시 단원구",
-  "경기 김포시 고촌읍",
-];
-
-const MOCK_DESTINATION_POOL = [
-  "대전 대덕구 대화동",
-  "부산 강서구 녹산동",
-  "전북 군산시 소룡동",
-  "충남 아산시 둔포면",
-  "경북 칠곡군 왜관읍",
-];
-
-const MOCK_VEHICLE_POOL = ["1톤 카고", "2.5톤 윙바디", "5톤 탑차"];
-const MOCK_METHOD_POOL = ["고객 상차 / 기사 하차", "기사 상차 / 지게차 하차", "기사 상차 / 기사 하차"];
-const MOCK_CARGO_POOL = ["생활가전", "전자부품", "공산품"];
-const MOCK_PICKUP_HINT_POOL = ["즉시 상차 가능", "30분 내 상차", "1시간 내 상차"];
 
 function toPositiveInt(value: unknown): number {
   const parsed = Number(value);
@@ -141,19 +119,6 @@ function formatDistance(value: unknown): string {
   const km = Number(value);
   if (!Number.isFinite(km) || km <= 0) return "";
   return `${km.toFixed(1)}km`;
-}
-
-function wait(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
-
-async function waitRandom(minMs: number, maxMs: number): Promise<void> {
-  const min = Math.max(0, Math.trunc(minMs));
-  const max = Math.max(min, Math.trunc(maxMs));
-  const next = min + Math.floor(Math.random() * (max - min + 1));
-  await wait(next);
 }
 
 function normalizeVehicleType(value: unknown): string {
@@ -211,29 +176,10 @@ function resolvePrice(quote: QuoteDetailResponse | null): { priceValue?: number;
   };
 }
 
-function buildMockFlags(seed: number): DriverOrderFlags {
-  const mod = Math.abs(seed) % 5;
-  if (mod === 0) return { aiRecommended: true, urgent: true };
-  if (mod === 1) return { combined: true };
-  if (mod === 2) return { waypoint: true };
-  if (mod === 3) return { aiRecommended: true, combined: true };
-  return { urgent: true };
-}
-
-function toTags(flags: DriverOrderFlags): DriverOrderTag[] {
-  const tags: DriverOrderTag[] = [];
-
-  if (flags.aiRecommended) tags.push({ key: "AI_RECOMMENDED", label: FILTER_LABELS.AI_RECOMMENDED });
-  if (flags.combined) tags.push({ key: "COMBINED", label: FILTER_LABELS.COMBINED });
-  if (flags.waypoint) tags.push({ key: "WAYPOINT", label: FILTER_LABELS.WAYPOINT });
-  if (flags.urgent) tags.push({ key: "URGENT", label: FILTER_LABELS.URGENT });
-
-  return tags;
-}
-
-function pickMockText(pool: string[], seed: number): string {
-  if (pool.length <= 0) return "";
-  return pool[Math.abs(seed) % pool.length] || "";
+function toDriverOrderTags(tagKeys: readonly MockFlowDriverOrderTagKey[]): DriverOrderTag[] {
+  return Array.from(new Set(tagKeys))
+    .map((key) => ({ key, label: FILTER_LABELS[key] }))
+    .filter((item): item is DriverOrderTag => Boolean(item.label));
 }
 
 async function loadQuoteDetailsByIds(quoteIds: number[]): Promise<Map<number, QuoteDetailResponse>> {
@@ -271,35 +217,30 @@ function mapDriverOrderCard(
   const safeMatchId = toPositiveInt(match.matchId);
   const safeQuoteId = toPositiveInt(match.quoteId);
   const seed = safeMatchId || safeQuoteId || index + 1;
+  const mockDecoration = mode === "mock" ? selectMockFlowDriverOrderDecoration(seed, scope) : null;
 
   const status = normalizeStatus(toText(match.status));
   const statusLabel = getDriverBadge(getDriverUiStateFromBackendStatus(status)).label;
 
   const requestedAtText = formatDateTime(match.createdAt);
-  const defaultOrigin = mode === "mock" ? pickMockText(MOCK_ORIGIN_POOL, seed) : "";
-  const defaultDestination = mode === "mock" ? pickMockText(MOCK_DESTINATION_POOL, seed + 1) : "";
 
-  const originAddress = toOptionalText(quote?.originAddress) ?? toOptionalText(defaultOrigin);
-  const destinationAddress = toOptionalText(quote?.destinationAddress) ?? toOptionalText(defaultDestination);
+  const originAddress = toOptionalText(quote?.originAddress) ?? toOptionalText(mockDecoration?.fallbackOriginAddress);
+  const destinationAddress =
+    toOptionalText(quote?.destinationAddress) ?? toOptionalText(mockDecoration?.fallbackDestinationAddress);
   const routeDistanceText = formatDistance(quote?.distanceKm);
 
-  const vehicleText = buildVehicleText(quote) ?? (mode === "mock" ? pickMockText(MOCK_VEHICLE_POOL, seed) : undefined);
-  const methodText = buildMethodText(quote) ?? (mode === "mock" ? pickMockText(MOCK_METHOD_POOL, seed + 2) : undefined);
-  const cargoText = buildCargoText(quote) ?? (mode === "mock" ? pickMockText(MOCK_CARGO_POOL, seed + 3) : undefined);
+  const vehicleText = buildVehicleText(quote) ?? toOptionalText(mockDecoration?.fallbackVehicleText);
+  const methodText = buildMethodText(quote) ?? toOptionalText(mockDecoration?.fallbackMethodText);
+  const cargoText = buildCargoText(quote) ?? toOptionalText(mockDecoration?.fallbackCargoText);
 
   const basePrice = resolvePrice(quote);
-  const fallbackPrice = mode === "mock" ? 120000 + (seed % 8) * 12000 : 0;
+  const fallbackPrice = mode === "mock" ? Number(mockDecoration?.fallbackPriceValue ?? 0) : 0;
   const priceValue = basePrice.priceValue ?? (fallbackPrice > 0 ? fallbackPrice : undefined);
   const priceText = basePrice.priceText ?? (fallbackPrice > 0 ? formatPrice(fallbackPrice) : undefined);
 
-  const mockFlags = mode === "mock" ? buildMockFlags(seed + (scope === "my" ? 7 : 0)) : {};
-  const tags = toTags(mockFlags);
-
-  const pickupTimeText = mode === "mock" ? pickMockText(MOCK_PICKUP_HINT_POOL, seed) : undefined;
-  const emptyDistanceText =
-    mode === "mock"
-      ? `공차 ${formatDistance(2.1 + ((seed + 3) % 7) * 0.9) || "-"}`
-      : undefined;
+  const tags = toDriverOrderTags(mockDecoration?.tagKeys ?? []);
+  const pickupTimeText = toOptionalText(mockDecoration?.pickupTimeText);
+  const emptyDistanceText = toOptionalText(mockDecoration?.emptyDistanceText);
 
   return {
     cardKey: `${scope}-${safeMatchId}-${index}`,
@@ -392,7 +333,7 @@ export async function loadDriverOrdersOverview(): Promise<DriverOrdersOverview> 
   };
 
   if (mode === "mock") {
-    await waitRandom(300, 700);
+    await waitRandom();
   }
 
   const [marketMatches, myMatches] = await Promise.all([listOpenDriverMatches(), listMyDriverMatches()]);
@@ -428,30 +369,27 @@ export async function requestAiRecommendedOrder(sourceOrders: DriverOrderCard[])
     return null;
   }
 
-  await waitRandom(1200, 1800);
+  await waitRandom();
 
   const source = Array.isArray(sourceOrders) ? sourceOrders : [];
   const base = source.find((order) => !order.tags.some((tag) => tag.key === "AI_RECOMMENDED")) ?? source[0] ?? null;
   if (!base) return null;
 
-  const nextPriceValue = (base.priceValue ?? 150000) + 15000;
-  const tags = [
-    { key: "AI_RECOMMENDED", label: FILTER_LABELS.AI_RECOMMENDED },
-    ...base.tags.filter((tag) => tag.key !== "AI_RECOMMENDED"),
-  ] as DriverOrderTag[];
-
-  if (!tags.some((tag) => tag.key === "URGENT")) {
-    tags.push({ key: "URGENT", label: FILTER_LABELS.URGENT });
-  }
+  const aiDecoration = selectMockFlowAiRecommendedDecoration(base.matchId, base.priceValue ?? 150000);
+  const nextTagKeys = new Set<MockFlowDriverOrderTagKey>(
+    base.tags.map((tag) => tag.key as MockFlowDriverOrderTagKey)
+  );
+  nextTagKeys.add("AI_RECOMMENDED");
+  if (aiDecoration.addUrgentTag) nextTagKeys.add("URGENT");
 
   return {
     ...base,
     cardKey: `ai-${base.matchId}-${Date.now()}`,
-    pickupTimeText: "AI 추천: 즉시 상차 가능",
-    emptyDistanceText: base.emptyDistanceText || "공차 2.3km",
-    priceValue: nextPriceValue,
-    priceText: formatPrice(nextPriceValue),
-    tags,
+    pickupTimeText: aiDecoration.pickupTimeText,
+    emptyDistanceText: base.emptyDistanceText || aiDecoration.emptyDistanceText,
+    priceValue: aiDecoration.priceValue,
+    priceText: formatPrice(aiDecoration.priceValue),
+    tags: toDriverOrderTags(Array.from(nextTagKeys)),
   };
 }
 

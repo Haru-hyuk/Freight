@@ -1,6 +1,64 @@
 # Mobile Changelog
 
 ## 2026-02-25
+- PR/브랜치: `chore/mock-flow-entry-and-selectors`
+- 범주 태그: `[mock] [routing] [infra]`
+- 변경 요약:
+  - debug 목록 페이지 상단에 `Mock Flow Control` 버튼을 추가하고 `/mock-flow`로 바로 진입 가능하게 연결함.
+  - `driver-orders-api`에 남아 있던 mock 전용 풀/태그/AI추천 가공 로직을 `mock-flow/selectors.ts`로 선별 이관함.
+  - API 레이어는 mock 모드에서 `waitRandom` + selector 결과 소비 중심으로 정리해 mock 가공 응집도를 높임.
+- 영향 범위:
+  - 사용자 관점: 일반 사용자 플로우 변화 없음, debug 진입점에서만 dev 기능 접근성 향상.
+  - 개발자 관점: driver-orders mock 가공 책임이 selector 계층으로 이동해 API 파일 복잡도가 감소함.
+- 파일 변경 목록:
+  - Modified:
+    - `src/pages/debug/DebugLogsPage.tsx`
+    - `src/features/matching/api/driver-orders-api.ts`
+    - `src/shared/lib/mock-flow/selectors.ts`
+    - `docs/CHANGELOG.md`
+  - Added:
+    - 없음
+  - Deleted:
+    - 없음
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+- 후속 작업 (다음 PR 후보):
+  - debug landing에서 `orval-smoke`/`mock-flow` 통합 진입 허브 구성
+  - 필요 시 driver-orders 서버/목업 공통 매핑 로직을 별도 mapper 모듈로 분리
+
+## 2026-02-25
+- PR/브랜치: `chore/mock-flow-dev-tools`
+- 범주 태그: `[mock] [infra] [routing]`
+- 변경 요약:
+  - dev 전용 라우트 `/(dev)/mock-flow`와 `MockFlowControlPage`를 추가해 quote/match/counter-offer 상태를 앱 내에서 직접 조작할 수 있게 함.
+  - mock-flow mutation에 `견적 상태 단계 이동`, `매칭 상태 단계 이동`, `역제안 삭제`를 추가해 상태 케이스 검증을 한 화면에서 수행 가능하게 함.
+  - `driver-orders-api`의 mock 지연을 `mock-flow/waitRandom(500~900ms)` 공통 유틸로 통일함.
+  - 미사용 레거시 mock 파일(`MockHub`, `mockShipperQuotes`, `mockShipperQuoteDetails`, `driverMatchMockStore`)을 제거해 mock-flow SSOT 의존도로 정리함.
+- 영향 범위:
+  - 사용자 관점: 일반(shipper/driver) 화면 UX 변경 없음, dev 라우트에서만 제어 기능 노출.
+  - 개발자 관점: mock 상태 조작/재현이 빨라지고 분산 mock 경로가 정리되어 추적 및 유지보수 비용이 감소함.
+- 파일 변경 목록:
+  - Modified:
+    - `src/shared/lib/mock-flow/mutations.ts`
+    - `src/features/matching/api/driver-orders-api.ts`
+    - `docs/CHANGELOG.md`
+  - Added:
+    - `app/(dev)/mock-flow.tsx`
+    - `src/pages/debug/MockFlowControlPage.tsx`
+  - Deleted:
+    - `src/shared/lib/mock/MockHub.ts`
+    - `src/features/quote/api/mockShipperQuotes.ts`
+    - `src/features/quote/api/mockShipperQuoteDetails.ts`
+    - `src/features/matching/model/driverMatchMockStore.ts`
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+- 후속 작업 (다음 PR 후보):
+  - dev 진입점(예: debug 목록)에서 `/(dev)/mock-flow` 바로가기 추가
+  - driver-orders mock 가공 로직을 필요 범위 내 `mock-flow/selectors.ts`로 단계 이관
+
+## 2026-02-25
 - PR/브랜치: `feature/policy-apply-core`
 - 범주 태그: `[policy] [api] [ui]`
 - 변경 요약:
