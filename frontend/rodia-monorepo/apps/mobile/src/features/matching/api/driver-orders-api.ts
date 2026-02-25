@@ -12,6 +12,11 @@ import {
   mapDriverOrderCard,
   sortDriverOrderCards,
 } from "./driver-orders-mapper";
+import {
+  collectDriverOrderQuoteIds,
+  parseDriverOrderPositiveInt,
+  parseDriverOrderSource,
+} from "./driver-orders-parser";
 
 import {
   getDriverMatch,
@@ -72,14 +77,11 @@ const FILTER_LABELS: Record<DriverOrderFilterKey, string> = {
   URGENT: "긴급",
 };
 
-function toPositiveInt(value: unknown): number {
-  const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
-}
-
 async function loadQuoteDetailsByIds(quoteIds: number[]): Promise<Map<number, QuoteDetailResponse>> {
   const map = new Map<number, QuoteDetailResponse>();
-  const safeQuoteIds = Array.from(new Set(quoteIds.map((quoteId) => toPositiveInt(quoteId)).filter((quoteId) => quoteId > 0)));
+  const safeQuoteIds = Array.from(
+    new Set(quoteIds.map((quoteId) => parseDriverOrderPositiveInt(quoteId)).filter((quoteId) => quoteId > 0))
+  );
   if (safeQuoteIds.length <= 0) return map;
 
   const entries = await Promise.all(
@@ -121,7 +123,6 @@ function resolveAvailableFilters(capability: DriverOrdersCapability, marketOrder
   return filters;
 }
 
-
 export function getDriverOrderFilterLabel(filter: DriverOrderFilterKey): string {
   return FILTER_LABELS[filter] ?? filter;
 }
@@ -132,13 +133,15 @@ export function matchesDriverOrderFilter(card: DriverOrderCard, filter: DriverOr
 }
 
 export function buildDriverOrderDetailParams(card: DriverOrderCard): Record<string, string> {
+  const safeMatchId = parseDriverOrderPositiveInt(card.matchId);
   const params: Record<string, string> = {
-    id: String(card.matchId),
-    matchId: String(card.matchId),
+    id: String(safeMatchId),
+    matchId: String(safeMatchId),
   };
 
-  if (card.quoteId && card.quoteId > 0) {
-    params.quoteId = String(card.quoteId);
+  const safeQuoteId = parseDriverOrderPositiveInt(card.quoteId);
+  if (safeQuoteId > 0) {
+    params.quoteId = String(safeQuoteId);
   }
 
   if (card.status) {
@@ -161,31 +164,37 @@ export async function loadDriverOrdersOverview(): Promise<DriverOrdersOverview> 
 
   const [marketMatches, myMatches] = await Promise.all([listOpenDriverMatches(), listMyDriverMatches()]);
 
-  const quoteIds = [...marketMatches, ...myMatches].map((match) => toPositiveInt(match.quoteId));
+  const quoteIds = collectDriverOrderQuoteIds([...marketMatches, ...myMatches]);
   const quoteMap = await loadQuoteDetailsByIds(quoteIds);
 
   const marketOrders = marketMatches.map((match, index) => {
-    const quoteId = toPositiveInt(match.quoteId);
+    const quoteId = parseDriverOrderPositiveInt(match.quoteId);
     const quote = quoteId > 0 ? quoteMap.get(quoteId) ?? null : null;
-    return mapDriverOrderCard({
+    const source = parseDriverOrderSource({
       match,
       quote,
-      mode,
       scope: "market",
       index,
+    });
+    return mapDriverOrderCard({
+      source,
+      mode,
       filterLabels: FILTER_LABELS,
     });
   });
 
   const myOrders = myMatches.map((match, index) => {
-    const quoteId = toPositiveInt(match.quoteId);
+    const quoteId = parseDriverOrderPositiveInt(match.quoteId);
     const quote = quoteId > 0 ? quoteMap.get(quoteId) ?? null : null;
-    return mapDriverOrderCard({
+    const source = parseDriverOrderSource({
       match,
       quote,
-      mode,
       scope: "my",
       index,
+    });
+    return mapDriverOrderCard({
+      source,
+      mode,
       filterLabels: FILTER_LABELS,
     });
   });
@@ -231,7 +240,7 @@ export async function requestAiRecommendedOrder(sourceOrders: DriverOrderCard[])
 }
 
 export async function probeDriverOrderDetailAccess(matchId: number): Promise<DriverOrderDetailAccess> {
-  const safeMatchId = toPositiveInt(matchId);
+  const safeMatchId = parseDriverOrderPositiveInt(matchId);
   if (safeMatchId <= 0) return "error";
 
   try {
