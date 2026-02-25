@@ -1,6 +1,6 @@
-package com.freight.backend.gpsmiss.routeassembly.repository;
+package com.freight.backend.gpsload.routeassembly.repository;
 
-import com.freight.backend.gpsmiss.routeassembly.entity.QuoteItemEntity;
+import com.freight.backend.gpsload.routeassembly.entity.QuoteItemEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;

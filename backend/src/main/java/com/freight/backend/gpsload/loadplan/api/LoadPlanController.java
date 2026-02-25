@@ -1,9 +1,9 @@
-package com.freight.backend.gpsmiss.loadplan.api;
+package com.freight.backend.gpsload.loadplan.api;
 
-import com.freight.backend.gpsmiss.loadplan.model.LoadPlanRequest;
-import com.freight.backend.gpsmiss.loadplan.model.LoadPlanResponse;
-import com.freight.backend.gpsmiss.loadplan.model.LoadPlanSavedResponse;
-import com.freight.backend.gpsmiss.loadplan.service.LoadPlanService;
+import com.freight.backend.gpsload.loadplan.model.LoadPlanRequest;
+import com.freight.backend.gpsload.loadplan.model.LoadPlanResponse;
+import com.freight.backend.gpsload.loadplan.model.LoadPlanSavedResponse;
+import com.freight.backend.gpsload.loadplan.service.LoadPlanService;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;

@@ -8,13 +8,13 @@ import com.freight.backend.entity.QuoteStop;
 import com.freight.backend.entity.Truck;
 import com.freight.backend.exception.CustomException;
 import com.freight.backend.exception.ErrorCode;
-import com.freight.backend.gpsmiss.loadplan.model.CargoItem;
-import com.freight.backend.gpsmiss.loadplan.model.LoadPlanRequest;
-import com.freight.backend.gpsmiss.loadplan.service.LoadPlanService;
-import com.freight.backend.gpsmiss.route.model.Place;
-import com.freight.backend.gpsmiss.routeassembly.model.DriverState;
-import com.freight.backend.gpsmiss.routeassembly.model.RouteAssemblyRequest;
-import com.freight.backend.gpsmiss.routeassembly.service.RouteAssemblyService;
+import com.freight.backend.gpsload.loadplan.model.CargoItem;
+import com.freight.backend.gpsload.loadplan.model.LoadPlanRequest;
+import com.freight.backend.gpsload.loadplan.service.LoadPlanService;
+import com.freight.backend.gpsload.route.model.Place;
+import com.freight.backend.gpsload.routeassembly.model.DriverState;
+import com.freight.backend.gpsload.routeassembly.model.RouteAssemblyRequest;
+import com.freight.backend.gpsload.routeassembly.service.RouteAssemblyService;
 import com.freight.backend.repository.MatchRepository;
 import com.freight.backend.repository.QuoteItemRepository;
 import com.freight.backend.repository.QuoteRepository;
@@ -167,7 +167,7 @@ public class AlgorithmGatewayService {
         }
 
         // Map candidates를 Quote record로 변환
-        List<com.freight.backend.gpsmiss.routeassembly.model.Quote> quoteList = candidates.stream()
+        List<com.freight.backend.gpsload.routeassembly.model.Quote> quoteList = candidates.stream()
                 .map(this::toQuoteRecord)
                 .toList();
 
@@ -231,7 +231,7 @@ public class AlgorithmGatewayService {
                 .toList();
 
         // Truck record 생성
-        com.freight.backend.gpsmiss.loadplan.model.Truck truckModel = new com.freight.backend.gpsmiss.loadplan.model.Truck(
+        com.freight.backend.gpsload.loadplan.model.Truck truckModel = new com.freight.backend.gpsload.loadplan.model.Truck(
                 truck.getTruckId(), dims[0], dims[1], dims[2],
                 safeBigDecimal(truck.getMaxWeight(), 5000.0),
                 inferDoorPosition(truck.getVehicleBodyType())
@@ -764,7 +764,7 @@ public class AlgorithmGatewayService {
     }
 
     @SuppressWarnings("unchecked")
-    private com.freight.backend.gpsmiss.routeassembly.model.Quote toQuoteRecord(Map<String, Object> map) {
+    private com.freight.backend.gpsload.routeassembly.model.Quote toQuoteRecord(Map<String, Object> map) {
         Long quoteId = map.get("quoteId") instanceof Number n ? n.longValue() : null;
 
         Map<String, Object> originMap = (Map<String, Object>) map.get("origin");
@@ -779,7 +779,7 @@ public class AlgorithmGatewayService {
         Double finalPrice = asDoubleOrNull(map.get("finalPrice"));
         String status = map.get("status") instanceof String s ? s : null;
 
-        return new com.freight.backend.gpsmiss.routeassembly.model.Quote(
+        return new com.freight.backend.gpsload.routeassembly.model.Quote(
                 quoteId, origin, destination, volumeCbm, weightKg, allowCombine, finalPrice,
                 null, null, null, null, null, null, null, null, null, null, status, null
         );

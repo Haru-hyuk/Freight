@@ -1,4 +1,4 @@
-package com.freight.backend.gpsmiss.loadplan.entity;
+package com.freight.backend.gpsload.loadplan.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

@@ -1,8 +1,8 @@
-package com.freight.backend.gpsmiss.route.api;
+package com.freight.backend.gpsload.route.api;
 
-import com.freight.backend.gpsmiss.route.model.RouteRequest;
-import com.freight.backend.gpsmiss.route.model.RouteResponse;
-import com.freight.backend.gpsmiss.route.service.KakaoRouteService;
+import com.freight.backend.gpsload.route.model.RouteRequest;
+import com.freight.backend.gpsload.route.model.RouteResponse;
+import com.freight.backend.gpsload.route.service.KakaoRouteService;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;

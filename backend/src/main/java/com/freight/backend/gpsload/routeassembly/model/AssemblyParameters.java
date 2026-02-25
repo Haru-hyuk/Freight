@@ -1,4 +1,4 @@
-package com.freight.backend.gpsmiss.routeassembly.model;
+package com.freight.backend.gpsload.routeassembly.model;
 
 /**
  * 조립 알고리즘 파라미터

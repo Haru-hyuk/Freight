@@ -1,4 +1,4 @@
-package com.freight.backend.gpsmiss.gps.model;
+package com.freight.backend.gpsload.gps.model;
 
 /**
  * 기사 GPS 위치 전송 요청 DTO

@@ -1,8 +1,8 @@
-package com.freight.backend.gpsmiss.routeassembly.api;
+package com.freight.backend.gpsload.routeassembly.api;
 
-import com.freight.backend.gpsmiss.route.model.Place;
-import com.freight.backend.gpsmiss.route.service.CachedRouteService;
-import com.freight.backend.gpsmiss.route.service.CachedRouteService.RouteDistance;
+import com.freight.backend.gpsload.route.model.Place;
+import com.freight.backend.gpsload.route.service.CachedRouteService;
+import com.freight.backend.gpsload.route.service.CachedRouteService.RouteDistance;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;

@@ -1,10 +1,10 @@
-package com.freight.backend.gpsmiss.routeassembly.service;
+package com.freight.backend.gpsload.routeassembly.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.freight.backend.ai.DeepSeekClient;
-import com.freight.backend.gpsmiss.routeassembly.model.DriverState;
-import com.freight.backend.gpsmiss.routeassembly.model.Quote;
+import com.freight.backend.gpsload.routeassembly.model.DriverState;
+import com.freight.backend.gpsload.routeassembly.model.Quote;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;

@@ -1,11 +1,11 @@
-package com.freight.backend.gpsmiss.gps.service;
+package com.freight.backend.gpsload.gps.service;
 
-import com.freight.backend.gpsmiss.gps.entity.GpsLog;
-import com.freight.backend.gpsmiss.gps.model.GpsLogRequest;
-import com.freight.backend.gpsmiss.gps.model.TrackingResponse;
-import com.freight.backend.gpsmiss.gps.model.TrackingResponse.DriverLocation;
-import com.freight.backend.gpsmiss.gps.model.TrackingResponse.RoutePoint;
-import com.freight.backend.gpsmiss.gps.repository.GpsTrackingLogRepository;
+import com.freight.backend.gpsload.gps.entity.GpsLog;
+import com.freight.backend.gpsload.gps.model.GpsLogRequest;
+import com.freight.backend.gpsload.gps.model.TrackingResponse;
+import com.freight.backend.gpsload.gps.model.TrackingResponse.DriverLocation;
+import com.freight.backend.gpsload.gps.model.TrackingResponse.RoutePoint;
+import com.freight.backend.gpsload.gps.repository.GpsTrackingLogRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

@@ -1,12 +1,12 @@
-package com.freight.backend.gpsmiss.routeassembly.service;
+package com.freight.backend.gpsload.routeassembly.service;
 
 import com.freight.backend.entity.QuoteItem;
-import com.freight.backend.gpsmiss.loadplan.model.CargoHandling;
-import com.freight.backend.gpsmiss.loadplan.entity.TruckDimension;
-import com.freight.backend.gpsmiss.route.model.Place;
-import com.freight.backend.gpsmiss.routeassembly.model.DriverState;
-import com.freight.backend.gpsmiss.routeassembly.model.Quote;
-import com.freight.backend.gpsmiss.loadplan.repository.TruckDimensionRepository;
+import com.freight.backend.gpsload.loadplan.model.CargoHandling;
+import com.freight.backend.gpsload.loadplan.entity.TruckDimension;
+import com.freight.backend.gpsload.route.model.Place;
+import com.freight.backend.gpsload.routeassembly.model.DriverState;
+import com.freight.backend.gpsload.routeassembly.model.Quote;
+import com.freight.backend.gpsload.loadplan.repository.TruckDimensionRepository;
 import com.freight.backend.repository.QuoteItemRepository;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;

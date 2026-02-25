@@ -1,9 +1,9 @@
-package com.freight.backend.gpsmiss.routeassembly.service;
+package com.freight.backend.gpsload.routeassembly.service;
 
-import com.freight.backend.gpsmiss.route.model.Place;
-import com.freight.backend.gpsmiss.routeassembly.model.AssemblyParameters;
-import com.freight.backend.gpsmiss.routeassembly.model.DriverState;
-import com.freight.backend.gpsmiss.routeassembly.model.Quote;
+import com.freight.backend.gpsload.route.model.Place;
+import com.freight.backend.gpsload.routeassembly.model.AssemblyParameters;
+import com.freight.backend.gpsload.routeassembly.model.DriverState;
+import com.freight.backend.gpsload.routeassembly.model.Quote;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;

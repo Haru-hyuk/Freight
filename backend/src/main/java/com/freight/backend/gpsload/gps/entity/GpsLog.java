@@ -1,4 +1,4 @@
-package com.freight.backend.gpsmiss.gps.entity;
+package com.freight.backend.gpsload.gps.entity;
 
 import jakarta.persistence.*;
 import java.time.LocalDateTime;

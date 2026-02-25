@@ -1,4 +1,4 @@
-package com.freight.backend.gpsmiss.loadplan.model;
+package com.freight.backend.gpsload.loadplan.model;
 
 /**
  * 차량 적재함 타입 Enum

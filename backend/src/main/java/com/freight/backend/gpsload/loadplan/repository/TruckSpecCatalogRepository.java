@@ -1,6 +1,6 @@
-package com.freight.backend.gpsmiss.loadplan.repository;
+package com.freight.backend.gpsload.loadplan.repository;
 
-import com.freight.backend.gpsmiss.loadplan.entity.TruckSpecCatalog;
+import com.freight.backend.gpsload.loadplan.entity.TruckSpecCatalog;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
