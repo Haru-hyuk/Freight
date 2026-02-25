@@ -1,34 +1,24 @@
-import type { QuoteDetailResponse } from "@/entities/quote/model/quote.types";
 import { formatWorkMethodLabel } from "@/features/quote/model/workMethod";
 import {
   BACKEND_STATUS,
   getDriverBadge,
   getDriverUiStateFromBackendStatus,
-  normalizeStatus,
 } from "@/shared/lib/policy";
 import {
   selectMockFlowDriverOrderDecoration,
   type MockFlowDriverOrderTagKey,
 } from "@/shared/lib/mock-flow";
 
-import type { DriverMatchItem } from "./shipper-match-api";
-import type { DriverOrderCard, DriverOrderTag, DriverOrderTagKey, DriverOrdersTabKey } from "./driver-orders-api";
+import type { DriverOrderCard, DriverOrderTag, DriverOrderTagKey } from "./driver-orders-api";
+import type { ParsedDriverOrderQuote, ParsedDriverOrderSource } from "./driver-orders-parser";
 
 type DriverOrderTagLabelMap = Readonly<Record<DriverOrderTagKey, string>>;
 
 type DriverOrderCardMapperInput = {
-  match: DriverMatchItem;
-  quote: QuoteDetailResponse | null;
+  source: ParsedDriverOrderSource;
   mode: "mock" | "server";
-  scope: DriverOrdersTabKey;
-  index: number;
   filterLabels: DriverOrderTagLabelMap;
 };
-
-function toPositiveInt(value: unknown): number {
-  const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
-}
 
 function toText(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -37,12 +27,6 @@ function toText(value: unknown): string {
 function toOptionalText(value: unknown): string | undefined {
   const text = toText(value);
   return text || undefined;
-}
-
-function toOptionalNumber(value: unknown): number | undefined {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return undefined;
-  return parsed;
 }
 
 function formatDateTime(value: unknown): string {
@@ -87,7 +71,7 @@ function normalizeVehicleBodyType(value: unknown): string {
   return toText(value);
 }
 
-function buildVehicleText(quote: QuoteDetailResponse | null): string | undefined {
+function buildVehicleText(quote: ParsedDriverOrderQuote | null): string | undefined {
   if (!quote) return undefined;
 
   const ton = normalizeVehicleType(quote.vehicleType);
@@ -96,27 +80,27 @@ function buildVehicleText(quote: QuoteDetailResponse | null): string | undefined
   return text || undefined;
 }
 
-function buildMethodText(quote: QuoteDetailResponse | null): string | undefined {
+function buildMethodText(quote: ParsedDriverOrderQuote | null): string | undefined {
   if (!quote) return undefined;
 
-  const load = toText(formatWorkMethodLabel(quote.loadMethod));
-  const unload = toText(formatWorkMethodLabel(quote.unloadMethod));
+  const load = toText(formatWorkMethodLabel(quote.loadMethod ?? ""));
+  const unload = toText(formatWorkMethodLabel(quote.unloadMethod ?? ""));
   if (!load && !unload) return undefined;
   if (!load) return unload;
   if (!unload) return load;
   return `${load} / ${unload}`;
 }
 
-function buildCargoText(quote: QuoteDetailResponse | null): string | undefined {
+function buildCargoText(quote: ParsedDriverOrderQuote | null): string | undefined {
   if (!quote) return undefined;
   return toOptionalText(quote.cargoName);
 }
 
-function resolvePrice(quote: QuoteDetailResponse | null): { priceValue?: number; priceText?: string } {
+function resolvePrice(quote: ParsedDriverOrderQuote | null): { priceValue?: number; priceText?: string } {
   if (!quote) return {};
 
-  const finalPrice = toOptionalNumber(quote.finalPrice);
-  const desiredPrice = toOptionalNumber(quote.desiredPrice);
+  const finalPrice = Number.isFinite(quote.finalPrice) ? quote.finalPrice : undefined;
+  const desiredPrice = Number.isFinite(quote.desiredPrice) ? quote.desiredPrice : undefined;
   const value = (finalPrice && finalPrice > 0 ? finalPrice : desiredPrice) ?? 0;
   if (value <= 0) return {};
 
@@ -136,15 +120,12 @@ export function buildDriverOrderTags(
 }
 
 export function mapDriverOrderCard(input: DriverOrderCardMapperInput): DriverOrderCard {
-  const { match, quote, mode, scope, index, filterLabels } = input;
-  const safeMatchId = toPositiveInt(match.matchId);
-  const safeQuoteId = toPositiveInt(match.quoteId);
-  const seed = safeMatchId || safeQuoteId || index + 1;
+  const { source, mode, filterLabels } = input;
+  const { matchId, quoteId, status, createdAt, quote, scope, index, seed } = source;
   const mockDecoration = mode === "mock" ? selectMockFlowDriverOrderDecoration(seed, scope) : null;
 
-  const status = normalizeStatus(toText(match.status));
   const statusLabel = getDriverBadge(getDriverUiStateFromBackendStatus(status)).label;
-  const requestedAtText = formatDateTime(match.createdAt);
+  const requestedAtText = formatDateTime(createdAt);
 
   const originAddress = toOptionalText(quote?.originAddress) ?? toOptionalText(mockDecoration?.fallbackOriginAddress);
   const destinationAddress =
@@ -165,9 +146,9 @@ export function mapDriverOrderCard(input: DriverOrderCardMapperInput): DriverOrd
   const emptyDistanceText = toOptionalText(mockDecoration?.emptyDistanceText);
 
   return {
-    cardKey: `${scope}-${safeMatchId}-${index}`,
-    matchId: safeMatchId,
-    quoteId: safeQuoteId > 0 ? safeQuoteId : undefined,
+    cardKey: `${scope}-${matchId}-${index}`,
+    matchId,
+    quoteId,
     status,
     statusLabel,
     requestedAtText: requestedAtText || undefined,

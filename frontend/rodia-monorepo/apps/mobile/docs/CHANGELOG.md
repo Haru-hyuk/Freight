@@ -1,6 +1,33 @@
 # Mobile Changelog
 
 ## 2026-02-25
+- PR/브랜치: `refactor/driver-orders-parsing-boundary`
+- 범주 태그: `[api] [mock] [infra]`
+- 변경 요약:
+  - `driver-orders-parser.ts`를 추가해 driver orders 소스(match/quote)의 기본 파싱/정규화 책임을 API/mapper 밖으로 분리함.
+  - `driver-orders-api.ts`는 모드 분기/데이터 조회 후 `parseDriverOrderSource` + `mapDriverOrderCard`를 호출하는 파이프라인 중심으로 정리함.
+  - quoteId 수집/양수 정수 보정 로직을 parser 유틸로 통일해 mock/server 모두 같은 변환 흐름을 타도록 맞춤.
+  - `driver-orders-mapper.ts`는 파싱 완료 입력을 소비해 카드/태그/정렬 계산 역할에 집중하도록 조정함.
+- 영향 범위:
+  - 사용자 관점: 목록/상세 UI 동작 및 응답 형태 변경 없음(리팩토링 전용).
+  - 개발자 관점: 파싱 경계가 분리되어 API 책임이 줄고 mock/server 파이프라인 추적이 쉬워짐.
+- 파일 변경 목록:
+  - Modified:
+    - `src/features/matching/api/driver-orders-api.ts`
+    - `src/features/matching/api/driver-orders-mapper.ts`
+    - `docs/CHANGELOG.md`
+  - Added:
+    - `src/features/matching/api/driver-orders-parser.ts`
+  - Deleted:
+    - 없음
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+- 후속 작업 (다음 PR 후보):
+  - `shipper-match-api`의 응답 파싱 유틸도 도메인별 parser 모듈로 단계 분리 검토
+  - driver orders 카드 포맷팅(거리/시간/가격)의 공통 포맷 유틸 정리 검토
+
+## 2026-02-25
 - PR/브랜치: `chore/debug-hub-and-driverorders-mapper`
 - 범주 태그: `[infra] [routing] [mock]`
 - 변경 요약:
