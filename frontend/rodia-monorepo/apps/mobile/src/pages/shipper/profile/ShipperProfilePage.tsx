@@ -40,7 +40,6 @@ const useStyles = createThemedStyles((theme) => {
   const cSub = safeString(theme?.colors?.textSub, "#334155");
   const cMuted = safeString(theme?.colors?.textMuted, "#64748B");
   const cBrand = safeString(theme?.colors?.brandPrimary, "#FF6A00");
-  const cOnBrand = safeString(theme?.colors?.textOnBrand, "#FFFFFF");
   const cDanger = safeString(theme?.colors?.semanticDanger, "#EF4444");
   const cPressed = safeString(theme?.colors?.stateOverlayPressed, tint(cText, 0.04, cSurface));
 

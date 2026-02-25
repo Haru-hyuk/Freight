@@ -22,8 +22,6 @@ function warnOnce(key: string, message: string) {
   if (!__DEV__) return;
   if (warned.has(key)) return;
   warned.add(key);
-
-  // eslint-disable-next-line no-console
   console.warn(message);
 }
 

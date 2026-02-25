@@ -9,7 +9,7 @@ import {
 } from "react-native";
 
 import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
-import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
+import { createThemedStyles } from "@/shared/theme/useAppTheme";
 import { AppButton } from "@/shared/ui/kit/AppButton";
 import { AppInput } from "@/shared/ui/kit/AppInput";
 import { AppText } from "@/shared/ui/kit/AppText";

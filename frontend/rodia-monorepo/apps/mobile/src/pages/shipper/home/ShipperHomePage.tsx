@@ -309,7 +309,7 @@ export function ShipperHomePage() {
 
   const goToHistory = () => {
     // navigation.navigate('History');
-    console.log("Navigate to History");
+    Alert.alert("이용 내역", "이용 내역 화면으로 이동합니다.");
   };
 
   return (

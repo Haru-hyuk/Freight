@@ -261,7 +261,7 @@ function QuoteEditPageInner() {
   const quoteIdentifier = parseQuoteIdentifier(params?.id);
   const quoteId = parseQuoteId(params?.id);
 
-  const { draft, patchDraft, setDraft } = useQuoteCreateDraft();
+  const { draft, setDraft } = useQuoteCreateDraft();
 
   const [resolvedQuoteId, setResolvedQuoteId] = useState(0);
   const [resolvedQuoteIdentifier, setResolvedQuoteIdentifier] = useState("");

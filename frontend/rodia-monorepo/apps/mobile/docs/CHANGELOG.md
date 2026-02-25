@@ -2,6 +2,30 @@
 
 ## 2026-02-25
 - PR/브랜치: `feature/mock-flow-e2e-driver-shipper`
+- 범주 태그: `[infra]`
+- 변경 요약:
+  - `apps/mobile` 패키지 루트에 Flat Config(`eslint.config.cjs`)를 추가해 `pnpm -C ... exec eslint .` 실행 시 설정 탐색 실패가 나지 않도록 정리함.
+  - TypeScript 파서를 명시하고 경고 중심 규칙으로 조정해, 기존 레거시 코드베이스에서도 lint가 즉시 중단되지 않게 기본선을 맞춤.
+  - generated 코드/스크립트/설정 파일을 lint 대상에서 제외해 실개발 대상 소스 위주로 신호를 받도록 스코프를 정리함.
+- 영향 범위:
+  - 사용자 관점: 런타임 영향 없음.
+  - 개발자 관점: lint가 “config not found/파싱 실패” 단계에서 “실제 규칙 경고” 단계로 전환되어 후속 리팩토링/정책 적용 작업 착수가 쉬워짐.
+- 파일 변경 목록:
+  - Modified:
+    - `docs/CHANGELOG.md`
+  - Added:
+    - `apps/mobile/eslint.config.cjs`
+  - Deleted:
+    - 없음
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과(0 errors, warnings only)
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+- 후속 작업 (다음 PR 후보):
+  - 남은 warning(미사용 변수/unused eslint-disable/console)를 우선순위별로 정리
+  - 공통 eslint flat config를 monorepo base로 승격하고 앱별 override만 유지
+
+## 2026-02-25
+- PR/브랜치: `feature/mock-flow-e2e-driver-shipper`
 - 범주 태그: `[mock] [api] [infra]`
 - 변경 요약:
   - `src/shared/lib/mock-flow/`를 신규 추가해 화주 견적/상세, 기사 매칭(open/my/detail), 역제안 데이터를 단일 인메모리 SSOT로 통합함.

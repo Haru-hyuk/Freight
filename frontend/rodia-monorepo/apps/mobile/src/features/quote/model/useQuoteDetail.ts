@@ -98,7 +98,7 @@ function formatKrw(value: unknown): string {
   return `${KRW_FORMAT.format(safeValue)}원`;
 }
 
-function mapEnumLabel<T extends string>(value: unknown, mapping: Record<string, string>, fallback = "-"): string {
+function mapEnumLabel(value: unknown, mapping: Record<string, string>, fallback = "-"): string {
   const raw = String(value ?? "").trim();
   if (!raw) return fallback;
   const normalized = raw.toUpperCase();

@@ -99,7 +99,7 @@ export function PostcodeModal({ visible, onClose, onSelected }: PostcodeModalPro
             try {
               const data = JSON.parse(event.nativeEvent.data);
               
-              let fullAddress = data.roadAddress || data.jibunAddress;
+              const fullAddress = data.roadAddress || data.jibunAddress;
               let extraAddress = '';
 
               if (data.bname !== '' && /[동|로|가]$/g.test(data.bname)) {
