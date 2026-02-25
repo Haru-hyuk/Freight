@@ -7,8 +7,8 @@ import { useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppButton } from "@/shared/ui/kit/AppButton";
 import { AppText } from "@/shared/ui/kit/AppText";
 import { PageScaffold } from "@/widgets/layout/PageScaffold";
+import { shipperSettingsMock } from "@/features/shipper-settings/api/shipper-settings-mock";
 
-import { shipperSettingsMock } from "./_mock";
 import KeyValueRow from "./ui/KeyValueRow";
 import SettingSection from "./ui/SettingSection";
 
@@ -95,4 +95,3 @@ export default function ShipperVerificationManagePage() {
     </PageScaffold>
   );
 }
-

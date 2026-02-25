@@ -6,8 +6,8 @@ import type { AppTheme } from "@/shared/theme/types";
 import { useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppText } from "@/shared/ui/kit/AppText";
 import { PageScaffold } from "@/widgets/layout/PageScaffold";
+import { shipperSettingsMock } from "@/features/shipper-settings/api/shipper-settings-mock";
 
-import { shipperSettingsMock } from "./_mock";
 import SettingRow from "./ui/SettingRow";
 import SettingSection from "./ui/SettingSection";
 
@@ -158,4 +158,3 @@ export default function ShipperSettingsHomePage() {
     </PageScaffold>
   );
 }
-

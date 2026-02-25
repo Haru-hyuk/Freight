@@ -3,7 +3,8 @@ import { Alert, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
-import type { AddressItemMock } from "@/pages/shipper/settings/_mock";
+import type { AddressItemMock } from "@/features/shipper-settings/api/shipper-settings-mock";
+import { shipperSettingsMock } from "@/features/shipper-settings/api/shipper-settings-mock";
 import type { AppTheme } from "@/shared/theme/types";
 import { useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppButton } from "@/shared/ui/kit/AppButton";
@@ -11,7 +12,6 @@ import { AppCard } from "@/shared/ui/kit/AppCard";
 import { AppText } from "@/shared/ui/kit/AppText";
 import { PageScaffold } from "@/widgets/layout/PageScaffold";
 
-import { shipperSettingsMock } from "./_mock";
 import Divider from "./ui/Divider";
 import SettingSection from "./ui/SettingSection";
 
@@ -193,4 +193,3 @@ export default function ShipperAddressBookPage() {
     </PageScaffold>
   );
 }
-

@@ -27,8 +27,11 @@ import {
   waitRandom,
 } from "@/shared/lib/mock-flow";
 import { BACKEND_STATUS, normalizeStatus } from "@/shared/lib/policy";
-
-type AnyObject = Record<string, unknown>;
+import {
+  parseMatchListResponse,
+  parseMatchPositiveInt,
+  parseSingleMatchResponse,
+} from "./shipper-match-parser";
 
 export type MatchResponseItem = {
   matchId: number;
@@ -68,87 +71,8 @@ const DRIVER_ACTION_GUARD_MOCK: DriverMatchActionGuard = {
   enabled: true,
 };
 
-function asObject(value: unknown): AnyObject {
-  if (value && typeof value === "object" && !Array.isArray(value)) {
-    return value as AnyObject;
-  }
-  return {};
-}
-
-function toPositiveInt(value: unknown): number {
-  const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
-}
-
-function toOptionalText(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
-  const text = value.trim();
-  return text ? text : undefined;
-}
-
-function toOptionalBoolean(value: unknown): boolean | undefined {
-  if (typeof value !== "boolean") return undefined;
-  return value;
-}
-
-function toNormalizedMatchStatus(value: unknown): string | undefined {
-  const text = toOptionalText(value);
-  if (!text) return undefined;
-  const normalized = normalizeStatus(text);
-  return normalized === BACKEND_STATUS.UNKNOWN ? undefined : normalized;
-}
-
-function unwrapPayload(value: unknown): unknown {
-  const root = asObject(value);
-  if (typeof root.data !== "undefined") return root.data;
-  if (typeof root.result !== "undefined") return root.result;
-  return value;
-}
-
-function unwrapListPayload(value: unknown): unknown[] {
-  const payload = unwrapPayload(value);
-  if (Array.isArray(payload)) return payload;
-
-  const source = asObject(payload);
-  if (Array.isArray(source.items)) return source.items;
-  if (Array.isArray(source.list)) return source.list;
-  if (Array.isArray(source.content)) return source.content;
-
-  return [];
-}
-
-function toMatchResponseItem(value: unknown): MatchResponseItem | null {
-  const source = asObject(value);
-  const matchId = toPositiveInt(source.matchId);
-  if (matchId <= 0) return null;
-
-  const quoteId = toPositiveInt(source.quoteId);
-  const driverId = toPositiveInt(source.driverId);
-
-  return {
-    matchId,
-    quoteId: quoteId > 0 ? quoteId : undefined,
-    driverId: driverId > 0 ? driverId : undefined,
-    accepted: toOptionalBoolean(source.accepted),
-    status: toNormalizedMatchStatus(source.status),
-    acceptedAt: toOptionalText(source.acceptedAt),
-    createdAt: toOptionalText(source.createdAt),
-    updatedAt: toOptionalText(source.updatedAt),
-  };
-}
-
 function toDriverMatchList(value: unknown): DriverMatchItem[] {
-  return unwrapListPayload(value)
-    .map((item) => toMatchResponseItem(item))
-    .filter((item): item is DriverMatchItem => item !== null)
-    .sort((a, b) => {
-      const aTs = Date.parse(a.updatedAt ?? "");
-      const bTs = Date.parse(b.updatedAt ?? "");
-      if (Number.isFinite(aTs) && Number.isFinite(bTs)) return bTs - aTs;
-      if (Number.isFinite(bTs)) return 1;
-      if (Number.isFinite(aTs)) return -1;
-      return b.matchId - a.matchId;
-    });
+  return parseMatchListResponse(value);
 }
 
 function toShipperMatchList(value: unknown): ShipperMatchItem[] {
@@ -162,12 +86,7 @@ function toShipperMatchList(value: unknown): ShipperMatchItem[] {
 }
 
 function toSingleDriverMatch(value: unknown): DriverMatchItem | null {
-  const payload = unwrapPayload(value);
-  if (Array.isArray(payload)) {
-    if (payload.length <= 0) return null;
-    return toMatchResponseItem(payload[0]);
-  }
-  return toMatchResponseItem(payload);
+  return parseSingleMatchResponse(value);
 }
 
 export function getDriverMatchActionGuard(): DriverMatchActionGuard {
@@ -178,7 +97,7 @@ export function getDriverMatchDetailBadges(match: DriverMatchItem | null): Drive
   if (!isMockMode()) return [];
   if (!match) return [];
 
-  const safeMatchId = toPositiveInt(match.matchId);
+  const safeMatchId = parseMatchPositiveInt(match.matchId);
   const status = normalizeStatus(match.status ?? "");
   if (safeMatchId <= 0) return [];
 
@@ -210,7 +129,7 @@ export function listShipperMatches(): Promise<ShipperMatchItem[]> {
 }
 
 export async function createShipperMatch(quoteId: number): Promise<ShipperMatchItem | null> {
-  const safeQuoteId = toPositiveInt(quoteId);
+  const safeQuoteId = parseMatchPositiveInt(quoteId);
   if (safeQuoteId <= 0) return null;
 
   if (isMockMode()) {
@@ -228,7 +147,7 @@ export async function createShipperMatch(quoteId: number): Promise<ShipperMatchI
 }
 
 export async function cancelShipperMatch(matchId: number): Promise<void> {
-  const safeMatchId = toPositiveInt(matchId);
+  const safeMatchId = parseMatchPositiveInt(matchId);
   if (safeMatchId <= 0) return;
 
   if (isMockMode()) {
@@ -280,7 +199,7 @@ export async function listDriverMatches(): Promise<DriverMatchItem[]> {
 }
 
 export async function getDriverMatch(matchId: number): Promise<DriverMatchItem | null> {
-  const safeMatchId = toPositiveInt(matchId);
+  const safeMatchId = parseMatchPositiveInt(matchId);
   if (safeMatchId <= 0) return null;
 
   if (isMockMode()) {
@@ -293,7 +212,7 @@ export async function getDriverMatch(matchId: number): Promise<DriverMatchItem |
 }
 
 export async function acceptDriverMatch(matchId: number): Promise<DriverMatchItem | null> {
-  const safeMatchId = toPositiveInt(matchId);
+  const safeMatchId = parseMatchPositiveInt(matchId);
   if (safeMatchId <= 0) return null;
 
   if (isMockMode()) {
@@ -310,23 +229,23 @@ export async function postCounterOffer(
   input: MatchCounterOfferInput,
   quoteIdHint?: number
 ): Promise<CounterOfferItem | null> {
-  const safeMatchId = toPositiveInt(matchId);
+  const safeMatchId = parseMatchPositiveInt(matchId);
   if (safeMatchId <= 0) return null;
 
-  const safeQuoteIdHint = toPositiveInt(quoteIdHint);
+  const safeQuoteIdHint = parseMatchPositiveInt(quoteIdHint);
   if (safeQuoteIdHint > 0) {
     return createDriverCounterOffer(safeQuoteIdHint, input ?? {});
   }
 
   const match = await getDriverMatch(safeMatchId);
-  const safeQuoteId = toPositiveInt(match?.quoteId);
+  const safeQuoteId = parseMatchPositiveInt(match?.quoteId);
   if (safeQuoteId <= 0) return null;
 
   return createDriverCounterOffer(safeQuoteId, input ?? {});
 }
 
 export async function cancelDriverMatch(matchId: number): Promise<void> {
-  const safeMatchId = toPositiveInt(matchId);
+  const safeMatchId = parseMatchPositiveInt(matchId);
   if (safeMatchId <= 0) return;
 
   if (isMockMode()) {

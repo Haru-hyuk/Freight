@@ -2,13 +2,13 @@ import React, { useMemo } from "react";
 import { StyleSheet, View } from "react-native";
 import { useRouter } from "expo-router";
 
-import type { VerificationStatus } from "@/pages/shipper/settings/_mock";
+import type { VerificationStatus } from "@/features/shipper-settings/api/shipper-settings-mock";
+import { shipperSettingsMock } from "@/features/shipper-settings/api/shipper-settings-mock";
 import type { AppTheme } from "@/shared/theme/types";
 import { useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppText } from "@/shared/ui/kit/AppText";
 import { PageScaffold } from "@/widgets/layout/PageScaffold";
 
-import { shipperSettingsMock } from "./_mock";
 import Divider from "./ui/Divider";
 import KeyValueRow from "./ui/KeyValueRow";
 import SettingSection from "./ui/SettingSection";
@@ -175,4 +175,3 @@ export default function ShipperBusinessInfoPage() {
     </PageScaffold>
   );
 }
-
