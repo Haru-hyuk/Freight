@@ -15,6 +15,7 @@ import {
   listOpenDriverMatches,
   type DriverMatchItem,
 } from "./shipper-match-api";
+import { waitRandom } from "@/shared/lib/mock-flow";
 
 type DriverOrderTagKey = "AI_RECOMMENDED" | "COMBINED" | "WAYPOINT" | "URGENT";
 
@@ -141,19 +142,6 @@ function formatDistance(value: unknown): string {
   const km = Number(value);
   if (!Number.isFinite(km) || km <= 0) return "";
   return `${km.toFixed(1)}km`;
-}
-
-function wait(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
-
-async function waitRandom(minMs: number, maxMs: number): Promise<void> {
-  const min = Math.max(0, Math.trunc(minMs));
-  const max = Math.max(min, Math.trunc(maxMs));
-  const next = min + Math.floor(Math.random() * (max - min + 1));
-  await wait(next);
 }
 
 function normalizeVehicleType(value: unknown): string {
@@ -392,7 +380,7 @@ export async function loadDriverOrdersOverview(): Promise<DriverOrdersOverview> 
   };
 
   if (mode === "mock") {
-    await waitRandom(300, 700);
+    await waitRandom();
   }
 
   const [marketMatches, myMatches] = await Promise.all([listOpenDriverMatches(), listMyDriverMatches()]);
@@ -428,7 +416,7 @@ export async function requestAiRecommendedOrder(sourceOrders: DriverOrderCard[])
     return null;
   }
 
-  await waitRandom(1200, 1800);
+  await waitRandom();
 
   const source = Array.isArray(sourceOrders) ? sourceOrders : [];
   const base = source.find((order) => !order.tags.some((tag) => tag.key === "AI_RECOMMENDED")) ?? source[0] ?? null;
