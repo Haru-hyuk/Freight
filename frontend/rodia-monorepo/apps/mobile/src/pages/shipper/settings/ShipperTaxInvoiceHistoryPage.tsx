@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 
 import type { TaxInvoiceItemMock, TaxInvoiceStatus } from "@/features/shipper-settings/api/shipper-settings-mock";
 import { shipperSettingsMock } from "@/features/shipper-settings/api/shipper-settings-mock";
+import { formatKrw } from "@/shared/lib/format/display";
 import type { AppTheme } from "@/shared/theme/types";
 import { useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppButton } from "@/shared/ui/kit/AppButton";
@@ -25,11 +26,6 @@ function toDisplayDate(input: string): string {
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}.${mm}.${dd}`;
-}
-
-function formatKrw(amount: number): string {
-  const value = Number.isFinite(amount) ? Math.max(0, Math.trunc(amount)) : 0;
-  return `${value.toLocaleString("ko-KR")}원`;
 }
 
 function toStatusLabel(status: TaxInvoiceStatus): string {
@@ -141,9 +137,9 @@ function TaxInvoiceCard({ item }: { item: TaxInvoiceItemMock }) {
       </View>
 
       <KeyValueRow label="발행일" value={toDisplayDate(item.issuedAt)} />
-      <KeyValueRow label="공급가" value={formatKrw(item.supplyAmount)} />
-      <KeyValueRow label="부가세" value={formatKrw(item.vatAmount)} />
-      <KeyValueRow label="합계" value={formatKrw(item.totalAmount)} />
+      <KeyValueRow label="공급가" value={formatKrw(item.supplyAmount, "0원")} />
+      <KeyValueRow label="부가세" value={formatKrw(item.vatAmount, "0원")} />
+      <KeyValueRow label="합계" value={formatKrw(item.totalAmount, "0원")} />
 
       <Divider />
 
