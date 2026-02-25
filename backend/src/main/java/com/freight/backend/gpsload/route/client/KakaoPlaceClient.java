@@ -1,4 +1,4 @@
-package com.freight.backend.gpsmiss.route.client;
+package com.freight.backend.gpsload.route.client;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;

@@ -1,4 +1,4 @@
-package com.freight.backend.gpsmiss.loadplan.model;
+package com.freight.backend.gpsload.loadplan.model;
 
 public record Stats(
         double utilization,

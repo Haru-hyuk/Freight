@@ -1,6 +1,6 @@
-package com.freight.backend.gpsmiss.routeassembly.model;
+package com.freight.backend.gpsload.routeassembly.model;
 
-import com.freight.backend.gpsmiss.route.model.Place;
+import com.freight.backend.gpsload.route.model.Place;
 
 /**
  * 방문 순서 정보

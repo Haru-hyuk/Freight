@@ -1,4 +1,4 @@
-package com.freight.backend.gpsmiss.config;
+package com.freight.backend.gpsload.config;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.CrossOrigin;

@@ -1,19 +1,19 @@
-package com.freight.backend.gpsmiss.loadplan.service;
+package com.freight.backend.gpsload.loadplan.service;
 
-import com.freight.backend.gpsmiss.loadplan.entity.LoadPlan;
-import com.freight.backend.gpsmiss.loadplan.entity.LoadPlanItem;
-import com.freight.backend.gpsmiss.loadplan.entity.TruckDimension;
-import com.freight.backend.gpsmiss.loadplan.model.CargoItem;
-import com.freight.backend.gpsmiss.loadplan.model.LoadPlanRequest;
-import com.freight.backend.gpsmiss.loadplan.model.LoadPlanResponse;
-import com.freight.backend.gpsmiss.loadplan.model.LoadPlanSavedResponse;
-import com.freight.backend.gpsmiss.loadplan.model.Placement;
-import com.freight.backend.gpsmiss.loadplan.model.Stats;
-import com.freight.backend.gpsmiss.loadplan.model.Truck;
-import com.freight.backend.gpsmiss.loadplan.repository.LoadPlanRepository;
-import com.freight.backend.gpsmiss.loadplan.repository.TruckDimensionRepository;
-import com.freight.backend.gpsmiss.loadplan.service.ExtremePointsGenerator.PlacedBox;
-import com.freight.backend.gpsmiss.loadplan.service.ExtremePointsGenerator.Position;
+import com.freight.backend.gpsload.loadplan.entity.LoadPlan;
+import com.freight.backend.gpsload.loadplan.entity.LoadPlanItem;
+import com.freight.backend.gpsload.loadplan.entity.TruckDimension;
+import com.freight.backend.gpsload.loadplan.model.CargoItem;
+import com.freight.backend.gpsload.loadplan.model.LoadPlanRequest;
+import com.freight.backend.gpsload.loadplan.model.LoadPlanResponse;
+import com.freight.backend.gpsload.loadplan.model.LoadPlanSavedResponse;
+import com.freight.backend.gpsload.loadplan.model.Placement;
+import com.freight.backend.gpsload.loadplan.model.Stats;
+import com.freight.backend.gpsload.loadplan.model.Truck;
+import com.freight.backend.gpsload.loadplan.repository.LoadPlanRepository;
+import com.freight.backend.gpsload.loadplan.repository.TruckDimensionRepository;
+import com.freight.backend.gpsload.loadplan.service.ExtremePointsGenerator.PlacedBox;
+import com.freight.backend.gpsload.loadplan.service.ExtremePointsGenerator.Position;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;

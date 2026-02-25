@@ -1,8 +1,8 @@
-package com.freight.backend.gpsmiss.route.service;
+package com.freight.backend.gpsload.route.service;
 
-import com.freight.backend.gpsmiss.route.model.Place;
-import com.freight.backend.gpsmiss.route.model.RouteRequest;
-import com.freight.backend.gpsmiss.route.model.RouteResponse;
+import com.freight.backend.gpsload.route.model.Place;
+import com.freight.backend.gpsload.route.model.RouteRequest;
+import com.freight.backend.gpsload.route.model.RouteResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;

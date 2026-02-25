@@ -1,10 +1,10 @@
-package com.freight.backend.gpsmiss.gps.api;
+package com.freight.backend.gpsload.gps.api;
 
-import com.freight.backend.gpsmiss.gps.entity.GpsLog;
-import com.freight.backend.gpsmiss.gps.model.GpsLogRequest;
-import com.freight.backend.gpsmiss.gps.model.TrackingResponse;
-import com.freight.backend.gpsmiss.gps.model.TrackingResponse.RoutePoint;
-import com.freight.backend.gpsmiss.gps.service.GpsTrackingService;
+import com.freight.backend.gpsload.gps.entity.GpsLog;
+import com.freight.backend.gpsload.gps.model.GpsLogRequest;
+import com.freight.backend.gpsload.gps.model.TrackingResponse;
+import com.freight.backend.gpsload.gps.model.TrackingResponse.RoutePoint;
+import com.freight.backend.gpsload.gps.service.GpsTrackingService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;

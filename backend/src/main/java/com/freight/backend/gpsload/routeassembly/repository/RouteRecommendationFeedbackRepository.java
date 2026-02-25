@@ -1,6 +1,6 @@
-package com.freight.backend.gpsmiss.routeassembly.repository;
+package com.freight.backend.gpsload.routeassembly.repository;
 
-import com.freight.backend.gpsmiss.routeassembly.entity.RouteRecommendationFeedback;
+import com.freight.backend.gpsload.routeassembly.entity.RouteRecommendationFeedback;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;

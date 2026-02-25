@@ -1,6 +1,6 @@
-package com.freight.backend.gpsmiss.routeassembly.entity;
+package com.freight.backend.gpsload.routeassembly.entity;
 
-import com.freight.backend.gpsmiss.routeassembly.model.RecommendedRoute;
+import com.freight.backend.gpsload.routeassembly.model.RecommendedRoute;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;

@@ -1,7 +1,7 @@
-package com.freight.backend.gpsmiss.route.api;
+package com.freight.backend.gpsload.route.api;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.freight.backend.gpsmiss.route.client.KakaoPlaceClient;
+import com.freight.backend.gpsload.route.client.KakaoPlaceClient;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;

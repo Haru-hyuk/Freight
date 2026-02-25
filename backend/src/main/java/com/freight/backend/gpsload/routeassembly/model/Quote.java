@@ -1,7 +1,7 @@
-package com.freight.backend.gpsmiss.routeassembly.model;
+package com.freight.backend.gpsload.routeassembly.model;
 
-import com.freight.backend.gpsmiss.loadplan.model.CargoHandling;
-import com.freight.backend.gpsmiss.route.model.Place;
+import com.freight.backend.gpsload.loadplan.model.CargoHandling;
+import com.freight.backend.gpsload.route.model.Place;
 
 import java.time.Duration;
 import java.time.LocalDateTime;

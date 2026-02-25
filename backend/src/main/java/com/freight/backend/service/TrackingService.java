@@ -8,7 +8,7 @@ import com.freight.backend.entity.GpsLog;
 import com.freight.backend.entity.Match;
 import com.freight.backend.exception.CustomException;
 import com.freight.backend.exception.ErrorCode;
-import com.freight.backend.gpsmiss.util.HaversineUtil;
+import com.freight.backend.gpsload.util.HaversineUtil;
 import com.freight.backend.repository.GpsLogRepository;
 import com.freight.backend.repository.MatchRepository;
 import java.math.BigDecimal;

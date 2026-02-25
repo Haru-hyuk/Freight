@@ -1,6 +1,6 @@
-package com.freight.backend.gpsmiss.gps.repository;
+package com.freight.backend.gpsload.gps.repository;
 
-import com.freight.backend.gpsmiss.gps.entity.GpsLog;
+import com.freight.backend.gpsload.gps.entity.GpsLog;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;

@@ -1,4 +1,4 @@
-package com.freight.backend.gpsmiss.util;
+package com.freight.backend.gpsload.util;
 
 /**
  * Haversine 공식을 이용한 두 위·경도 간 대권 거리 계산 유틸리티.

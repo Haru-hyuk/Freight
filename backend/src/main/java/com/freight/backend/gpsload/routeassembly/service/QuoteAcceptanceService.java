@@ -1,7 +1,7 @@
-package com.freight.backend.gpsmiss.routeassembly.service;
+package com.freight.backend.gpsload.routeassembly.service;
 
-import com.freight.backend.gpsmiss.routeassembly.model.RouteAcceptRequest;
-import com.freight.backend.gpsmiss.routeassembly.model.RouteAcceptResponse;
+import com.freight.backend.gpsload.routeassembly.model.RouteAcceptRequest;
+import com.freight.backend.gpsload.routeassembly.model.RouteAcceptResponse;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

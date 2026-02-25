@@ -1,4 +1,4 @@
-package com.freight.backend.gpsmiss.route.model;
+package com.freight.backend.gpsload.route.model;
 
 import java.util.List;
 

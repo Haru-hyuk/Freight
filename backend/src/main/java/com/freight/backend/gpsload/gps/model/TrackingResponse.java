@@ -1,4 +1,4 @@
-package com.freight.backend.gpsmiss.gps.model;
+package com.freight.backend.gpsload.gps.model;
 
 import java.time.LocalDateTime;
 import java.util.List;

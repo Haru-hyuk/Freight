@@ -1,4 +1,4 @@
-package com.freight.backend.gpsmiss.routeassembly.model;
+package com.freight.backend.gpsload.routeassembly.model;
 
 public record RouteCalibrationFeedbackRequest(
         String calibrationId,

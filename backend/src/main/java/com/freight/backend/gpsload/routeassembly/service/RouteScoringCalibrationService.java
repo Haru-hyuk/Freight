@@ -1,11 +1,11 @@
-package com.freight.backend.gpsmiss.routeassembly.service;
+package com.freight.backend.gpsload.routeassembly.service;
 
-import com.freight.backend.gpsmiss.routeassembly.entity.RouteRecommendationFeedback;
-import com.freight.backend.gpsmiss.routeassembly.model.AssemblyParameters;
-import com.freight.backend.gpsmiss.routeassembly.model.RecommendedRoute;
-import com.freight.backend.gpsmiss.routeassembly.model.RouteCalibrationFeedbackRequest;
-import com.freight.backend.gpsmiss.routeassembly.model.RouteCalibrationStatusResponse;
-import com.freight.backend.gpsmiss.routeassembly.repository.RouteRecommendationFeedbackRepository;
+import com.freight.backend.gpsload.routeassembly.entity.RouteRecommendationFeedback;
+import com.freight.backend.gpsload.routeassembly.model.AssemblyParameters;
+import com.freight.backend.gpsload.routeassembly.model.RecommendedRoute;
+import com.freight.backend.gpsload.routeassembly.model.RouteCalibrationFeedbackRequest;
+import com.freight.backend.gpsload.routeassembly.model.RouteCalibrationStatusResponse;
+import com.freight.backend.gpsload.routeassembly.repository.RouteRecommendationFeedbackRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;

@@ -1,4 +1,4 @@
-package com.freight.backend.gpsmiss.routeassembly.api;
+package com.freight.backend.gpsload.routeassembly.api;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Controller;

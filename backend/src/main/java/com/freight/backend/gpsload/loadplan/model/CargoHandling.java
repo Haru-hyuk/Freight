@@ -1,4 +1,4 @@
-package com.freight.backend.gpsmiss.loadplan.model;
+package com.freight.backend.gpsload.loadplan.model;
 
 /**
  * 화물 취급 속성 Enum

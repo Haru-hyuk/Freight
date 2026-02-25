@@ -1,10 +1,10 @@
-package com.freight.backend.gpsmiss.route.service;
+package com.freight.backend.gpsload.route.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.freight.backend.gpsmiss.route.model.Place;
-import com.freight.backend.gpsmiss.route.model.RouteRequest;
-import com.freight.backend.gpsmiss.route.model.RouteResponse;
+import com.freight.backend.gpsload.route.model.Place;
+import com.freight.backend.gpsload.route.model.RouteRequest;
+import com.freight.backend.gpsload.route.model.RouteResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;

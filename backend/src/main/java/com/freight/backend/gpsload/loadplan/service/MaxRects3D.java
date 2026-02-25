@@ -1,4 +1,4 @@
-package com.freight.backend.gpsmiss.loadplan.service;
+package com.freight.backend.gpsload.loadplan.service;
 
 import java.util.ArrayList;
 import java.util.List;

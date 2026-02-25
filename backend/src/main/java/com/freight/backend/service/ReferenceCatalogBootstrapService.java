@@ -2,8 +2,8 @@ package com.freight.backend.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.freight.backend.gpsmiss.loadplan.entity.TruckSpecCatalog;
-import com.freight.backend.gpsmiss.loadplan.repository.TruckSpecCatalogRepository;
+import com.freight.backend.gpsload.loadplan.entity.TruckSpecCatalog;
+import com.freight.backend.gpsload.loadplan.repository.TruckSpecCatalogRepository;
 import com.freight.backend.pricing.PricingRateCatalog;
 import com.freight.backend.pricing.PricingRateCatalogRepository;
 import java.io.IOException;

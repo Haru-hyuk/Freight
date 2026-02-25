@@ -1,4 +1,4 @@
-package com.freight.backend.gpsmiss.loadplan.model;
+package com.freight.backend.gpsload.loadplan.model;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
 
