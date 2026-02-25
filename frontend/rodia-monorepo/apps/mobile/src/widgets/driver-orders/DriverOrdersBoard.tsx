@@ -787,7 +787,7 @@ export function DriverOrdersBoard({ activeTab, onChangeTab }: DriverOrdersBoardP
       }
 
       router.push({
-        pathname: "/(driver)/matches/[id]",
+        pathname: "/(driver)/run/[id]",
         params: buildDriverOrderDetailParams(card),
       });
 

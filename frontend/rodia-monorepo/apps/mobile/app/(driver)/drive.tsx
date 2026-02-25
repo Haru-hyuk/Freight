@@ -20,6 +20,7 @@ export default function DriverDriveLegacyRoute() {
     return legacyId || "current";
   }, [params?.id, params?.quoteId, params?.runId]);
 
+  // Legacy alias: keep `/drive` entry point but route rendering is unified under `/run/[id]`.
   return <Redirect href={{ pathname: "/(driver)/run/[id]", params: { id: nextId } }} />;
 }
 
