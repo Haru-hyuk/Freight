@@ -7,9 +7,10 @@
   - `src/shared/lib/format/display.ts`를 공통 포맷 SSOT로 확장해 `formatKrw`, `formatDistance`, `formatDateTime`을 추가함.
   - 기존 `formatKrwAmount`, `formatShortDateTime`는 호환용으로 유지해 기존 사용처 회귀 없이 단계적 이관이 가능하도록 정리함.
   - `driver-orders-mapper`, `DriverMatchDetailPage`, `QuoteDetailPage`의 로컬 포맷 함수를 제거하고 공통 display 유틸로 치환함.
+  - `QuoteListPage`, `useQuoteDetail`, `ShipperTaxInvoiceHistoryPage`의 잔여 원화/거리/날짜 포맷 중복을 공통 display 유틸로 추가 이관함.
   - 포맷 결과는 기존 화면 기준(원화 쉼표+원, 거리 소수 1자리, 날짜 `M/D HH:mm`)을 유지하도록 맞춤.
 - 영향 범위:
-  - 사용자 관점: Driver/Quote 주요 화면의 거리·금액·시간 표기가 기존과 동일한 형태로 일관되게 노출됨.
+  - 사용자 관점: Driver/Quote 주요 화면과 세금계산서 발행내역의 거리·금액·시간 표기가 기존과 동일한 형태로 일관되게 노출됨.
   - 개발자 관점: 중복 포맷 함수가 줄어 포맷 변경 시 수정 지점이 `shared/lib/format`로 수렴됨.
 - 파일 변경 목록:
   - 수정:
@@ -17,6 +18,9 @@
     - `src/features/matching/api/driver-orders-mapper.ts`
     - `src/pages/driver/matches/DriverMatchDetailPage.tsx`
     - `src/pages/shipper/quotes/QuoteDetailPage.tsx`
+    - `src/pages/shipper/quotes/QuoteListPage.tsx`
+    - `src/features/quote/model/useQuoteDetail.ts`
+    - `src/pages/shipper/settings/ShipperTaxInvoiceHistoryPage.tsx`
     - `docs/CHANGELOG.md`
   - 추가:
     - 없음
@@ -26,7 +30,7 @@
   - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과
   - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
 - 후속 작업 (다음 PR 후보):
-  - `QuoteListPage`, `useQuoteDetail`, 인증/설정 페이지의 잔여 날짜·원화 포맷 중복을 동일 방식으로 이관.
+  - `ShipperVerificationPage`, `DriverVerificationPage`의 날짜 포맷 함수를 동일 기준으로 통합 검토.
 ## 2026-02-25
 - PR/브랜치: `work/matching-quote-actions`
 - 범주 태그: `[matching] [quote] [routing] [refactor]`
