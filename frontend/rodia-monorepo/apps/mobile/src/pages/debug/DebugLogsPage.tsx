@@ -131,6 +131,33 @@ const useStyles = createThemedStyles((theme) => {
       lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
       fontWeight: "600",
     },
+    devToolsCard: {
+      padding: spacing * 3,
+      gap: spacing * 2,
+      borderRadius: safeNumber(theme.layout.radii.card, 16),
+      borderWidth: 1,
+      borderColor: c.borderDefault,
+      backgroundColor: c.bgSurface,
+    },
+    devToolsTitle: {
+      color: c.textMain,
+      fontSize: safeNumber(theme.typography.scale.detail.size, 14),
+      lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20),
+      fontWeight: "900",
+    },
+    devToolsDesc: {
+      color: c.textMuted,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
+      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
+      fontWeight: "600",
+    },
+    devToolsButtons: {
+      flexDirection: "row",
+      gap: spacing,
+    },
+    devToolButton: {
+      flex: 1,
+    },
 
     chipSection: {
       gap: spacing,
@@ -303,7 +330,6 @@ export default function DebugLogsPage() {
         <View style={styles.topRow}>
           <AppText style={styles.hint}>requestId 그룹 단위로 API 흐름(→/←/✕)을 확인합니다.</AppText>
           <View style={styles.topButtons}>
-            <AppButton title="Mock Flow Control" variant="secondary" onPress={() => router.push("/mock-flow")} />
             <AppButton title="전체 삭제" variant="secondary" onPress={clearAll} />
           </View>
         </View>
@@ -315,6 +341,25 @@ export default function DebugLogsPage() {
           autoCapitalize="none"
           autoCorrect={false}
         />
+
+        <View style={styles.devToolsCard}>
+          <AppText style={styles.devToolsTitle}>Dev Tools</AppText>
+          <AppText style={styles.devToolsDesc}>mock-flow 상태 제어와 API smoke 점검 화면으로 바로 이동합니다.</AppText>
+          <View style={styles.devToolsButtons}>
+            <AppButton
+              title="Mock Flow Control"
+              variant="secondary"
+              style={styles.devToolButton}
+              onPress={() => router.push("/mock-flow")}
+            />
+            <AppButton
+              title="Orval Smoke"
+              variant="secondary"
+              style={styles.devToolButton}
+              onPress={() => router.push("/debug/orval-smoke")}
+            />
+          </View>
+        </View>
 
         <View style={styles.chipSection}>
           <AppText style={styles.chipTitle}>Tag</AppText>

@@ -1,6 +1,32 @@
 # Mobile Changelog
 
 ## 2026-02-25
+- PR/브랜치: `chore/debug-hub-and-driverorders-mapper`
+- 범주 태그: `[infra] [routing] [mock]`
+- 변경 요약:
+  - `DebugLogsPage`에 `Dev Tools` 허브 섹션을 추가하고 `Mock Flow Control`/`Orval Smoke`로 원클릭 이동 버튼을 배치함.
+  - 경로는 Expo Router 실제 라우팅 기준으로 `"/mock-flow"`와 `"/debug/orval-smoke"`를 사용해 진입 안정성을 맞춤.
+  - `driver-orders-api`의 카드 매핑/태그 구성/정렬 계산을 `driver-orders-mapper.ts`로 선별 분리해 API 파일 복잡도를 낮춤.
+- 영향 범위:
+  - 사용자 관점: 일반 사용자 플로우 영향 없음(debug 영역 전용 개선).
+  - 개발자 관점: 디버그 도구 접근성이 좋아지고 driver-orders 매핑 책임이 mapper로 응집되어 유지보수가 쉬워짐.
+- 파일 변경 목록:
+  - Modified:
+    - `src/pages/debug/DebugLogsPage.tsx`
+    - `src/features/matching/api/driver-orders-api.ts`
+    - `docs/CHANGELOG.md`
+  - Added:
+    - `src/features/matching/api/driver-orders-mapper.ts`
+  - Deleted:
+    - 없음
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+- 후속 작업 (다음 PR 후보):
+  - debug landing 전용 페이지가 필요하면 `app/debug/index`로 허브를 독립
+  - driver-orders 서버 응답 파싱/매핑 경계 분리를 추가 검토
+
+## 2026-02-25
 - PR/브랜치: `chore/mock-flow-entry-and-selectors`
 - 범주 태그: `[mock] [routing] [infra]`
 - 변경 요약:
