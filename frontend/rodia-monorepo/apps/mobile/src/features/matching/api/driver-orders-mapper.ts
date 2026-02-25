@@ -4,7 +4,7 @@ import {
   getDriverOrderSortPriority,
   getDriverUiStateFromBackendStatus,
 } from "@/shared/lib/policy";
-import { formatShortDateTime } from "@/shared/lib/format/display";
+import { formatDateTime, formatDistance, formatKrw } from "@/shared/lib/format/display";
 import {
   selectMockFlowDriverOrderDecoration,
   type MockFlowDriverOrderTagKey,
@@ -18,7 +18,6 @@ import type { ParsedDriverOrderQuote, ParsedDriverOrderSource } from "./driver-o
  * - parser가 정규화한 source를 UI 카드 모델로 변환한다.
  * - 상태 배지, 카드 텍스트, 태그, 정렬 순서 같은 표현/파생 계산을 담당한다.
  * - 입력 안전성 보정은 parser 책임으로 유지한다.
- * TODO: 거리/시간/가격 포맷 공통 유틸 후보는 중복 확인 후 별도 PR에서 분리한다.
  */
 type DriverOrderTagLabelMap = Readonly<Record<DriverOrderTagKey, string>>;
 
@@ -37,10 +36,6 @@ function toOptionalText(value: unknown): string | undefined {
   return text || undefined;
 }
 
-function formatDateTime(value: unknown): string {
-  return formatShortDateTime(value, "");
-}
-
 function toSortTimestamp(value: unknown): number {
   const raw = toText(value);
   if (!raw) return 0;
@@ -49,15 +44,7 @@ function toSortTimestamp(value: unknown): number {
 }
 
 export function formatDriverOrderPrice(value: unknown): string {
-  const amount = Number(value);
-  if (!Number.isFinite(amount) || amount <= 0) return "";
-  return `${Math.trunc(amount).toLocaleString("ko-KR")}원`;
-}
-
-function formatDistance(value: unknown): string {
-  const km = Number(value);
-  if (!Number.isFinite(km) || km <= 0) return "";
-  return `${km.toFixed(1)}km`;
+  return formatKrw(value, "");
 }
 
 function normalizeVehicleType(value: unknown): string {
@@ -131,12 +118,12 @@ export function mapDriverOrderCard(input: DriverOrderCardMapperInput): DriverOrd
 
   const statusBadge = getDriverBadge(getDriverUiStateFromBackendStatus(status));
   const statusLabel = statusBadge.label;
-  const requestedAtText = formatDateTime(createdAt);
+  const requestedAtText = formatDateTime(createdAt, "");
 
   const originAddress = toOptionalText(quote?.originAddress) ?? toOptionalText(mockDecoration?.fallbackOriginAddress);
   const destinationAddress =
     toOptionalText(quote?.destinationAddress) ?? toOptionalText(mockDecoration?.fallbackDestinationAddress);
-  const routeDistanceText = formatDistance(quote?.distanceKm);
+  const routeDistanceText = formatDistance(quote?.distanceKm, "", 1);
 
   const vehicleText = buildVehicleText(quote) ?? toOptionalText(mockDecoration?.fallbackVehicleText);
   const methodText = buildMethodText(quote) ?? toOptionalText(mockDecoration?.fallbackMethodText);

@@ -22,6 +22,7 @@ import {
   type DriverUiState,
   normalizeStatus,
 } from "@/shared/lib/policy";
+import { formatDateTime, formatDistance, formatKrw } from "@/shared/lib/format/display";
 import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppButton } from "@/shared/ui/kit/AppButton";
@@ -67,33 +68,6 @@ function toText(value: unknown): string {
 function toDisplayText(value: unknown, fallback = "-"): string {
   const text = toText(value);
   return text || fallback;
-}
-
-function formatDistanceText(value: unknown): string {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed <= 0) return "-";
-  return `${parsed.toFixed(1)}km`;
-}
-
-function formatPriceText(value: unknown): string {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed <= 0) return "-";
-  return `${Math.trunc(parsed).toLocaleString("ko-KR")}원`;
-}
-
-function formatDateTime(value: unknown): string {
-  const raw = toText(value);
-  if (!raw) return "-";
-
-  const timestamp = Date.parse(raw);
-  if (!Number.isFinite(timestamp)) return "-";
-
-  const date = new Date(timestamp);
-  const month = date.getMonth() + 1;
-  const day = date.getDate();
-  const hour = String(date.getHours()).padStart(2, "0");
-  const minute = String(date.getMinutes()).padStart(2, "0");
-  return `${month}/${day} ${hour}:${minute}`;
 }
 
 function normalizeVehicleType(value: unknown): string {
@@ -567,7 +541,7 @@ export function DriverMatchDetailPage({ matchId, routeSnapshot }: DriverMatchDet
 
   const originAddress = toDisplayText(detail.quote?.originAddress);
   const destinationAddress = toDisplayText(detail.quote?.destinationAddress);
-  const distanceText = formatDistanceText(detail.quote?.distanceKm);
+  const distanceText = formatDistance(detail.quote?.distanceKm);
   const loadMethod = toDisplayText(formatWorkMethodLabel(detail.quote?.loadMethod));
   const unloadMethod = toDisplayText(formatWorkMethodLabel(detail.quote?.unloadMethod));
   const cargoName = toDisplayText(detail.quote?.cargoName);
@@ -583,7 +557,7 @@ export function DriverMatchDetailPage({ matchId, routeSnapshot }: DriverMatchDet
     if (Number.isFinite(desiredPrice) && desiredPrice > 0) return desiredPrice;
     return 0;
   }, [detail.quote?.desiredPrice, detail.quote?.finalPrice]);
-  const priceText = formatPriceText(priceValue);
+  const priceText = formatKrw(priceValue);
 
   const shipperName = toText(detail.quote?.senderName);
   const shipperPhone = toText(detail.quote?.senderPhone);

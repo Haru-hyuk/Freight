@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { QuoteDetailResponse, QuoteId } from "@/entities/quote/model/quote.types";
 import { getShipperQuoteDetailByIdentifier } from "@/features/quote/api";
 import { isSessionExpiredApiError, SESSION_EXPIRED_MESSAGE } from "@/shared/lib/api/apiClient";
+import { formatDateTime, formatKrw } from "@/shared/lib/format/display";
 import {
   getQuoteActionPolicy,
   getQuoteStatusLabel,
@@ -60,16 +61,6 @@ export type QuoteDetailViewModel = {
   actionsContext: QuoteActionsContext;
 };
 
-const KRW_FORMAT = (() => {
-  try {
-    // RN Hermes/JS runtime may vary; keep safe fallback.
-    if (typeof Intl !== "undefined" && typeof Intl.NumberFormat === "function") return new Intl.NumberFormat("ko-KR");
-  } catch {
-    // ignore
-  }
-  return { format: (v: number) => String(v) } as Pick<Intl.NumberFormat, "format">;
-})();
-
 const QUOTE_STATUS_GUARD: Record<QuoteDetailResponse["status"], true> = {
   OPEN: true,
   NEGOTIATING: true,
@@ -92,11 +83,6 @@ function toSafeInteger(value: unknown, fallback = 0): number {
 function toSafeStatus(value: unknown): QuoteDetailResponse["status"] {
   const candidate = String(value ?? "OPEN") as QuoteDetailResponse["status"];
   return QUOTE_STATUS_GUARD[candidate] ? candidate : "OPEN";
-}
-
-function formatKrw(value: unknown): string {
-  const safeValue = Math.max(0, Math.round(toSafeNumber(value)));
-  return `${KRW_FORMAT.format(safeValue)}원`;
 }
 
 function mapEnumLabel(value: unknown, mapping: Record<string, string>, fallback = "-"): string {
@@ -131,18 +117,6 @@ function toCargoTypeIcon(value: unknown): string {
 function formatCargoHeadline(cargoName: unknown, cargoType: unknown): string {
   const name = toDisplayText(cargoName, "화물");
   return `${toCargoTypeIcon(cargoType)} ${name}`;
-}
-
-function formatDateTime(iso: unknown): string {
-  const raw = typeof iso === "string" ? iso : "";
-  const date = new Date(raw);
-  if (!Number.isFinite(date.getTime())) return "-";
-
-  const month = date.getMonth() + 1;
-  const day = date.getDate();
-  const hour = String(date.getHours()).padStart(2, "0");
-  const minute = String(date.getMinutes()).padStart(2, "0");
-  return `${month}월 ${day}일 ${hour}:${minute}`;
 }
 
 function toDisplayText(value: unknown, fallback = "-"): string {

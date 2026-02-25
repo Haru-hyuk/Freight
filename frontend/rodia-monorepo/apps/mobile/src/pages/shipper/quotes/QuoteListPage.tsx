@@ -11,6 +11,7 @@ import {
   type QuoteActionPolicy,
   type QuoteTonePaletteKey,
 } from "@/features/quote/model/quoteActionMatrix";
+import { formatDateTime, formatDistance, formatKrw } from "@/shared/lib/format/display";
 import { CUSTOMER_UI_STATE, getCustomerUiStateFromBackendStatus, type CustomerUiState } from "@/shared/lib/policy";
 import { safeNumber, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
@@ -79,8 +80,6 @@ type QuoteListSectionProps = {
   items: QuoteListViewItem[];
   onPressCard: QuoteListCardProps["onPress"];
 };
-
-const KRW = new Intl.NumberFormat("ko-KR");
 
 const COMPLETED_UI_STATES = new Set<CustomerUiState>([CUSTOMER_UI_STATE.COMPLETED]);
 const CANCELED_UI_STATES = new Set<CustomerUiState>([CUSTOMER_UI_STATE.CANCELED]);
@@ -449,25 +448,9 @@ function toSafeNumber(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
-function formatKrw(value: number): string {
-  const safeValue = Math.max(0, Math.round(toSafeNumber(value)));
-  return `${KRW.format(safeValue)}원`;
-}
-
 function toDateValue(iso: string): number {
   const value = new Date(iso).getTime();
   return Number.isFinite(value) ? value : 0;
-}
-
-function formatDateTime(iso: string): string {
-  const date = new Date(iso);
-  if (!Number.isFinite(date.getTime())) return "시간 정보 없음";
-
-  const month = date.getMonth() + 1;
-  const day = date.getDate();
-  const hour = String(date.getHours()).padStart(2, "0");
-  const minute = String(date.getMinutes()).padStart(2, "0");
-  return `${month}월 ${day}일 ${hour}:${minute}`;
 }
 
 function getPriceValue(quote: QuoteListItem): number {
@@ -488,8 +471,8 @@ function toViewItem(quote: QuoteListItem): QuoteListViewItem {
     statusLabel: policy.badgeLabel,
     ctaText: policy.ctaLabel,
     isPriceCta: policy.listCtaKind === "price",
-    priceText: formatKrw(priceValue),
-    createdAtLabel: formatDateTime(quote.createdAt),
+    priceText: formatKrw(priceValue, "0원"),
+    createdAtLabel: formatDateTime(quote.createdAt, "시간 정보 없음"),
     cargoText: `${quote.vehicleType} ${quote.vehicleBodyType} · ${quote.cargoName}`,
     priceValue,
     recencyValue: toDateValue(quote.createdAt),
@@ -641,7 +624,7 @@ function QuoteListCardBase({ item, onPress }: QuoteListCardProps) {
   const toneKey = resolveTonePalette(theme, item.policy).key;
   const toneStyles = useMemo(() => getToneStyles(toneKey, styles), [toneKey, styles]);
   const isClosed = item.policy.category === "closed";
-  const safeDistanceKm = Number.isFinite(item.quote.distanceKm) ? item.quote.distanceKm : 0;
+  const safeDistanceText = formatDistance(item.quote.distanceKm, "0.0km", 1);
 
   return (
     <Pressable
@@ -677,7 +660,7 @@ function QuoteListCardBase({ item, onPress }: QuoteListCardProps) {
             <View style={styles.cargoWrap}>
               <Ionicons name="cube-outline" style={styles.cargoIcon} />
               <AppText style={styles.cargoText} numberOfLines={1}>
-                {`${item.cargoText} · ${safeDistanceKm.toFixed(1)}km`}
+                {`${item.cargoText} · ${safeDistanceText}`}
               </AppText>
             </View>
 

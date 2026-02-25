@@ -17,6 +17,7 @@ import { useQuoteDetail, type QuoteActionsContext } from "@/features/quote/model
 import { formatWorkMethodLabel } from "@/features/quote/model/workMethod";
 import { BottomActionRouter } from "@/features/quote/ui/actions/BottomActionRouter";
 import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
+import { formatDistance, formatKrw } from "@/shared/lib/format/display";
 import {
   BACKEND_STATUS,
   CUSTOMER_UI_STATE,
@@ -290,18 +291,6 @@ function toPositiveAmount(value: unknown): number {
   return Math.trunc(parsed);
 }
 
-function formatPriceText(value: unknown): string {
-  const amount = toPositiveAmount(value);
-  if (amount <= 0) return "-";
-  return `${amount.toLocaleString("ko-KR")}원`;
-}
-
-function formatDistanceText(value: unknown): string {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed <= 0) return "-";
-  return `${parsed.toFixed(1)}km`;
-}
-
 function resolvePriceSummary(quote: QuoteDetailQuote): PriceSummary {
   const uiState = getCustomerUiStateFromBackendStatus(toText(quote.status));
   const desired = toPositiveAmount(quote.desiredPrice);
@@ -313,22 +302,22 @@ function resolvePriceSummary(quote: QuoteDetailQuote): PriceSummary {
   if (isCompleted && finalPrice > 0) {
     return {
       primaryLabel: "정산 금액",
-      primaryText: formatPriceText(finalPrice),
-      secondaryText: desired > 0 ? `희망 운임 ${formatPriceText(desired)}` : "",
+      primaryText: formatKrw(finalPrice),
+      secondaryText: desired > 0 ? `희망 운임 ${formatKrw(desired)}` : "",
     };
   }
 
   if (desired > 0) {
     return {
       primaryLabel: "희망 운임",
-      primaryText: formatPriceText(desired),
-      secondaryText: estimatedAmount > 0 ? `예상 금액 ${formatPriceText(estimatedAmount)}` : "",
+      primaryText: formatKrw(desired),
+      secondaryText: estimatedAmount > 0 ? `예상 금액 ${formatKrw(estimatedAmount)}` : "",
     };
   }
 
   return {
     primaryLabel: "예상 금액",
-    primaryText: formatPriceText(estimatedAmount),
+    primaryText: formatKrw(estimatedAmount),
     secondaryText: "",
   };
 }
@@ -457,7 +446,7 @@ function SummaryCard({ view }: { view: QuoteDetailView }) {
   const styles = useStyles();
   const theme = useAppTheme();
   const palette = resolveTonePalette(theme, view.policy);
-  const distanceText = formatDistanceText(view.quote.distanceKm);
+  const distanceText = formatDistance(view.quote.distanceKm);
   const loadText = toDisplayText(formatWorkMethodLabel(view.quote.loadMethod));
   const unloadText = toDisplayText(formatWorkMethodLabel(view.quote.unloadMethod));
   const price = React.useMemo(
