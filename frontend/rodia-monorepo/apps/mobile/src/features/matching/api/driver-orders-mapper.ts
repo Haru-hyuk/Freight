@@ -4,6 +4,7 @@ import {
   getDriverOrderSortPriority,
   getDriverUiStateFromBackendStatus,
 } from "@/shared/lib/policy";
+import { formatShortDateTime } from "@/shared/lib/format/display";
 import {
   selectMockFlowDriverOrderDecoration,
   type MockFlowDriverOrderTagKey,
@@ -37,17 +38,7 @@ function toOptionalText(value: unknown): string | undefined {
 }
 
 function formatDateTime(value: unknown): string {
-  const raw = toText(value);
-  if (!raw) return "";
-  const timestamp = Date.parse(raw);
-  if (!Number.isFinite(timestamp)) return "";
-
-  const date = new Date(timestamp);
-  const month = date.getMonth() + 1;
-  const day = date.getDate();
-  const hour = String(date.getHours()).padStart(2, "0");
-  const minute = String(date.getMinutes()).padStart(2, "0");
-  return `${month}/${day} ${hour}:${minute}`;
+  return formatShortDateTime(value, "");
 }
 
 function toSortTimestamp(value: unknown): number {

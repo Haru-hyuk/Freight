@@ -1,32 +1,63 @@
 # Mobile Changelog
 
 ## 2026-02-25
-- PR/Branch: `work/driver-complete`
-- Tags: `[routing] [policy] [ui] [docs]`
+- PR/Branch: `work/matching-quote-actions`
+- Tags: `[matching] [quote] [routing] [refactor]`
 - Summary:
-  - Re-checked driver canonical routing and kept `/(driver)/run/[id]` as the single detail destination.
-  - Kept legacy aliases (`/(driver)/drive`, `/(driver)/matches/*`) as redirect-only paths with no duplicated detail implementation.
-  - Added driver orders tie-break sort for stable ordering within the same `uiState` group:
-    priority by policy `uiState`, then timestamp (`updatedAt`/`createdAt`) descending, then `matchId` descending.
-  - Removed legacy `driverMatchStatus.ts` utility after confirming zero usage.
+  - Wired quote detail policy CTA actions (`acceptOffer`, `rejectOffer`, `cancelRequest`) to real API mutations.
+  - Kept existing shipper match create/cancel CTA flow, and switched to policy action router only for policy-action uiStates.
+  - Split route snapshot normalization into a single utility module and reused it in both `app/(driver)/run/[id].tsx` and `useMatchDetail`.
+  - Consolidated duplicated formatting helpers by introducing shared display format utils (KRW amount, short date-time).
 - Impact:
-  - User-facing order list no longer flips unpredictably when multiple cards share the same `uiState`.
-  - Driver routing remains canonical and easier to maintain.
+  - Shipper quote detail CTA now triggers server/mock mutations instead of local placeholder flow for core negotiation/cancel actions.
+  - Route snapshot parsing/coercion path is now single-source and easier to maintain.
 - File changes:
+  - Added:
+    - `src/features/matching/model/matchDetailRouteSnapshot.ts`
+    - `src/shared/lib/format/display.ts`
+  - Modified:
+    - `app/(driver)/run/[id].tsx`
+    - `app/(driver)/matches/[id].tsx`
+    - `src/features/matching/model/useMatchDetail.ts`
+    - `src/pages/shipper/quotes/QuoteDetailPage.tsx`
+    - `src/features/matching/api/driver-orders-mapper.ts`
+    - `docs/CHANGELOG.md`
+  - Deleted:
+    - none
+- Verification:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: pass
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: pass
+- Follow-ups:
+  - Connect `pay` CTA to real payment flow/API when payment domain API is finalized.
+  - Continue moving remaining local `formatDistance/formatKrw/formatDateTime` duplicates to shared format module in small PRs.
+
+## 2026-02-25
+- PR/브랜치: `work/driver-complete`
+- 범주 태그: `[routing] [policy] [ui] [docs]`
+- 변경 요약:
+  - Driver canonical 라우팅을 재점검하고 `/(driver)/run/[id]`를 단일 상세 진입 경로로 유지함.
+  - 레거시 alias(`/(driver)/drive`, `/(driver)/matches/*`)는 리다이렉트 전용으로 유지하고 상세 구현 중복 없이 정리함.
+  - 동일 `uiState` 그룹 내 정렬 안정화를 위한 tie-break 기준 추가:
+    정책 `uiState` 우선순위 → 타임스탬프(`updatedAt`/`createdAt`) 내림차순 → `matchId` 내림차순.
+  - 레거시 `driverMatchStatus.ts` 유틸을 사용처 0 확인 후 제거함.
+- 영향 범위:
+  - 사용자 관점: 동일 `uiState` 카드가 여러 개일 때 목록 순서가 새로고침 시 뒤집히지 않음.
+  - 개발자 관점: Driver 라우팅이 canonical로 유지되어 유지보수가 쉬워짐.
+- 파일 변경 목록:
   - Modified:
     - `src/features/matching/api/driver-orders-parser.ts`
     - `src/features/matching/api/driver-orders-mapper.ts`
     - `src/features/matching/api/driver-orders-api.ts`
     - `docs/CHANGELOG.md`
   - Added:
-    - none
+    - 없음
   - Deleted:
     - `src/features/matching/model/driverMatchStatus.ts`
-- Verification:
-  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: pass
-  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: pass
-- Follow-ups:
-  - Keep alias removal decision aligned with `docs/DRIVER_RUN_CANONICAL.md` checklist and monitoring window.
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+- 후속 작업 (다음 PR 후보):
+  - alias 제거 시점은 `docs/DRIVER_RUN_CANONICAL.md` 체크리스트 및 모니터링 기간과 맞춰 결정.
 
 ## 2026-02-25
 - PR/브랜치: `refactor/driver-orders-sort-uistate`
