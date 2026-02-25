@@ -1,6 +1,33 @@
 ﻿# Mobile Changelog
 
 ## 2026-02-25
+- PR/브랜치: `work/format-utils-migration`
+- 범주 태그: `[refactor] [ui] [infra]`
+- 변경 요약:
+  - `src/shared/lib/format/display.ts`를 공통 포맷 SSOT로 확장해 `formatKrw`, `formatDistance`, `formatDateTime`을 추가함.
+  - 기존 `formatKrwAmount`, `formatShortDateTime`는 호환용으로 유지해 기존 사용처 회귀 없이 단계적 이관이 가능하도록 정리함.
+  - `driver-orders-mapper`, `DriverMatchDetailPage`, `QuoteDetailPage`의 로컬 포맷 함수를 제거하고 공통 display 유틸로 치환함.
+  - 포맷 결과는 기존 화면 기준(원화 쉼표+원, 거리 소수 1자리, 날짜 `M/D HH:mm`)을 유지하도록 맞춤.
+- 영향 범위:
+  - 사용자 관점: Driver/Quote 주요 화면의 거리·금액·시간 표기가 기존과 동일한 형태로 일관되게 노출됨.
+  - 개발자 관점: 중복 포맷 함수가 줄어 포맷 변경 시 수정 지점이 `shared/lib/format`로 수렴됨.
+- 파일 변경 목록:
+  - 수정:
+    - `src/shared/lib/format/display.ts`
+    - `src/features/matching/api/driver-orders-mapper.ts`
+    - `src/pages/driver/matches/DriverMatchDetailPage.tsx`
+    - `src/pages/shipper/quotes/QuoteDetailPage.tsx`
+    - `docs/CHANGELOG.md`
+  - 추가:
+    - 없음
+  - 삭제:
+    - 없음
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+- 후속 작업 (다음 PR 후보):
+  - `QuoteListPage`, `useQuoteDetail`, 인증/설정 페이지의 잔여 날짜·원화 포맷 중복을 동일 방식으로 이관.
+## 2026-02-25
 - PR/브랜치: `work/matching-quote-actions`
 - 범주 태그: `[matching] [quote] [routing] [refactor]`
 - 변경 요약:
@@ -426,4 +453,5 @@
   - `features/matching/api/shipper-match-api.ts`, `features/counter-offer/api/counter-offer-api.ts`, `features/matching/api/driver-orders-api.ts`의 상태 normalize 중복 정리
   - `features/quote/model/quoteActionMatrix.ts`와 `pages/shipper/quotes/QuoteDetailPage.tsx`의 CTA 정책 소스 일치화
   - Driver/Shipper 상세/목록 흐름에서 정책 모듈 적용 범위를 단계적으로 확대
+
 
