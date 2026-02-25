@@ -686,14 +686,14 @@ export default function QuoteDetailPage() {
           setIsMatchSubmitting(true);
           const offerId = await resolvePendingCounterOfferId();
           if (offerId <= 0) {
-            Alert.alert("Offer Accept", "No pending counter-offer was found.");
+            Alert.alert("협상 제안 수락", "대기 중인 역제안을 찾을 수 없습니다.");
             return;
           }
           await acceptShipperCounterOffer(offerId);
           await refreshQuoteAndMatchData();
-          Alert.alert("Offer Accept", "Counter-offer was accepted.");
+          Alert.alert("협상 제안 수락", "역제안을 수락했습니다.");
         } catch (error) {
-          Alert.alert("Offer Accept Failed", readApiErrorMessage(error));
+          Alert.alert("협상 제안 수락 실패", readApiErrorMessage(error));
         } finally {
           setIsMatchSubmitting(false);
         }
@@ -705,14 +705,14 @@ export default function QuoteDetailPage() {
           setIsMatchSubmitting(true);
           const offerId = await resolvePendingCounterOfferId();
           if (offerId <= 0) {
-            Alert.alert("Offer Reject", "No pending counter-offer was found.");
+            Alert.alert("협상 제안 거절", "대기 중인 역제안을 찾을 수 없습니다.");
             return;
           }
           await rejectShipperCounterOffer(offerId);
           await refreshQuoteAndMatchData();
-          Alert.alert("Offer Reject", "Counter-offer was rejected.");
+          Alert.alert("협상 제안 거절", "역제안을 거절했습니다.");
         } catch (error) {
-          Alert.alert("Offer Reject Failed", readApiErrorMessage(error));
+          Alert.alert("협상 제안 거절 실패", readApiErrorMessage(error));
         } finally {
           setIsMatchSubmitting(false);
         }
@@ -725,7 +725,7 @@ export default function QuoteDetailPage() {
       }
 
       if (action === "pay") {
-        Alert.alert("Payment", "Payment flow will be connected in the next step.");
+        Alert.alert("결제", "결제 플로우는 다음 단계에서 연결됩니다.");
       }
     },
     [isMatchSubmitting, refreshQuoteAndMatchData, resolvePendingCounterOfferId, router]
