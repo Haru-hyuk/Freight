@@ -81,6 +81,9 @@ importers:
       babel-plugin-module-resolver:
         specifier: ^5.0.2
         version: 5.0.2
+      dotenv:
+        specifier: ^16.4.7
+        version: 16.4.7
       orval:
         specifier: ^8.4.1
         version: 8.4.1(typescript@5.9.3)
