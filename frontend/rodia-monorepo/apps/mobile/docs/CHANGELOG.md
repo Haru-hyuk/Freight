@@ -1,6 +1,62 @@
 # Mobile Changelog
 
 ## 2026-02-25
+- PR/Branch: `work/driver-complete`
+- Tags: `[routing] [policy] [ui] [docs]`
+- Summary:
+  - Re-checked driver canonical routing and kept `/(driver)/run/[id]` as the single detail destination.
+  - Kept legacy aliases (`/(driver)/drive`, `/(driver)/matches/*`) as redirect-only paths with no duplicated detail implementation.
+  - Added driver orders tie-break sort for stable ordering within the same `uiState` group:
+    priority by policy `uiState`, then timestamp (`updatedAt`/`createdAt`) descending, then `matchId` descending.
+  - Removed legacy `driverMatchStatus.ts` utility after confirming zero usage.
+- Impact:
+  - User-facing order list no longer flips unpredictably when multiple cards share the same `uiState`.
+  - Driver routing remains canonical and easier to maintain.
+- File changes:
+  - Modified:
+    - `src/features/matching/api/driver-orders-parser.ts`
+    - `src/features/matching/api/driver-orders-mapper.ts`
+    - `src/features/matching/api/driver-orders-api.ts`
+    - `docs/CHANGELOG.md`
+  - Added:
+    - none
+  - Deleted:
+    - `src/features/matching/model/driverMatchStatus.ts`
+- Verification:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: pass
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: pass
+- Follow-ups:
+  - Keep alias removal decision aligned with `docs/DRIVER_RUN_CANONICAL.md` checklist and monitoring window.
+
+## 2026-02-25
+- PR/브랜치: `refactor/driver-orders-sort-uistate`
+- 범주 태그: `[policy] [ui] [routing] [docs]`
+- 변경 요약:
+  - `driver-orders` 정렬 우선순위를 raw status 비교에서 policy 기반 `uiState` 우선순위 계산으로 전환함.
+  - 정렬 로직은 `driverPolicy`의 `getDriverOrderSortPriority(uiState)`를 단일 기준으로 사용하도록 수렴함.
+  - 목록 카드 정렬은 mock/server 공통 파이프라인에서 동일하게 적용되고, UI 레벨 추가 정렬은 유지하지 않음.
+  - `DRIVER_RUN_CANONICAL.md`에 alias 제거 전 체크리스트(deeplink/로그/QA/앱내 경로 수렴)를 추가함.
+- 영향 범위:
+  - 사용자 관점: 목록 카드의 상태별 우선순위 정렬이 일관되게 표시됨.
+  - 개발자 관점: 정렬 기준이 정책 단일 함수에 모여 후속 상태 정책 변경 시 수정 포인트가 명확해짐.
+- 파일 변경 목록:
+  - Modified:
+    - `src/shared/lib/policy/driverPolicy.ts`
+    - `src/features/matching/api/driver-orders-mapper.ts`
+    - `docs/DRIVER_RUN_CANONICAL.md`
+    - `docs/CHANGELOG.md`
+  - Added:
+    - 없음
+  - Deleted:
+    - 없음
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+- 후속 작업 (다음 PR 후보):
+  - 정렬 tie-break(동일 uiState 내 시간 우선순위)의 정책화 여부 검토
+  - alias route 제거 시점에 모니터링 지표 캡처 자동화 검토
+
+## 2026-02-25
 - PR/브랜치: `refactor/driver-run-policy-strip`
 - 범주 태그: `[routing] [policy] [ui] [infra]`
 - 변경 요약:

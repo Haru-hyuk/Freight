@@ -53,6 +53,7 @@ export type DriverOrderCard = {
   emptyDistanceText?: string;
   priceText?: string;
   priceValue?: number;
+  sortTimestamp?: number;
   tags: DriverOrderTag[];
 };
 

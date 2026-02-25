@@ -1,7 +1,7 @@
 import { formatWorkMethodLabel } from "@/features/quote/model/workMethod";
 import {
-  BACKEND_STATUS,
   getDriverBadge,
+  getDriverOrderSortPriority,
   getDriverUiStateFromBackendStatus,
 } from "@/shared/lib/policy";
 import {
@@ -48,6 +48,13 @@ function formatDateTime(value: unknown): string {
   const hour = String(date.getHours()).padStart(2, "0");
   const minute = String(date.getMinutes()).padStart(2, "0");
   return `${month}/${day} ${hour}:${minute}`;
+}
+
+function toSortTimestamp(value: unknown): number {
+  const raw = toText(value);
+  if (!raw) return 0;
+  const timestamp = Date.parse(raw);
+  return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
 export function formatDriverOrderPrice(value: unknown): string {
@@ -128,7 +135,7 @@ export function buildDriverOrderTags(
 
 export function mapDriverOrderCard(input: DriverOrderCardMapperInput): DriverOrderCard {
   const { source, mode, filterLabels } = input;
-  const { matchId, quoteId, status, createdAt, quote, scope, index, seed } = source;
+  const { matchId, quoteId, status, createdAt, updatedAt, quote, scope, index, seed } = source;
   const mockDecoration = mode === "mock" ? selectMockFlowDriverOrderDecoration(seed, scope) : null;
 
   const statusBadge = getDriverBadge(getDriverUiStateFromBackendStatus(status));
@@ -152,6 +159,7 @@ export function mapDriverOrderCard(input: DriverOrderCardMapperInput): DriverOrd
   const tags = buildDriverOrderTags(mockDecoration?.tagKeys ?? [], filterLabels);
   const pickupTimeText = toOptionalText(mockDecoration?.pickupTimeText);
   const emptyDistanceText = toOptionalText(mockDecoration?.emptyDistanceText);
+  const sortTimestamp = toSortTimestamp(updatedAt) || toSortTimestamp(createdAt);
 
   return {
     cardKey: `${scope}-${matchId}-${index}`,
@@ -171,23 +179,19 @@ export function mapDriverOrderCard(input: DriverOrderCardMapperInput): DriverOrd
     emptyDistanceText,
     priceText,
     priceValue,
+    sortTimestamp,
     tags,
   };
 }
 
 export function sortDriverOrderCards(items: DriverOrderCard[]): DriverOrderCard[] {
   return [...items].sort((a, b) => {
-    const statusWeight = (status: string): number => {
-      if (status === BACKEND_STATUS.READY || status === BACKEND_STATUS.OPEN) return 0;
-      if (status === BACKEND_STATUS.NEGOTIATING) return 1;
-      if (status === BACKEND_STATUS.ASSIGNED || status === BACKEND_STATUS.ACCEPTED) return 2;
-      if (status === BACKEND_STATUS.PICKUP) return 3;
-      if (status === BACKEND_STATUS.TRANSIT) return 4;
-      return 5;
-    };
-
-    const byStatus = statusWeight(a.status) - statusWeight(b.status);
+    const byStatus =
+      getDriverOrderSortPriority(getDriverUiStateFromBackendStatus(a.status)) -
+      getDriverOrderSortPriority(getDriverUiStateFromBackendStatus(b.status));
     if (byStatus !== 0) return byStatus;
+    const byTime = (b.sortTimestamp ?? 0) - (a.sortTimestamp ?? 0);
+    if (byTime !== 0) return byTime;
     return b.matchId - a.matchId;
   });
 }

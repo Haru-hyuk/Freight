@@ -92,6 +92,17 @@ const DRIVER_ASSIGNED_PAYMENT_PENDING_CTA: DriverCtaConfig = {
   enabled: false,
 };
 
+const DRIVER_ORDER_SORT_PRIORITY_MAP: Readonly<Record<DriverUiState, number>> = {
+  [DRIVER_UI_STATE.READY_TO_ACCEPT]: 0,
+  [DRIVER_UI_STATE.NEGOTIATING]: 1,
+  [DRIVER_UI_STATE.ASSIGNED]: 2,
+  [DRIVER_UI_STATE.PICKUP_IN_PROGRESS]: 3,
+  [DRIVER_UI_STATE.TRANSIT_IN_PROGRESS]: 4,
+  [DRIVER_UI_STATE.COMPLETED]: 5,
+  [DRIVER_UI_STATE.CANCELED]: 6,
+  [DRIVER_UI_STATE.UNKNOWN]: 7,
+};
+
 export function getDriverCta(
   uiState: DriverUiState,
   photoGatePassed: boolean,
@@ -115,6 +126,10 @@ export function getDriverCta(
 
 export function getDriverStatusTitle(uiState: DriverUiState): string {
   return DRIVER_STATUS_TITLE_MAP[uiState] ?? DRIVER_STATUS_TITLE_MAP[DRIVER_UI_STATE.UNKNOWN];
+}
+
+export function getDriverOrderSortPriority(uiState: DriverUiState): number {
+  return DRIVER_ORDER_SORT_PRIORITY_MAP[uiState] ?? DRIVER_ORDER_SORT_PRIORITY_MAP[DRIVER_UI_STATE.UNKNOWN];
 }
 
 /**
