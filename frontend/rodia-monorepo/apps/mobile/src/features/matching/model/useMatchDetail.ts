@@ -21,7 +21,7 @@ type UseMatchDetailViewModel = {
   refetch: () => Promise<void>;
 };
 
-const NETWORK_ERROR_TEXT = "?ㅽ듃?뚰겕 ?붿껌???ㅽ뙣?덉뒿?덈떎. ?좎떆 ???ㅼ떆 ?쒕룄??二쇱꽭??";
+const NETWORK_ERROR_TEXT = "네트워크 요청에 실패했습니다. 잠시 후 다시 시도해 주세요.";
 
 export function useMatchDetail(matchId: number, routeSnapshot?: MatchDetailRouteSnapshot): UseMatchDetailViewModel {
   const safeMatchId = parseMatchPositiveInt(matchId);
@@ -69,7 +69,7 @@ export function useMatchDetail(matchId: number, routeSnapshot?: MatchDetailRoute
       setMatch(null);
       setQuote(null);
       setIsLoading(false);
-      setErrorMessage("?좏슚???ㅻ뜑 ID媛 ?꾨떃?덈떎.");
+      setErrorMessage("유효한 매칭 ID가 아닙니다.");
 
       const resolvers = pendingRefetchResolversRef.current.splice(0);
       resolvers.forEach((resolve) => resolve());
@@ -92,7 +92,7 @@ export function useMatchDetail(matchId: number, routeSnapshot?: MatchDetailRoute
         setMatch(resolvedMatch ?? null);
 
         if (!resolvedMatch) {
-          setErrorMessage("?ㅻ뜑 ?뺣낫瑜?李얠쓣 ???놁뒿?덈떎.");
+          setErrorMessage("매칭 정보를 찾을 수 없습니다.");
           return;
         }
 

@@ -1,4 +1,4 @@
-# Mobile Changelog Entry Template
+﻿# Mobile Changelog Entry Template
 
 ## YYYY-MM-DD
 - PR/브랜치: `feature/xxx`
@@ -11,12 +11,12 @@
   - 사용자 관점: (화면/동작 영향)
   - 개발자 관점: (구조/유지보수 영향)
 - 파일 변경 목록:
-  - Modified:
+  - 수정:
     - `path/to/file-a`
     - `path/to/file-b`
-  - Added:
+  - 추가:
     - `path/to/new-file-a`
-  - Deleted:
+  - 삭제:
     - `path/to/deleted-file-a`
 - 검증 결과:
   - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: (성공/실패 + 원인)
