@@ -1,5 +1,39 @@
 # Mobile Changelog
 
+## 2026-02-25
+- PR/브랜치: `feature/mock-flow-e2e-driver-shipper`
+- 범주 태그: `[mock] [api] [infra]`
+- 변경 요약:
+  - `src/shared/lib/mock-flow/`를 신규 추가해 화주 견적/상세, 기사 매칭(open/my/detail), 역제안 데이터를 단일 인메모리 SSOT로 통합함.
+  - `features/quote/api/quote-api.ts`, `features/matching/api/shipper-match-api.ts`, `features/counter-offer/api/counter-offer-api.ts`의 mock 분기를 `mock-flow`로 연결해 UI/훅 분기 없이 동일 상태 흐름을 공유하도록 정리함.
+  - mock 모드에서 `GET /api/driver/matches/{id}`가 store 기반으로 항상 조회 가능해져 상세 화면 개발 시 403으로 막히던 흐름을 우회 검증할 수 있게 함(서버 모드는 기존 동작 유지).
+  - mock fetch/mutation 지연을 `waitRandom(500~900ms)` 공통 유틸로 통일해 실서버 체감과 로딩/중복클릭 방어 시나리오를 유지함.
+- 영향 범위:
+  - 사용자 관점: mock 모드에서 Shipper ↔ Driver 매칭 생성/수락/상태 반영 흐름을 끝까지 수동 검증 가능.
+  - 개발자 관점: 기존 분산 mock 파일 의존도를 줄이고, API 레이어만 교체해 목록/상세/역제안의 상태 동기화 포인트를 단일 스토어로 고정.
+- 파일 변경 목록:
+  - Modified:
+    - `src/features/quote/api/quote-api.ts`
+    - `src/features/matching/api/shipper-match-api.ts`
+    - `src/features/counter-offer/api/counter-offer-api.ts`
+    - `docs/CHANGELOG.md`
+  - Added:
+    - `src/shared/lib/mock-flow/types.ts`
+    - `src/shared/lib/mock-flow/delay.ts`
+    - `src/shared/lib/mock-flow/seed.ts`
+    - `src/shared/lib/mock-flow/store.ts`
+    - `src/shared/lib/mock-flow/selectors.ts`
+    - `src/shared/lib/mock-flow/mutations.ts`
+    - `src/shared/lib/mock-flow/index.ts`
+  - Deleted:
+    - 없음
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+- 후속 작업 (다음 PR 후보):
+  - 기존 `MockHub`/`mockShipperQuotes`/`mockShipperQuoteDetails` 미사용 경로 정리 및 제거
+  - dev 전용 `mock-flow` 상태 제어 라우트(`app/(dev)/mock-flow.tsx`) 추가
+  - driver-orders-api 내부의 개별 지연/가공 로직을 필요 시 `mock-flow` selector 계층으로 단계적 이관
+
 ## 2026-02-24
 - PR/브랜치: `feature/policy-foundation`
 - 범주 태그: `[policy] [infra]`

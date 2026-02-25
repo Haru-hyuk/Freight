@@ -21,6 +21,10 @@
 - 검증 결과:
   - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: (성공/실패 + 원인)
   - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: (성공/실패 + 원인)
+- 미해결 항목 (이번 PR에서 실패/포기한 작업):
+  - `(실패한 작업 1)` — 원인: (왜 실패했는지) / 다음 PR에서 해결 필요
+  - `(실패한 작업 2)` — 원인: (왜 실패했는지) / 다음 PR에서 해결 필요
 - 후속 작업 (다음 PR 후보):
-  - (후속 후보 1)
-  - (후속 후보 2)
+  - [ ] (미해결 항목에서 이월된 작업)
+  - [ ] (신규 후속 후보 1)
+  - [ ] (신규 후속 후보 2)

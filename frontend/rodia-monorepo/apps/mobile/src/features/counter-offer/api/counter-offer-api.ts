@@ -9,14 +9,14 @@ import {
 } from "@/shared/api/generated/shipper-counter-offer-controller/shipper-counter-offer-controller";
 import { isMockMode } from "@/shared/lib/config/env";
 import {
-  acceptMockShipperCounterOffer,
-  createMockDriverCounterOffer,
-  listMockDriverCounterOffersByQuote,
-  listMockMyDriverCounterOffers,
-  listMockShipperCounterOffers,
-  rejectMockShipperCounterOffer,
-  waitNetwork,
-} from "@/shared/lib/mock/MockHub";
+  acceptMockFlowShipperCounterOffer,
+  createMockFlowDriverCounterOffer,
+  listMockFlowDriverCounterOffersByQuote,
+  listMockFlowMyDriverCounterOffers,
+  listMockFlowShipperCounterOffers,
+  rejectMockFlowShipperCounterOffer,
+  waitRandom,
+} from "@/shared/lib/mock-flow";
 
 type AnyObject = Record<string, unknown>;
 
@@ -139,8 +139,8 @@ export async function listShipperCounterOffers(quoteId: number): Promise<Counter
   if (safeQuoteId <= 0) return [];
 
   if (isMockMode()) {
-    await waitNetwork();
-    return toCounterOfferList(listMockShipperCounterOffers(safeQuoteId));
+    await waitRandom();
+    return toCounterOfferList(listMockFlowShipperCounterOffers(safeQuoteId));
   }
 
   const data = await getShipperCounterOffersGenerated(String(safeQuoteId));
@@ -152,8 +152,8 @@ export async function acceptShipperCounterOffer(offerId: number): Promise<void> 
   if (safeOfferId <= 0) return;
 
   if (isMockMode()) {
-    await waitNetwork();
-    acceptMockShipperCounterOffer(safeOfferId);
+    await waitRandom();
+    acceptMockFlowShipperCounterOffer(safeOfferId);
     return;
   }
 
@@ -165,8 +165,8 @@ export async function rejectShipperCounterOffer(offerId: number): Promise<void> 
   if (safeOfferId <= 0) return;
 
   if (isMockMode()) {
-    await waitNetwork();
-    rejectMockShipperCounterOffer(safeOfferId);
+    await waitRandom();
+    rejectMockFlowShipperCounterOffer(safeOfferId);
     return;
   }
 
@@ -190,8 +190,8 @@ export async function createDriverCounterOffer(
   };
 
   if (isMockMode()) {
-    await waitNetwork();
-    return toSingleCounterOffer(createMockDriverCounterOffer(safeQuoteId, payload));
+    await waitRandom();
+    return toSingleCounterOffer(createMockFlowDriverCounterOffer(safeQuoteId, payload));
   }
 
   const data = await createDriverCounterOfferGenerated(String(safeQuoteId), payload);
@@ -200,8 +200,8 @@ export async function createDriverCounterOffer(
 
 export async function listMyDriverCounterOffers(): Promise<CounterOfferItem[]> {
   if (isMockMode()) {
-    await waitNetwork();
-    return toCounterOfferList(listMockMyDriverCounterOffers());
+    await waitRandom();
+    return toCounterOfferList(listMockFlowMyDriverCounterOffers());
   }
 
   const data = await getMyDriverCounterOffersGenerated();
@@ -213,8 +213,8 @@ export async function listDriverCounterOffersByQuote(quoteId: number): Promise<C
   if (safeQuoteId <= 0) return [];
 
   if (isMockMode()) {
-    await waitNetwork();
-    return toCounterOfferList(listMockDriverCounterOffersByQuote(safeQuoteId));
+    await waitRandom();
+    return toCounterOfferList(listMockFlowDriverCounterOffersByQuote(safeQuoteId));
   }
 
   const list = await listMyDriverCounterOffers();

@@ -17,15 +17,15 @@ import {
 } from "@/shared/api/generated/shipper-match-controller/shipper-match-controller";
 import { isMockMode } from "@/shared/lib/config/env";
 import {
-  acceptMockDriverMatch,
-  cancelMockMatch,
-  createMockShipperMatch,
-  getMockDriverMatch,
-  listMockDriverMyMatches,
-  listMockDriverOpenMatches,
-  listMockShipperMatches,
-  waitNetwork,
-} from "@/shared/lib/mock/MockHub";
+  acceptMockFlowDriverMatch,
+  cancelMockFlowMatch,
+  createMockFlowShipperMatch,
+  getMockFlowDriverMatch,
+  listMockFlowDriverMyMatches,
+  listMockFlowDriverOpenMatches,
+  listMockFlowShipperMatches,
+  waitRandom,
+} from "@/shared/lib/mock-flow";
 
 type AnyObject = Record<string, unknown>;
 
@@ -198,8 +198,8 @@ export function getDriverMatchDetailBadges(match: DriverMatchItem | null): Drive
 
 export async function listMyShipperMatches(): Promise<ShipperMatchItem[]> {
   if (isMockMode()) {
-    await waitNetwork();
-    return toShipperMatchList(listMockShipperMatches());
+    await waitRandom();
+    return toShipperMatchList(listMockFlowShipperMatches());
   }
 
   const data = await getMyShipperMatchesGenerated();
@@ -215,8 +215,8 @@ export async function createShipperMatch(quoteId: number): Promise<ShipperMatchI
   if (safeQuoteId <= 0) return null;
 
   if (isMockMode()) {
-    await waitNetwork();
-    return toSingleDriverMatch(createMockShipperMatch({ quoteId: safeQuoteId })) as ShipperMatchItem | null;
+    await waitRandom();
+    return toSingleDriverMatch(createMockFlowShipperMatch({ quoteId: safeQuoteId })) as ShipperMatchItem | null;
   }
 
   const data = await createShipperMatchGenerated({ quoteId: safeQuoteId });
@@ -233,8 +233,8 @@ export async function cancelShipperMatch(matchId: number): Promise<void> {
   if (safeMatchId <= 0) return;
 
   if (isMockMode()) {
-    await waitNetwork();
-    cancelMockMatch(safeMatchId);
+    await waitRandom();
+    cancelMockFlowMatch(safeMatchId);
     return;
   }
 
@@ -243,8 +243,8 @@ export async function cancelShipperMatch(matchId: number): Promise<void> {
 
 export async function listOpenDriverMatches(): Promise<DriverMatchItem[]> {
   if (isMockMode()) {
-    await waitNetwork();
-    return toDriverMatchList(listMockDriverOpenMatches());
+    await waitRandom();
+    return toDriverMatchList(listMockFlowDriverOpenMatches());
   }
 
   const data = await getOpenDriverMatchesGenerated();
@@ -253,8 +253,8 @@ export async function listOpenDriverMatches(): Promise<DriverMatchItem[]> {
 
 export async function listMyDriverMatches(): Promise<DriverMatchItem[]> {
   if (isMockMode()) {
-    await waitNetwork();
-    return toDriverMatchList(listMockDriverMyMatches());
+    await waitRandom();
+    return toDriverMatchList(listMockFlowDriverMyMatches());
   }
 
   const data = await getMyDriverMatchesGenerated();
@@ -285,8 +285,8 @@ export async function getDriverMatch(matchId: number): Promise<DriverMatchItem |
   if (safeMatchId <= 0) return null;
 
   if (isMockMode()) {
-    await waitNetwork();
-    return toSingleDriverMatch(getMockDriverMatch(safeMatchId));
+    await waitRandom();
+    return toSingleDriverMatch(getMockFlowDriverMatch(safeMatchId));
   }
 
   const data = await getDriverMatchGenerated(String(safeMatchId));
@@ -298,8 +298,8 @@ export async function acceptDriverMatch(matchId: number): Promise<DriverMatchIte
   if (safeMatchId <= 0) return null;
 
   if (isMockMode()) {
-    await waitNetwork();
-    return toSingleDriverMatch(acceptMockDriverMatch(safeMatchId));
+    await waitRandom();
+    return toSingleDriverMatch(acceptMockFlowDriverMatch(safeMatchId));
   }
 
   const data = await acceptDriverMatchGenerated(String(safeMatchId));
@@ -331,8 +331,8 @@ export async function cancelDriverMatch(matchId: number): Promise<void> {
   if (safeMatchId <= 0) return;
 
   if (isMockMode()) {
-    await waitNetwork();
-    cancelMockMatch(safeMatchId);
+    await waitRandom();
+    cancelMockFlowMatch(safeMatchId);
     return;
   }
 
