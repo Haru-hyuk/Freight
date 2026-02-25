@@ -131,7 +131,8 @@ export function mapDriverOrderCard(input: DriverOrderCardMapperInput): DriverOrd
   const { matchId, quoteId, status, createdAt, quote, scope, index, seed } = source;
   const mockDecoration = mode === "mock" ? selectMockFlowDriverOrderDecoration(seed, scope) : null;
 
-  const statusLabel = getDriverBadge(getDriverUiStateFromBackendStatus(status)).label;
+  const statusBadge = getDriverBadge(getDriverUiStateFromBackendStatus(status));
+  const statusLabel = statusBadge.label;
   const requestedAtText = formatDateTime(createdAt);
 
   const originAddress = toOptionalText(quote?.originAddress) ?? toOptionalText(mockDecoration?.fallbackOriginAddress);
@@ -158,6 +159,7 @@ export function mapDriverOrderCard(input: DriverOrderCardMapperInput): DriverOrd
     quoteId,
     status,
     statusLabel,
+    statusTone: statusBadge.tone,
     requestedAtText: requestedAtText || undefined,
     pickupTimeText: pickupTimeText || undefined,
     originAddress,

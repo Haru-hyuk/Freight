@@ -1,6 +1,38 @@
 # Mobile Changelog
 
 ## 2026-02-25
+- PR/브랜치: `refactor/driver-run-policy-strip`
+- 범주 태그: `[routing] [policy] [ui] [infra]`
+- 변경 요약:
+  - Driver run canonical 운영 원칙 문서를 추가하고 canonical 경로를 `/(driver)/run/[id]`로 명시함.
+  - legacy alias(`/(driver)/drive`, `/(driver)/matches/*`) 제거 기준을 문서에 고정함:
+    - 2주간 crash/404 0건, 내부 직접 이동 경로 run 수렴, 외부 deep link/문서 소비처 제거.
+  - 운행 목록 카드 스트립 색/상태 문구를 raw status 비교가 아니라 policy badge tone/label 기반으로 일원화함.
+  - debug 허브에 `Run Detail 샘플` 진입 버튼을 추가해 `/run/[id]` 상세 검증 경로를 확보함(샘플 없으면 `/run/current` fallback).
+- 영향 범위:
+  - 사용자 관점: 운행 카드 상태 표시 일관성 향상, 기존 플로우/동작 변화 없음.
+  - 개발자 관점: run canonical 정책과 alias 제거 기준이 문서화되어 라우팅 정리 기준이 명확해짐.
+- 파일 변경 목록:
+  - Modified:
+    - `src/features/matching/api/driver-orders-api.ts`
+    - `src/features/matching/api/driver-orders-mapper.ts`
+    - `src/widgets/driver-orders/DriverOrdersBoard.tsx`
+    - `src/pages/debug/DebugLogsPage.tsx`
+    - `app/(driver)/matches/[id].tsx`
+    - `app/(driver)/matches/me.tsx`
+    - `docs/CHANGELOG.md`
+  - Added:
+    - `docs/DRIVER_RUN_CANONICAL.md`
+  - Deleted:
+    - 없음
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+- 후속 작업 (다음 PR 후보):
+  - `driver-orders` 정렬 우선순위 계산의 uiState 중심 전환 검토
+  - alias route 삭제 시점에 deep link/QA 시나리오 동기화 체크리스트 추가
+
+## 2026-02-25
 - PR/브랜치: `fix/driver-drive-route-wiring`
 - 범주 태그: `[routing] [ui] [policy]`
 - 변경 요약:

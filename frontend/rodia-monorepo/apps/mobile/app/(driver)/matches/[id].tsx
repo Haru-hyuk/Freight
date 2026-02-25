@@ -30,6 +30,7 @@ export default function DriverMatchesLegacyDetailRoute() {
   const updatedAt = readFirst(params?.updatedAt);
   const accepted = readFirst(params?.accepted);
 
+  // Legacy alias: canonical driver run detail route is `/(driver)/run/[id]`.
   return (
     <Redirect
       href={{
