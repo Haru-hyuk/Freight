@@ -15,6 +15,7 @@ export type SanctionRow = {
   status: SanctionStatus;
 
   createdAt: string;
+  releasedAt?: string;
 
   reason: string;
   amount?: number;

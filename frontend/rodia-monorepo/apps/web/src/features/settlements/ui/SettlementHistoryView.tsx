@@ -25,8 +25,8 @@ export function SettlementHistoryView() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-semibold text-foreground">정산 승인 이력</h2>
-        <p className="mt-1 text-sm text-foreground">승인/거부 결과를 포함한 정산 승인 이력을 조회합니다.</p>
+        <h2 className="text-2xl font-semibold text-slate-900">정산 승인 이력</h2>
+        <p className="mt-1 text-sm text-slate-600">승인/거부 결과를 포함한 정산 승인 이력을 조회합니다.</p>
       </div>
 
       <SettlementHistoryTable rows={rows} loading={loading} />

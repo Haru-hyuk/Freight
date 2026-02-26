@@ -151,11 +151,11 @@ export function PricingManagementView() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 text-slate-900">
       <div className="space-y-6">
         <div>
-          <h2 className="text-2xl font-semibold text-foreground">금액 관리</h2>
-          <p className="mt-1 text-sm text-foreground">
+          <h2 className="text-3xl font-semibold text-slate-900">금액 관리</h2>
+          <p className="mt-1 text-base text-slate-600">
             화물 종류 고정 단가가 아니라 차량/운송/상하차 옵션 기준의 추가금과 할인률을 관리합니다.
           </p>
         </div>

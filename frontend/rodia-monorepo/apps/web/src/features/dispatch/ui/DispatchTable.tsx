@@ -110,13 +110,12 @@ export function DispatchTable({ rows, total, loading, onRefresh }: Props) {
                   <TableHead>운영 상태</TableHead>
                   <TableHead>정산 정보</TableHead>
                   <TableHead>리스크 / 알림</TableHead>
-                  <TableHead className="text-right">동작</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={8}>
+                    <TableCell colSpan={7}>
                       <div className="space-y-2 p-2">
                         <Skeleton className="h-8 w-full" />
                         <Skeleton className="h-8 w-full" />
@@ -126,13 +125,13 @@ export function DispatchTable({ rows, total, loading, onRefresh }: Props) {
                   </TableRow>
                 ) : rows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="py-10 text-center text-sm text-foreground">
+                    <TableCell colSpan={7} className="py-10 text-center text-sm text-foreground">
                       조회된 배차 건이 없습니다.
                     </TableCell>
                   </TableRow>
                 ) : (
                   rows.map((row) => (
-                    <TableRow key={row.matchId}>
+                    <TableRow key={row.matchId} className="cursor-pointer hover:bg-muted" onClick={() => setSelected(row)}>
                       <TableCell>
                         <div className="space-y-1">
                           <div className="font-medium text-foreground">{row.matchId}</div>
@@ -178,11 +177,6 @@ export function DispatchTable({ rows, total, loading, onRefresh }: Props) {
                           <DeviationBadge severity={row.deviationSeverity} />
                           <div className="text-xs text-foreground">미확인 알림 {row.unreadNotificationCount}건</div>
                         </div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button type="button" variant="secondary" onClick={() => setSelected(row)}>
-                          상세
-                        </Button>
                       </TableCell>
                     </TableRow>
                   ))
