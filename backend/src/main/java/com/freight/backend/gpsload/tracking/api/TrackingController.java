@@ -1,13 +1,13 @@
-package com.freight.backend.controller;
+package com.freight.backend.gpsload.tracking.api;
 
-import com.freight.backend.dto.tracking.GpsLogUpsertRequest;
-import com.freight.backend.dto.tracking.GpsLogUpsertResponse;
-import com.freight.backend.dto.tracking.TrackingResponse;
-import com.freight.backend.dto.tracking.TrackingShareStateResponse;
-import com.freight.backend.dto.tracking.TrackingShareUpdateRequest;
 import com.freight.backend.exception.CustomException;
 import com.freight.backend.exception.ErrorCode;
-import com.freight.backend.service.TrackingService;
+import com.freight.backend.gpsload.tracking.dto.GpsLogUpsertRequest;
+import com.freight.backend.gpsload.tracking.dto.GpsLogUpsertResponse;
+import com.freight.backend.gpsload.tracking.dto.TrackingResponse;
+import com.freight.backend.gpsload.tracking.dto.TrackingShareStateResponse;
+import com.freight.backend.gpsload.tracking.dto.TrackingShareUpdateRequest;
+import com.freight.backend.gpsload.tracking.service.TrackingService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;

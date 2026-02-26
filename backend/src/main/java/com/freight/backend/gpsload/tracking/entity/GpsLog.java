@@ -1,4 +1,4 @@
-package com.freight.backend.entity;
+package com.freight.backend.gpsload.tracking.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
