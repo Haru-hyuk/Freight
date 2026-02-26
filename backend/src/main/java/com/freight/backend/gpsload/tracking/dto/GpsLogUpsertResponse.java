@@ -1,4 +1,4 @@
-package com.freight.backend.dto.tracking;
+package com.freight.backend.gpsload.tracking.dto;
 
 import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
