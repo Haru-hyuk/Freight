@@ -246,7 +246,15 @@ function QuoteCreatePageInner() {
       ...draft,
       basePrice: submitBasePrice,
     };
+    
     const payload = buildQuoteCreateRequest(draftForSubmit);
+
+    // 안전장치: 생성 시점에는 truckId가 1 등 임의의 값으로 포함되면 FK 에러가 발생함
+    // 전송 직전에 payload에서 truckId 필드를 제거하여 선검증 완화 정책 준수
+    if (payload && typeof payload === 'object') {
+      delete (payload as any).truckId;
+    }
+
     const stops = Array.isArray(payload?.stops) ? payload.stops : [];
     const addressCandidates = [
       payload?.originAddress,

@@ -190,7 +190,12 @@ export function buildQuoteCreateRequest(draft: QuoteCreateDraft): QuoteCreateReq
     stops: buildStops(draft),
   };
 
-  if (truckId > 0) payload.truckId = truckId;
+if (truckId > 0) {
+    payload.truckId = truckId;
+  } else {
+    // 확실히 하기 위해 삭제
+    delete (payload as any).truckId;
+  }
   if (distanceKm > 0) payload.distanceKm = distanceKm;
   if (basePrice > 0) payload.basePrice = basePrice;
 
