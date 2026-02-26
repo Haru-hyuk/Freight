@@ -29,7 +29,6 @@ import { getShipperQuoteCreatePath, isMockMode as isApiMockMode } from "@/shared
 import {
   DEFAULT_LOAD_METHOD,
   DEFAULT_UNLOAD_METHOD,
-  normalizeWorkMethodValue,
   toActorOnlyWorkMethod,
 } from "@/features/quote/model/workMethod";
 import {
@@ -303,8 +302,8 @@ function sanitizeQuotePayload(payload: QuoteCreateRequestDto, strictDistance: bo
     cargoDesc: safeString(source.cargoDesc, ""),
     desiredPrice: Math.max(0, safeInt(source.desiredPrice, 0)),
     allowCombine: Boolean(source.allowCombine),
-    loadMethod: normalizeWorkMethodValue(source.loadMethod, DEFAULT_LOAD_METHOD),
-    unloadMethod: normalizeWorkMethodValue(source.unloadMethod, DEFAULT_UNLOAD_METHOD),
+    loadMethod: toActorOnlyWorkMethod(source.loadMethod, DEFAULT_LOAD_METHOD),
+    unloadMethod: toActorOnlyWorkMethod(source.unloadMethod, DEFAULT_UNLOAD_METHOD),
     checklistItems: sanitizeChecklistItems(source.checklistItems),
     stops: sanitizeStopsForRequest(source.stops),
   };
@@ -324,8 +323,8 @@ function isValidationStatusError(error: unknown): boolean {
 function toLegacyWorkMethodPayload(payload: QuoteCreateRequestDto): QuoteCreateRequestDto {
   return {
     ...payload,
-    loadMethod: toActorOnlyWorkMethod(payload?.loadMethod),
-    unloadMethod: toActorOnlyWorkMethod(payload?.unloadMethod),
+    loadMethod: toActorOnlyWorkMethod(payload?.loadMethod, DEFAULT_LOAD_METHOD),
+    unloadMethod: toActorOnlyWorkMethod(payload?.unloadMethod, DEFAULT_UNLOAD_METHOD),
   };
 }
 
