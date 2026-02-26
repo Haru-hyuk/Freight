@@ -22,6 +22,7 @@ import {
 import { createShipperMatch } from "@/features/matching/api";
 import { createShipperQuote } from "@/features/quote/api/quote-api";
 import { buildQuoteCreateRequest } from "@/features/quote/model/quoteCreateRequestMapper";
+import { isActorOnlyWorkMethod } from "@/features/quote/model/workMethod";
 import { getQuoteFlatCardStyle, QUOTE_PROGRESS_TOKENS } from "@/features/quote/ui/QuoteCreateUiPrimitives";
 import QuoteCreateStep1 from "@/features/quote/ui/QuoteCreateStep1";
 import QuoteCreateStep2 from "@/features/quote/ui/QuoteCreateStep2";
@@ -283,6 +284,11 @@ function QuoteCreatePageInner() {
 
     if (!isStrictPositiveNumber(payload?.basePrice)) {
       Alert.alert("견적 요청 실패", "기본 운임이 확정되지 않았어요. 차량과 옵션을 다시 확인해주세요.");
+      return;
+    }
+
+    if (!isActorOnlyWorkMethod(payload?.loadMethod) || !isActorOnlyWorkMethod(payload?.unloadMethod)) {
+      Alert.alert("견적 요청 실패", "상하차 방식이 확정되지 않았어요. 상하차 방식을 다시 선택해주세요.");
       return;
     }
 
