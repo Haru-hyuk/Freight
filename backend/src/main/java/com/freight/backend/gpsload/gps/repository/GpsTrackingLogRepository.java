@@ -1,6 +1,7 @@
 package com.freight.backend.gpsload.gps.repository;
 
 import com.freight.backend.gpsload.gps.entity.GpsLog;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -33,11 +34,14 @@ public interface GpsTrackingLogRepository extends JpaRepository<GpsLog, Long> {
     /**
      * 특정 매칭의 최근 N건 GPS 로그 조회
      */
-    @Query(value = "SELECT * FROM gps_logs WHERE match_id = :matchId " +
-                   "ORDER BY logged_at DESC LIMIT :limit", nativeQuery = true)
+    @Query(value = """
+            SELECT * FROM gps_logs
+            WHERE match_id = :matchId
+            ORDER BY logged_at DESC
+            """, nativeQuery = true)
     List<GpsLog> findRecentByMatchId(
             @Param("matchId") Long matchId,
-            @Param("limit") int limit);
+            Pageable pageable);
 
     /**
      * 특정 매칭의 이탈 로그만 조회
