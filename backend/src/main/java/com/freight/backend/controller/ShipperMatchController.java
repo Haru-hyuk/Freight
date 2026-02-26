@@ -4,6 +4,7 @@ import com.freight.backend.dto.match.MatchCreateRequest;
 import com.freight.backend.dto.match.MatchResponse;
 import com.freight.backend.service.MatchService;
 import com.freight.backend.util.SecurityUtils;
+import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,7 +39,7 @@ public class ShipperMatchController {
     @PostMapping
     public ResponseEntity<MatchResponse> createMatch(
             @AuthenticationPrincipal UserDetails userDetails,
-            @RequestBody MatchCreateRequest request
+            @Valid @RequestBody MatchCreateRequest request
     ) {
         Long shipperId = SecurityUtils.requireShipperId(userDetails);
         MatchResponse response = matchService.createMatch(shipperId, request.getQuoteId());

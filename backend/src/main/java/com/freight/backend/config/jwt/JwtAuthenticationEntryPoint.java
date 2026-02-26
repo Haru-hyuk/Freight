@@ -1,6 +1,7 @@
 package com.freight.backend.config.jwt;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.freight.backend.config.RequestIdFilter;
 import com.freight.backend.dto.common.ErrorResponse;
 import com.freight.backend.exception.ErrorCode;
 import jakarta.servlet.http.HttpServletRequest;
@@ -28,11 +29,21 @@ public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
                 .message("Authentication required.")
                 .path(request.getRequestURI())
                 .timestamp(LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME))
+                .requestId(resolveRequestId(request))
                 .build();
 
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
         response.getWriter().write(objectMapper.writeValueAsString(body));
+    }
+
+    private String resolveRequestId(HttpServletRequest request) {
+        Object attr = request.getAttribute(RequestIdFilter.REQUEST_ID_ATTR);
+        if (attr instanceof String requestId && !requestId.isBlank()) {
+            return requestId;
+        }
+        String header = request.getHeader(RequestIdFilter.REQUEST_ID_HEADER);
+        return (header == null || header.isBlank()) ? null : header;
     }
 }
