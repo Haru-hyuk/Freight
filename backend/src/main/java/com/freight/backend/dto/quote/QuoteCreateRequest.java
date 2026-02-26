@@ -19,34 +19,31 @@ public class QuoteCreateRequest {
     private Long truckId;
 
     @NotBlank(message = "출발지 주소는 필수입니다")
-    @Size(max = 255, message = "출발지 주소는 255자 이하이어야 합니다")
+    @Size(max = 255, message = "출발지 주소는 255자 이하여야 합니다")
     private String originAddress;
 
     @NotBlank(message = "도착지 주소는 필수입니다")
-    @Size(max = 255, message = "도착지 주소는 255자 이하이어야 합니다")
+    @Size(max = 255, message = "도착지 주소는 255자 이하여야 합니다")
     private String destinationAddress;
 
-    @NotNull(message = "출발지 위도는 필수입니다")
+    // Optional: if absent, backend geocoding resolves from address.
     @DecimalMin(value = "-90.0", message = "위도는 -90 이상이어야 합니다")
-    @DecimalMax(value = "90.0", message = "위도는 90 이하이어야 합니다")
+    @DecimalMax(value = "90.0", message = "위도는 90 이하여야 합니다")
     private Double originLat;
 
-    @NotNull(message = "출발지 경도는 필수입니다")
     @DecimalMin(value = "-180.0", message = "경도는 -180 이상이어야 합니다")
-    @DecimalMax(value = "180.0", message = "경도는 180 이하이어야 합니다")
+    @DecimalMax(value = "180.0", message = "경도는 180 이하여야 합니다")
     private Double originLng;
 
-    @NotNull(message = "도착지 위도는 필수입니다")
     @DecimalMin(value = "-90.0", message = "위도는 -90 이상이어야 합니다")
-    @DecimalMax(value = "90.0", message = "위도는 90 이하이어야 합니다")
+    @DecimalMax(value = "90.0", message = "위도는 90 이하여야 합니다")
     private Double destinationLat;
 
-    @NotNull(message = "도착지 경도는 필수입니다")
     @DecimalMin(value = "-180.0", message = "경도는 -180 이상이어야 합니다")
-    @DecimalMax(value = "180.0", message = "경도는 180 이하이어야 합니다")
+    @DecimalMax(value = "180.0", message = "경도는 180 이하여야 합니다")
     private Double destinationLng;
 
-    @NotNull(message = "거리는 필수입니다")
+    // Optional: backend can calculate route distance.
     @Min(value = 1, message = "거리는 1km 이상이어야 합니다")
     private Integer distanceKm;
 
@@ -60,20 +57,20 @@ public class QuoteCreateRequest {
     @NotBlank(message = "차량 종류는 필수입니다")
     private String vehicleType;
 
-    @NotBlank(message = "차량 적재함 타입은 필수입니다")
+    @NotBlank(message = "차량 적재 타입은 필수입니다")
     private String vehicleBodyType;
 
     @NotBlank(message = "화물명은 필수입니다")
-    @Size(max = 100, message = "화물명은 100자 이하이어야 합니다")
+    @Size(max = 100, message = "화물명은 100자 이하여야 합니다")
     private String cargoName;
 
     @NotBlank(message = "화물 종류는 필수입니다")
     private String cargoType;
 
-    @Size(max = 500, message = "화물 설명은 500자 이하이어야 합니다")
+    @Size(max = 500, message = "화물 설명은 500자 이하여야 합니다")
     private String cargoDesc;
 
-    @NotNull(message = "기본 운임은 필수입니다")
+    // Optional: backend pricing calculation fills this.
     @PositiveOrZero(message = "기본 운임은 0 이상이어야 합니다")
     private Integer basePrice;
 
@@ -85,10 +82,10 @@ public class QuoteCreateRequest {
 
     private Boolean allowCombine;
 
-    @NotBlank(message = "상차 방법은 필수입니다")
+    @NotBlank(message = "상차 방식은 필수입니다")
     private String loadMethod;
 
-    @NotBlank(message = "하차 방법은 필수입니다")
+    @NotBlank(message = "하차 방식은 필수입니다")
     private String unloadMethod;
 
     @Valid
