@@ -96,6 +96,7 @@ const QUOTE_STATUS: QuoteStatusApi[] = [
   "OPEN",
   "NEGOTIATING",
   "ASSIGNED",
+  "ACCEPTED",
   "PICKUP",
   "TRANSIT",
   "DROPOFF",
@@ -144,11 +145,13 @@ function pickFirstStringFrom(objects: AnyObj[], keys: string[], fallback = ""): 
 
 function parseStatus(input: unknown): QuoteStatusApi {
   const raw = safeString(input, "").toUpperCase();
+  if (!raw) return "UNKNOWN";
   if (raw === "READY" || raw === "REQUESTED") return "OPEN";
-  if (raw === "ACCEPTED") return "ASSIGNED";
+  if (raw === "ASSIGNED_CONFIRMED") return "ASSIGNED";
+  if (raw === "ACCEPTED") return "ACCEPTED";
   if (raw === "CANCELLED" || raw === "CANCEL" || raw === "CANCELED") return "CANCELED";
   if (raw === "COMPLETED" || raw === "DONE" || raw === "FINISHED") return "DROPOFF";
-  return (QUOTE_STATUS.find((status) => status === raw) ?? "OPEN") as QuoteStatusApi;
+  return QUOTE_STATUS.find((status) => status === raw) ?? raw;
 }
 
 function pickPayload(input: unknown): unknown {

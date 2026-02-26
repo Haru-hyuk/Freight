@@ -2,6 +2,35 @@
 
 ## 2026-02-26
 - PR/브랜치: `work/mobile-driver-api-align`
+- 범주 태그: `[policy] [api] [ui]`
+- 변경 요약:
+  - `src/entities/quote/model/quote.types.ts`에서 `QuoteStatusApi`를 확장해 `ACCEPTED` 및 미인식 상태 문자열을 보존할 수 있도록 정리함.
+  - `src/features/quote/api/quote-api.ts`와 `src/features/quote/model/useQuoteDetail.ts`에서 미인식 status를 `OPEN`으로 강등하던 fallback을 제거하고 원본 status를 유지하도록 변경함.
+  - `src/pages/shipper/quotes/QuoteDetailPage.tsx`에서 `quote.status`가 `OPEN/READY/UNKNOWN`인데 `match.status`가 더 진척된 경우 `effectiveStatus`로 승격해 정책 CTA/배지 계산에 반영함.
+- 영향 범위:
+  - 사용자 관점: Driver 수락/제안 이후 화주 상세에서 상태가 `OPEN`으로 회귀해 보이는 문제가 줄고, 정책 CTA가 실제 진행 상태에 맞게 표시됨.
+  - 개발자 관점: 상태 정규화 경로가 “강등” 중심에서 “보존 + 최소 승격”으로 바뀌어 상태 정책 디버깅이 쉬워짐.
+- 파일 변경 목록:
+  - 수정:
+    - `src/entities/quote/model/quote.types.ts`
+    - `src/features/quote/api/quote-api.ts`
+    - `src/features/quote/model/quoteActionMatrix.ts`
+    - `src/features/quote/model/useQuoteDetail.ts`
+    - `src/pages/shipper/quotes/QuoteDetailPage.tsx`
+    - `docs/CHANGELOG.md`
+  - 추가:
+    - 없음
+  - 삭제:
+    - 없음
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과
+- 미해결 항목 (이번 PR에서 실패/포기한 작업):
+  - 없음
+- 후속 작업 (다음 PR 후보):
+  - [ ] 실서버 status 토큰(`ASSIGNED_CONFIRMED` 등) 목록을 백엔드 계약과 맞춰 alias 확장 필요 여부 확인
+
+- PR/브랜치: `work/mobile-driver-api-align`
 - 범주 태그: `[api] [policy] [ui]`
 - 변경 요약:
   - `src/features/matching/model/useMatchDetail.ts`에서 Driver 상세 quote 조회를 `getShipperQuoteDetailByIdentifier` 대신 Driver 전용 summary 로더로 교체함.
