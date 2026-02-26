@@ -10,6 +10,7 @@ import { DEFAULT_LOAD_METHOD, DEFAULT_UNLOAD_METHOD, toActorOnlyWorkMethod } fro
 
 const VEHICLE_TYPE_BY_TON_INDEX: QuoteVehicleType[] = ["TON_1", "TON_2_5", "TON_5"];
 const VEHICLE_BODY_BY_TYPE_INDEX: QuoteVehicleBodyType[] = ["CARGO", "WING_BODY", "TOP_CAR"];
+type QuoteCreateRequestPayload = QuoteCreateRequestDto & { basePrice: number };
 
 function digitsOnly(input?: string) {
   return (input ?? "").replace(/[^\d]/g, "");
@@ -112,6 +113,13 @@ function resolveDesiredPrice(draft: QuoteCreateDraft) {
   return 0;
 }
 
+function resolveBasePrice(draft: QuoteCreateDraft) {
+  const extendedDraft = draft as QuoteCreateDraft & { basePrice?: unknown; desiredPrice?: unknown };
+  const raw = extendedDraft.basePrice ?? extendedDraft.desiredPrice ?? 0;
+  const safeRaw = typeof raw === "string" || typeof raw === "number" ? raw : 0;
+  return Math.max(0, toInt(safeRaw, 0));
+}
+
 function buildChecklistItems(draft: QuoteCreateDraft): QuoteCreateRequestDto["checklistItems"] {
   const selected = Array.isArray(draft?.selectedOpts) ? draft.selectedOpts : [];
   if (selected.length === 0) return [];
@@ -129,7 +137,7 @@ function buildChecklistItems(draft: QuoteCreateDraft): QuoteCreateRequestDto["ch
   });
 }
 
-export function buildQuoteCreateRequest(draft: QuoteCreateDraft): QuoteCreateRequestDto {
+export function buildQuoteCreateRequest(draft: QuoteCreateDraft): QuoteCreateRequestPayload {
   const originAddress = joinAddress(draft.startAddr, draft.startAddrDetail);
   const destinationAddress = joinAddress(draft.endAddr, draft.endAddrDetail);
 
@@ -149,6 +157,7 @@ export function buildQuoteCreateRequest(draft: QuoteCreateDraft): QuoteCreateReq
     cargoName: summarizeCargoName(draft),
     cargoType: mapCargoType(draft.isFrozen),
     cargoDesc: summarizeCargoDesc(draft),
+    basePrice: resolveBasePrice(draft),
     desiredPrice: resolveDesiredPrice(draft),
     allowCombine: !!draft.isPool,
     loadMethod: toActorOnlyWorkMethod(draft.loadMethod, DEFAULT_LOAD_METHOD),
