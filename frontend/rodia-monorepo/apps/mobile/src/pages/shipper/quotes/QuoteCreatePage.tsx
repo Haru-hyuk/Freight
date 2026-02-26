@@ -253,7 +253,12 @@ function QuoteCreatePageInner() {
   const submitQuoteRequest = async () => {
     if (isSubmitting) return;
 
-    const payload = buildQuoteCreateRequest(draft);
+    const submitBasePrice = Math.max(0, Math.trunc(Number(pricing?.basePrice ?? 0)));
+    const draftForSubmit: typeof draft & { basePrice?: number } = {
+      ...draft,
+      basePrice: submitBasePrice,
+    };
+    const payload = buildQuoteCreateRequest(draftForSubmit);
     const stops = Array.isArray(payload?.stops) ? payload.stops : [];
     const addressCandidates = [
       payload?.originAddress,
@@ -273,6 +278,11 @@ function QuoteCreatePageInner() {
 
     if (!isStrictPositiveNumber(payload?.distanceKm)) {
       Alert.alert("견적 요청 실패", "운행 거리가 확정되지 않았어요. 경로를 다시 확인해주세요.");
+      return;
+    }
+
+    if (!isStrictPositiveNumber(payload?.basePrice)) {
+      Alert.alert("견적 요청 실패", "기본 운임이 확정되지 않았어요. 차량과 옵션을 다시 확인해주세요.");
       return;
     }
 
