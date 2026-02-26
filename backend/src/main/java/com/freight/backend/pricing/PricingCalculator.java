@@ -5,14 +5,20 @@ import java.math.RoundingMode;
 import java.util.Set;
 import org.springframework.stereotype.Component;
 
+/**
+ * 운임 계산기
+ * - 기본요금 + 할증 계산
+ * - 플랫폼 수수료 적용
+ * - 합짐 할인 적용
+ */
 @Component
 public class PricingCalculator {
     private static final BigDecimal MULTIPLIER_ONE = BigDecimal.ONE;
     private static final BigDecimal FOUR = new BigDecimal("4");
     private static final BigDecimal SIX = new BigDecimal("6");
-    private static final BigDecimal PLATFORM_FEE_RATE = new BigDecimal("0.10");
-    private static final BigDecimal COMBINE_DISCOUNT_RATE = new BigDecimal("0.30");
-    private static final BigDecimal LOAD_UNLOAD_DRIVER_FEE = new BigDecimal("10000");
+    private static final BigDecimal PLATFORM_FEE_RATE = new BigDecimal("0.10");   // 10% 플랫폼 수수료
+    private static final BigDecimal COMBINE_DISCOUNT_RATE = new BigDecimal("0.30"); // 30% 합짐 할인
+    private static final BigDecimal LOAD_UNLOAD_DRIVER_FEE = new BigDecimal("10000"); // 기사 상하차 시 1만원 추가
 
     private final PricingRateTable rateTable;
 
@@ -50,6 +56,7 @@ public class PricingCalculator {
         BigDecimal totalMidWon = surchargeSummary.totalMinWon()
                 .add(surchargeSummary.totalMaxWon())
                 .divide(new BigDecimal("2"), RoundingMode.HALF_UP);
+        // PERT 가중평균: (min + 4*mid + max) / 6
         BigDecimal weightedWon = surchargeSummary.totalMinWon()
                 .add(totalMidWon.multiply(FOUR))
                 .add(surchargeSummary.totalMaxWon())
@@ -98,6 +105,7 @@ public class PricingCalculator {
         return rawDistanceKm;
     }
 
+    /** 할증 계산 (차종옵션 + 상하차방식) */
     private SurchargeSummary calculateSurcharges(
             Set<SurchargeOptionRule> options,
             BigDecimal baseTotalWon,

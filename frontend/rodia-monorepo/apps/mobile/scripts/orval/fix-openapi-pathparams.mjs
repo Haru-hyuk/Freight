@@ -1,11 +1,21 @@
 // apps/mobile/scripts/orval/fix-openapi-path-params.mjs
 import fs from "node:fs";
 import path from "node:path";
+import { config } from "dotenv";
+
+// 1) .env.local first, then .env (local should win)
+config({ path: path.resolve(process.cwd(), ".env.local") });
+config({ path: path.resolve(process.cwd(), ".env") });
+
+// Examples:
+// ORVAL_OPENAPI_SOURCE=http://localhost:8080/api-docs
+// ORVAL_OPENAPI_SOURCE=http://10.0.2.2:8080/api-docs
+// ORVAL_OPENAPI_SOURCE=http://15.x.x.x:8080/api-docs
 
 const DEFAULT_SOURCE =
-  process.env.ORVAL_OPENAPI_SOURCE ??
-  process.env.OPENAPI_SOURCE ??
-  "http://192.168.0.28:8080/api-docs";
+  process.env.ORVAL_OPENAPI_SOURCE ||
+  process.env.OPENAPI_SOURCE ||
+  "http://localhost:8080/api-docs";
 
 const CWD = process.cwd(); // expected: apps/mobile
 const ORVAL_DIR = path.resolve(CWD, ".orval");

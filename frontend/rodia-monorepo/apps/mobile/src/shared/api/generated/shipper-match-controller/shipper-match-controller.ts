@@ -24,7 +24,7 @@ import { customInstance } from '../../orval/custom-instance';
       );
     }
   export const getMatch = (
-    matchId: string,
+    matchId: number,
  ) => {
       return customInstance<Blob>(
       {url: `/api/shipper/matches/${matchId}`, method: 'GET',
@@ -33,7 +33,7 @@ import { customInstance } from '../../orval/custom-instance';
       );
     }
   export const cancelMatch = (
-    matchId: string,
+    matchId: number,
  ) => {
       return customInstance<void>(
       {url: `/api/shipper/matches/${matchId}`, method: 'DELETE'

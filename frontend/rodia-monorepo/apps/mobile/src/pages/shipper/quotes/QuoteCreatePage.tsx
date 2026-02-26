@@ -5,24 +5,24 @@ import { useNavigation, type NavigationProp, type ParamListBase } from "@react-n
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
 import { safeNumber, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
 import type { AppTheme } from "@/shared/theme/types";
 import { AppButton } from "@/shared/ui/kit/AppButton";
 import { AppText } from "@/shared/ui/kit/AppText";
 import { PageScaffold } from "@/widgets/layout/PageScaffold";
-import { estimateRouteKm, isValidCoord, type LatLng } from "@/shared/lib/geo/distance";
 
 import {
   computeQuotePricing,
-  createInitialQuoteCreateDraft,
   formatKrw,
   QuoteCreateDraftProvider,
-  type QuoteCreateDraft,
   useQuoteCreateDraft,
 } from "@/features/quote/model/quoteCreateDraft";
+import { createShipperMatch } from "@/features/matching/api";
 import { createShipperQuote } from "@/features/quote/api/quote-api";
 import { buildQuoteCreateRequest } from "@/features/quote/model/quoteCreateRequestMapper";
+import { isActorOnlyWorkMethod } from "@/features/quote/model/workMethod";
 import { getQuoteFlatCardStyle, QUOTE_PROGRESS_TOKENS } from "@/features/quote/ui/QuoteCreateUiPrimitives";
 import QuoteCreateStep1 from "@/features/quote/ui/QuoteCreateStep1";
 import QuoteCreateStep2 from "@/features/quote/ui/QuoteCreateStep2";
@@ -33,148 +33,6 @@ const QUOTE_STEP_ITEMS = [
   { step: 2 as const, label: "화물 정보" },
   { step: 3 as const, label: "차량/옵션" },
 ];
-
-type DevMockPreset = {
-  id: "route" | "cargo" | "option";
-  label: string;
-  step: 1 | 2 | 3;
-  draft: QuoteCreateDraft;
-};
-
-const DEV_MOCK_LABELS = ["경로", "화물", "옵션"] as const;
-
-function createDevMockPresets(now: Date): DevMockPreset[] {
-  const date = new Date(now);
-  const time = new Date(now);
-  time.setHours(10, 30, 0, 0);
-
-  const common: QuoteCreateDraft = {
-    ...createInitialQuoteCreateDraft(),
-    senderName: "테스트 발송인",
-    senderPhone: "010-1234-5678",
-    receiverName: "테스트 수취인",
-    receiverPhone: "010-8765-4321",
-    startAddr: "서울 강남구 테헤란로 427",
-    startAddrDetail: "15층 물류팀",
-    endAddr: "경기 성남시 분당구 판교역로 166",
-    endAddrDetail: "1층 하차장",
-    loadMethod: "수작업",
-    unloadMethod: "지게차",
-    date,
-    time,
-    truckId: 1,
-    originLat: 37.5066,
-    originLng: 127.0543,
-    destinationLat: 37.3944,
-    destinationLng: 127.1112,
-    distanceKm: 23,
-  };
-
-  return [
-    {
-      id: "route",
-      label: "경로/입력 기본 점검",
-      step: 1,
-      draft: {
-        ...common,
-        waypoints: [{ id: 1, name: "", phone: "", addr: "서울 송파구 올림픽로 300", detail: "" }],
-        cargoList: [
-          {
-            id: 1,
-            itemCategory: "BOX",
-            type: "전자부품 박스",
-            quantity: "3",
-            lengthCm: "48",
-            widthCm: "38",
-            heightCm: "34",
-            weight: "45",
-            dropOffKey: "END",
-          },
-        ],
-        budget: "",
-        selectedOpts: [],
-      },
-    },
-    {
-      id: "cargo",
-      label: "화물/경유지 다건 점검",
-      step: 2,
-      draft: {
-        ...common,
-        waypoints: [
-          { id: 1, name: "경유 담당자1", phone: "010-5555-6666", addr: "서울 송파구 올림픽로 300", detail: "B1 집하장" },
-          { id: 2, name: "경유 담당자2", phone: "010-3333-9999", addr: "경기 하남시 미사강변대로 100", detail: "2층 출고장" },
-        ],
-        cargoList: [
-          {
-            id: 1,
-            itemCategory: "BOX",
-            type: "전자부품 박스",
-            quantity: "12",
-            lengthCm: "48",
-            widthCm: "38",
-            heightCm: "34",
-            weight: "180",
-            dropOffKey: "WP:1",
-          },
-          {
-            id: 2,
-            itemCategory: "PALLET",
-            type: "파렛트 자재",
-            quantity: "2",
-            lengthCm: "110",
-            widthCm: "110",
-            heightCm: "120",
-            weight: "420",
-            dropOffKey: "END",
-          },
-          {
-            id: 3,
-            itemCategory: "FURNITURE",
-            type: "3인소파",
-            quantity: "1",
-            lengthCm: "200",
-            widthCm: "90",
-            heightCm: "90",
-            weight: "80",
-            dropOffKey: "WP:2",
-          },
-        ],
-        budget: "180000",
-        noteToDriver: "2단계 UI 점검용 목업입니다.",
-      },
-    },
-    {
-      id: "option",
-      label: "차량/옵션/예산 점검",
-      step: 3,
-      draft: {
-        ...common,
-        waypoints: [{ id: 1, name: "경유 담당자", phone: "010-2222-4444", addr: "서울 동작구 노량진로 10", detail: "1층" }],
-        cargoList: [
-          {
-            id: 1,
-            itemCategory: "PALLET",
-            type: "냉장 식자재",
-            quantity: "4",
-            lengthCm: "110",
-            widthCm: "110",
-            heightCm: "120",
-            weight: "900",
-            dropOffKey: "END",
-          },
-        ],
-        tonIdx: 1,
-        typeIdx: 1,
-        isFrozen: true,
-        isPool: false,
-        selectedOpts: ["caution", "waterproof"],
-        budget: "220000",
-        noteToDriver: "3단계 옵션/AI UI 점검용 목업입니다.",
-      },
-    },
-  ];
-}
 
 const useStyles = createThemedStyles((theme: AppTheme) => {
   const c = theme.colors;
@@ -228,18 +86,6 @@ const useStyles = createThemedStyles((theme: AppTheme) => {
     stepNum: { fontSize: 12, fontWeight: '700', color: c.textMuted },
     stepLabel: { fontSize: 11, fontWeight: '600', color: c.textMuted },
     stepLabelActive: { color: c.brandPrimary, fontWeight: '700' },
-    devAutoFillBtn: {
-      minHeight: 36,
-      minWidth: 68,
-      paddingHorizontal: 10,
-    },
-    devAppliedLabel: {
-      fontSize: 11,
-      fontWeight: "700",
-      color: c.textMuted,
-      marginBottom: spacing * 2,
-      paddingHorizontal: spacing * 5,
-    },
 
     // 하단 바 (Bottom Bar)
     bottomBar: {
@@ -298,35 +144,39 @@ const useStyles = createThemedStyles((theme: AppTheme) => {
   });
 });
 
-function isDistanceDebugEnabled(): boolean {
-  const devFlag = typeof __DEV__ !== "undefined" && __DEV__;
-
-  let envFlag = false;
-  try {
-    const v = String((globalThis as any)?.process?.env?.EXPO_PUBLIC_DEBUG_LOGS ?? "").trim().toLowerCase();
-    envFlag = v === "1" || v === "true" || v === "yes" || v === "on";
-  } catch {
-    envFlag = false;
-  }
-
-  return devFlag || envFlag;
-}
-
-function quoteDistanceDebugLog(payload: {
-  wasAutoCalculated: boolean;
-  computedDistanceKm: number;
-  pointsCount: number;
-}) {
-  if (!isDistanceDebugEnabled()) return;
-  // eslint-disable-next-line no-console
-  console.log("[quote-create] distance", payload);
-}
-
 function hasBrokenAddressText(value?: string) {
   const v = String(value ?? "").trim();
   if (!v) return false;
   if (v.includes("\uFFFD")) return true;
   return /\?{2,}/.test(v);
+}
+
+function toFiniteNumber(value: unknown): number | null {
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(parsed)) return null;
+  return parsed;
+}
+
+function isResolvedLatLng(lat: unknown, lng: unknown): boolean {
+  const safeLat = toFiniteNumber(lat);
+  const safeLng = toFiniteNumber(lng);
+  if (safeLat === null || safeLng === null) return false;
+  if (Math.abs(safeLat) <= 0.001 || Math.abs(safeLng) <= 0.001) return false;
+  if (Math.abs(safeLat) > 90) return false;
+  if (Math.abs(safeLng) > 180) return false;
+  return true;
+}
+
+function isStrictPositiveNumber(value: unknown): boolean {
+  const parsed = toFiniteNumber(value);
+  if (parsed === null) return false;
+  return parsed > 0;
+}
+
+function isNonNegativeNumber(value: unknown): boolean {
+  const parsed = toFiniteNumber(value);
+  if (parsed === null) return false;
+  return parsed >= 0;
 }
 
 function QuoteCreatePageInner() {
@@ -336,14 +186,13 @@ function QuoteCreatePageInner() {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const insets = useSafeAreaInsets();
 
-  const { draft, patchDraft } = useQuoteCreateDraft();
+  const { draft } = useQuoteCreateDraft();
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [bottomBarHeight, setBottomBarHeight] = useState(100);
   const [isSubmitDoneOpen, setIsSubmitDoneOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [devMockCursor, setDevMockCursor] = useState(0);
-  const [appliedMockLabel, setAppliedMockLabel] = useState("");
+  const [createdQuoteIdentifier, setCreatedQuoteIdentifier] = useState("");
 
   const pricing = useMemo(() => computeQuotePricing(draft), [draft]);
 
@@ -381,19 +230,23 @@ function QuoteCreatePageInner() {
     else router.replace("/(shipper)/quotes");
   };
 
-  const readErrorMessage = (error: unknown) => {
-    const fallback = "네트워크 또는 요청 값을 확인해주세요.";
-    if (!error || typeof error !== "object") return fallback;
+  const resolveCreatedQuoteIdentifier = (input: unknown): string => {
+    if (!input || typeof input !== "object") return "";
+    const source = input as { quotePublicId?: unknown; quoteId?: unknown };
+    const quotePublicId = typeof source?.quotePublicId === "string" ? source.quotePublicId.trim() : "";
+    if (quotePublicId) return quotePublicId;
 
-    const e = error as {
-      response?: { data?: { message?: string; error?: string } };
-      message?: string;
-    };
+    const quoteId = Number(source?.quoteId);
+    if (Number.isFinite(quoteId) && quoteId > 0) return String(Math.trunc(quoteId));
+    return "";
+  };
 
-    const serverMessage = e.response?.data?.message ?? e.response?.data?.error;
-    if (typeof serverMessage === "string" && serverMessage.trim()) return serverMessage.trim();
-    if (typeof e.message === "string" && e.message.trim()) return e.message.trim();
-    return fallback;
+  const resolveCreatedQuoteId = (input: unknown): number => {
+    if (!input || typeof input !== "object") return 0;
+    const source = input as { quoteId?: unknown };
+    const quoteId = Number(source?.quoteId);
+    if (!Number.isFinite(quoteId) || quoteId <= 0) return 0;
+    return Math.trunc(quoteId);
   };
 
   const handleNext = async () => {
@@ -411,13 +264,53 @@ function QuoteCreatePageInner() {
   const submitQuoteRequest = async () => {
     if (isSubmitting) return;
 
-    const payload = buildQuoteCreateRequest(draft);
+    const submitBasePrice = Math.max(0, Math.trunc(Number(pricing?.basePrice ?? 0)));
+    const draftForSubmit: typeof draft & { basePrice?: number } = {
+      ...draft,
+      basePrice: submitBasePrice,
+    };
+    const payload = buildQuoteCreateRequest(draftForSubmit);
     const stops = Array.isArray(payload?.stops) ? payload.stops : [];
     const addressCandidates = [
       payload?.originAddress,
       payload?.destinationAddress,
       ...stops.map((stop) => (stop as { address?: unknown })?.address),
     ];
+
+    if (!isResolvedLatLng(payload?.originLat, payload?.originLng)) {
+      Alert.alert("견적 요청 실패", "출발지 위치가 확정되지 않았어요. 주소 검색 결과에서 선택해 위치를 확정해 주세요.");
+      return;
+    }
+
+    if (!isResolvedLatLng(payload?.destinationLat, payload?.destinationLng)) {
+      Alert.alert("견적 요청 실패", "도착지 위치가 확정되지 않았어요. 주소 검색 결과에서 선택해 위치를 확정해 주세요.");
+      return;
+    }
+
+    if (!isStrictPositiveNumber(payload?.distanceKm)) {
+      Alert.alert("견적 요청 실패", "운행 거리가 확정되지 않았어요. 경로를 다시 확인해주세요.");
+      return;
+    }
+
+    if (!isStrictPositiveNumber(payload?.basePrice)) {
+      Alert.alert("견적 요청 실패", "기본 운임이 확정되지 않았어요. 차량과 옵션을 다시 확인해주세요.");
+      return;
+    }
+
+    if (!isActorOnlyWorkMethod(payload?.loadMethod) || !isActorOnlyWorkMethod(payload?.unloadMethod)) {
+      Alert.alert("견적 요청 실패", "상하차 방식이 확정되지 않았어요. 상하차 방식을 다시 선택해주세요.");
+      return;
+    }
+
+    if (!isStrictPositiveNumber(payload?.weightKg)) {
+      Alert.alert("견적 요청 실패", "화물 중량이 확정되지 않았어요. 화물 정보를 확인해주세요.");
+      return;
+    }
+
+    if (!isNonNegativeNumber(payload?.volumeCbm)) {
+      Alert.alert("견적 요청 실패", "화물 부피 값이 유효하지 않아요. 화물 정보를 확인해주세요.");
+      return;
+    }
 
     if (addressCandidates.some((address) => hasBrokenAddressText(String(address ?? "")))) {
       Alert.alert("견적 요청 실패", "주소 문자열이 깨져 있어요. 주소를 다시 선택해주세요.");
@@ -426,34 +319,60 @@ function QuoteCreatePageInner() {
 
     try {
       setIsSubmitting(true);
-      await createShipperQuote(payload);
+      setCreatedQuoteIdentifier("");
+      const response = await createShipperQuote(payload);
+      const nextQuoteIdentifier = resolveCreatedQuoteIdentifier(response);
+      const nextQuoteId =
+        resolveCreatedQuoteId(response) ||
+        (() => {
+          const parsed = Number(nextQuoteIdentifier);
+          return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : 0;
+        })();
+      setCreatedQuoteIdentifier(nextQuoteIdentifier);
+
+      if (nextQuoteId > 0) {
+        try {
+          await createShipperMatch(nextQuoteId);
+        } catch (error) {
+          if (__DEV__) {
+            console.warn("[quote-create] auto-create-match failed", error);
+          }
+        }
+      }
+
+      if (nextQuoteIdentifier) {
+        setIsSubmitDoneOpen(false);
+        router.replace({ pathname: "/(shipper)/quotes/[id]", params: { id: nextQuoteIdentifier } });
+        return;
+      }
 
       setIsSubmitDoneOpen(true);
     } catch (error) {
-      Alert.alert("견적 요청 실패", readErrorMessage(error));
+      Alert.alert("견적 요청 실패", readApiErrorMessage(error));
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const applyDevAutoFill = () => {
-    const presets = createDevMockPresets(new Date());
-    const index = devMockCursor % presets.length;
-    const selected = presets[index];
-
-    patchDraft(selected.draft);
-    setStep(selected.step);
-    setAppliedMockLabel(selected.label);
-    setDevMockCursor((prev) => (prev + 1) % presets.length);
+  const goToCreatedQuoteDetail = () => {
+    const safeIdentifier = String(createdQuoteIdentifier ?? "").trim();
+    setIsSubmitDoneOpen(false);
+    if (!safeIdentifier) {
+      router.replace("/(shipper)/quotes");
+      return;
+    }
+    router.replace({ pathname: "/(shipper)/quotes/[id]", params: { id: safeIdentifier } });
   };
 
   const goToQuoteList = () => {
     setIsSubmitDoneOpen(false);
+    setCreatedQuoteIdentifier("");
     router.replace("/(shipper)/quotes");
   };
 
   const goToHome = () => {
     setIsSubmitDoneOpen(false);
+    setCreatedQuoteIdentifier("");
     router.replace("/(shipper)/home"); // 홈 경로로 이동 (가정)
   };
 
@@ -469,9 +388,11 @@ function QuoteCreatePageInner() {
       return formatKrw(pricing.finalPrice || pricing.basePrice);
   };
 
+  const startAddrLabel = String(draft?.startAddr ?? "").trim().split(/\s+/).filter(Boolean)[0] ?? "-";
+  const endAddrLabel = String(draft?.endAddr ?? "").trim().split(/\s+/).filter(Boolean)[0] ?? "-";
+
   const stepProgress =
     QUOTE_STEP_ITEMS.length > 1 ? ((step - 1) / (QUOTE_STEP_ITEMS.length - 1)) * 100 : 0;
-  const nextDevMockLabel = DEV_MOCK_LABELS[devMockCursor] ?? DEV_MOCK_LABELS[0];
 
   const bottomBar = (
     <View
@@ -511,16 +432,6 @@ function QuoteCreatePageInner() {
   return (
     <PageScaffold
       title="견적 요청"
-      headerRight={
-        <AppButton
-          title={`${devMockCursor + 1}/3`}
-          size="sm"
-          variant="secondary"
-          style={styles.devAutoFillBtn}
-          onPress={applyDevAutoFill}
-          accessibilityLabel={`개발용 목업 자동 입력 (${nextDevMockLabel})`}
-        />
-      }
       onPressBack={goBack}
       backgroundColor={theme.colors.bgMain}
       scroll={false}
@@ -553,7 +464,6 @@ function QuoteCreatePageInner() {
               })}
           </View>
       </View>
-      {appliedMockLabel ? <AppText style={styles.devAppliedLabel}>목업 적용: {appliedMockLabel}</AppText> : null}
 
       {/* Content Area */}
       {step === 1 && <QuoteCreateStep1 />}
@@ -582,13 +492,14 @@ function QuoteCreatePageInner() {
                     <View style={styles.infoRow}>
                         <AppText style={styles.infoLabel}>운송 구간</AppText>
                         <AppText style={[styles.infoValue, { maxWidth: "70%" }]} numberOfLines={1}>
-                            {draft.startAddr.split(" ")[0]} <Ionicons name="arrow-forward" size={10}/> {draft.endAddr.split(" ")[0]}
+                            {startAddrLabel} <Ionicons name="arrow-forward" size={10}/> {endAddrLabel}
                         </AppText>
                     </View>
                 </View>
 
                 <View style={styles.modalBtnGroup}>
-                    <AppButton title="내역 확인하기" size="lg" style={styles.modalBtn} onPress={goToQuoteList} />
+                    <AppButton title="견적 상세 보기" size="lg" style={styles.modalBtn} onPress={goToCreatedQuoteDetail} />
+                    <AppButton title="내역 확인하기" variant="secondary" size="lg" style={styles.modalBtnSecondary} onPress={goToQuoteList} />
                     <AppButton title="홈으로" variant="secondary" size="lg" style={styles.modalBtnSecondary} onPress={goToHome} />
                 </View>
             </View>

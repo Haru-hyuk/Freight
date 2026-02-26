@@ -7,6 +7,7 @@ import com.freight.backend.dto.quote.QuoteListResponse;
 import com.freight.backend.dto.quote.QuoteUpdateRequest;
 import com.freight.backend.dto.quote.QuoteValidationResponse;
 import com.freight.backend.service.QuoteService;
+import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -27,12 +28,12 @@ public class QuoteController {
     private final QuoteService quoteService;
 
     @PostMapping
-    public ResponseEntity<QuoteCreateResponse> createQuote(@RequestBody QuoteCreateRequest req) {
+    public ResponseEntity<QuoteCreateResponse> createQuote(@Valid @RequestBody QuoteCreateRequest req) {
         return ResponseEntity.ok(quoteService.createQuote(req));
     }
 
     @PostMapping("/validate")
-    public ResponseEntity<QuoteValidationResponse> validateQuote(@RequestBody QuoteCreateRequest req) {
+    public ResponseEntity<QuoteValidationResponse> validateQuote(@Valid @RequestBody QuoteCreateRequest req) {
         return ResponseEntity.ok(quoteService.validateQuote(req));
     }
 
@@ -49,7 +50,7 @@ public class QuoteController {
     @PutMapping("/{quoteIdentifier}")
     public ResponseEntity<QuoteDetailResponse> updateQuote(
             @PathVariable String quoteIdentifier,
-            @RequestBody QuoteUpdateRequest req
+            @Valid @RequestBody QuoteUpdateRequest req
     ) {
         return ResponseEntity.ok(quoteService.updateQuote(quoteIdentifier, req));
     }

@@ -1,0 +1,74 @@
+package com.freight.backend.controller;
+
+import com.freight.backend.dto.admin.AdminUserStatusUpdateRequest;
+import com.freight.backend.exception.CustomException;
+import com.freight.backend.exception.ErrorCode;
+import com.freight.backend.service.AdminOpsService;
+import java.util.Map;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequiredArgsConstructor
+@RequestMapping("/api/admin")
+public class AdminOpsController {
+
+    private final AdminOpsService adminOpsService;
+
+    @GetMapping("/dashboard")
+    public ResponseEntity<Map<String, Object>> dashboard(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestParam(required = false, defaultValue = "7d") String range
+    ) {
+        requireAdmin(userDetails);
+        return ResponseEntity.ok(adminOpsService.getDashboard(range));
+    }
+
+    @GetMapping("/users")
+    public ResponseEntity<Map<String, Object>> users(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestParam(required = false) String role,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
+    ) {
+        requireAdmin(userDetails);
+        return ResponseEntity.ok(adminOpsService.getUsers(role, status, q, page, size));
+    }
+
+    @GetMapping("/users/{userId}")
+    public ResponseEntity<Map<String, Object>> userDetail(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable String userId
+    ) {
+        requireAdmin(userDetails);
+        return ResponseEntity.ok(adminOpsService.getUserDetail(userId));
+    }
+
+    @PatchMapping("/users/{userId}/status")
+    public ResponseEntity<Map<String, Object>> updateUserStatus(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable String userId,
+            @RequestBody AdminUserStatusUpdateRequest request
+    ) {
+        requireAdmin(userDetails);
+        return ResponseEntity.ok(adminOpsService.updateUserStatus(userId, request.getStatus()));
+    }
+
+    private static void requireAdmin(UserDetails userDetails) {
+        if (userDetails == null || !userDetails.getAuthorities().contains(new SimpleGrantedAuthority("ROLE_ADMIN"))) {
+            throw new CustomException(ErrorCode.AUTH_FORBIDDEN);
+        }
+    }
+}

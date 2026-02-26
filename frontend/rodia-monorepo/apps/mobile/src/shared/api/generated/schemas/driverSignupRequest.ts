@@ -6,12 +6,23 @@
  */
 
 export interface DriverSignupRequest {
-  email?: string;
-  password?: string;
-  name?: string;
-  phone?: string;
-  address?: string;
+  email: string;
+  /**
+   * @minLength 8
+   * @maxLength 100
+   * @pattern ^(?=.*[a-zA-Z])(?=.*\d).*$
+   */
+  password: string;
+  /**
+   * @minLength 2
+   * @maxLength 50
+   */
+  name: string;
+  /** @pattern ^01[0-9]-?\d{3,4}-?\d{4}$ */
+  phone: string;
+  address: string;
   addressDetail?: string;
-  bankName?: string;
-  bankAccount?: string;
+  bankName: string;
+  /** @pattern ^\d{10,14}$ */
+  bankAccount: string;
 }

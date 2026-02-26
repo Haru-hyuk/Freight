@@ -23,6 +23,10 @@ type SignUpParams = {
   password: string;
   name: string;
   phone: string;
+  address?: string;
+  addressDetail?: string;
+  bankName?: string;
+  bankAccount?: string;
   role: AuthUserRole;
   companyName?: string;
   ownerName?: string;
@@ -117,6 +121,10 @@ function isValidOpenDate(v: string): boolean {
   return date.getFullYear() === y && date.getMonth() === m - 1 && date.getDate() === d;
 }
 
+function isPositiveSignupId(v: unknown): v is number {
+  return typeof v === "number" && Number.isFinite(v) && v > 0;
+}
+
 function readMockAuthMode(): boolean {
   return isMockAuthEnabled();
 }
@@ -151,27 +159,33 @@ function buildFallbackUser(role: AuthUserRole, email: string): User {
 
 function buildDriverSignupPayload(params: SignUpParams): DriverSignupParams {
   const safeName = safeTrim(params?.name);
-  const safePhone = safeTrim(params?.phone);
+  const safePhone = toPhoneHyphen(params?.phone);
+  const safeAddress = safeTrim(params?.address);
+  const safeAddressDetail = safeTrim(params?.addressDetail);
+  const safeBankName = safeTrim(params?.bankName);
+  const safeBankAccount = safeTrim(params?.bankAccount);
 
   return {
     email: safeTrim(params?.email),
     password: safeTrim(params?.password),
     name: safeName,
     phone: safePhone,
-    address: "N/A",
-    addressDetail: "-",
-    bankName: "N/A",
-    bankAccount: "000-000-0000",
+    address: safeAddress,
+    addressDetail: safeAddressDetail,
+    bankName: safeBankName,
+    bankAccount: safeBankAccount,
   };
 }
 
 function buildShipperSignupPayload(params: SignUpParams): ShipperSignupParams {
   const safeName = safeTrim(params?.name);
   const safePhone = toPhoneHyphen(params?.phone);
-  const safeBizPhone = toPhoneHyphen(params?.bizPhone || safePhone);
+  const safeBizPhone = toPhoneHyphen(params?.bizPhone);
   const bizRegNo = onlyDigits(params?.bizRegNo);
-  const companyName = safeTrim(params?.companyName) || (safeName ? `${safeName} 화주` : "");
-  const ownerName = safeTrim(params?.ownerName) || safeName;
+  const companyName = safeTrim(params?.companyName);
+  const ownerName = safeTrim(params?.ownerName);
+  const safeAddress = safeTrim(params?.address);
+  const safeAddressDetail = safeTrim(params?.addressDetail);
   const openDate = normalizeOpenDate(params?.openDate);
 
   return {
@@ -180,8 +194,8 @@ function buildShipperSignupPayload(params: SignUpParams): ShipperSignupParams {
     name: safeName,
     companyName,
     phone: safePhone,
-    address: "서울특별시 강남구 테헤란로 1",
-    addressDetail: "101호",
+    address: safeAddress,
+    addressDetail: safeAddressDetail,
     bizRegNo,
     bizPhone: safeBizPhone,
     openDate,
@@ -193,7 +207,7 @@ function toSignupErrorMessage(errorCode?: "INVALID_INPUT_VALUE" | "UNKNOWN", mes
   const safeMessage = safeTrim(message);
   if (safeMessage) return safeMessage;
   if (errorCode === "INVALID_INPUT_VALUE") {
-    return "Please check signup inputs.";
+    return "필수 입력값 누락";
   }
   return "Signup failed. Please try again.";
 }
@@ -342,10 +356,12 @@ async function signUpImpl(params: SignUpParams) {
   const password = safeTrim(params?.password);
   const name = safeTrim(params?.name);
   const phone = safeTrim(params?.phone);
+  const address = safeTrim(params?.address);
+  const addressDetail = safeTrim(params?.addressDetail);
   const role = params?.role;
 
-  if (!email || !password || !name || !phone || (role !== "shipper" && role !== "driver")) {
-    setState({ isBusy: false, errorMessage: "Please check signup inputs." });
+  if (!email || !password || !name || !phone || !address || !addressDetail || (role !== "shipper" && role !== "driver")) {
+    setState({ isBusy: false, errorMessage: "필수 입력값 누락" });
     return false;
   }
 
@@ -358,8 +374,8 @@ async function signUpImpl(params: SignUpParams) {
       const openDate = normalizeOpenDate(params?.openDate);
       const phoneDigits = onlyDigits(phone);
 
-      if (!companyName || !ownerName) {
-        setState({ isBusy: false, errorMessage: "상호명과 대표자명을 입력해 주세요." });
+      if (!companyName || !ownerName || !bizRegNo || !bizPhoneDigits || !openDate) {
+        setState({ isBusy: false, errorMessage: "필수 입력값 누락" });
         return false;
       }
 
@@ -383,6 +399,8 @@ async function signUpImpl(params: SignUpParams) {
         password,
         name,
         phone,
+        address,
+        addressDetail,
         role,
         companyName,
         ownerName,
@@ -391,27 +409,63 @@ async function signUpImpl(params: SignUpParams) {
         openDate,
       });
       const res = await authApi.shipperSignup(payload);
-      const shipperId = typeof res?.shipperId === "number" ? res.shipperId : null;
-      if (shipperId && shipperId > 0) {
+      const shipperId = res?.shipperId;
+      if (isPositiveSignupId(shipperId)) {
         await verificationStorage.setPendingRole(role);
         setState({ pendingVerificationRole: role });
         return loginAfterSignupOrContinue({ email, password, role });
       }
 
-      setState({ isBusy: false, errorMessage: toSignupErrorMessage(res?.errorCode, res?.message) });
+      setState({
+        isBusy: false,
+        errorMessage: toSignupErrorMessage(
+          res?.errorCode,
+          res?.message ?? "회원가입 응답에서 화주 식별자(shipperId)를 확인하지 못했습니다."
+        ),
+      });
       return false;
     }
 
-    const payload = buildDriverSignupPayload({ email, password, name, phone, role });
+    const bankName = safeTrim(params?.bankName);
+    const bankAccount = safeTrim(params?.bankAccount);
+    const phoneDigits = onlyDigits(phone);
+
+    if (!bankName || !bankAccount) {
+      setState({ isBusy: false, errorMessage: "필수 입력값 누락" });
+      return false;
+    }
+
+    if (phoneDigits.length < 10) {
+      setState({ isBusy: false, errorMessage: "전화번호는 숫자 10자리 이상으로 입력해 주세요." });
+      return false;
+    }
+
+    const payload = buildDriverSignupPayload({
+      email,
+      password,
+      name,
+      phone,
+      address,
+      addressDetail,
+      bankName,
+      bankAccount,
+      role,
+    });
     const res = await authApi.driverSignup(payload);
-    const driverId = typeof res?.driverId === "number" ? res.driverId : null;
-    if (driverId && driverId > 0) {
+    const driverId = res?.driverId;
+    if (isPositiveSignupId(driverId)) {
       await verificationStorage.setPendingRole(role);
       setState({ pendingVerificationRole: role });
       return loginAfterSignupOrContinue({ email, password, role });
     }
 
-    setState({ isBusy: false, errorMessage: toSignupErrorMessage(res?.errorCode, res?.message) });
+    setState({
+      isBusy: false,
+      errorMessage: toSignupErrorMessage(
+        res?.errorCode,
+        res?.message ?? "회원가입 응답에서 기사 식별자(driverId)를 확인하지 못했습니다."
+      ),
+    });
     return false;
   } catch (e: any) {
     const msg = typeof e?.message === "string" ? e.message : "Signup failed.";

@@ -38,6 +38,7 @@ public class QuoteDetailResponse {
     private String status;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private List<QuoteItemResponse> quoteItems;
     private List<QuoteChecklistItemResponse> checklistItems;
     private List<QuoteStopResponse> stops;
 }

@@ -13,4 +13,8 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     List<Payment> findByMatchIdInOrderByCreatedAtDesc(List<Long> matchIds);
 
     Optional<Payment> findByOrderNo(String orderNo);
+
+    boolean existsByMatchIdAndStatus(Long matchId, Payment.PaymentStatus status);
+
+    List<Payment> findByMatchIdAndStatus(Long matchId, Payment.PaymentStatus status);
 }

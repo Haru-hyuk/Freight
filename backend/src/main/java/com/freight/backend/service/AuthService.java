@@ -66,16 +66,31 @@ public class AuthService {
     }
 
     private TokenResponse issueAccessToken(Long userId, String email, String role) {
-        String accessToken = jwtTokenProvider.generateAccessToken(
-                userId,
-                email,
-                role
-        );
+        String accessToken = jwtTokenProvider.generateAccessToken(userId, email, role);
+        String refreshToken = jwtTokenProvider.generateRefreshToken(userId, email, role);
 
-        return new TokenResponse(
-                accessToken,
-                "Bearer",
-                jwtTokenProvider.getAccessTokenExpirationSeconds()
-        );
+        return TokenResponse.builder()
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
+                .tokenType("Bearer")
+                .expiresIn(jwtTokenProvider.getAccessTokenExpirationSeconds())
+                .role(role.toLowerCase())
+                .userId(String.valueOf(userId))
+                .build();
+    }
+
+    @Transactional
+    public TokenResponse refreshToken(String refreshToken) {
+        try {
+            jwtTokenProvider.validateTokenOrThrow(refreshToken);
+        } catch (Exception e) {
+            throw new CustomException(ErrorCode.AUTH_UNAUTHORIZED);
+        }
+
+        String userId = jwtTokenProvider.getUserIdFromToken(refreshToken);
+        String email = jwtTokenProvider.getEmailFromToken(refreshToken);
+        String role = jwtTokenProvider.getRoleFromToken(refreshToken);
+
+        return issueAccessToken(Long.parseLong(userId), email, role);
     }
 }

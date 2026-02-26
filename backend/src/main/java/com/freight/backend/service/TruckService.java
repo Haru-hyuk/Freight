@@ -26,14 +26,19 @@ public class TruckService {
     @Transactional
     public TruckCreateResponse createTruck(TruckCreateRequest req) {
         Long driverId = getCurrentDriverId();
+        Long nextTruckId = truckRepository.findMaxTruckId() + 1L;
 
         Truck truck = Truck.builder()
+                .truckId(nextTruckId)
                 .driverId(driverId)
                 .vehicleType(req.getVehicleType())
                 .vehicleBodyType(req.getVehicleBodyType())
                 .tonnage(req.getTonnage())
                 .maxWeight(req.getMaxWeight())
                 .maxVolume(req.getMaxVolume())
+                .cargoLength(req.getCargoLength())
+                .cargoWidth(req.getCargoWidth())
+                .cargoHeight(req.getCargoHeight())
                 .name(req.getName())
                 .imageUrl(req.getImageUrl())
                 .approved(req.getApproved())
@@ -71,6 +76,9 @@ public class TruckService {
                 req.getTonnage(),
                 req.getMaxWeight(),
                 req.getMaxVolume(),
+                req.getCargoLength(),
+                req.getCargoWidth(),
+                req.getCargoHeight(),
                 req.getName(),
                 req.getImageUrl(),
                 req.getApproved(),
@@ -86,6 +94,29 @@ public class TruckService {
         Long driverId = getCurrentDriverId();
         Truck truck = getOwnedTruck(truckId, driverId);
         truckRepository.delete(truck);
+    }
+
+    @Transactional
+    public List<TruckResponse> listPendingTrucksForAdmin() {
+        assertAdmin();
+        return truckRepository.findByApprovedFalseOrderByCreatedAtDesc().stream()
+                .map(this::toResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public TruckResponse updateApprovalForAdmin(Long truckId, Boolean approved) {
+        assertAdmin();
+        if (approved == null) {
+            throw new CustomException(ErrorCode.INVALID_REQUEST);
+        }
+
+        Truck truck = truckRepository.findById(truckId)
+                .orElseThrow(() -> new CustomException(ErrorCode.INVALID_REQUEST));
+
+        truck.setApprovedStatus(approved);
+        Truck saved = truckRepository.save(truck);
+        return toResponse(saved);
     }
 
     private Truck getOwnedTruck(Long truckId, Long driverId) {
@@ -106,6 +137,9 @@ public class TruckService {
                 truck.getTonnage(),
                 truck.getMaxWeight(),
                 truck.getMaxVolume(),
+                truck.getCargoLength(),
+                truck.getCargoWidth(),
+                truck.getCargoHeight(),
                 truck.getName(),
                 truck.getImageUrl(),
                 truck.getApproved(),
@@ -128,7 +162,20 @@ public class TruckService {
         if (!isDriver) {
             throw new CustomException(ErrorCode.AUTH_FORBIDDEN);
         }
-        String principal = String.valueOf(authentication.getPrincipal());
-        return Long.valueOf(principal);
+        return Long.valueOf(authentication.getName());
+    }
+
+    private void assertAdmin() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new CustomException(ErrorCode.AUTH_UNAUTHORIZED);
+        }
+        boolean isAdmin = authentication.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .anyMatch("ROLE_ADMIN"::equals);
+        if (!isAdmin) {
+            throw new CustomException(ErrorCode.AUTH_FORBIDDEN);
+        }
     }
 }
+

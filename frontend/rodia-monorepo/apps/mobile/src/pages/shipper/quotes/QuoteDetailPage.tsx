@@ -1,121 +1,116 @@
-// app/quote/[id].tsx (or wherever QuoteDetailPage lives)
 import React from "react";
-import { Alert, KeyboardAvoidingView, LayoutAnimation, Modal, Platform, Pressable, StyleSheet, View } from "react-native";
+import { Alert, InteractionManager, LayoutAnimation, Pressable, StyleSheet, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { cancelShipperMatch, createShipperMatch, listMyShipperMatches, type ShipperMatchItem } from "@/features/matching/api";
 import {
   acceptShipperCounterOffer,
   isCounterOfferPending,
   listShipperCounterOffers,
-  normalizeCounterOfferStatus,
   rejectShipperCounterOffer,
-  type CounterOfferItem,
 } from "@/features/counter-offer/api";
-import { cancelShipperMatch, createShipperMatch, listMyShipperMatches, type ShipperMatchItem } from "@/features/matching/api";
-import { resolveTonePalette, type BottomActionId } from "@/features/quote/model/quoteActionMatrix";
-import { useQuoteDetail } from "@/features/quote/model/useQuoteDetail";
 import { deleteShipperQuote } from "@/features/quote/api";
+import { getQuoteActionPolicy, resolveTonePalette, type DecisionActionId } from "@/features/quote/model/quoteActionMatrix";
+import { useQuoteDetail, type QuoteActionsContext } from "@/features/quote/model/useQuoteDetail";
+import { formatWorkMethodLabel } from "@/features/quote/model/workMethod";
 import { BottomActionRouter } from "@/features/quote/ui/actions/BottomActionRouter";
+import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
+import { formatDistance, formatKrw } from "@/shared/lib/format/display";
+import {
+  BACKEND_STATUS,
+  CUSTOMER_UI_STATE,
+  getCustomerUiStateFromBackendStatus,
+  normalizeStatus,
+  type CustomerUiState,
+} from "@/shared/lib/policy";
 import { initLayoutAnimationForAndroid } from "@/shared/lib/ui/layoutAnimationInit";
 import { safeNumber, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppButton } from "@/shared/ui/kit/AppButton";
 import { AppCard } from "@/shared/ui/kit/AppCard";
-import { AppErrorState } from "@/shared/ui/kit/AppErrorState";
-import { AppInput } from "@/shared/ui/kit/AppInput";
-import { AppSpinner } from "@/shared/ui/kit/AppSpinner";
+import { AppRequestState } from "@/shared/ui/kit/AppRequestState";
 import { AppText } from "@/shared/ui/kit/AppText";
 import { PageScaffold } from "@/widgets/layout/PageScaffold";
 
 type QuoteDetailView = ReturnType<typeof useQuoteDetail>;
-type BottomDecisionAction = "acceptOffer" | "rejectOffer" | "pay" | "reRequestRoute";
+type QuoteDetailQuote = QuoteDetailView["quote"];
+type QuoteDetailCoreSummary = QuoteDetailView["coreSummary"];
+type MatchSnapshot = { cancelableMatch: ShipperMatchItem | null; nonCanceledMatch: ShipperMatchItem | null };
+type RouteNode = { key: string; title: string; address: string; kind: "origin" | "waypoint" | "destination" };
+type ArchiveRow = { label: string; value: string };
+type ArchiveSection = { key: string; title: string; rows: ArchiveRow[] };
+type PriceSummary = { primaryLabel: string; primaryText: string; secondaryText: string };
+type QuoteDecisionAction = Exclude<DecisionActionId, "cancelRequest">;
+
+const POLICY_ACTION_UI_STATES: ReadonlySet<CustomerUiState> = new Set([
+  CUSTOMER_UI_STATE.NEGOTIATION_REQUIRED,
+  CUSTOMER_UI_STATE.PAYMENT_REQUIRED,
+  CUSTOMER_UI_STATE.COMPLETED,
+  CUSTOMER_UI_STATE.CANCELED,
+]);
+const STATUS_PROMOTION_SOURCE_STATES: ReadonlySet<string> = new Set([
+  BACKEND_STATUS.READY,
+  BACKEND_STATUS.OPEN,
+  BACKEND_STATUS.UNKNOWN,
+]);
+const STATUS_PROMOTION_TARGET_STATES: ReadonlySet<string> = new Set([
+  BACKEND_STATUS.NEGOTIATING,
+  BACKEND_STATUS.ASSIGNED,
+  BACKEND_STATUS.ACCEPTED,
+  BACKEND_STATUS.PICKUP,
+  BACKEND_STATUS.TRANSIT,
+  BACKEND_STATUS.DROPOFF,
+  BACKEND_STATUS.CANCELED,
+]);
+const FOCUS_REFETCH_THROTTLE_MS = 1500;
+
+const EMPTY_MATCH_SNAPSHOT: MatchSnapshot = { cancelableMatch: null, nonCanceledMatch: null };
+const VEHICLE_SECTION_TITLES = new Set(["차량/화물", "차량 정보", "화물 정보"]);
+const VEHICLE_ROW_LABELS = new Set(["톤수", "차량", "차종", "차량 번호"]);
 
 const useStyles = createThemedStyles((theme) => {
   const c = theme.colors;
-  const spacing = safeNumber(theme.layout.spacing.base, 4);
-
+  const s = safeNumber(theme.layout.spacing.base, 4);
   return StyleSheet.create({
-    pageContent: {
-      paddingTop: spacing * 2,
-      paddingHorizontal: spacing * 5,
-      paddingBottom: spacing * 28,
-      backgroundColor: c.bgMain,
+    pageContent: { paddingTop: s * 2, paddingHorizontal: s * 5, paddingBottom: s * 6, backgroundColor: c.bgMain },
+    sectionTitle: {
+      color: c.textMain,
+      fontSize: safeNumber(theme.typography.scale.detail.size, 14),
+      lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20),
+      fontWeight: "900",
     },
 
-    commandCenter: {
-      marginTop: spacing,
-      marginBottom: spacing * 3,
-      gap: spacing,
-    },
-    manageActionsRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing * 2,
-    },
-    manageActionButton: {
-      flex: 1,
-      minHeight: 42,
-    },
-    statusRow: {
-      minHeight: 44,
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      gap: spacing * 2,
-    },
-    statusLeft: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing,
-      flex: 1,
-    },
-    statusBadge: {
-      borderRadius: 999,
-      borderWidth: 1,
-      paddingHorizontal: spacing * 2,
-      paddingVertical: spacing,
-      maxWidth: "60%",
-    },
+    statusSection: { marginTop: s, marginBottom: s * 3, gap: s * 2 },
+    statusRow: { minHeight: 42, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: s * 2 },
+    statusBadge: { borderRadius: 999, borderWidth: 1, paddingHorizontal: s * 2, paddingVertical: s, maxWidth: "62%" },
     statusText: {
       fontSize: safeNumber(theme.typography.scale.caption.size, 12),
       lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
       fontWeight: "900",
       letterSpacing: -0.2,
     },
-    metaText: {
+    statusMeta: {
+      flex: 1,
+      textAlign: "right",
       color: c.textMuted,
       fontSize: safeNumber(theme.typography.scale.caption.size, 12),
       lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
       fontWeight: "700",
     },
-    cancelSummaryBox: {
-      borderWidth: 1,
-      borderColor: c.borderDefault,
-      backgroundColor: c.bgSurface,
-      borderRadius: safeNumber(theme.layout.radii.card, 16),
-      paddingHorizontal: spacing * 3,
-      paddingVertical: spacing * 2,
-      gap: spacing + 2,
-    },
-    cancelSummaryRow: {
-      minHeight: 24,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing,
-    },
-    cancelSummaryIcon: {
-      color: c.semanticWarning,
-      fontSize: 16,
-    },
-    cancelSummaryLabel: {
-      color: c.textMuted,
-      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
-      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
-      fontWeight: "700",
+    cancelBox: { backgroundColor: c.bgSurface, borderRadius: safeNumber(theme.layout.radii.card, 16), padding: s * 3, gap: s + 2 },
+    cancelRow: { minHeight: 22, flexDirection: "row", alignItems: "center", gap: s },
+    cancelIcon: { color: c.semanticWarning, fontSize: 16 },
+    cancelLabel: {
       width: 56,
+      color: c.textMuted,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
+      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
+      fontWeight: "700",
     },
-    cancelSummaryValue: {
+    cancelValue: {
       flex: 1,
       color: c.textMain,
       fontSize: safeNumber(theme.typography.scale.detail.size, 14),
@@ -123,343 +118,86 @@ const useStyles = createThemedStyles((theme) => {
       fontWeight: "700",
     },
 
-    overviewCard: {
-      marginBottom: spacing * 3,
-      borderWidth: 1,
-    },
-    overviewInner: {
-      padding: spacing * 4,
-      gap: spacing * 2,
-    },
-    overviewTop: {
-      minHeight: 24,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing + 2,
-    },
-    iconChip: {
-      width: 24,
-      height: 24,
-      borderRadius: 12,
-      borderWidth: 1,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    icon: {
-      fontSize: 14,
-    },
-    eyebrow: {
+    routeSection: { marginBottom: s * 3, gap: s * 2 },
+    routeCard: { backgroundColor: c.bgSurface },
+    routeInner: { padding: s * 4, gap: s },
+    routeRow: { flexDirection: "row", alignItems: "stretch", gap: s },
+    routeRail: { width: 20, alignItems: "center" },
+    routeDot: { width: 10, height: 10, borderRadius: 5, marginTop: 6, backgroundColor: c.borderStrong },
+    routeDotOrigin: { backgroundColor: c.textMain },
+    routeDotWaypoint: { backgroundColor: c.brandPrimary },
+    routeDotDestination: { backgroundColor: c.semanticSuccess },
+    routeLine: { width: 2, flex: 1, marginTop: 4, backgroundColor: tint(c.textMain, 0.12, c.borderDefault) },
+    routeBody: { flex: 1, paddingBottom: s * 2 },
+    routeNodeTitle: {
+      color: c.textMuted,
       fontSize: safeNumber(theme.typography.scale.caption.size, 12),
       lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
-      fontWeight: "900",
+      fontWeight: "800",
     },
-    overviewTitle: {
-      color: c.textMain,
-      fontSize: safeNumber(theme.typography.scale.heading.size, 18),
-      lineHeight: safeNumber(theme.typography.scale.heading.lineHeight, 24),
-      fontWeight: "900",
-      letterSpacing: -0.3,
-    },
-
-    routeRow: {
-      minHeight: 44,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing + 2,
-    },
-    routeAddress: {
-      flex: 1,
-      color: c.textMain,
-      fontSize: safeNumber(theme.typography.scale.detail.size, 14) + 1,
-      lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20) + 1,
-      fontWeight: "900",
-      letterSpacing: -0.2,
-    },
-    routeArrow: {
-      color: c.borderStrong,
-      fontSize: 14,
-    },
-    waypointRow: {
-      minHeight: 24,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing,
-    },
-    waypointIcon: {
-      color: c.textSub,
-      fontSize: 14,
-    },
-    waypointText: {
-      flex: 1,
+    routeAddress: { color: c.textMain, fontSize: 17, lineHeight: 24, fontWeight: "900", marginTop: 2 },
+    routeWaypointCaption: {
       color: c.textSub,
       fontSize: safeNumber(theme.typography.scale.caption.size, 12),
       lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
       fontWeight: "700",
+      marginTop: 2,
     },
 
-    divider: {
-      height: 1,
-      backgroundColor: tint(c.textMain, 0.06, c.borderDefault),
+    summarySection: { marginBottom: s * 3, gap: s * 2 },
+    summaryCard: { borderWidth: 1 },
+    summaryInner: { padding: s * 4, gap: s * 2 },
+    summaryTop: { minHeight: 24, flexDirection: "row", alignItems: "center", gap: s + 2 },
+    summaryChip: { width: 24, height: 24, borderRadius: 12, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+    summaryEyebrow: {
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
+      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
+      fontWeight: "900",
     },
-
-    metricRow: {
-      minHeight: 40,
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      gap: spacing,
-    },
-    metricLeft: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing,
-      flex: 1,
-    },
-    metricIcon: {
-      color: c.textSub,
-      fontSize: 14,
-    },
-    metricLabel: {
+    summaryRow: { minHeight: 40, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: s },
+    summaryLeft: { flexDirection: "row", alignItems: "center", gap: s, flex: 1 },
+    summaryIcon: { color: c.textSub, fontSize: 14 },
+    summaryLabel: {
       color: c.textMain,
       fontSize: safeNumber(theme.typography.scale.detail.size, 14),
       lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20),
       fontWeight: "900",
     },
-    metricValue: {
+    summaryValue: {
       color: c.textSub,
       fontSize: safeNumber(theme.typography.scale.caption.size, 12),
       lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
       fontWeight: "700",
     },
-    priceValue: {
+    summaryDivider: { height: 1, backgroundColor: tint(c.textMain, 0.06, c.borderDefault) },
+    priceWrap: { marginTop: s, gap: s },
+    priceLabel: {
+      color: c.textMuted,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
+      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
+      fontWeight: "700",
+    },
+    priceMain: {
       color: c.textMain,
       fontSize: safeNumber(theme.typography.scale.display.size, 30),
       lineHeight: safeNumber(theme.typography.scale.display.lineHeight, 38),
       fontWeight: "900",
-      marginTop: spacing,
-      letterSpacing: -0.7,
+      letterSpacing: -0.6,
     },
-    note: {
-      color: c.textMuted,
-      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
-      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
-      fontWeight: "600",
-      marginTop: spacing,
-    },
-    locationSection: {
-      marginBottom: spacing * 3,
-      gap: spacing * 2,
-    },
-    locationSectionTitle: {
-      color: c.textMain,
-      fontSize: safeNumber(theme.typography.scale.detail.size, 14),
-      lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20),
-      fontWeight: "900",
-    },
-    locationCard: {
-      borderWidth: 1,
-      borderColor: c.borderDefault,
-    },
-    locationCardInner: {
-      padding: spacing * 3,
-      gap: spacing,
-    },
-    locationCardHeader: {
-      minHeight: 28,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing,
-    },
-    locationIconChip: {
-      width: 22,
-      height: 22,
-      borderRadius: 11,
-      borderWidth: 1,
-      borderColor: tint(c.textMain, 0.18, c.borderDefault),
-      backgroundColor: tint(c.textMain, 0.04, c.bgSurface),
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    locationIcon: {
-      fontSize: 12,
+    priceSecondary: {
       color: c.textSub,
-    },
-    locationCardTitle: {
-      color: c.textMain,
-      fontSize: safeNumber(theme.typography.scale.detail.size, 14),
-      lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20),
-      fontWeight: "900",
-    },
-    locationRow: {
-      minHeight: 20,
-      flexDirection: "row",
-      alignItems: "flex-start",
-      justifyContent: "space-between",
-      gap: spacing * 2,
-      paddingTop: 2,
-    },
-    locationLabel: {
-      width: "28%",
-      color: c.textMuted,
-      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
-      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
-      fontWeight: "700",
-    },
-    locationValue: {
-      flex: 1,
-      color: c.textMain,
-      fontSize: safeNumber(theme.typography.scale.detail.size, 14),
-      lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20),
-      fontWeight: "700",
-      textAlign: "right",
-    },
-    noWaypointText: {
-      color: c.textMuted,
       fontSize: safeNumber(theme.typography.scale.caption.size, 12),
       lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
       fontWeight: "700",
     },
 
-    highlightLine: {
-      color: c.textMain,
-      fontSize: safeNumber(theme.typography.scale.detail.size, 14),
-      lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20),
-      fontWeight: "700",
-    },
-    highlightRow: {
-      minHeight: 24,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing,
-    },
-    highlightIcon: {
-      color: c.textSub,
-      fontSize: 14,
-    },
-
-    actionsContainer: {
-      marginTop: spacing,
-      gap: spacing * 2,
-    },
-    quickActionsRow: {
-      flexDirection: "row",
-      gap: spacing * 2,
-    },
-    actionButton: {
-      flex: 1,
-    },
-    cancelInlineWrapper: {
-      paddingTop: spacing * 2,
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: tint(c.textMain, 0.08, c.borderDefault),
-    },
-    cancelInlineButton: {
-      minHeight: 44,
-    },
-    cancelInlineIcon: {
-      color: c.textSub,
-      fontSize: 18,
-    },
-    cancelInlineText: {
-      color: c.textSub,
-    },
-    footnote: {
-      color: c.textSub,
-      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
-      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
-      fontWeight: "600",
-      marginTop: spacing,
-      textAlign: "center",
-    },
-
-    negotiationSection: {
-      marginBottom: spacing * 3,
-      gap: spacing * 2,
-    },
-    negotiationCardInner: {
-      padding: spacing * 4,
-      gap: spacing * 2,
-    },
-    negotiationHeaderRow: {
-      minHeight: 24,
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      gap: spacing,
-    },
-    negotiationTitle: {
-      color: c.textMain,
-      fontSize: safeNumber(theme.typography.scale.detail.size, 14),
-      lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20),
-      fontWeight: "900",
-    },
-    negotiationSub: {
-      color: c.textMuted,
-      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
-      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
-      fontWeight: "700",
-    },
-    negotiationStatusChip: {
-      borderWidth: 1,
-      borderRadius: 999,
-      paddingHorizontal: spacing * 2,
-      paddingVertical: spacing / 2,
-      borderColor: tint(c.brandPrimary, 0.22, c.borderDefault),
-      backgroundColor: tint(c.brandPrimary, 0.08, c.bgSurface),
-    },
-    negotiationStatusText: {
-      color: c.brandPrimary,
-      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
-      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
-      fontWeight: "900",
-    },
-    negotiationInfoRow: {
-      minHeight: 20,
-      flexDirection: "row",
-      alignItems: "flex-start",
-      justifyContent: "space-between",
-      gap: spacing * 2,
-    },
-    negotiationLabel: {
-      width: "30%",
-      color: c.textMuted,
-      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
-      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
-      fontWeight: "700",
-    },
-    negotiationValue: {
-      flex: 1,
-      color: c.textMain,
-      fontSize: safeNumber(theme.typography.scale.detail.size, 14),
-      lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20),
-      fontWeight: "700",
-      textAlign: "right",
-    },
-    negotiationDivider: {
-      height: 1,
-      backgroundColor: tint(c.textMain, 0.06, c.borderDefault),
-    },
-    negotiationActions: {
-      flexDirection: "row",
-      gap: spacing * 2,
-    },
-    negotiationButton: {
-      flex: 1,
-      minHeight: 40,
-    },
-    emptyStateText: {
-      color: c.textMuted,
-      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
-      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
-      fontWeight: "700",
-    },
-
+    detailSection: { marginBottom: s * 3 },
     accordionHeader: {
       minHeight: 44,
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
-      paddingVertical: spacing * 3,
+      paddingVertical: s * 3,
       borderTopWidth: 1,
       borderTopColor: c.borderDefault,
     },
@@ -469,58 +207,37 @@ const useStyles = createThemedStyles((theme) => {
       lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20),
       fontWeight: "900",
     },
-    accordionRight: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing / 2,
-    },
+    accordionRight: { flexDirection: "row", alignItems: "center", gap: s / 2 },
     accordionState: {
       color: c.textMuted,
       fontSize: safeNumber(theme.typography.scale.caption.size, 12),
       lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
       fontWeight: "700",
     },
-    accordionChevron: {
-      color: c.textMuted,
-      fontSize: 16,
-    },
-    accordionBody: {
-      paddingBottom: spacing * 4,
-      gap: spacing * 2,
-    },
-
-    archiveCardInner: {
-      padding: spacing * 4,
-    },
+    accordionChevron: { color: c.textMuted, fontSize: 16 },
+    accordionBody: { paddingBottom: s * 2, gap: s * 2 },
+    archiveCard: { backgroundColor: c.bgSurface },
+    archiveInner: { padding: s * 4 },
     archiveTitle: {
       color: c.textMain,
       fontSize: safeNumber(theme.typography.scale.detail.size, 14),
       lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20),
       fontWeight: "900",
-      marginBottom: spacing,
+      marginBottom: s,
     },
     archiveRow: {
+      minHeight: 38,
       flexDirection: "row",
       alignItems: "flex-start",
       justifyContent: "space-between",
-      gap: spacing * 2,
-      paddingVertical: spacing,
+      gap: s * 2,
+      paddingVertical: s,
       borderBottomWidth: 1,
       borderBottomColor: tint(c.textMain, 0.06, c.borderDefault),
     },
-    archiveRowLast: {
-      borderBottomWidth: 0,
-    },
-    archiveLabelGroup: {
-      width: "35%",
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing,
-    },
-    archiveLabelIcon: {
-      color: c.textSub,
-      fontSize: 14,
-    },
+    archiveRowLast: { borderBottomWidth: 0, paddingBottom: 0 },
+    archiveLabelWrap: { width: "38%", flexDirection: "row", alignItems: "center", gap: s },
+    archiveLabelIcon: { color: c.textSub, fontSize: 14 },
     archiveLabel: {
       flex: 1,
       color: c.textMuted,
@@ -530,471 +247,322 @@ const useStyles = createThemedStyles((theme) => {
     },
     archiveValue: {
       flex: 1,
+      textAlign: "right",
       color: c.textMain,
       fontSize: safeNumber(theme.typography.scale.detail.size, 14),
       lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20),
       fontWeight: "700",
-      textAlign: "right",
     },
 
-    cancelModalOverlay: {
-      flex: 1,
-      justifyContent: "center",
-      paddingHorizontal: spacing * 4,
-      backgroundColor: "rgba(0, 0, 0, 0.5)",
-    },
-    cancelModalSheet: {
-      width: "100%",
-    },
-    cancelModalCard: {
-      borderWidth: 0,
+    bottomBar: {
       backgroundColor: c.bgSurface,
-      borderRadius: safeNumber(theme.layout.radii.card, 16) + 8,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 10 },
-      shadowOpacity: 0.15,
-      shadowRadius: 20,
-      elevation: 10,
+      borderTopWidth: 1,
+      borderTopColor: c.borderDefault,
+      paddingHorizontal: s * 5,
+      paddingTop: s * 3,
     },
-    cancelModalContent: {
-      padding: spacing * 5,
-      gap: spacing * 3,
-    },
-    cancelModalHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing * 2,
-      marginBottom: spacing,
-    },
-    cancelModalIconContainer: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      backgroundColor: tint(c.semanticWarning, 0.1, c.bgSurface),
+    bottomPlaceholder: {
+      minHeight: 46,
+      borderRadius: safeNumber(theme.layout.radii.card, 12),
       alignItems: "center",
       justifyContent: "center",
+      backgroundColor: tint(c.textMain, 0.04, c.bgMain),
     },
-    cancelModalIcon: {
-      color: c.semanticWarning,
-      fontSize: 22,
+    bottomPlaceholderText: {
+      color: c.textMuted,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
+      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
+      fontWeight: "700",
     },
-    cancelModalTitle: {
-      color: c.textMain,
-      fontSize: safeNumber(theme.typography.scale.heading.size, 18) + 2,
-      lineHeight: safeNumber(theme.typography.scale.heading.lineHeight, 24) + 4,
-      fontWeight: "900",
-      letterSpacing: -0.4,
-    },
-    cancelModalDesc: {
-      color: c.textSub,
-      fontSize: safeNumber(theme.typography.scale.detail.size, 14),
-      lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20),
-      fontWeight: "600",
-      marginBottom: spacing,
-    },
-    cancelModalActions: {
-      flexDirection: "row",
-      gap: spacing * 2,
-      marginTop: spacing * 2,
-    },
+    bottomButton: { minHeight: 46 },
   });
 });
 
-function parseRouteIdentifier(value: string | string[] | undefined): string {
+function readRouteParamText(value: string | string[] | undefined): string {
   const raw = Array.isArray(value) ? value[0] : value;
   return typeof raw === "string" ? raw.trim() : "";
 }
 
-function parsePositiveIntParam(value: string | string[] | undefined): number {
-  const raw = Array.isArray(value) ? value[0] : value;
-  const parsed = Number(raw);
+function parsePositiveInt(value: unknown): number {
+  const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
 }
 
-function resolveSpotlightIconName(type: QuoteDetailView["highlight"]["type"]): keyof typeof Ionicons.glyphMap {
-  if (type === "priceCompare") return "pricetag-outline";
-  if (type === "driverProfile") return "person-circle-outline";
-  if (type === "miniMap") return "navigate-outline";
-  if (type === "progressInfo") return "time-outline";
-  if (type === "proof") return "checkmark-circle-outline";
-  return "information-circle-outline";
+function parsePositiveIntParam(value: string | string[] | undefined): number {
+  return parsePositiveInt(readRouteParamText(value));
 }
 
-function resolveQuickActionLabel(action: BottomActionId): string {
-  if (action === "callDriver") return "기사님 연락";
-  if (action === "viewPickupPhotos") return "상차 사진";
-  if (action === "viewLiveLocation") return "실시간 위치";
-  if (action === "viewPOD") return "인수증 보기";
-  return "확인";
+function toText(value: unknown): string {
+  return String(value ?? "").trim();
 }
 
-function runQuickAction(action: BottomActionId, view: QuoteDetailView) {
-  const origin = view.actionsContext?.originAddress ?? "출발지";
-  const dest = view.actionsContext?.destinationAddress ?? "도착지";
-
-  if (action === "callDriver") {
-    Alert.alert("기사님 연락", "기사님에게 연락을 시도합니다.");
-    return;
-  }
-
-  if (action === "viewPickupPhotos") {
-    Alert.alert("상차 사진", "상차 사진을 불러옵니다.");
-    return;
-  }
-
-  if (action === "viewLiveLocation") {
-    Alert.alert("실시간 위치", `${origin}에서 ${dest}까지 운송 위치를 확인합니다.`);
-    return;
-  }
-
-  if (action === "viewPOD") {
-    Alert.alert("인수증", "인수증을 확인합니다.");
-    return;
-  }
-
-  Alert.alert("안내", "준비 중인 기능입니다.");
-}
-
-function buildWaypointText(waypoints: string[]): string {
-  const list = Array.isArray(waypoints) ? waypoints.filter(Boolean) : [];
-  if (list.length === 0) return "";
-  if (list.length === 1) return `경유지 1곳: ${list[0]}`;
-  return `경유지 ${list.length}곳: ${list[0]} 외 ${list.length - 1}곳`;
-}
-
-function toWorkMethodLabel(value: unknown): string {
-  const raw = String(value ?? "").trim();
-  const normalized = raw.toUpperCase();
-  if (normalized === "SHIPPER") return "화주";
-  if (normalized === "DRIVER") return "기사";
-  if (!raw) return "정보 없음";
-  return raw;
-}
-
-function formatPriceText(value: unknown): string {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return "-";
-  return `${Math.max(0, Math.trunc(parsed)).toLocaleString("ko-KR")}원`;
-}
-
-function toDisplayDash(value: unknown): string {
-  const text = String(value ?? "").trim();
+function toDisplayText(value: unknown): string {
+  const text = toText(value);
   return text || "-";
 }
 
-function formatDateTimeOrDash(value: unknown): string {
-  const raw = String(value ?? "").trim();
-  if (!raw) return "-";
-
-  const date = new Date(raw);
-  if (!Number.isFinite(date.getTime())) return "-";
-
-  const month = date.getMonth() + 1;
-  const day = date.getDate();
-  const hour = String(date.getHours()).padStart(2, "0");
-  const minute = String(date.getMinutes()).padStart(2, "0");
-  return `${month}월 ${day}일 ${hour}:${minute}`;
+function toPositiveAmount(value: unknown): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 0;
+  return Math.trunc(parsed);
 }
 
-function normalizeMatchStatus(status: string): string {
-  const normalized = String(status ?? "").trim().toUpperCase();
-  if (!normalized) return "UNKNOWN";
-  if (normalized === "CANCELLED") return "CANCELED";
-  return normalized;
+function resolvePriceSummary(quote: QuoteDetailQuote): PriceSummary {
+  const uiState = getCustomerUiStateFromBackendStatus(toText(quote.status));
+  const desired = toPositiveAmount(quote.desiredPrice);
+  const finalPrice = toPositiveAmount(quote.finalPrice);
+  const estimated = toPositiveAmount(quote.basePrice) + toPositiveAmount(quote.distancePrice) + toPositiveAmount(quote.extraPrice);
+  const estimatedAmount = estimated > 0 ? estimated : finalPrice;
+  const isCompleted = uiState === CUSTOMER_UI_STATE.COMPLETED;
+
+  if (isCompleted && finalPrice > 0) {
+    return {
+      primaryLabel: "정산 금액",
+      primaryText: formatKrw(finalPrice),
+      secondaryText: desired > 0 ? `희망 운임 ${formatKrw(desired)}` : "",
+    };
+  }
+
+  if (desired > 0) {
+    return {
+      primaryLabel: "희망 운임",
+      primaryText: formatKrw(desired),
+      secondaryText: estimatedAmount > 0 ? `예상 금액 ${formatKrw(estimatedAmount)}` : "",
+    };
+  }
+
+  return {
+    primaryLabel: "예상 금액",
+    primaryText: formatKrw(estimatedAmount),
+    secondaryText: "",
+  };
 }
 
-function resolveMatchStatusLabel(status: string): string {
-  const normalized = normalizeMatchStatus(status);
-  if (normalized === "OPEN") return "요청 접수";
-  if (normalized === "NEGOTIATING") return "협상 중";
-  if (normalized === "ASSIGNED") return "배차 완료";
-  if (normalized === "PICKUP") return "상차 중";
-  if (normalized === "TRANSIT") return "운송 중";
-  if (normalized === "DROPOFF") return "하차 완료";
-  if (normalized === "CANCELED") return "요청 취소";
-  return normalized;
+function normalizeMatchStatus(value: unknown): string {
+  const text = toText(value);
+  if (!text) return "";
+  const normalized = normalizeStatus(text);
+  return normalized === BACKEND_STATUS.UNKNOWN ? "" : normalized;
 }
 
-function resolveCounterOfferStatusLabel(status: string): string {
-  const normalized = normalizeCounterOfferStatus(status);
-  if (normalized === "PENDING") return "대기";
-  if (normalized === "OPEN") return "대기";
-  if (normalized === "NEGOTIATING") return "협의 중";
-  if (normalized.includes("ACCEPT")) return "수락됨";
-  if (normalized.includes("REJECT")) return "거절됨";
-  if (normalized.includes("CANCEL")) return "취소됨";
-  return normalized;
+function resolveEffectiveQuoteStatus(quoteStatus: unknown, matchStatus: unknown): string {
+  const quoteText = toText(quoteStatus);
+  const quoteNormalized = normalizeStatus(quoteText);
+  const normalizedMatchStatus = normalizeMatchStatus(matchStatus);
+  if (!normalizedMatchStatus) return quoteText;
+
+  if (STATUS_PROMOTION_SOURCE_STATES.has(quoteNormalized) && STATUS_PROMOTION_TARGET_STATES.has(normalizedMatchStatus)) {
+    return normalizedMatchStatus;
+  }
+
+  return quoteText || normalizedMatchStatus;
 }
 
-function resolveCounterOfferActorLabel(role: CounterOfferItem["actorRole"]): string {
-  if (role === "DRIVER") return "기사";
-  if (role === "SHIPPER") return "화주";
-  return "-";
+function isCanceledMatchStatus(value: unknown): boolean {
+  return normalizeMatchStatus(value) === BACKEND_STATUS.CANCELED;
 }
 
-function findLatestQuoteMatch(matches: ShipperMatchItem[]): ShipperMatchItem | null {
-  const list = Array.isArray(matches) ? matches : [];
-  if (list.length <= 0) return null;
-
-  const sorted = [...list].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
-  return sorted[0] ?? null;
+function toUpdatedAtTime(value: unknown): number {
+  const raw = toText(value);
+  if (!raw) return 0;
+  const parsed = Date.parse(raw);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function resolveArchiveRowIconName(
-  sectionTitle: string,
-  rowLabel: string
-): keyof typeof Ionicons.glyphMap | null {
-  const normalizedSectionTitle = String(sectionTitle ?? "").trim();
-  const normalizedLabel = String(rowLabel ?? "").trim();
-  if (normalizedSectionTitle !== "차량/화물") return null;
+function resolveMatchSnapshotForQuote(matches: unknown, quoteId: number): MatchSnapshot {
+  const safeQuoteId = parsePositiveInt(quoteId);
+  if (safeQuoteId <= 0) return EMPTY_MATCH_SNAPSHOT;
+  const safeMatches = Array.isArray(matches) ? matches : [];
+  let cancelableMatch: ShipperMatchItem | null = null;
+  let cancelableUpdatedAt = -1;
+  let nonCanceledMatch: ShipperMatchItem | null = null;
+  let nonCanceledUpdatedAt = -1;
+  for (const match of safeMatches as ShipperMatchItem[]) {
+    const matchQuoteId = parsePositiveInt((match as { quoteId?: unknown }).quoteId);
+    if (matchQuoteId !== safeQuoteId) continue;
+    const updatedAt = toUpdatedAtTime((match as { updatedAt?: unknown }).updatedAt);
+    const canceled = isCanceledMatchStatus((match as { status?: unknown }).status);
+    const cancelable = (match as { cancelable?: unknown }).cancelable === true;
+    if (!canceled && cancelable && updatedAt >= cancelableUpdatedAt) {
+      cancelableMatch = match;
+      cancelableUpdatedAt = updatedAt;
+    }
+    if (!canceled && updatedAt >= nonCanceledUpdatedAt) {
+      nonCanceledMatch = match;
+      nonCanceledUpdatedAt = updatedAt;
+    }
+  }
+  return { cancelableMatch, nonCanceledMatch };
+}
 
-  if (normalizedLabel === "차량") return "bus-outline";
-  if (normalizedLabel === "화물명") return "cube-outline";
-  if (normalizedLabel === "화물 구분") return "pricetag-outline";
-  if (normalizedLabel === "화물 설명") return "document-text-outline";
-  if (normalizedLabel === "중량") return "git-network-outline";
-  if (normalizedLabel === "부피") return "layers-outline";
-  if (normalizedLabel === "하차 위치") return "navigate-outline";
+function normalizeArchiveSections(input: QuoteDetailView["specificationArchive"]): ArchiveSection[] {
+  const out: ArchiveSection[] = [];
+  input.forEach((section, idx) => {
+    const title = toDisplayText(section.title);
+    const rows = section.rows.map((row) => ({ label: toDisplayText(row.label), value: toDisplayText(row.value) }));
+    if (!VEHICLE_SECTION_TITLES.has(title)) {
+      out.push({ key: `${title}-${idx}`, title, rows: rows.length ? rows : [{ label: "정보", value: "-" }] });
+      return;
+    }
+    const vehicleRows = rows.filter((row) => VEHICLE_ROW_LABELS.has(row.label));
+    const cargoRows = rows.filter((row) => !VEHICLE_ROW_LABELS.has(row.label));
+    if (vehicleRows.length) out.push({ key: `vehicle-${idx}`, title: "차량 정보", rows: vehicleRows });
+    if (cargoRows.length) out.push({ key: `cargo-${idx}`, title: "화물 정보", rows: cargoRows });
+  });
+  return out;
+}
+
+function resolveArchiveIcon(sectionTitle: string, rowLabel: string): keyof typeof Ionicons.glyphMap | null {
+  if (!VEHICLE_SECTION_TITLES.has(sectionTitle)) return null;
+  if (rowLabel === "화물") return "cube-outline";
+  if (rowLabel === "차량") return "bus-outline";
+  if (rowLabel === "차종") return "car-sport-outline";
+  if (rowLabel === "차량 번호") return "car-outline";
+  if (rowLabel === "화물 설명") return "document-text-outline";
+  if (rowLabel === "중량") return "git-network-outline";
+  if (rowLabel === "부피") return "layers-outline";
+  if (rowLabel === "톤수") return "speedometer-outline";
   return null;
 }
 
-function OverviewCard({
-  view,
-  showCancelButton,
-  onPressCancel,
-}: {
-  view: QuoteDetailView;
-  showCancelButton?: boolean;
-  onPressCancel?: () => void;
-}) {
+function buildRouteNodes(core: QuoteDetailCoreSummary): RouteNode[] {
+  const nodes: RouteNode[] = [{ key: "origin", title: "출발지", address: toDisplayText(core.originAddress), kind: "origin" }];
+  const waypointCount = core.waypointAddresses.filter((address) => toText(address).length > 0).length;
+  if (waypointCount > 0) nodes.push({ key: "waypoint", title: `경유지 ${waypointCount}곳`, address: "", kind: "waypoint" });
+  nodes.push({ key: "destination", title: "도착지", address: toDisplayText(core.destinationAddress), kind: "destination" });
+  return nodes;
+}
+
+function RouteFlowCard({ coreSummary }: { coreSummary: QuoteDetailCoreSummary }) {
+  const styles = useStyles();
+  const nodes = React.useMemo(() => buildRouteNodes(coreSummary), [coreSummary]);
+  return (
+    <View style={styles.routeSection}>
+      <AppText style={styles.sectionTitle}>운송 경로</AppText>
+      <AppCard elevated={false} style={styles.routeCard}>
+        <View style={styles.routeInner}>
+          {nodes.map((node, index) => {
+            const isLast = index === nodes.length - 1;
+            const isWaypoint = node.kind === "waypoint";
+            return (
+              <View key={node.key} style={styles.routeRow}>
+                <View style={styles.routeRail}>
+                  <View
+                    style={[
+                      styles.routeDot,
+                      node.kind === "origin" && styles.routeDotOrigin,
+                      node.kind === "waypoint" && styles.routeDotWaypoint,
+                      node.kind === "destination" && styles.routeDotDestination,
+                    ]}
+                  />
+                  {!isLast ? <View style={styles.routeLine} /> : null}
+                </View>
+                <View style={styles.routeBody}>
+                  <AppText style={styles.routeNodeTitle}>{node.title}</AppText>
+                  {isWaypoint ? <AppText style={styles.routeWaypointCaption}>중간 경유지를 포함한 운송입니다.</AppText> : null}
+                  {!isWaypoint ? <AppText style={styles.routeAddress}>{node.address}</AppText> : null}
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      </AppCard>
+    </View>
+  );
+}
+
+function SummaryCard({ view }: { view: QuoteDetailView }) {
   const styles = useStyles();
   const theme = useAppTheme();
   const palette = resolveTonePalette(theme, view.policy);
-  const iconName = resolveSpotlightIconName(view.highlight?.type ?? "none");
-
-  const quickActions = view.highlight?.quickActions ?? [];
-  const waypoints = view.coreSummary?.waypointAddresses ?? [];
-  const waypointText = buildWaypointText(waypoints);
-
-  const origin = view.coreSummary?.originAddress ?? "";
-  const dest = view.coreSummary?.destinationAddress ?? "";
-  const distanceText = view.coreSummary?.distanceText ?? "거리 정보 없음";
-  const loadMethodText = toWorkMethodLabel(view.quote?.loadMethod);
-  const unloadMethodText = toWorkMethodLabel(view.quote?.unloadMethod);
-  const completedAtText = (view.coreSummary?.completedAtText ?? "").trim();
-  const isCompleted = (view.quote?.status ?? "") === "DROPOFF";
-
-  const desiredPriceText = formatPriceText(view.quote?.desiredPrice);
-  const finalPriceText = formatPriceText(view.quote?.finalPrice);
-
-  const highlightLines = Array.isArray(view.highlight?.lines) ? view.highlight.lines.filter(Boolean) : [];
-  const title = (view.highlight?.title ?? "").trim();
-  const eyebrow = (view.highlight?.eyebrow ?? "").trim() || "운송 요약";
-  const footnote = (view.highlight?.footnote ?? "").trim();
-  const note = (view.coreSummary?.totalPriceNote ?? "").trim();
-
+  const distanceText = formatDistance(view.quote.distanceKm);
+  const loadText = toDisplayText(formatWorkMethodLabel(view.quote.loadMethod));
+  const unloadText = toDisplayText(formatWorkMethodLabel(view.quote.unloadMethod));
+  const price = React.useMemo(
+    () => resolvePriceSummary(view.quote),
+    [view.quote.basePrice, view.quote.desiredPrice, view.quote.distancePrice, view.quote.extraPrice, view.quote.finalPrice, view.quote.status]
+  );
   return (
-    <AppCard
-      outlined
-      elevated={false}
-      style={[
-        styles.overviewCard,
-        {
-          borderColor: palette.spotlightBorder,
-          backgroundColor: palette.spotlightBg,
-        },
-      ]}
-    >
-      <View style={styles.overviewInner}>
-        <View style={styles.overviewTop}>
-          <View
-            style={[
-              styles.iconChip,
-              {
-                backgroundColor: palette.iconChipBg,
-                borderColor: palette.iconChipBorder,
-              },
-            ]}
-          >
-            <Ionicons name={iconName} style={[styles.icon, { color: palette.iconColor }]} />
-          </View>
-          <AppText style={[styles.eyebrow, { color: palette.badgeText }]}>{eyebrow}</AppText>
-        </View>
-
-        {title ? <AppText style={styles.overviewTitle}>{title}</AppText> : null}
-
-        <View style={styles.routeRow}>
-          <AppText style={styles.routeAddress} numberOfLines={1}>
-            {origin || "출발지 정보 없음"}
-          </AppText>
-          <Ionicons name="arrow-forward" style={styles.routeArrow} />
-          <AppText style={styles.routeAddress} numberOfLines={1}>
-            {dest || "도착지 정보 없음"}
-          </AppText>
-        </View>
-
-        {waypointText ? (
-          <View style={styles.waypointRow}>
-            <Ionicons name="navigate-outline" style={styles.waypointIcon} />
-            <AppText style={styles.waypointText} numberOfLines={1}>
-              {waypointText}
-            </AppText>
-          </View>
-        ) : null}
-
-        <View style={styles.divider} />
-
-        <View style={styles.metricRow}>
-          <View style={styles.metricLeft}>
-            <Ionicons name="git-network-outline" style={styles.metricIcon} />
-            <AppText style={styles.metricLabel}>운송 거리</AppText>
-          </View>
-          <AppText style={styles.metricValue}>{distanceText}</AppText>
-        </View>
-
-        <View style={styles.metricRow}>
-          <View style={styles.metricLeft}>
-            <Ionicons name="cube-outline" style={styles.metricIcon} />
-            <AppText style={styles.metricLabel}>상차 방식</AppText>
-          </View>
-          <AppText style={styles.metricValue}>{loadMethodText}</AppText>
-        </View>
-
-        <View style={styles.metricRow}>
-          <View style={styles.metricLeft}>
-            <Ionicons name="exit-outline" style={styles.metricIcon} />
-            <AppText style={styles.metricLabel}>하차 방식</AppText>
-          </View>
-          <AppText style={styles.metricValue}>{unloadMethodText}</AppText>
-        </View>
-
-        <View>
-          <View style={styles.metricRow}>
-            <View style={styles.metricLeft}>
-              <Ionicons name="cash-outline" style={[styles.metricIcon, { color: palette.iconColor }]} />
-              <AppText style={styles.metricLabel}>제안 금액</AppText>
+    <View style={styles.summarySection}>
+      <AppCard elevated={false} style={[styles.summaryCard, { borderColor: palette.spotlightBorder, backgroundColor: palette.spotlightBg }]}>
+        <View style={styles.summaryInner}>
+          <View style={styles.summaryTop}>
+            <View style={[styles.summaryChip, { backgroundColor: palette.iconChipBg, borderColor: palette.iconChipBorder }]}>
+              <Ionicons name="information-circle-outline" style={[styles.summaryIcon, { color: palette.iconColor }]} />
             </View>
-            <AppText style={styles.metricValue}>{desiredPriceText}</AppText>
+            <AppText style={[styles.summaryEyebrow, { color: palette.badgeText }]}>운송 요약</AppText>
           </View>
-
-          <View style={styles.metricRow}>
-            <View style={styles.metricLeft}>
-              <Ionicons
-                name={isCompleted ? "wallet-outline" : "pricetag-outline"}
-                style={[styles.metricIcon, { color: palette.iconColor }]}
-              />
-              <AppText style={styles.metricLabel}>최종 금액</AppText>
+          <View style={styles.summaryRow}>
+            <View style={styles.summaryLeft}>
+              <Ionicons name="git-network-outline" style={styles.summaryIcon} />
+              <AppText style={styles.summaryLabel}>운송 거리</AppText>
             </View>
-            <AppText style={styles.metricValue}>{finalPriceText}</AppText>
+            <AppText style={styles.summaryValue}>{distanceText}</AppText>
           </View>
-
-          <AppText style={[styles.priceValue, { color: palette.emphasisText }]}>{finalPriceText}</AppText>
-
-          {isCompleted && completedAtText ? (
-            <AppText style={styles.note}>{`최종 정산 완료: ${completedAtText}`}</AppText>
-          ) : (
-            <AppText style={styles.note}>{note || "세부 요금은 아래에서 확인할 수 있습니다."}</AppText>
-          )}
+          <View style={styles.summaryRow}>
+            <View style={styles.summaryLeft}>
+              <Ionicons name="cube-outline" style={styles.summaryIcon} />
+              <AppText style={styles.summaryLabel}>상차 방식</AppText>
+            </View>
+            <AppText style={styles.summaryValue}>{loadText}</AppText>
+          </View>
+          <View style={styles.summaryRow}>
+            <View style={styles.summaryLeft}>
+              <Ionicons name="exit-outline" style={styles.summaryIcon} />
+              <AppText style={styles.summaryLabel}>하차 방식</AppText>
+            </View>
+            <AppText style={styles.summaryValue}>{unloadText}</AppText>
+          </View>
+          <View style={styles.summaryDivider} />
+          <View style={styles.priceWrap}>
+            {price.primaryLabel ? <AppText style={styles.priceLabel}>{price.primaryLabel}</AppText> : null}
+            <AppText style={[styles.priceMain, { color: palette.emphasisText }]}>{price.primaryText}</AppText>
+            {price.secondaryText ? <AppText style={styles.priceSecondary}>{price.secondaryText}</AppText> : null}
+          </View>
         </View>
-
-        {highlightLines.length > 0
-          ? highlightLines.slice(0, 4).map((line, index) => (
-              <View key={`${line}-${index}`} style={styles.highlightRow}>
-                <Ionicons name="information-circle-outline" style={styles.highlightIcon} />
-                <AppText style={styles.highlightLine}>{line}</AppText>
-              </View>
-            ))
-          : null}
-
-        {/* 하단 액션 버튼 영역 (빠른 실행 및 취소 버튼 묶음 배치 개선) */}
-        {(quickActions.length > 0 || showCancelButton || footnote) && (
-          <View style={styles.actionsContainer}>
-            {quickActions.length > 0 ? (
-              <View style={styles.quickActionsRow}>
-                {quickActions.map((action) => (
-                  <AppButton
-                    key={action}
-                    title={resolveQuickActionLabel(action)}
-                    variant="secondary"
-                    style={styles.actionButton}
-                    onPress={() => runQuickAction(action, view)}
-                  />
-                ))}
-              </View>
-            ) : null}
-
-            {showCancelButton ? (
-              <View style={[styles.cancelInlineWrapper, quickActions.length === 0 && { borderTopWidth: 0, paddingTop: 0 }]}>
-                <AppButton
-                  title="요청 취소"
-                  variant="secondary"
-                  style={styles.cancelInlineButton}
-                  textStyle={styles.cancelInlineText}
-                  left={<Ionicons name="trash-outline" style={styles.cancelInlineIcon} />}
-                  onPress={onPressCancel}
-                />
-              </View>
-            ) : null}
-
-            {footnote ? <AppText style={styles.footnote}>{footnote}</AppText> : null}
-          </View>
-        )}
-      </View>
-    </AppCard>
+      </AppCard>
+    </View>
   );
 }
 
 function SpecificationArchive({ view }: { view: QuoteDetailView }) {
   const styles = useStyles();
-  const [open, setOpen] = React.useState(true);
-
-  const toggle = () => {
+  const [open, setOpen] = React.useState(false);
+  const sections = React.useMemo(() => normalizeArchiveSections(view.specificationArchive), [view.specificationArchive]);
+  const toggle = React.useCallback(() => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setOpen((prev) => !prev);
-  };
-
-  const sections = Array.isArray(view.specificationArchive) ? view.specificationArchive : [];
-
+  }, []);
   return (
-    <View>
+    <View style={styles.detailSection}>
       <Pressable onPress={toggle} style={styles.accordionHeader}>
-        <AppText style={styles.accordionTitle}>요청 상세 정보 보기</AppText>
+        <AppText style={styles.accordionTitle}>요청 상세 정보</AppText>
         <View style={styles.accordionRight}>
           <AppText style={styles.accordionState}>{open ? "접기" : "보기"}</AppText>
           <Ionicons name={open ? "chevron-up" : "chevron-down"} style={styles.accordionChevron} />
         </View>
       </Pressable>
-
       {open ? (
         <View style={styles.accordionBody}>
-          {sections.map((section, sectionIndex) => {
-            const rows = Array.isArray(section.rows) ? section.rows : [];
-
-            return (
-              <AppCard key={`${section.title}-${sectionIndex}`} outlined elevated={false}>
-                <View style={styles.archiveCardInner}>
-                  <AppText style={styles.archiveTitle}>{section.title}</AppText>
-                  {rows.map((row, rowIndex) => (
-                    (() => {
-                      const iconName = resolveArchiveRowIconName(section.title, row.label);
-                      return (
-                        <View
-                          key={`${section.title}-${row.label}-${rowIndex}`}
-                          style={[styles.archiveRow, rowIndex === rows.length - 1 && styles.archiveRowLast]}
-                        >
-                          <View style={styles.archiveLabelGroup}>
-                            {iconName ? <Ionicons name={iconName} style={styles.archiveLabelIcon} /> : null}
-                            <AppText style={styles.archiveLabel}>{row.label}</AppText>
-                          </View>
-                          <AppText style={styles.archiveValue}>{row.value}</AppText>
-                        </View>
-                      );
-                    })()
-                  ))}
-                </View>
-              </AppCard>
-            );
-          })}
+          {sections.map((section) => (
+            <AppCard key={section.key} elevated={false} style={styles.archiveCard}>
+              <View style={styles.archiveInner}>
+                <AppText style={styles.archiveTitle}>{section.title}</AppText>
+                {section.rows.map((row, rowIndex) => {
+                  const iconName = resolveArchiveIcon(section.title, row.label);
+                  return (
+                    <View key={`${section.key}-${row.label}-${rowIndex}`} style={[styles.archiveRow, rowIndex === section.rows.length - 1 && styles.archiveRowLast]}>
+                      <View style={styles.archiveLabelWrap}>
+                        {iconName ? <Ionicons name={iconName} style={styles.archiveLabelIcon} /> : null}
+                        <AppText style={styles.archiveLabel}>{row.label}</AppText>
+                      </View>
+                      <AppText style={styles.archiveValue}>{row.value}</AppText>
+                    </View>
+                  );
+                })}
+              </View>
+            </AppCard>
+          ))}
         </View>
       ) : null}
     </View>
@@ -1004,690 +572,388 @@ function SpecificationArchive({ view }: { view: QuoteDetailView }) {
 export default function QuoteDetailPage() {
   const styles = useStyles();
   const theme = useAppTheme();
+  const insets = useSafeAreaInsets();
   const router = useRouter();
-  const params = useLocalSearchParams<{ id?: string | string[]; matchId?: string | string[] }>();
-  const [showCancelModal, setShowCancelModal] = React.useState(false);
-  const [cancelReasonInput, setCancelReasonInput] = React.useState("");
-  const [cancelReasonError, setCancelReasonError] = React.useState<string | undefined>(undefined);
-  const [isCancelSubmitting, setIsCancelSubmitting] = React.useState(false);
+  const params = useLocalSearchParams<{ id?: string | string[] }>();
+
   const [isDeleting, setIsDeleting] = React.useState(false);
-  const [quoteMatches, setQuoteMatches] = React.useState<ShipperMatchItem[]>([]);
-  const [isMatchLoading, setIsMatchLoading] = React.useState(false);
   const [isMatchSubmitting, setIsMatchSubmitting] = React.useState(false);
-  const [counterOffers, setCounterOffers] = React.useState<CounterOfferItem[]>([]);
-  const [isCounterOfferLoading, setIsCounterOfferLoading] = React.useState(false);
-  const [counterOfferPendingKey, setCounterOfferPendingKey] = React.useState<string | null>(null);
+  const [matchSnapshot, setMatchSnapshot] = React.useState<MatchSnapshot>(EMPTY_MATCH_SNAPSHOT);
+  const [matchHydrated, setMatchHydrated] = React.useState(false);
+  const [bottomBarHeight, setBottomBarHeight] = React.useState(0);
+  const matchLoadTokenRef = React.useRef(0);
+  const focusRefetchMetaRef = React.useRef({ hasFocusedOnce: false, lastRefetchAt: 0 });
+  const refreshInFlightRef = React.useRef<Promise<void> | null>(null);
 
-  const quoteIdentifier = parseRouteIdentifier(params?.id);
-  const quoteId = parsePositiveIntParam(params?.id);
+  const quoteIdentifier = readRouteParamText(params.id);
+  const routeQuoteId = parsePositiveIntParam(params.id);
   const view = useQuoteDetail(quoteIdentifier);
+  const actionQuoteId = React.useMemo(() => {
+    const fromView = parsePositiveInt(view.quote.quoteId);
+    return fromView > 0 ? fromView : routeQuoteId;
+  }, [routeQuoteId, view.quote.quoteId]);
+
   const isBlockedByFetchState = view.isLoading || Boolean(view.errorMessage);
-  const palette = isBlockedByFetchState ? null : resolveTonePalette(theme, view.policy);
-  const hasCancelAction =
-    !isBlockedByFetchState &&
-    (view.policy.bottomBar?.primary === "cancelRequest" || view.policy.bottomBar?.secondary === "cancelRequest");
-  const bottomBarWithoutCancel = React.useMemo(() => {
-    if (isBlockedByFetchState) return null;
+  const activeQuoteMatch = React.useMemo(
+    () => matchSnapshot.cancelableMatch ?? matchSnapshot.nonCanceledMatch ?? null,
+    [matchSnapshot.cancelableMatch, matchSnapshot.nonCanceledMatch]
+  );
+  const hasActiveQuoteMatch = Boolean(activeQuoteMatch);
+  const cancelTargetMatchId = React.useMemo(() => parsePositiveInt(activeQuoteMatch?.matchId), [activeQuoteMatch?.matchId]);
+  const isCancelIdInvalid = hasActiveQuoteMatch && cancelTargetMatchId <= 0;
+  const effectiveQuoteStatus = React.useMemo(
+    () => resolveEffectiveQuoteStatus(view.quote.status, activeQuoteMatch?.status),
+    [activeQuoteMatch?.status, view.quote.status]
+  );
+  const effectivePolicy = React.useMemo(() => getQuoteActionPolicy(effectiveQuoteStatus), [effectiveQuoteStatus]);
+  const effectiveActionsContext = React.useMemo(
+    () => ({ ...view.actionsContext, status: effectiveQuoteStatus }),
+    [effectiveQuoteStatus, view.actionsContext]
+  );
+  const quoteUiState = React.useMemo(
+    () => getCustomerUiStateFromBackendStatus(effectiveQuoteStatus),
+    [effectiveQuoteStatus]
+  );
+  const palette = resolveTonePalette(theme, effectivePolicy);
+  const effectiveStatusLabel = effectivePolicy.badgeLabel || view.commandCenter.statusLabel;
 
-    const original = view.policy.bottomBar;
-    if (!original) return null;
-
-    const nextPrimary = original.primary === "cancelRequest" ? undefined : original.primary;
-    const nextSecondary = original.secondary === "cancelRequest" ? undefined : original.secondary;
-
-    if (!nextPrimary && !nextSecondary) return null;
-    if (!nextPrimary && nextSecondary) return { primary: nextSecondary, secondary: undefined };
-    return { primary: nextPrimary, secondary: nextSecondary };
-  }, [view.policy.bottomBar, isBlockedByFetchState]);
-  const readErrorMessage = React.useCallback((error: unknown) => {
-    const fallback = "네트워크 또는 요청 값을 확인해주세요.";
-    if (!error || typeof error !== "object") return fallback;
-
-    const e = error as {
-      response?: { data?: { message?: string; error?: string } };
-      message?: string;
-    };
-
-    const serverMessage = e.response?.data?.message ?? e.response?.data?.error;
-    if (typeof serverMessage === "string" && serverMessage.trim()) return serverMessage.trim();
-    if (typeof e.message === "string" && e.message.trim()) return e.message.trim();
-    return fallback;
-  }, []);
-  const openCancelModal = React.useCallback(() => {
-    if (isBlockedByFetchState) return;
-    setShowCancelModal(true);
-    setCancelReasonError(undefined);
-  }, [isBlockedByFetchState]);
-  const closeCancelModal = React.useCallback(() => {
-    if (isCancelSubmitting) return;
-    setShowCancelModal(false);
-    setCancelReasonError(undefined);
-  }, [isCancelSubmitting]);
-  const resolveDirectMatchId = React.useCallback((): number => {
-    const fromRoute = parsePositiveIntParam(params?.matchId);
-    if (fromRoute > 0) return fromRoute;
-
-    const fromQuote = Number((view.quote as unknown as { matchId?: unknown })?.matchId);
-    if (Number.isInteger(fromQuote) && fromQuote > 0) return fromQuote;
-
-    const fromActions = Number((view.actionsContext as unknown as { matchId?: unknown })?.matchId);
-    if (Number.isInteger(fromActions) && fromActions > 0) return fromActions;
-
-    return 0;
-  }, [params?.matchId, view.actionsContext, view.quote]);
-  const resolveActionQuoteId = React.useCallback(() => {
-    const fromView = Number(view.quote?.quoteId);
-    if (Number.isInteger(fromView) && fromView > 0) return fromView;
-    if (Number.isInteger(quoteId) && quoteId > 0) return quoteId;
-    return 0;
-  }, [quoteId, view.quote?.quoteId]);
-
-  const loadQuoteMatches = React.useCallback(async (targetQuoteId: number): Promise<ShipperMatchItem[]> => {
-    const safeQuoteId = Number.isInteger(targetQuoteId) && targetQuoteId > 0 ? targetQuoteId : 0;
+  const loadMatchSnapshot = React.useCallback(async (targetQuoteId: number): Promise<MatchSnapshot> => {
+    const safeQuoteId = parsePositiveInt(targetQuoteId);
     if (safeQuoteId <= 0) {
-      setQuoteMatches([]);
-      return [];
+      setMatchSnapshot(EMPTY_MATCH_SNAPSHOT);
+      return EMPTY_MATCH_SNAPSHOT;
     }
-
     try {
-      setIsMatchLoading(true);
       const matches = await listMyShipperMatches();
-      const safeMatches = Array.isArray(matches) ? matches : [];
-      const filtered = safeMatches
-        .filter((match) => {
-          const quoteIdFromMatch = Number((match as { quoteId?: unknown })?.quoteId);
-          return Number.isInteger(quoteIdFromMatch) && quoteIdFromMatch === safeQuoteId;
-        })
-        .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
-
-      setQuoteMatches(filtered);
-      return filtered;
+      const snapshot = resolveMatchSnapshotForQuote(matches, safeQuoteId);
+      setMatchSnapshot(snapshot);
+      return snapshot;
     } catch {
-      setQuoteMatches([]);
-      return [];
-    } finally {
-      setIsMatchLoading(false);
+      setMatchSnapshot(EMPTY_MATCH_SNAPSHOT);
+      return EMPTY_MATCH_SNAPSHOT;
     }
   }, []);
 
-  const loadCounterOffers = React.useCallback(async (targetQuoteId: number): Promise<CounterOfferItem[]> => {
-    const safeQuoteId = Number.isInteger(targetQuoteId) && targetQuoteId > 0 ? targetQuoteId : 0;
-    if (safeQuoteId <= 0) {
-      setCounterOffers([]);
-      return [];
-    }
-
-    try {
-      setIsCounterOfferLoading(true);
-      const offers = await listShipperCounterOffers(safeQuoteId);
-      const safeOffers = Array.isArray(offers) ? offers : [];
-      setCounterOffers(safeOffers);
-      return safeOffers;
-    } catch {
-      setCounterOffers([]);
-      return [];
-    } finally {
-      setIsCounterOfferLoading(false);
-    }
-  }, []);
-
-  const refreshNegotiationData = React.useCallback(async () => {
-    const targetQuoteId = resolveActionQuoteId();
-    const tasks: Array<Promise<unknown>> = [view.refetch()];
-    if (targetQuoteId > 0) {
-      tasks.push(loadQuoteMatches(targetQuoteId));
-      tasks.push(loadCounterOffers(targetQuoteId));
-    }
-    await Promise.all(tasks);
-  }, [loadCounterOffers, loadQuoteMatches, resolveActionQuoteId, view.refetch]);
-
-  React.useEffect(() => {
-    const targetQuoteId = resolveActionQuoteId();
-    if (targetQuoteId <= 0) {
-      setQuoteMatches([]);
-      setCounterOffers([]);
+  const refreshQuoteAndMatchData = React.useCallback(async () => {
+    if (refreshInFlightRef.current) {
+      await refreshInFlightRef.current;
       return;
     }
 
-    void Promise.all([loadQuoteMatches(targetQuoteId), loadCounterOffers(targetQuoteId)]);
-  }, [loadCounterOffers, loadQuoteMatches, resolveActionQuoteId]);
+    const task = (async () => {
+      const tasks: Array<Promise<unknown>> = [view.refetch()];
+      if (actionQuoteId > 0) tasks.push(loadMatchSnapshot(actionQuoteId));
+      await Promise.all(tasks);
+    })();
 
-  const activeQuoteMatch = React.useMemo(() => findLatestQuoteMatch(quoteMatches), [quoteMatches]);
+    refreshInFlightRef.current = task;
+    try {
+      await task;
+    } finally {
+      if (refreshInFlightRef.current === task) {
+        refreshInFlightRef.current = null;
+      }
+    }
+  }, [actionQuoteId, loadMatchSnapshot, view.refetch]);
 
-  const latestPendingCounterOffer = React.useMemo(() => {
-    const safeList = Array.isArray(counterOffers) ? counterOffers : [];
-    return safeList.find((offer) => isCounterOfferPending(offer.status)) ?? null;
-  }, [counterOffers]);
+  React.useEffect(() => {
+    const safeQuoteId = parsePositiveInt(actionQuoteId);
+    matchLoadTokenRef.current += 1;
+    const token = matchLoadTokenRef.current;
+    let canceled = false;
+    if (safeQuoteId <= 0) {
+      setMatchSnapshot(EMPTY_MATCH_SNAPSHOT);
+      setMatchHydrated(true);
+      return;
+    }
+    setMatchHydrated(false);
+    const task = InteractionManager.runAfterInteractions(() => {
+      if (canceled || matchLoadTokenRef.current !== token) return;
+      void loadMatchSnapshot(safeQuoteId).finally(() => {
+        if (canceled || matchLoadTokenRef.current !== token) return;
+        setMatchHydrated(true);
+      });
+    });
+    return () => {
+      canceled = true;
+      task.cancel();
+    };
+  }, [actionQuoteId, loadMatchSnapshot]);
 
-  const runCounterOfferDecision = React.useCallback(
-    async (offer: CounterOfferItem, action: "accept" | "reject") => {
-      const safeOfferId = Number.isInteger(offer?.counterOfferId) && offer.counterOfferId > 0 ? offer.counterOfferId : 0;
-      if (safeOfferId <= 0) {
-        Alert.alert("제안 처리 실패", "유효한 제안 ID를 찾을 수 없습니다.");
-        return;
+  useFocusEffect(
+    React.useCallback(() => {
+      if (actionQuoteId <= 0) return undefined;
+
+      const focusMeta = focusRefetchMetaRef.current;
+      if (!focusMeta.hasFocusedOnce) {
+        focusMeta.hasFocusedOnce = true;
+        return undefined;
       }
 
-      const pendingKey = `${action}:${safeOfferId}`;
-      if (counterOfferPendingKey !== null) return;
+      const now = Date.now();
+      if (now - focusMeta.lastRefetchAt < FOCUS_REFETCH_THROTTLE_MS) return undefined;
+      focusMeta.lastRefetchAt = now;
 
-      try {
-        setCounterOfferPendingKey(pendingKey);
-        if (action === "accept") {
-          await acceptShipperCounterOffer(safeOfferId);
-        } else {
-          await rejectShipperCounterOffer(safeOfferId);
-        }
-
-        await refreshNegotiationData();
-
-        if (action === "accept") {
-          Alert.alert("제안 수락", "역제안을 수락했습니다.");
-        } else {
-          Alert.alert("제안 거절", "역제안을 거절했습니다.");
-        }
-      } catch (error) {
-        Alert.alert("제안 처리 실패", readErrorMessage(error));
-      } finally {
-        setCounterOfferPendingKey(null);
-      }
-    },
-    [counterOfferPendingKey, readErrorMessage, refreshNegotiationData]
+      void refreshQuoteAndMatchData();
+      return undefined;
+    }, [actionQuoteId, refreshQuoteAndMatchData])
   );
 
   const handleCreateMatch = React.useCallback(async () => {
     if (isMatchSubmitting) return;
-
-    const targetQuoteId = resolveActionQuoteId();
-    if (targetQuoteId <= 0) {
+    if (actionQuoteId <= 0) {
       Alert.alert("배차 요청 실패", "유효한 견적 정보를 찾을 수 없습니다.");
       return;
     }
-
     try {
       setIsMatchSubmitting(true);
-      await createShipperMatch(targetQuoteId);
-      await refreshNegotiationData();
+      await createShipperMatch(actionQuoteId);
+      await refreshQuoteAndMatchData();
       Alert.alert("배차 요청", "배차 요청이 생성되었습니다.");
     } catch (error) {
-      Alert.alert("배차 요청 실패", readErrorMessage(error));
+      Alert.alert("배차 요청 실패", readApiErrorMessage(error));
     } finally {
       setIsMatchSubmitting(false);
     }
-  }, [isMatchSubmitting, readErrorMessage, refreshNegotiationData, resolveActionQuoteId]);
+  }, [actionQuoteId, isMatchSubmitting, refreshQuoteAndMatchData]);
 
-  const handleCancelMatchDirect = React.useCallback(async () => {
+  const handleCancelMatch = React.useCallback(async () => {
     if (isMatchSubmitting) return;
-
-    const targetMatchId =
-      Number.isInteger(activeQuoteMatch?.matchId) && Number(activeQuoteMatch?.matchId) > 0
-        ? Number(activeQuoteMatch?.matchId)
-        : 0;
-    if (targetMatchId <= 0) {
+    if (cancelTargetMatchId <= 0) {
       Alert.alert("배차 취소 실패", "취소할 배차 요청을 찾을 수 없습니다.");
       return;
     }
-
     try {
       setIsMatchSubmitting(true);
-      await cancelShipperMatch(targetMatchId);
-      await refreshNegotiationData();
+      await cancelShipperMatch(cancelTargetMatchId);
+      await refreshQuoteAndMatchData();
       Alert.alert("배차 취소", "배차 요청을 취소했습니다.");
     } catch (error) {
-      Alert.alert("배차 취소 실패", readErrorMessage(error));
+      Alert.alert("배차 취소 실패", readApiErrorMessage(error));
     } finally {
       setIsMatchSubmitting(false);
     }
-  }, [activeQuoteMatch?.matchId, isMatchSubmitting, readErrorMessage, refreshNegotiationData]);
+  }, [cancelTargetMatchId, isMatchSubmitting, refreshQuoteAndMatchData]);
 
-  const handleBottomAction = React.useCallback(
-    async (action: BottomDecisionAction) => {
+  const resolvePendingCounterOfferId = React.useCallback(async () => {
+    if (actionQuoteId <= 0) return 0;
+    const offers = await listShipperCounterOffers(actionQuoteId);
+    const pendingOffer = offers.find((offer) => isCounterOfferPending(offer.status));
+    return parsePositiveInt(pendingOffer?.counterOfferId);
+  }, [actionQuoteId]);
+
+  const runPolicyAction = React.useCallback(
+    async (action: QuoteDecisionAction, _ctx: QuoteActionsContext) => {
+      if (isMatchSubmitting) return;
+
       if (action === "acceptOffer") {
-        if (!latestPendingCounterOffer) {
-          Alert.alert("제안 수락", "수락 가능한 역제안이 없습니다.");
-          return;
+        try {
+          setIsMatchSubmitting(true);
+          const offerId = await resolvePendingCounterOfferId();
+          if (offerId <= 0) {
+            Alert.alert("협상 제안 수락", "대기 중인 역제안을 찾을 수 없습니다.");
+            return;
+          }
+          await acceptShipperCounterOffer(offerId);
+          await refreshQuoteAndMatchData();
+          Alert.alert("협상 제안 수락", "역제안을 수락했습니다.");
+        } catch (error) {
+          Alert.alert("협상 제안 수락 실패", readApiErrorMessage(error));
+        } finally {
+          setIsMatchSubmitting(false);
         }
-        await runCounterOfferDecision(latestPendingCounterOffer, "accept");
         return;
       }
 
       if (action === "rejectOffer") {
-        if (!latestPendingCounterOffer) {
-          Alert.alert("제안 거절", "거절 가능한 역제안이 없습니다.");
-          return;
+        try {
+          setIsMatchSubmitting(true);
+          const offerId = await resolvePendingCounterOfferId();
+          if (offerId <= 0) {
+            Alert.alert("협상 제안 거절", "대기 중인 역제안을 찾을 수 없습니다.");
+            return;
+          }
+          await rejectShipperCounterOffer(offerId);
+          await refreshQuoteAndMatchData();
+          Alert.alert("협상 제안 거절", "역제안을 거절했습니다.");
+        } catch (error) {
+          Alert.alert("협상 제안 거절 실패", readApiErrorMessage(error));
+        } finally {
+          setIsMatchSubmitting(false);
         }
-        await runCounterOfferDecision(latestPendingCounterOffer, "reject");
+        return;
+      }
+
+      if (action === "reRequestRoute") {
+        router.push("/(shipper)/quotes/create");
         return;
       }
 
       if (action === "pay") {
-        const amount = Number.isFinite(view.actionsContext?.finalPrice) ? view.actionsContext.finalPrice : 0;
-        Alert.alert("결제 진행", `${Math.max(0, Math.trunc(amount)).toLocaleString("ko-KR")}원 결제를 진행합니다.`);
-        return;
+        Alert.alert("결제", "결제 플로우는 다음 단계에서 연결됩니다.");
       }
-
-      router.push("/(shipper)/quotes/create");
     },
-    [latestPendingCounterOffer, router, runCounterOfferDecision, view.actionsContext?.finalPrice]
+    [isMatchSubmitting, refreshQuoteAndMatchData, resolvePendingCounterOfferId, router]
   );
 
-  const submitCancelModal = React.useCallback(async () => {
-    if (isBlockedByFetchState || isCancelSubmitting) return;
-
-    const safeQuoteId =
-      Number.isInteger(view.actionsContext?.quoteId) && view.actionsContext.quoteId > 0 ? view.actionsContext.quoteId : 0;
-    if (safeQuoteId <= 0) {
-      setCancelReasonError("유효한 견적 정보를 찾을 수 없습니다.");
-      return;
-    }
-
-    const trimmed = cancelReasonInput.trim();
-    if (trimmed.length < 2) {
-      setCancelReasonError("취소 사유를 2자 이상 입력해주세요.");
-      return;
-    }
-
-    try {
-      setIsCancelSubmitting(true);
-      let targetMatchId = resolveDirectMatchId();
-
-      if (targetMatchId <= 0) {
-        const safeMatches = Array.isArray(quoteMatches) ? quoteMatches : [];
-        const latestLocal = findLatestQuoteMatch(safeMatches);
-        const localMatchId = Number(latestLocal?.matchId ?? 0);
-        if (Number.isInteger(localMatchId) && localMatchId > 0) {
-          targetMatchId = localMatchId;
-        }
-      }
-
-      if (targetMatchId <= 0) {
-        const remoteMatches = await listMyShipperMatches();
-        const safeMatches = Array.isArray(remoteMatches) ? remoteMatches : [];
-        const sameQuoteMatches = safeMatches.filter((match) => {
-          const quoteIdFromMatch = Number((match as { quoteId?: unknown })?.quoteId);
-          const matchIdFromMatch = Number((match as { matchId?: unknown })?.matchId);
-          return Number.isInteger(quoteIdFromMatch) && quoteIdFromMatch === safeQuoteId && Number.isInteger(matchIdFromMatch) && matchIdFromMatch > 0;
-        });
-
-        const preferred = sameQuoteMatches.find((match) => Boolean(match?.cancelable)) ?? sameQuoteMatches[0];
-        targetMatchId = Number(preferred?.matchId ?? 0);
-      }
-
-      if (!Number.isInteger(targetMatchId) || targetMatchId <= 0) {
-        setCancelReasonError("취소할 요청을 찾을 수 없습니다.");
-        return;
-      }
-
-      await cancelShipperMatch(targetMatchId);
-
-      setShowCancelModal(false);
-      setCancelReasonInput("");
-      setCancelReasonError(undefined);
-      await Promise.all([view.refetch(), loadQuoteMatches(safeQuoteId), loadCounterOffers(safeQuoteId)]);
-      Alert.alert("요청 취소", "취소 요청이 처리되었습니다.");
-    } catch (error) {
-      Alert.alert("요청 취소 실패", readErrorMessage(error));
-    } finally {
-      setIsCancelSubmitting(false);
-    }
-  }, [
-    cancelReasonInput,
-    isBlockedByFetchState,
-    isCancelSubmitting,
-    loadCounterOffers,
-    loadQuoteMatches,
-    quoteMatches,
-    readErrorMessage,
-    resolveDirectMatchId,
-    view.actionsContext?.quoteId,
-    view.refetch,
-  ]);
+  const handlePolicyCancelRequest = React.useCallback(
+    (_payload: { quoteId: number; reason: string }) => {
+      void handleCancelMatch();
+    },
+    [handleCancelMatch]
+  );
 
   const handlePressEdit = React.useCallback(() => {
     if (isBlockedByFetchState) return;
-    const targetQuoteId = resolveActionQuoteId();
-    const preferredIdentifier = String(view.quote?.quotePublicId ?? quoteIdentifier ?? "").trim();
-    const routeIdentifier = preferredIdentifier || (targetQuoteId > 0 ? String(targetQuoteId) : "");
-
+    const preferredIdentifier = toText(view.quote.quotePublicId || quoteIdentifier);
+    const routeIdentifier = preferredIdentifier || (actionQuoteId > 0 ? String(actionQuoteId) : "");
     if (!routeIdentifier) {
       Alert.alert("수정 이동 실패", "유효한 견적 ID를 찾을 수 없습니다.");
       return;
     }
-
     router.push({ pathname: "/(shipper)/quotes/edit/[id]", params: { id: routeIdentifier } });
-  }, [isBlockedByFetchState, quoteIdentifier, resolveActionQuoteId, router, view.quote?.quotePublicId]);
+  }, [actionQuoteId, isBlockedByFetchState, quoteIdentifier, router, view.quote.quotePublicId]);
+
   const runDelete = React.useCallback(async () => {
     if (isDeleting || isBlockedByFetchState) return;
-
-    const targetQuoteId = resolveActionQuoteId();
-    if (targetQuoteId <= 0) {
+    if (actionQuoteId <= 0) {
       Alert.alert("견적 삭제 실패", "유효한 견적 ID를 찾을 수 없습니다.");
       return;
     }
-
     try {
       setIsDeleting(true);
-      await deleteShipperQuote(targetQuoteId);
+      await deleteShipperQuote(actionQuoteId);
       router.replace("/(shipper)/quotes");
     } catch (error) {
-      Alert.alert("견적 삭제 실패", readErrorMessage(error));
+      Alert.alert("견적 삭제 실패", readApiErrorMessage(error));
     } finally {
       setIsDeleting(false);
     }
-  }, [isBlockedByFetchState, isDeleting, readErrorMessage, resolveActionQuoteId, router]);
+  }, [actionQuoteId, isBlockedByFetchState, isDeleting, router]);
+
   const handlePressDelete = React.useCallback(() => {
     if (isBlockedByFetchState || isDeleting) return;
-
     Alert.alert("견적 삭제", "해당 견적을 삭제하시겠습니까?", [
       { text: "취소", style: "cancel" },
-      {
-        text: "삭제",
-        style: "destructive",
-        onPress: () => {
-          void runDelete();
-        },
-      },
+      { text: "삭제", style: "destructive", onPress: () => void runDelete() },
     ]);
   }, [isBlockedByFetchState, isDeleting, runDelete]);
 
-  React.useEffect(() => {
-    initLayoutAnimationForAndroid();
-  }, []);
+  const handleOpenManageMenu = React.useCallback(() => {
+    if (isBlockedByFetchState || isDeleting) return;
+    Alert.alert("견적 관리", "작업을 선택해 주세요.", [
+      { text: "취소", style: "cancel" },
+      { text: "수정", onPress: handlePressEdit },
+      { text: "삭제", style: "destructive", onPress: handlePressDelete },
+    ]);
+  }, [handlePressDelete, handlePressEdit, isBlockedByFetchState, isDeleting]);
 
   const handleDetailErrorRetry = React.useCallback(() => {
     if (view.isSessionExpired) {
       router.replace("/(auth)/login");
       return;
     }
-    view.refetch();
+    void view.refetch();
   }, [router, view.isSessionExpired, view.refetch]);
+
+  React.useEffect(() => {
+    initLayoutAnimationForAndroid();
+  }, []);
+
+  const spacing = safeNumber(theme.layout.spacing.base, 4);
+  const shouldUsePolicyActionBar = POLICY_ACTION_UI_STATES.has(quoteUiState) && Boolean(effectivePolicy.bottomBar);
+  const bottomTitle = hasActiveQuoteMatch ? "배차 요청 취소" : "배차 요청";
+  const bottomVariant = hasActiveQuoteMatch ? "destructive" : "primary";
+  const handlePressBottomAction = React.useCallback(() => {
+    if (hasActiveQuoteMatch) {
+      void handleCancelMatch();
+      return;
+    }
+    void handleCreateMatch();
+  }, [handleCancelMatch, handleCreateMatch, hasActiveQuoteMatch]);
+
+  const bottomBar = !isBlockedByFetchState ? (
+    <View style={[styles.bottomBar, { paddingBottom: insets.bottom + spacing * 2 }]} onLayout={(e) => setBottomBarHeight(e.nativeEvent.layout.height)}>
+      {!matchHydrated ? (
+        <View style={styles.bottomPlaceholder}>
+          <AppText style={styles.bottomPlaceholderText}>배차 상태 확인 중...</AppText>
+        </View>
+      ) : shouldUsePolicyActionBar ? (
+        <BottomActionRouter
+          ctx={effectiveActionsContext}
+          bottomBar={effectivePolicy.bottomBar}
+          guards={effectivePolicy.guards}
+          onCancelRequest={handlePolicyCancelRequest}
+          onRunAction={(action, ctx) => runPolicyAction(action, ctx)}
+        />
+      ) : (
+        <AppButton
+          title={bottomTitle}
+          variant={bottomVariant}
+          style={styles.bottomButton}
+          onPress={handlePressBottomAction}
+          loading={isMatchSubmitting}
+          disabled={isMatchSubmitting || (hasActiveQuoteMatch && isCancelIdInvalid) || actionQuoteId <= 0}
+        />
+      )}
+    </View>
+  ) : null;
 
   return (
     <PageScaffold
       title="견적 상세"
       backgroundColor={theme.colors.bgMain}
-      contentStyle={styles.pageContent}
-      bottomBar={
-        bottomBarWithoutCancel ? (
-          <BottomActionRouter
-            ctx={view.actionsContext}
-            bottomBar={bottomBarWithoutCancel}
-            guards={view.policy.guards}
-            onRunAction={handleBottomAction}
-          />
-        ) : null
-      }
+      contentStyle={StyleSheet.flatten([styles.pageContent, { paddingBottom: bottomBarHeight + spacing * 3 }])}
       onPressBack={() => router.back()}
       backLabel="이전"
+      headerRight={
+        <AppButton size="icon" variant="secondary" accessibilityLabel="견적 관리 메뉴" onPress={handleOpenManageMenu} disabled={isBlockedByFetchState || isDeleting}>
+          <Ionicons name="ellipsis-horizontal" size={20} color={theme.colors.textMain} />
+        </AppButton>
+      }
+      bottomBar={bottomBar}
     >
-      {view.isLoading ? (
-        <AppSpinner label="견적 상세를 불러오는 중입니다." />
-      ) : view.errorMessage ? (
-        <AppErrorState
-          title={view.isSessionExpired ? "세션이 만료되었습니다" : "견적 상세를 불러오지 못했어요"}
-          description={view.isSessionExpired ? "세션이 만료되었습니다. 다시 로그인해 주세요." : view.errorMessage}
-          retryLabel={view.isSessionExpired ? "로그인으로 이동" : "다시 시도"}
-          onRetry={handleDetailErrorRetry}
-          fullScreen={false}
-        />
-      ) : (
+      <AppRequestState
+        isLoading={view.isLoading}
+        loadingLabel="견적 상세를 불러오는 중입니다."
+        errorMessage={view.isSessionExpired ? "세션이 만료되었습니다. 다시 로그인해 주세요." : view.errorMessage}
+        errorTitle={view.isSessionExpired ? "세션이 만료되었습니다" : "견적 상세를 불러오지 못했어요"}
+        retryLabel={view.isSessionExpired ? "로그인으로 이동" : "다시 시도"}
+        onRetry={handleDetailErrorRetry}
+        fullScreen={false}
+      >
         <>
-          <View style={styles.commandCenter}>
+          <View style={styles.statusSection}>
             <View style={styles.statusRow}>
-              <View style={styles.statusLeft}>
-                <View
-                  style={[
-                    styles.statusBadge,
-                    {
-                      backgroundColor: palette?.badgeBg ?? theme.colors.bgSurface,
-                      borderColor: palette?.badgeBorder ?? theme.colors.borderDefault,
-                    },
-                  ]}
-                >
-                  <AppText style={[styles.statusText, { color: palette?.badgeText ?? theme.colors.textMain }]} numberOfLines={1}>
-                    {view.commandCenter?.statusLabel ?? "진행 상태"}
-                  </AppText>
-                </View>
+              <View style={[styles.statusBadge, { backgroundColor: palette.badgeBg, borderColor: palette.badgeBorder }]}>
+                <AppText style={[styles.statusText, { color: palette.badgeText }]} numberOfLines={1}>
+                  {effectiveStatusLabel}
+                </AppText>
               </View>
-
-              <AppText style={styles.metaText} numberOfLines={1}>
-                {view.commandCenter?.metaText ?? `#${view.quote?.quoteId ?? quoteId}`}
+              <AppText style={styles.statusMeta} numberOfLines={1}>
+                {view.commandCenter.metaText || `#${view.quote.quoteId || routeQuoteId}`}
               </AppText>
             </View>
-
-            {!isBlockedByFetchState ? (
-              <View style={styles.manageActionsRow}>
-                <AppButton
-                  title="수정"
-                  variant="secondary"
-                  style={styles.manageActionButton}
-                  onPress={handlePressEdit}
-                />
-                <AppButton
-                  title="삭제"
-                  variant="destructive"
-                  style={styles.manageActionButton}
-                  onPress={handlePressDelete}
-                  loading={isDeleting}
-                />
-              </View>
-            ) : null}
-
-            {view.commandCenter?.cancelReasonText ? (
-              <View style={styles.cancelSummaryBox}>
-                <View style={styles.cancelSummaryRow}>
-                  <Ionicons name="alert-circle" style={styles.cancelSummaryIcon} />
-                  <AppText style={styles.cancelSummaryLabel}>취소 사유</AppText>
-                  <AppText style={styles.cancelSummaryValue}>{view.commandCenter.cancelReasonText}</AppText>
+            {view.commandCenter.cancelReasonText ? (
+              <View style={styles.cancelBox}>
+                <View style={styles.cancelRow}>
+                  <Ionicons name="alert-circle" style={styles.cancelIcon} />
+                  <AppText style={styles.cancelLabel}>취소 사유</AppText>
+                  <AppText style={styles.cancelValue}>{view.commandCenter.cancelReasonText}</AppText>
                 </View>
-                <View style={styles.cancelSummaryRow}>
-                  <Ionicons name="time-outline" style={styles.cancelSummaryIcon} />
-                  <AppText style={styles.cancelSummaryLabel}>취소 시간</AppText>
-                  <AppText style={styles.cancelSummaryValue}>{view.commandCenter.canceledAtText || "시간 정보 없음"}</AppText>
+                <View style={styles.cancelRow}>
+                  <Ionicons name="time-outline" style={styles.cancelIcon} />
+                  <AppText style={styles.cancelLabel}>취소 시간</AppText>
+                  <AppText style={styles.cancelValue}>{toDisplayText(view.commandCenter.canceledAtText)}</AppText>
                 </View>
               </View>
             ) : null}
           </View>
-
-          <OverviewCard view={view} showCancelButton={hasCancelAction} onPressCancel={openCancelModal} />
-
-          <View style={styles.negotiationSection}>
-            <AppCard outlined elevated={false}>
-              <View style={styles.negotiationCardInner}>
-                <View style={styles.negotiationHeaderRow}>
-                  <AppText style={styles.negotiationTitle}>배차 요청(Match)</AppText>
-                  <View style={styles.negotiationStatusChip}>
-                    <AppText style={styles.negotiationStatusText}>
-                      {activeQuoteMatch ? resolveMatchStatusLabel(activeQuoteMatch.status) : "요청 없음"}
-                    </AppText>
-                  </View>
-                </View>
-
-                <AppText style={styles.negotiationSub}>
-                  {isMatchLoading ? "매칭 상태를 불러오는 중입니다." : "배차 요청 생성/취소 후 최신 상태로 즉시 갱신됩니다."}
-                </AppText>
-
-                <View style={styles.negotiationInfoRow}>
-                  <AppText style={styles.negotiationLabel}>매칭 ID</AppText>
-                  <AppText style={styles.negotiationValue}>{toDisplayDash(activeQuoteMatch?.matchId)}</AppText>
-                </View>
-                <View style={styles.negotiationInfoRow}>
-                  <AppText style={styles.negotiationLabel}>견적 ID</AppText>
-                  <AppText style={styles.negotiationValue}>{toDisplayDash(activeQuoteMatch?.quoteId)}</AppText>
-                </View>
-                <View style={styles.negotiationInfoRow}>
-                  <AppText style={styles.negotiationLabel}>최근 갱신</AppText>
-                  <AppText style={styles.negotiationValue}>{formatDateTimeOrDash(activeQuoteMatch?.updatedAt)}</AppText>
-                </View>
-
-                <View style={styles.negotiationDivider} />
-
-                <View style={styles.negotiationActions}>
-                  <AppButton
-                    title="배차 요청"
-                    variant="primary"
-                    style={styles.negotiationButton}
-                    onPress={handleCreateMatch}
-                    loading={isMatchSubmitting && !activeQuoteMatch}
-                    disabled={isMatchSubmitting || Boolean(activeQuoteMatch)}
-                  />
-                  <AppButton
-                    title="배차 취소"
-                    variant="destructive"
-                    style={styles.negotiationButton}
-                    onPress={handleCancelMatchDirect}
-                    loading={isMatchSubmitting && Boolean(activeQuoteMatch)}
-                    disabled={isMatchSubmitting || !activeQuoteMatch}
-                  />
-                </View>
-              </View>
-            </AppCard>
-
-            <AppCard outlined elevated={false}>
-              <View style={styles.negotiationCardInner}>
-                <View style={styles.negotiationHeaderRow}>
-                  <AppText style={styles.negotiationTitle}>역제안 목록(Counter-Offer)</AppText>
-                  <View style={styles.negotiationStatusChip}>
-                    <AppText style={styles.negotiationStatusText}>{`${counterOffers.length}건`}</AppText>
-                  </View>
-                </View>
-
-                <AppText style={styles.negotiationSub}>
-                  {isCounterOfferLoading ? "역제안 목록을 불러오는 중입니다." : "각 제안의 상태/사유/시간을 확인하고 수락/거절할 수 있습니다."}
-                </AppText>
-
-                {counterOffers.length > 0 ? (
-                  counterOffers.map((offer) => {
-                    const safeOfferId =
-                      Number.isInteger(offer?.counterOfferId) && Number(offer?.counterOfferId) > 0
-                        ? Number(offer?.counterOfferId)
-                        : 0;
-                    const isPending = isCounterOfferPending(offer.status);
-                    const acceptPendingKey = `accept:${safeOfferId}`;
-                    const rejectPendingKey = `reject:${safeOfferId}`;
-                    const isAcceptLoading = counterOfferPendingKey === acceptPendingKey;
-                    const isRejectLoading = counterOfferPendingKey === rejectPendingKey;
-                    const isOtherActionPending =
-                      counterOfferPendingKey !== null && counterOfferPendingKey !== acceptPendingKey && counterOfferPendingKey !== rejectPendingKey;
-
-                    return (
-                      <View key={`offer-${safeOfferId || offer.createdAt}`}>
-                        <View style={styles.negotiationDivider} />
-                        <View style={styles.negotiationInfoRow}>
-                          <AppText style={styles.negotiationLabel}>제안 금액</AppText>
-                          <AppText style={styles.negotiationValue}>{formatPriceText(offer.proposedPrice)}</AppText>
-                        </View>
-                        <View style={styles.negotiationInfoRow}>
-                          <AppText style={styles.negotiationLabel}>사유</AppText>
-                          <AppText style={styles.negotiationValue}>{toDisplayDash(offer.message)}</AppText>
-                        </View>
-                        <View style={styles.negotiationInfoRow}>
-                          <AppText style={styles.negotiationLabel}>상태</AppText>
-                          <AppText style={styles.negotiationValue}>{resolveCounterOfferStatusLabel(offer.status)}</AppText>
-                        </View>
-                        <View style={styles.negotiationInfoRow}>
-                          <AppText style={styles.negotiationLabel}>주체</AppText>
-                          <AppText style={styles.negotiationValue}>{resolveCounterOfferActorLabel(offer.actorRole)}</AppText>
-                        </View>
-                        <View style={styles.negotiationInfoRow}>
-                          <AppText style={styles.negotiationLabel}>생성 시간</AppText>
-                          <AppText style={styles.negotiationValue}>{formatDateTimeOrDash(offer.createdAt)}</AppText>
-                        </View>
-                        <View style={styles.negotiationInfoRow}>
-                          <AppText style={styles.negotiationLabel}>응답 시간</AppText>
-                          <AppText style={styles.negotiationValue}>{formatDateTimeOrDash(offer.respondedAt)}</AppText>
-                        </View>
-
-                        {isPending ? (
-                          <View style={styles.negotiationActions}>
-                            <AppButton
-                              title="수락"
-                              variant="primary"
-                              style={styles.negotiationButton}
-                              onPress={() => {
-                                void runCounterOfferDecision(offer, "accept");
-                              }}
-                              loading={isAcceptLoading}
-                              disabled={isOtherActionPending || isRejectLoading}
-                            />
-                            <AppButton
-                              title="거절"
-                              variant="destructive"
-                              style={styles.negotiationButton}
-                              onPress={() => {
-                                void runCounterOfferDecision(offer, "reject");
-                              }}
-                              loading={isRejectLoading}
-                              disabled={isOtherActionPending || isAcceptLoading}
-                            />
-                          </View>
-                        ) : null}
-                      </View>
-                    );
-                  })
-                ) : (
-                  <AppText style={styles.emptyStateText}>표시할 역제안이 없습니다.</AppText>
-                )}
-              </View>
-            </AppCard>
-          </View>
-
+          <RouteFlowCard coreSummary={view.coreSummary} />
+          <SummaryCard view={view} />
           <SpecificationArchive view={view} />
-
-          <Modal transparent visible={showCancelModal} animationType="fade" onRequestClose={closeCancelModal}>
-            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.cancelModalOverlay}>
-              <Pressable style={StyleSheet.absoluteFill} onPress={isCancelSubmitting ? undefined : closeCancelModal} />
-              <View style={styles.cancelModalSheet}>
-                <AppCard outlined elevated={false} style={styles.cancelModalCard}>
-                  <View style={styles.cancelModalContent}>
-                    <View style={styles.cancelModalHeader}>
-                      <View style={styles.cancelModalIconContainer}>
-                        <Ionicons name="warning" style={styles.cancelModalIcon} />
-                      </View>
-                      <AppText style={styles.cancelModalTitle}>요청 취소</AppText>
-                    </View>
-                    <AppText style={styles.cancelModalDesc}>
-                      요청을 취소하시겠습니까? 취소 사유를 입력하면 즉시 취소 상태로 변경됩니다.
-                    </AppText>
-
-                    <AppInput
-                      label="취소 사유"
-                      placeholder="예) 다른 운송 수단 이용, 일정 변경 등"
-                      value={cancelReasonInput}
-                      onChangeText={(text) => {
-                        setCancelReasonInput(text);
-                        if (cancelReasonError) setCancelReasonError(undefined);
-                      }}
-                      error={cancelReasonError}
-                      multiline
-                      numberOfLines={4}
-                      textAlignVertical="top"
-                      maxLength={200}
-                    />
-
-                    <View style={styles.cancelModalActions}>
-                      <AppButton
-                        title="닫기"
-                        variant="secondary"
-                        style={styles.actionButton}
-                        onPress={closeCancelModal}
-                        disabled={isCancelSubmitting}
-                      />
-                      <AppButton
-                        title="취소 확정"
-                        variant="destructive"
-                        style={styles.actionButton}
-                        onPress={submitCancelModal}
-                        loading={isCancelSubmitting}
-                        disabled={isCancelSubmitting}
-                      />
-                    </View>
-                  </View>
-                </AppCard>
-              </View>
-            </KeyboardAvoidingView>
-          </Modal>
         </>
-      )}
+      </AppRequestState>
     </PageScaffold>
   );
 }

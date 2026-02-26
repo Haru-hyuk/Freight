@@ -5,6 +5,7 @@
  * OpenAPI spec version: v0
  */
 import type { QuoteChecklistItemRequest } from './quoteChecklistItemRequest';
+import type { QuoteItemRequest } from './quoteItemRequest';
 import type { QuoteStopRequest } from './quoteStopRequest';
 
 export interface QuoteUpdateRequest {
@@ -30,5 +31,6 @@ export interface QuoteUpdateRequest {
   loadMethod?: string;
   unloadMethod?: string;
   checklistItems?: QuoteChecklistItemRequest[];
+  quoteItems?: QuoteItemRequest[];
   stops?: QuoteStopRequest[];
 }

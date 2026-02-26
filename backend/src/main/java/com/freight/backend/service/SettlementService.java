@@ -20,6 +20,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 정산 서비스
+ * - 결제 후 정산 생성
+ * - 플랫폼/빠른정산 수수료 계산
+ * - 화주 확인/자동 확정
+ */
 @Service
 @RequiredArgsConstructor
 public class SettlementService {
@@ -33,6 +39,7 @@ public class SettlementService {
     private static final BigDecimal FAST_SETTLEMENT_FEE_RATE = new BigDecimal("0.02");
     private static final BigDecimal INSTANT_SETTLEMENT_FEE_RATE = new BigDecimal("0.03");
 
+    /** 결제 완료 후 정산 생성 (플랫폼 수수료 + 빠른정산 수수료 계산) */
     @Transactional
     public Settlement createAfterPaymentConfirm(
             String orderId,
@@ -205,6 +212,7 @@ public class SettlementService {
         return settlement;
     }
 
+    /** 배송사진 업로드 후 24시간 경과 시 자동 정산 확정 (스케줄러에서 호출) */
     @Transactional
     public int autoConfirmEligibleSettlements(int afterHours) {
         int safeHours = Math.max(1, afterHours);

@@ -7,6 +7,9 @@
 
 export interface TokenResponse {
   accessToken?: string;
+  refreshToken?: string;
   tokenType?: string;
   expiresIn?: number;
+  role?: string;
+  userId?: string;
 }

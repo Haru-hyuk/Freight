@@ -42,7 +42,6 @@ function warnOnce(key: string, message: string) {
   if (!AUTH_DEBUG_LOGS_ENABLED) return;
   if (warned.has(key)) return;
   warned.add(key);
-  // eslint-disable-next-line no-console
   console.warn(message);
 }
 
@@ -148,26 +147,6 @@ function extractIdFromAny(data: unknown, keys: string[]): number | null {
   }
 
   return null;
-}
-
-function isTruthySuccessFlag(data: unknown): boolean {
-  const root = (data ?? {}) as AnyObj;
-  const sources: AnyObj[] = [root, (root?.data ?? {}) as AnyObj, (root?.result ?? {}) as AnyObj];
-
-  for (const source of sources) {
-    const success = source?.success ?? source?.ok ?? source?.isSuccess;
-    if (typeof success === "boolean") return success;
-
-    const code = pickString(source?.code, source?.statusCode, source?.resultCode)?.toUpperCase();
-    if (code === "SUCCESS" || code === "OK") return true;
-  }
-
-  return false;
-}
-
-function is2xxStatus(v: unknown): boolean {
-  if (typeof v !== "number" || !Number.isFinite(v)) return false;
-  return v >= 200 && v < 300;
 }
 
 function normalizeRoleFromToken(roleRaw: unknown): UserRole | null {
@@ -335,7 +314,6 @@ function bytesToUtf8(bytes: Uint8Array): string {
   }
 
   try {
-    // eslint-disable-next-line no-undef
     return decodeURIComponent(escape(bin));
   } catch {
     return bin;
@@ -438,9 +416,14 @@ export async function driverSignup(params: DriverSignupParams): Promise<DriverSi
     const res = await apiClient.post("/api/auth/driver/signup", payload);
     const data = (res as any)?.data ?? null;
     const d = (data ?? {}) as DriverSignupResponseDTO & AnyObj;
-    const driverId =
-      extractIdFromAny(d, ["driverId", "driver_id", "userId", "memberId", "id"]) ??
-      (is2xxStatus((res as any)?.status) || isTruthySuccessFlag(d) ? 1 : null);
+    const driverId = extractIdFromAny(d, ["driverId", "driver_id", "userId", "memberId", "id"]);
+    if (!driverId) {
+      return {
+        driverId: null,
+        errorCode: "UNKNOWN",
+        message: "회원가입 응답에서 기사 식별자(driverId)를 확인하지 못했습니다.",
+      };
+    }
     return { driverId };
   } catch (err) {
     const meta = extractApiErrorMeta(err);
@@ -518,9 +501,14 @@ export async function shipperSignup(params: ShipperSignupParams): Promise<Shippe
     const res = await apiClient.post("/api/auth/shipper/signup", payload);
     const data = (res as any)?.data ?? null;
     const d = (data ?? {}) as ShipperSignupResponseDTO & AnyObj;
-    const shipperId =
-      extractIdFromAny(d, ["shipperId", "shipper_id", "userId", "memberId", "id"]) ??
-      (is2xxStatus((res as any)?.status) || isTruthySuccessFlag(d) ? 1 : null);
+    const shipperId = extractIdFromAny(d, ["shipperId", "shipper_id", "userId", "memberId", "id"]);
+    if (!shipperId) {
+      return {
+        shipperId: null,
+        errorCode: "UNKNOWN",
+        message: "회원가입 응답에서 화주 식별자(shipperId)를 확인하지 못했습니다.",
+      };
+    }
     return { shipperId };
   } catch (err) {
     const meta = extractApiErrorMeta(err);
@@ -582,7 +570,7 @@ export async function login(params: LoginParams): Promise<LoginResult> {
     return buildMockLoginResult(role, email);
   }
 
-  const role: AuthRole = params?.role ?? inferMockRoleFromEmail(email);
+  const role: AuthRole = params?.role === "driver" ? "driver" : "shipper";
   warnOnce("auth.real.login", `[auth] login(role=${role}) → POST ${getRoleLoginPath(role)}`);
   return loginByRole(role, email, password);
 }

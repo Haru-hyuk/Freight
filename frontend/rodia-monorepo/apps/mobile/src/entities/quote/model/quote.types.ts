@@ -5,10 +5,12 @@ export type QuoteStatusApi =
   | "OPEN"
   | "NEGOTIATING"
   | "ASSIGNED"
+  | "ACCEPTED"
   | "PICKUP"
   | "TRANSIT"
   | "DROPOFF"
-  | "CANCELED";
+  | "CANCELED"
+  | (string & {});
 
 export type QuoteChecklistItem = {
   checklistItemId: number;

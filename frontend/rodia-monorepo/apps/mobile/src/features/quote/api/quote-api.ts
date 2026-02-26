@@ -24,7 +24,23 @@ import {
   updateQuote as updateQuoteGenerated,
   validateQuote as validateQuoteGenerated,
 } from "@/shared/api/generated/quote-controller/quote-controller";
-import { getShipperQuoteCreatePath, isMockQuoteEnabled } from "@/shared/lib/config/env";
+import type { QuoteCreateRequest } from "@/shared/api/generated/schemas";
+import { getShipperQuoteCreatePath, isMockMode as isApiMockMode } from "@/shared/lib/config/env";
+import {
+  DEFAULT_LOAD_METHOD,
+  DEFAULT_UNLOAD_METHOD,
+  isActorOnlyWorkMethod,
+  toActorOnlyWorkMethod,
+} from "@/features/quote/model/workMethod";
+import {
+  createMockFlowShipperQuote,
+  deleteMockFlowShipperQuote,
+  getMockFlowShipperQuoteDetail,
+  getMockFlowShipperQuoteDetailByIdentifier,
+  listMockFlowShipperQuotes,
+  updateMockFlowShipperQuote,
+  waitRandom,
+} from "@/shared/lib/mock-flow";
 
 export type QuotePricePreview = {
   estimatedWeightedPrice?: number;
@@ -46,7 +62,7 @@ export interface QuoteApi {
 const SHIPPER_QUOTES_PATH = getShipperQuoteCreatePath();
 
 function isMockMode(): boolean {
-  return isMockQuoteEnabled();
+  return isApiMockMode();
 }
 
 function isQuoteDebugEnabled(): boolean {
@@ -74,11 +90,13 @@ function resolveQuoteApi(): QuoteApi {
 }
 
 type AnyObj = Record<string, unknown>;
+type QuoteCreateTransportPayload = QuoteCreateRequestDto & { basePrice?: number };
 
 const QUOTE_STATUS: QuoteStatusApi[] = [
   "OPEN",
   "NEGOTIATING",
   "ASSIGNED",
+  "ACCEPTED",
   "PICKUP",
   "TRANSIT",
   "DROPOFF",
@@ -127,9 +145,13 @@ function pickFirstStringFrom(objects: AnyObj[], keys: string[], fallback = ""): 
 
 function parseStatus(input: unknown): QuoteStatusApi {
   const raw = safeString(input, "").toUpperCase();
+  if (!raw) return "UNKNOWN";
+  if (raw === "READY" || raw === "REQUESTED") return "OPEN";
+  if (raw === "ASSIGNED_CONFIRMED") return "ASSIGNED";
+  if (raw === "ACCEPTED") return "ACCEPTED";
   if (raw === "CANCELLED" || raw === "CANCEL" || raw === "CANCELED") return "CANCELED";
   if (raw === "COMPLETED" || raw === "DONE" || raw === "FINISHED") return "DROPOFF";
-  return (QUOTE_STATUS.find((status) => status === raw) ?? "OPEN") as QuoteStatusApi;
+  return QUOTE_STATUS.find((status) => status === raw) ?? raw;
 }
 
 function pickPayload(input: unknown): unknown {
@@ -259,38 +281,83 @@ function sanitizeStopsForRequest(input: unknown): QuoteStopRequestDto[] {
     }));
 }
 
-function sanitizeQuotePayload(payload: QuoteCreateRequestDto, strictDistance: boolean): QuoteCreateRequestDto {
-  const source = asObject(payload as unknown as AnyObj) as Partial<QuoteCreateRequestDto>;
-  const normalizedDistance = safeInt(source.distanceKm, 0);
+function sanitizeQuotePayload(payload: QuoteCreateTransportPayload, strictDistance: boolean): QuoteCreateTransportPayload {
+  const source = asObject(payload as unknown as AnyObj) as Partial<QuoteCreateTransportPayload>;
+  const normalizedDistance = safeNumber(source.distanceKm, NaN);
 
-  if (strictDistance && normalizedDistance < 1) {
-    throw new Error("distanceKm must be >= 1");
+  if (strictDistance && (!Number.isFinite(normalizedDistance) || normalizedDistance <= 0)) {
+    throw new Error("distanceKm must be > 0");
   }
 
-  const distanceKm = strictDistance ? normalizedDistance : Math.max(1, normalizedDistance);
+  const loadMethod = toActorOnlyWorkMethod(source.loadMethod, DEFAULT_LOAD_METHOD);
+  const unloadMethod = toActorOnlyWorkMethod(source.unloadMethod, DEFAULT_UNLOAD_METHOD);
+  const basePriceRaw = safeNumber(source.basePrice, NaN);
+  const hasBasePrice = Number.isFinite(basePriceRaw);
+  const normalizedBasePrice = hasBasePrice ? Math.max(0, Math.trunc(basePriceRaw)) : undefined;
+
+  if (strictDistance && (!hasBasePrice || (normalizedBasePrice ?? 0) <= 0)) {
+    throw new Error("basePrice must be > 0");
+  }
 
   return {
-    truckId: Math.max(1, safeInt(source.truckId, 1)),
-    originAddress: safeString(source.originAddress, ""),
-    destinationAddress: safeString(source.destinationAddress, ""),
-    originLat: safeNumber(source.originLat, 0),
-    originLng: safeNumber(source.originLng, 0),
-    destinationLat: safeNumber(source.destinationLat, 0),
-    destinationLng: safeNumber(source.destinationLng, 0),
-    distanceKm,
-    weightKg: Math.max(0, safeInt(source.weightKg, 0)),
-    volumeCbm: Math.max(0, Math.trunc(safeNumber(source.volumeCbm, 0))),
-    vehicleType: (safeString(source.vehicleType, "TON_1") || "TON_1") as QuoteCreateRequestDto["vehicleType"],
-    vehicleBodyType: (safeString(source.vehicleBodyType, "CARGO") || "CARGO") as QuoteCreateRequestDto["vehicleBodyType"],
-    cargoName: safeString(source.cargoName, ""),
-    cargoType: (safeString(source.cargoType, "GENERAL") || "GENERAL") as QuoteCreateRequestDto["cargoType"],
-    cargoDesc: safeString(source.cargoDesc, ""),
-    desiredPrice: Math.max(0, safeInt(source.desiredPrice, 0)),
-    allowCombine: Boolean(source.allowCombine),
-    loadMethod: (safeString(source.loadMethod, "DRIVER") || "DRIVER") as QuoteCreateRequestDto["loadMethod"],
-    unloadMethod: (safeString(source.unloadMethod, "DRIVER") || "DRIVER") as QuoteCreateRequestDto["unloadMethod"],
+    ...(payload as QuoteCreateTransportPayload),
+    loadMethod,
+    unloadMethod,
     checklistItems: sanitizeChecklistItems(source.checklistItems),
     stops: sanitizeStopsForRequest(source.stops),
+    ...(hasBasePrice ? { basePrice: normalizedBasePrice } : {}),
+  };
+}
+
+function needsLegacyWorkMethodFallback(payload: QuoteCreateTransportPayload): boolean {
+  const load = safeString(payload?.loadMethod, "");
+  const unload = safeString(payload?.unloadMethod, "");
+  return !isActorOnlyWorkMethod(load) || !isActorOnlyWorkMethod(unload);
+}
+
+function isValidationStatusError(error: unknown): boolean {
+  const status = Number((error as { response?: { status?: unknown } } | undefined)?.response?.status ?? 0);
+  return status === 400 || status === 422;
+}
+
+function toLegacyWorkMethodPayload(payload: QuoteCreateTransportPayload): QuoteCreateTransportPayload {
+  return {
+    ...payload,
+    loadMethod: toActorOnlyWorkMethod(payload?.loadMethod, DEFAULT_LOAD_METHOD),
+    unloadMethod: toActorOnlyWorkMethod(payload?.unloadMethod, DEFAULT_UNLOAD_METHOD),
+  };
+}
+
+function toMockQuoteCreateRequest(payload: QuoteCreateTransportPayload): QuoteCreateRequest {
+  const stops = Array.isArray(payload?.stops)
+    ? payload.stops
+        .map((stop, index) => {
+          const source = asObject(stop as AnyObj) as Partial<QuoteStopRequestDto>;
+          const address = safeString(source.address, "");
+          return {
+            seq: Math.max(1, safeInt(source.seq, index + 1)),
+            address,
+            lat: safeNumber(source.lat, 0),
+            lng: safeNumber(source.lng, 0),
+            contactName: safeString(source.contactName, ""),
+            contactPhone: safeString(source.contactPhone, ""),
+            deptName: safeString(source.deptName, ""),
+            managerName: safeString(source.managerName, ""),
+          };
+        })
+        .filter((stop) => Boolean(stop.address.trim()))
+    : undefined;
+
+  const rawBasePrice = safeNumber(payload?.basePrice, NaN);
+  if (!Number.isFinite(rawBasePrice)) {
+    throw new Error("basePrice is required for quote create");
+  }
+  const basePrice = Math.max(0, Math.trunc(rawBasePrice));
+
+  return {
+    ...payload,
+    basePrice,
+    stops,
   };
 }
 
@@ -497,7 +564,7 @@ function createRealQuoteApi(): QuoteApi {
     },
 
     async previewShipperQuote(payload: QuoteCreateRequestDto): Promise<QuotePricePreview | null> {
-      const safePayload = sanitizeQuotePayload((payload ?? {}) as QuoteCreateRequestDto, false);
+      const safePayload = sanitizeQuotePayload((payload ?? {}) as QuoteCreateTransportPayload, false);
       try {
         const data = await validateQuoteGenerated(
           safePayload as unknown as Parameters<typeof validateQuoteGenerated>[0]
@@ -512,21 +579,31 @@ function createRealQuoteApi(): QuoteApi {
     },
 
     async createShipperQuote(payload: QuoteCreateRequestDto): Promise<QuoteCreateResponseDto> {
-      const safePayload = sanitizeQuotePayload((payload ?? {}) as QuoteCreateRequestDto, true);
+      const safePayload = sanitizeQuotePayload((payload ?? {}) as QuoteCreateTransportPayload, true);
       quoteDebugLog("create.payload", {
         keys: Object.keys((safePayload ?? {}) as Record<string, unknown>),
         stopsLength: Array.isArray(safePayload?.stops) ? safePayload.stops.length : 0,
         distanceKm: safePayload?.distanceKm ?? null,
       });
-      const data = await createQuoteGenerated(safePayload as unknown as Parameters<typeof createQuoteGenerated>[0]);
-      return toQuoteCreateResponse(data);
+      try {
+        const data = await createQuoteGenerated(safePayload as unknown as Parameters<typeof createQuoteGenerated>[0]);
+        return toQuoteCreateResponse(data);
+      } catch (error) {
+        if (!needsLegacyWorkMethodFallback(safePayload) || !isValidationStatusError(error)) {
+          throw error;
+        }
+
+        const legacyPayload = toLegacyWorkMethodPayload(safePayload);
+        const data = await createQuoteGenerated(legacyPayload as unknown as Parameters<typeof createQuoteGenerated>[0]);
+        return toQuoteCreateResponse(data);
+      }
     },
 
     async updateShipperQuote(quoteId: number, payload: QuoteUpdateRequestDto): Promise<QuoteUpdateResponse> {
       const safeQuoteId = normalizeQuoteId(quoteId);
       if (safeQuoteId <= 0) return toQuoteDetail({}, 0);
 
-      const safePayload = sanitizeQuotePayload((payload ?? {}) as QuoteUpdateRequestDto, true);
+      const safePayload = sanitizeQuotePayload((payload ?? {}) as QuoteCreateTransportPayload, true);
       try {
         const data = await updateQuoteGenerated(
           String(safeQuoteId),
@@ -551,122 +628,32 @@ function createRealQuoteApi(): QuoteApi {
   };
 }
 
-function nowIso(): string {
-  return new Date().toISOString();
-}
-
-function buildMockListItem(quoteId: number): QuoteListItem {
-  const safeQuoteId = normalizeQuoteId(quoteId) || 1;
-  return {
-    quoteId: safeQuoteId,
-    quotePublicId: `mock-quote-${safeQuoteId}`,
-    truckId: 1,
-    originAddress: "서울특별시 강남구",
-    destinationAddress: "경기도 성남시 분당구",
-    distanceKm: 18.5,
-    vehicleType: "TON_1",
-    vehicleBodyType: "CARGO",
-    cargoName: "목업 화물",
-    desiredPrice: 100000,
-    finalPrice: 120000,
-    status: "OPEN",
-    createdAt: nowIso(),
-  };
-}
-
-function buildMockDetail(quoteId: number, payload?: Partial<QuoteCreateRequestDto>): QuoteDetailResponse {
-  const safeQuoteId = normalizeQuoteId(quoteId) || 1;
-  const createdAt = nowIso();
-
-  const originAddress = String(payload?.originAddress ?? "서울특별시 강남구");
-  const destinationAddress = String(payload?.destinationAddress ?? "경기도 성남시 분당구");
-  const payloadStops = sanitizeStopsForRequest(payload?.stops);
-  const mockStops: QuoteDetailResponse["stops"] = payloadStops.length
-    ? payloadStops.map((stop, index) => ({
-        quoteStopId: index + 1,
-        seq: index + 1,
-        address: String(stop.address ?? ""),
-        lat: Number(stop.lat ?? 0),
-        lng: Number(stop.lng ?? 0),
-        contactName: String(stop.contactName ?? ""),
-        contactPhone: String(stop.contactPhone ?? ""),
-        deptName: String(stop.deptName ?? ""),
-        managerName: String(stop.managerName ?? ""),
-      }))
-    : [
-        {
-          quoteStopId: 1,
-          seq: 1,
-          address: "인천광역시 연수구 (목업 경유지)",
-          lat: 37.4563,
-          lng: 126.7052,
-          contactName: "담당자A",
-          contactPhone: "010-0000-0000",
-          deptName: "물류팀",
-          managerName: "매니저A",
-        },
-      ];
-
-  return {
-    quoteId: safeQuoteId,
-    quotePublicId: undefined,
-    shipperId: 1,
-    truckId: Math.max(1, normalizeQuoteId(payload?.truckId ?? 1)),
-    originAddress,
-    destinationAddress,
-    originLat: Number(payload?.originLat ?? 0),
-    originLng: Number(payload?.originLng ?? 0),
-    destinationLat: Number(payload?.destinationLat ?? 0),
-    destinationLng: Number(payload?.destinationLng ?? 0),
-    distanceKm: Math.max(1, Math.trunc(Number(payload?.distanceKm ?? 18))),
-    weightKg: Math.max(0, Number(payload?.weightKg ?? 0)),
-    volumeCbm: Math.max(0, Math.trunc(Number(payload?.volumeCbm ?? 0))),
-    vehicleType: String(payload?.vehicleType ?? "TON_1"),
-    vehicleBodyType: String(payload?.vehicleBodyType ?? "CARGO"),
-    cargoName: String(payload?.cargoName ?? "목업 화물"),
-    cargoType: String(payload?.cargoType ?? "GENERAL"),
-    cargoDesc: String(payload?.cargoDesc ?? ""),
-    basePrice: Math.max(0, Number(payload?.desiredPrice ?? 0)),
-    distancePrice: 0,
-    extraPrice: 0,
-    desiredPrice: Math.max(0, Number(payload?.desiredPrice ?? 0)),
-    finalPrice: Math.max(0, Number(payload?.desiredPrice ?? 0)),
-    allowCombine: Boolean(payload?.allowCombine),
-    loadMethod: String(payload?.loadMethod ?? "SHIPPER"),
-    unloadMethod: String(payload?.unloadMethod ?? "DRIVER"),
-    status: "OPEN",
-    createdAt,
-    updatedAt: createdAt,
-    checklistItems: Array.isArray(payload?.checklistItems)
-      ? payload.checklistItems.map((item, index) => ({
-          checklistItemId: Math.max(0, Number(item?.checklistItemId ?? index + 1)),
-          extraInput: String(item?.extraInput ?? ""),
-          extraFee: Math.max(0, Number(item?.extraFee ?? 0)),
-        }))
-      : [],
-    stops: mockStops,
-  };
-}
-
 function createMockQuoteApi(): QuoteApi {
   return {
     async listShipperQuotes(): Promise<QuoteListItem[]> {
-      return [buildMockListItem(1), buildMockListItem(2)];
+      await waitRandom();
+      return toQuoteList(listMockFlowShipperQuotes());
     },
 
     async getShipperQuoteDetail(quoteId: number): Promise<QuoteDetailResponse> {
-      return buildMockDetail(quoteId);
+      await waitRandom();
+      const safeQuoteId = normalizeQuoteId(quoteId);
+      if (safeQuoteId <= 0) return toQuoteDetail({}, 0);
+
+      return toQuoteDetail(getMockFlowShipperQuoteDetail(safeQuoteId), safeQuoteId);
     },
 
     async getShipperQuoteDetailByIdentifier(quoteIdentifier: string): Promise<QuoteDetailResponse> {
+      await waitRandom();
       const safeIdentifier = normalizeQuoteIdentifier(quoteIdentifier);
-      const parsedQuoteId = normalizeQuoteId(Number(safeIdentifier));
-      const fallbackQuoteId = parsedQuoteId > 0 ? parsedQuoteId : 1;
-      return buildMockDetail(fallbackQuoteId);
+      const fallbackQuoteId = normalizeQuoteId(Number(safeIdentifier));
+
+      return toQuoteDetail(getMockFlowShipperQuoteDetailByIdentifier(safeIdentifier), fallbackQuoteId);
     },
 
     async previewShipperQuote(payload: QuoteCreateRequestDto): Promise<QuotePricePreview | null> {
-      const safePayload = sanitizeQuotePayload((payload ?? {}) as QuoteCreateRequestDto, false);
+      await waitRandom();
+      const safePayload = sanitizeQuotePayload((payload ?? {}) as QuoteCreateTransportPayload, false);
       const desiredPrice = Math.max(0, safeInt(safePayload?.desiredPrice, 0));
       const fallbackPrice = desiredPrice > 0 ? desiredPrice : 100000;
       return {
@@ -678,30 +665,26 @@ function createMockQuoteApi(): QuoteApi {
     },
 
     async createShipperQuote(payload: QuoteCreateRequestDto): Promise<QuoteCreateResponseDto> {
-      const safePayload = sanitizeQuotePayload((payload ?? {}) as QuoteCreateRequestDto, false);
-      const seed =
-        Date.now() +
-        Math.max(0, Number(safePayload?.desiredPrice ?? 0)) +
-        Math.max(0, Number(safePayload?.weightKg ?? 0));
-      const quoteId = Math.max(1, Math.trunc(seed % 9_000_000));
-      const safeDesiredPrice = Math.max(0, Math.trunc(Number(safePayload?.desiredPrice ?? 0)));
-      return {
-        quoteId,
-        quotePublicId: `mock-quote-${quoteId}`,
-        basePrice: safeDesiredPrice,
-        distancePrice: 0,
-        extraPrice: 0,
-        desiredPrice: safeDesiredPrice,
-        finalPrice: safeDesiredPrice,
-      };
+      await waitRandom();
+      const safePayload = sanitizeQuotePayload((payload ?? {}) as QuoteCreateTransportPayload, true);
+      return toQuoteCreateResponse(createMockFlowShipperQuote(toMockQuoteCreateRequest(safePayload)));
     },
 
     async updateShipperQuote(quoteId: number, payload: QuoteUpdateRequestDto): Promise<QuoteUpdateResponse> {
-      const safePayload = sanitizeQuotePayload((payload ?? {}) as QuoteUpdateRequestDto, false);
-      return buildMockDetail(quoteId, safePayload);
+      await waitRandom();
+      const safeQuoteId = normalizeQuoteId(quoteId);
+      if (safeQuoteId <= 0) return toQuoteDetail({}, 0);
+
+      const safePayload = sanitizeQuotePayload((payload ?? {}) as QuoteCreateTransportPayload, true);
+      const updated = updateMockFlowShipperQuote(safeQuoteId, toMockQuoteCreateRequest(safePayload));
+      return toQuoteDetail(updated, safeQuoteId);
     },
 
-    async deleteShipperQuote(_quoteId: number): Promise<void> {
+    async deleteShipperQuote(quoteId: number): Promise<void> {
+      await waitRandom();
+      const safeQuoteId = normalizeQuoteId(quoteId);
+      if (safeQuoteId <= 0) return;
+      deleteMockFlowShipperQuote(safeQuoteId);
       return;
     },
   };

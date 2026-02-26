@@ -24,6 +24,7 @@ public class Notification {
     public enum Type {
         MATCH_CREATED,
         MATCH_ACCEPTED,
+        MATCH_UPDATED,
         MATCH_CANCELLED,
         COUNTER_OFFER_CREATED,
         COUNTER_OFFER_ACCEPTED,

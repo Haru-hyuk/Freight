@@ -2,9 +2,11 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Alert, Pressable, StyleSheet, View, type ViewStyle } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
 
 import { getShipperQuoteDetail } from "@/features/quote/api";
 import { cancelShipperMatch, listShipperMatches, type ShipperMatchItem } from "@/features/matching/api";
+import { BACKEND_STATUS, normalizeStatus } from "@/shared/lib/policy";
 import { safeString, tint } from "@/shared/theme/colorUtils";
 import { useAppTheme } from "@/shared/theme/useAppTheme";
 import { PageScaffold } from "@/widgets/layout/PageScaffold";
@@ -30,7 +32,8 @@ type MatchingItem = {
   cancelable: boolean;
 };
 
-const TERMINAL_MATCH_STATUSES = new Set(["CANCELED", "COMPLETED", "DONE", "FINISHED", "DROPOFF", "DELIVERED"]);
+const TERMINAL_MATCH_STATUSES = new Set<string>([BACKEND_STATUS.CANCELED, BACKEND_STATUS.DROPOFF]);
+const FOCUS_REFETCH_THROTTLE_MS = 1500;
 
 function toSafeInt(value: unknown, fallback = 0): number {
   const parsed = typeof value === "number" ? value : Number(value);
@@ -39,41 +42,50 @@ function toSafeInt(value: unknown, fallback = 0): number {
 }
 
 function normalizeMatchStatus(status: string): string {
-  const normalized = status.trim().toUpperCase();
-  if (normalized === "CANCELLED" || normalized === "CANCEL") return "CANCELED";
-  return normalized;
+  const normalized = normalizeStatus(status);
+  if (normalized === BACKEND_STATUS.ACCEPTED) return BACKEND_STATUS.ASSIGNED;
+  if (normalized !== BACKEND_STATUS.UNKNOWN) return normalized;
+
+  const token = status.trim().toUpperCase();
+  if (token === "CANCELLED" || token === "CANCEL") return BACKEND_STATUS.CANCELED;
+  if (token === "COMPLETED" || token === "DONE" || token === "FINISHED" || token === "DELIVERED") {
+    return BACKEND_STATUS.DROPOFF;
+  }
+  return token;
 }
 
 function toMatchingStatus(status: string): MatchingStatus {
   const normalized = normalizeMatchStatus(status);
-  if (normalized === "OPEN" || normalized === "NEGOTIATING") return "payment";
-  if (normalized === "ASSIGNED" || normalized === "PICKUP") return "loading";
-  if (normalized === "TRANSIT") return "moving";
+  if (normalized === BACKEND_STATUS.READY || normalized === BACKEND_STATUS.OPEN || normalized === BACKEND_STATUS.NEGOTIATING) {
+    return "payment";
+  }
+  if (normalized === BACKEND_STATUS.ASSIGNED || normalized === BACKEND_STATUS.PICKUP) return "loading";
+  if (normalized === BACKEND_STATUS.TRANSIT) return "moving";
   if (TERMINAL_MATCH_STATUSES.has(normalized)) return "completed";
-  return "completed";
+  return "payment";
 }
 
 function toStatusLabel(status: string): string {
   const normalized = normalizeMatchStatus(status);
-  if (normalized === "OPEN") return "요청 접수";
-  if (normalized === "NEGOTIATING") return "매칭 협의";
-  if (normalized === "ASSIGNED") return "배차 완료";
-  if (normalized === "PICKUP") return "상차 진행";
-  if (normalized === "TRANSIT") return "운송 중";
-  if (normalized === "DROPOFF") return "하차 완료";
-  if (normalized === "CANCELED") return "취소됨";
+  if (normalized === BACKEND_STATUS.READY || normalized === BACKEND_STATUS.OPEN) return "요청 접수";
+  if (normalized === BACKEND_STATUS.NEGOTIATING) return "매칭 협의";
+  if (normalized === BACKEND_STATUS.ASSIGNED) return "배차 완료";
+  if (normalized === BACKEND_STATUS.PICKUP) return "상차 진행";
+  if (normalized === BACKEND_STATUS.TRANSIT) return "운송 중";
+  if (normalized === BACKEND_STATUS.DROPOFF) return "하차 완료";
+  if (normalized === BACKEND_STATUS.CANCELED) return "취소됨";
   return normalized || "상태 확인";
 }
 
 function toMatchingTitle(status: string): string {
   const normalized = normalizeMatchStatus(status);
-  if (normalized === "OPEN") return "기사님 배정 대기";
-  if (normalized === "NEGOTIATING") return "기사님 제안 확인";
-  if (normalized === "ASSIGNED") return "배차 확정";
-  if (normalized === "PICKUP") return "상차 진행";
-  if (normalized === "TRANSIT") return "이동 중";
-  if (normalized === "DROPOFF") return "운송 완료";
-  if (normalized === "CANCELED") return "요청 취소";
+  if (normalized === BACKEND_STATUS.READY || normalized === BACKEND_STATUS.OPEN) return "기사님 배정 대기";
+  if (normalized === BACKEND_STATUS.NEGOTIATING) return "기사님 제안 확인";
+  if (normalized === BACKEND_STATUS.ASSIGNED) return "배차 확정";
+  if (normalized === BACKEND_STATUS.PICKUP) return "상차 진행";
+  if (normalized === BACKEND_STATUS.TRANSIT) return "이동 중";
+  if (normalized === BACKEND_STATUS.DROPOFF) return "운송 완료";
+  if (normalized === BACKEND_STATUS.CANCELED) return "요청 취소";
   return "매칭 상태";
 }
 
@@ -139,6 +151,7 @@ export function MatchingListPage() {
   const theme = useAppTheme();
   const router = useRouter();
   const isMountedRef = useRef(true);
+  const focusRefetchMetaRef = useRef({ hasFocusedOnce: false, inFlight: false, lastRefetchAt: 0 });
 
   const [matchings, setMatchings] = useState<MatchingItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -186,11 +199,14 @@ export function MatchingListPage() {
     } as const;
   }, [cBlue, cMint, cBorder, subtleText]);
 
-  const loadMatches = useCallback(async () => {
+  const loadMatches = useCallback(async (mode: "initial" | "focus" | "manual" = "initial") => {
     if (!isMountedRef.current) return;
 
-    setIsLoading(true);
-    setErrorMessage(null);
+    const shouldShowBlockingLoader = mode === "initial" || mode === "manual";
+    if (shouldShowBlockingLoader) {
+      setIsLoading(true);
+      setErrorMessage(null);
+    }
 
     try {
       const list = await listShipperMatches();
@@ -202,10 +218,12 @@ export function MatchingListPage() {
     } catch (error) {
       if (!isMountedRef.current) return;
 
-      setMatchings([]);
+      if (shouldShowBlockingLoader) {
+        setMatchings([]);
+      }
       setErrorMessage(readErrorMessage(error));
     } finally {
-      if (isMountedRef.current) {
+      if (isMountedRef.current && shouldShowBlockingLoader) {
         setIsLoading(false);
       }
     }
@@ -213,12 +231,35 @@ export function MatchingListPage() {
 
   useEffect(() => {
     isMountedRef.current = true;
-    void loadMatches();
+    void loadMatches("initial");
 
     return () => {
       isMountedRef.current = false;
     };
   }, [loadMatches]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const focusMeta = focusRefetchMetaRef.current;
+      if (!focusMeta.hasFocusedOnce) {
+        focusMeta.hasFocusedOnce = true;
+        return undefined;
+      }
+
+      const now = Date.now();
+      if (focusMeta.inFlight || now - focusMeta.lastRefetchAt < FOCUS_REFETCH_THROTTLE_MS) {
+        return undefined;
+      }
+
+      focusMeta.inFlight = true;
+      focusMeta.lastRefetchAt = now;
+      void loadMatches("focus").finally(() => {
+        focusMeta.inFlight = false;
+      });
+
+      return undefined;
+    }, [loadMatches])
+  );
 
   const runCancelMatch = useCallback(
     async (match: MatchingItem) => {
@@ -229,7 +270,7 @@ export function MatchingListPage() {
         setCancellingMatchId(safeMatchId);
         await cancelShipperMatch(safeMatchId);
         if (!isMountedRef.current) return;
-        await loadMatches();
+        await loadMatches("manual");
       } catch (error) {
         if (!isMountedRef.current) return;
         Alert.alert("요청 취소 실패", readErrorMessage(error));
@@ -374,7 +415,9 @@ export function MatchingListPage() {
           title="매칭 목록을 불러오지 못했어요"
           description={errorMessage}
           retryLabel="다시 시도"
-          onRetry={loadMatches}
+          onRetry={() => {
+            void loadMatches("manual");
+          }}
           fullScreen={false}
         />
       ) : activeMatchings.length > 0 || completedMatchings.length > 0 ? (
