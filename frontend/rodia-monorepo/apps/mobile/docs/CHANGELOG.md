@@ -86,6 +86,35 @@
 - 후속 작업 (다음 PR 후보):
   - [ ] auth 서버 스펙 문서에 driver/shipper signup 필수 필드 및 응답 ID 필드 계약을 명시하고 클라이언트 계약 테스트 추가 검토
 
+- PR/브랜치: `work/mobile-quote-create-payload-guardrail`
+- 범주 태그: `[api] [policy] [ui]`
+- 변경 요약:
+  - `src/features/quote/model/quoteCreateRequestMapper.ts`에서 quote create payload 생성 규칙을 유지하면서 `basePrice`를 포함하고 거리값 강제 보정을 제거함.
+  - `src/pages/shipper/quotes/QuoteCreatePage.tsx` submit SSOT에 `basePrice > 0` 및 `loadMethod/unloadMethod` actor-only 최종 가드를 추가해 미충족 시 요청을 차단함.
+  - `src/features/quote/api/quote-api.ts` sanitize 경로를 정규화 중심으로 정리하고, `basePrice` 보존 및 상하차 actor-only 마지막 방어를 고정함.
+  - `src/features/quote/model/workMethod.ts`에 actor-only 판별 함수(`isActorOnlyWorkMethod`)를 추가해 page/api가 동일 기준을 사용하도록 맞춤.
+- 영향 범위:
+  - 사용자 관점: 기본 운임/상하차 방식이 확정되지 않은 경우 견적 요청이 차단되어 잘못된 전송이 줄어듦.
+  - 개발자 관점: mapper(page 전) / page(요청 차단) / api(최종 sanitize) 책임이 분리되어 quote create 디버깅 경계가 명확해짐.
+- 파일 변경 목록:
+  - 수정:
+    - `src/features/quote/model/quoteCreateRequestMapper.ts`
+    - `src/pages/shipper/quotes/QuoteCreatePage.tsx`
+    - `src/features/quote/api/quote-api.ts`
+    - `src/features/quote/model/workMethod.ts`
+    - `docs/CHANGELOG.md`
+  - 추가:
+    - 없음
+  - 삭제:
+    - 없음
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과
+- 미해결 항목 (이번 PR에서 실패/포기한 작업):
+  - 수동 테스트 2건 수행 — 원인: CLI 환경에서 앱 실행/네트워크 패널 검증 불가 / PR QA에서 확인 필요
+- 후속 작업 (다음 PR 후보):
+  - [ ] quote create 수동 QA 시나리오(정상 요청/`basePrice=0` 차단) 결과를 캡처해 회귀 기준으로 문서화
+
 - PR/브랜치: `work/mobile-quote-baseprice-guard`
 - 범주 태그: `[api] [policy] [ui]`
 - 변경 요약:
@@ -572,4 +601,3 @@
   - `features/matching/api/shipper-match-api.ts`, `features/counter-offer/api/counter-offer-api.ts`, `features/matching/api/driver-orders-api.ts`의 상태 normalize 중복 정리
   - `features/quote/model/quoteActionMatrix.ts`와 `pages/shipper/quotes/QuoteDetailPage.tsx`의 CTA 정책 소스 일치화
   - Driver/Shipper 상세/목록 흐름에서 정책 모듈 적용 범위를 단계적으로 확대
-
