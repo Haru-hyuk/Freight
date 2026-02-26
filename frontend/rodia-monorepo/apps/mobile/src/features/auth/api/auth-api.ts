@@ -570,7 +570,7 @@ export async function login(params: LoginParams): Promise<LoginResult> {
     return buildMockLoginResult(role, email);
   }
 
-  const role: AuthRole = params?.role ?? inferMockRoleFromEmail(email);
+  const role: AuthRole = params?.role === "driver" ? "driver" : "shipper";
   warnOnce("auth.real.login", `[auth] login(role=${role}) → POST ${getRoleLoginPath(role)}`);
   return loginByRole(role, email, password);
 }

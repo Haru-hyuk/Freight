@@ -57,6 +57,35 @@
   - [ ] `src/features/counter-offer/api/counter-offer-api.ts`의 string-to-number 인자 타입 오류 정리
   - [ ] `src/features/matching/api/shipper-match-api.ts` 및 `src/features/quote/api/quote-api.ts`의 타입 불일치 정리
 
+- PR/브랜치: `work/mobile-auth-real-api-align`
+- 범주 태그: `[api] [mock] [policy] [ui]`
+- 변경 요약:
+  - `src/shared/lib/config/env.ts`에서 auth mock 기본값을 `EXPO_PUBLIC_MOCK_AUTH` 명시값 기반으로 변경해 mock auth가 기본 활성화되지 않도록 정리함.
+  - `src/features/auth/api/auth-api.ts`에서 실서버 로그인 role 결정 시 mock 추론을 제거하고, 회원가입 응답 ID 누락 시 실패를 유지해 서버 응답 정합성 기준을 고정함.
+  - `src/features/auth/model/useAuth.ts`와 `src/features/auth/ui/forms/SignUpForm.tsx`에서 driver/shipper 가입 필수 입력(주소/상세주소/기사 계좌정보)을 실제 값으로 받도록 통일하고 placeholder 대체값을 제거함.
+  - 가입 성공 판정은 `driverId/shipperId > 0`일 때만 허용하고, ID 누락 시 자동 로그인으로 진행하지 않도록 실패 처리 흐름을 유지함.
+- 영향 범위:
+  - 사용자 관점: 필수값이 누락된 가입 요청은 즉시 차단되며, 서버가 ID 없는 응답을 줄 경우 가입 성공으로 오인하지 않음.
+  - 개발자 관점: mock/real auth 경계가 분리되고, 가입 페이로드 구성 기준이 실입력 기반으로 정리되어 디버깅과 API 정합성 확인이 쉬워짐.
+- 파일 변경 목록:
+  - 수정:
+    - `src/shared/lib/config/env.ts`
+    - `src/features/auth/api/auth-api.ts`
+    - `src/features/auth/model/useAuth.ts`
+    - `src/features/auth/ui/forms/SignUpForm.tsx`
+    - `docs/CHANGELOG.md`
+  - 추가:
+    - 없음
+  - 삭제:
+    - 없음
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과
+- 미해결 항목 (이번 PR에서 실패/포기한 작업):
+  - 없음
+- 후속 작업 (다음 PR 후보):
+  - [ ] auth 서버 스펙 문서에 driver/shipper signup 필수 필드 및 응답 ID 필드 계약을 명시하고 클라이언트 계약 테스트 추가 검토
+
 ## 2026-02-25
 - PR/브랜치: `work/format-utils-migration`
 - 범주 태그: `[refactor] [ui] [infra]`
@@ -517,6 +546,5 @@
   - `features/matching/api/shipper-match-api.ts`, `features/counter-offer/api/counter-offer-api.ts`, `features/matching/api/driver-orders-api.ts`의 상태 normalize 중복 정리
   - `features/quote/model/quoteActionMatrix.ts`와 `pages/shipper/quotes/QuoteDetailPage.tsx`의 CTA 정책 소스 일치화
   - Driver/Shipper 상세/목록 흐름에서 정책 모듈 적용 범위를 단계적으로 확대
-
 
 
