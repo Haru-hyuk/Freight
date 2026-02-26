@@ -18,7 +18,7 @@ import { customInstance } from '../../orval/custom-instance';
       );
     }
   export const get = (
-    announcementId: string,
+    announcementId: number,
  ) => {
       return customInstance<Blob>(
       {url: `/api/announcements/${announcementId}`, method: 'GET',

@@ -5,6 +5,7 @@
  * OpenAPI spec version: v0
  */
 import type { QuoteChecklistItemResponse } from './quoteChecklistItemResponse';
+import type { QuoteItemResponse } from './quoteItemResponse';
 import type { QuoteStopResponse } from './quoteStopResponse';
 
 export interface QuoteDetailResponse {
@@ -37,6 +38,7 @@ export interface QuoteDetailResponse {
   status?: string;
   createdAt?: string;
   updatedAt?: string;
+  quoteItems?: QuoteItemResponse[];
   checklistItems?: QuoteChecklistItemResponse[];
   stops?: QuoteStopResponse[];
 }

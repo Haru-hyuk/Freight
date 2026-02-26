@@ -6,7 +6,7 @@
   },
   "servers": [
     {
-      "url": "http://192.168.0.28:8080",
+      "url": "http://localhost:8080",
       "description": "Generated server url"
     }
   ],
@@ -198,7 +198,17 @@
           "admin-announcement-controller"
         ],
         "operationId": "get_1",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "announcementId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -217,7 +227,17 @@
           "admin-announcement-controller"
         ],
         "operationId": "update",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "announcementId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -246,10 +266,51 @@
           "admin-announcement-controller"
         ],
         "operationId": "delete",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "announcementId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/shipper/settlements/{matchId}/confirm": {
+      "post": {
+        "tags": [
+          "shipper-settlement-controller"
+        ],
+        "operationId": "confirmSettlement",
+        "parameters": [
+          {
+            "name": "matchId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettlementResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -425,6 +486,266 @@
         }
       }
     },
+    "/api/shipper/inquiries": {
+      "post": {
+        "tags": [
+          "inquiry-controller"
+        ],
+        "operationId": "create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InquiryCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/InquiryResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/route/multi-directions": {
+      "post": {
+        "tags": [
+          "kakao-directions-controller"
+        ],
+        "operationId": "getMultiDirections",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MultiDirectionsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/route/find": {
+      "post": {
+        "tags": [
+          "route-controller"
+        ],
+        "operationId": "find",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RouteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouteResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/route/cached-distances": {
+      "post": {
+        "tags": [
+          "kakao-directions-controller"
+        ],
+        "operationId": "getCachedDistances",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchDistanceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchDistanceResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/route-assembly/recommend": {
+      "post": {
+        "tags": [
+          "route-assembly-controller"
+        ],
+        "operationId": "recommend",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RouteAssemblyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouteAssemblyResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/route-assembly/evaluate": {
+      "post": {
+        "tags": [
+          "route-assembly-controller"
+        ],
+        "operationId": "evaluate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RouteAssemblyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouteAssemblyResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/route-assembly/calibration/recompute": {
+      "post": {
+        "tags": [
+          "route-assembly-controller"
+        ],
+        "operationId": "recomputeCalibration",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouteCalibrationStatusResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/route-assembly/calibration/feedback": {
+      "post": {
+        "tags": [
+          "route-assembly-controller"
+        ],
+        "operationId": "feedback",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RouteCalibrationFeedbackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouteCalibrationFeedbackResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/route-assembly/accept": {
+      "post": {
+        "tags": [
+          "route-assembly-controller"
+        ],
+        "operationId": "accept",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RouteAcceptRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouteAcceptResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/push-tokens/me": {
       "post": {
         "tags": [
@@ -465,6 +786,66 @@
         "responses": {
           "200": {
             "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/load/plan": {
+      "post": {
+        "tags": [
+          "load-plan-controller"
+        ],
+        "operationId": "plan",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoadPlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoadPlanResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/load/plan/confirm": {
+      "post": {
+        "tags": [
+          "load-plan-controller"
+        ],
+        "operationId": "confirm_1",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoadPlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoadPlanSavedResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -526,7 +907,17 @@
           "driver-counter-offer-controller"
         ],
         "operationId": "createCounterOffer",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "quoteId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -551,13 +942,114 @@
         }
       }
     },
+    "/api/driver/optimization/route-recommendations": {
+      "post": {
+        "tags": [
+          "driver-optimization-controller"
+        ],
+        "operationId": "recommendRoutes",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RouteRecommendRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/driver/optimization/load-plan-preview": {
+      "post": {
+        "tags": [
+          "driver-optimization-controller"
+        ],
+        "operationId": "previewLoadPlan",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoadPlanPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/driver/matches/{matchId}/start": {
+      "post": {
+        "tags": [
+          "driver-match-controller"
+        ],
+        "operationId": "startTransit",
+        "parameters": [
+          {
+            "name": "matchId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/MatchResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/driver/matches/{matchId}/photos": {
       "get": {
         "tags": [
           "delivery-photo-controller"
         ],
         "operationId": "getDriverMatchPhotos",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "matchId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -580,6 +1072,15 @@
         ],
         "operationId": "uploadDriverPhoto",
         "parameters": [
+          {
+            "name": "matchId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
           {
             "name": "type",
             "in": "query",
@@ -650,13 +1151,64 @@
         }
       }
     },
-    "/api/driver/matches/{matchId}/accept": {
+    "/api/driver/matches/{matchId}/gps": {
+      "post": {
+        "tags": [
+          "tracking-controller"
+        ],
+        "operationId": "submitDriverGps",
+        "parameters": [
+          {
+            "name": "matchId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GpsLogUpsertRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/GpsLogUpsertResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/driver/matches/{matchId}/complete": {
       "post": {
         "tags": [
           "driver-match-controller"
         ],
-        "operationId": "acceptMatch",
-        "parameters": [],
+        "operationId": "completeTransit",
+        "parameters": [
+          {
+            "name": "matchId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -664,6 +1216,97 @@
               "*/*": {
                 "schema": {
                   "$ref": "#/components/schemas/MatchResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/driver/matches/{matchId}/accept": {
+      "post": {
+        "tags": [
+          "driver-match-controller"
+        ],
+        "operationId": "acceptMatch",
+        "parameters": [
+          {
+            "name": "matchId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/MatchResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/driver/matches/accept-batch": {
+      "post": {
+        "tags": [
+          "driver-match-controller"
+        ],
+        "operationId": "acceptMatches",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchAcceptMatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchAcceptMatchResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/driver/inquiries": {
+      "post": {
+        "tags": [
+          "inquiry-controller"
+        ],
+        "operationId": "createByDriver",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InquiryCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/InquiryResponse"
                 }
               }
             }
@@ -712,6 +1355,39 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/refresh": {
+      "post": {
+        "tags": [
+          "auth-controller"
+        ],
+        "operationId": "refresh",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
               }
             }
           },
@@ -834,6 +1510,63 @@
         }
       }
     },
+    "/api/admin/sanctions": {
+      "get": {
+        "tags": [
+          "admin-sanction-controller"
+        ],
+        "operationId": "list",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "admin-sanction-controller"
+        ],
+        "operationId": "create_1",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminSanctionCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/admin/announcements": {
       "get": {
         "tags": [
@@ -860,7 +1593,7 @@
         "tags": [
           "admin-announcement-controller"
         ],
-        "operationId": "create",
+        "operationId": "create_2",
         "requestBody": {
           "content": {
             "application/json": {
@@ -891,7 +1624,17 @@
           "shipper-counter-offer-controller"
         ],
         "operationId": "rejectCounterOffer",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "offerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK"
@@ -905,7 +1648,17 @@
           "shipper-counter-offer-controller"
         ],
         "operationId": "acceptCounterOffer",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "offerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK"
@@ -919,10 +1672,274 @@
           "notification-controller"
         ],
         "operationId": "markRead",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "notificationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/driver/matches/{matchId}/tracking-sharing": {
+      "patch": {
+        "tags": [
+          "tracking-controller"
+        ],
+        "operationId": "updateTrackingSharing",
+        "parameters": [
+          {
+            "name": "matchId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrackingShareUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrackingShareStateResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/users/{userId}/status": {
+      "patch": {
+        "tags": [
+          "admin-ops-controller"
+        ],
+        "operationId": "updateUserStatus",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminUserStatusUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/trucks/{truckId}/approval": {
+      "patch": {
+        "tags": [
+          "admin-truck-controller"
+        ],
+        "operationId": "updateApproval",
+        "parameters": [
+          {
+            "name": "truckId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TruckApprovalUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/TruckResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/sanctions/{sanctionId}/release": {
+      "patch": {
+        "tags": [
+          "admin-sanction-controller"
+        ],
+        "operationId": "release",
+        "parameters": [
+          {
+            "name": "sanctionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/inquiries/{inquiryId}/answer": {
+      "patch": {
+        "tags": [
+          "inquiry-controller"
+        ],
+        "operationId": "answer",
+        "parameters": [
+          {
+            "name": "inquiryId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InquiryAnswerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/InquiryResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/shipper/settlements": {
+      "get": {
+        "tags": [
+          "shipper-settlement-controller"
+        ],
+        "operationId": "getByMatch",
+        "parameters": [
+          {
+            "name": "matchId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettlementResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/shipper/settlements/me": {
+      "get": {
+        "tags": [
+          "shipper-settlement-controller"
+        ],
+        "operationId": "getMySettlements",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SettlementResponse"
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -933,7 +1950,17 @@
           "shipper-counter-offer-controller"
         ],
         "operationId": "getCounterOffers",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "quoteId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -959,7 +1986,7 @@
         "operationId": "getByMatchId",
         "parameters": [
           {
-            "name": "arg1",
+            "name": "matchId",
             "in": "query",
             "required": true,
             "schema": {
@@ -991,7 +2018,17 @@
           "payment-controller"
         ],
         "operationId": "getById",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "paymentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -1035,7 +2072,17 @@
           "shipper-match-controller"
         ],
         "operationId": "getMatch",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "matchId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -1054,10 +2101,51 @@
           "shipper-match-controller"
         ],
         "operationId": "cancelMatch",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "matchId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/shipper/matches/{matchId}/tracking": {
+      "get": {
+        "tags": [
+          "tracking-controller"
+        ],
+        "operationId": "getShipperTracking",
+        "parameters": [
+          {
+            "name": "matchId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrackingResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -1068,7 +2156,17 @@
           "delivery-photo-controller"
         ],
         "operationId": "getShipperMatchPhotos",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "matchId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -1102,6 +2200,328 @@
                   "items": {
                     "$ref": "#/components/schemas/MatchResponse"
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/shipper/inquiries/me": {
+      "get": {
+        "tags": [
+          "inquiry-controller"
+        ],
+        "operationId": "myInquiries",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/InquiryResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/route/place-search": {
+      "get": {
+        "tags": [
+          "place-controller"
+        ],
+        "operationId": "search",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/route/health": {
+      "get": {
+        "tags": [
+          "kakao-directions-controller"
+        ],
+        "operationId": "health",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/route/directions": {
+      "get": {
+        "tags": [
+          "kakao-directions-controller"
+        ],
+        "operationId": "getDirections",
+        "parameters": [
+          {
+            "name": "origin",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "destination",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "waypoints",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/route/cached-distance": {
+      "get": {
+        "tags": [
+          "kakao-directions-controller"
+        ],
+        "operationId": "getCachedDistance",
+        "parameters": [
+          {
+            "name": "fromLat",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          {
+            "name": "fromLng",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          {
+            "name": "toLat",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          {
+            "name": "toLng",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "format": "double"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CachedDistanceResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/route-assembly/health": {
+      "get": {
+        "tags": [
+          "route-assembly-controller"
+        ],
+        "operationId": "health_1",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/route-assembly/calibration/status": {
+      "get": {
+        "tags": [
+          "route-assembly-controller"
+        ],
+        "operationId": "calibrationStatus",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouteCalibrationStatusResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/reference/truck-specs": {
+      "get": {
+        "tags": [
+          "reference-catalog-controller"
+        ],
+        "operationId": "getTruckSpecs",
+        "parameters": [
+          {
+            "name": "vehicleType",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TruckSpecReferenceResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/reference/pricing-rates": {
+      "get": {
+        "tags": [
+          "reference-catalog-controller"
+        ],
+        "operationId": "getPricingRates",
+        "parameters": [
+          {
+            "name": "vehicleType",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PricingRateReferenceResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/reference/pricing-rate": {
+      "get": {
+        "tags": [
+          "reference-catalog-controller"
+        ],
+        "operationId": "getPricingRate",
+        "parameters": [
+          {
+            "name": "distanceKm",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "vehicleType",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/PricingRateReferenceResponse"
                 }
               }
             }
@@ -1152,6 +2572,91 @@
         }
       }
     },
+    "/api/driver/settlements": {
+      "get": {
+        "tags": [
+          "driver-settlement-controller"
+        ],
+        "operationId": "getByMatch_1",
+        "parameters": [
+          {
+            "name": "matchId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettlementResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/driver/settlements/me": {
+      "get": {
+        "tags": [
+          "driver-settlement-controller"
+        ],
+        "operationId": "getMySettlements_1",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SettlementResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/driver/quotes/{quoteId}/summary": {
+      "get": {
+        "tags": [
+          "driver-quote-controller"
+        ],
+        "operationId": "getQuoteSummary",
+        "parameters": [
+          {
+            "name": "quoteId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/DriverQuoteSummaryResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/driver/matches": {
       "get": {
         "tags": [
@@ -1181,7 +2686,17 @@
           "driver-match-controller"
         ],
         "operationId": "getMatch_1",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "matchId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -1200,7 +2715,17 @@
           "driver-match-controller"
         ],
         "operationId": "cancelMatch_1",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "matchId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK"
@@ -1223,6 +2748,29 @@
                   "type": "array",
                   "items": {
                     "$ref": "#/components/schemas/MatchResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/driver/inquiries/me": {
+      "get": {
+        "tags": [
+          "inquiry-controller"
+        ],
+        "operationId": "myDriverInquiries",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/InquiryResponse"
                   }
                 }
               }
@@ -1260,7 +2808,17 @@
           "delivery-photo-controller"
         ],
         "operationId": "downloadPhoto",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "photoId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -1269,6 +2827,29 @@
                 "schema": {
                   "type": "string",
                   "format": "binary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/config/public": {
+      "get": {
+        "tags": [
+          "public-config-controller"
+        ],
+        "operationId": "getPublicConfig",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
                 }
               }
             }
@@ -1292,6 +2873,26 @@
                   "items": {
                     "$ref": "#/components/schemas/ChecklistItemResponse"
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "tags": [
+          "auth-controller"
+        ],
+        "operationId": "me",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeResponse"
                 }
               }
             }
@@ -1328,7 +2929,17 @@
           "announcement-controller"
         ],
         "operationId": "get",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "announcementId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -1336,6 +2947,358 @@
               "*/*": {
                 "schema": {
                   "$ref": "#/components/schemas/AnnouncementResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/users": {
+      "get": {
+        "tags": [
+          "admin-ops-controller"
+        ],
+        "operationId": "users",
+        "parameters": [
+          {
+            "name": "role",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/users/{userId}": {
+      "get": {
+        "tags": [
+          "admin-ops-controller"
+        ],
+        "operationId": "userDetail",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/trucks/pending": {
+      "get": {
+        "tags": [
+          "admin-truck-controller"
+        ],
+        "operationId": "listPending",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TruckResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/settlements": {
+      "get": {
+        "tags": [
+          "admin-transport-controller"
+        ],
+        "operationId": "settlements",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/quotes": {
+      "get": {
+        "tags": [
+          "admin-transport-controller"
+        ],
+        "operationId": "quotes",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/quotes/{quoteId}": {
+      "get": {
+        "tags": [
+          "admin-transport-controller"
+        ],
+        "operationId": "quote",
+        "parameters": [
+          {
+            "name": "quoteId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/payments": {
+      "get": {
+        "tags": [
+          "admin-transport-controller"
+        ],
+        "operationId": "payments",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/matches": {
+      "get": {
+        "tags": [
+          "admin-transport-controller"
+        ],
+        "operationId": "matches",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/matches/{matchId}": {
+      "get": {
+        "tags": [
+          "admin-transport-controller"
+        ],
+        "operationId": "match",
+        "parameters": [
+          {
+            "name": "matchId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/inquiries": {
+      "get": {
+        "tags": [
+          "inquiry-controller"
+        ],
+        "operationId": "allInquiries",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/InquiryResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/dashboard": {
+      "get": {
+        "tags": [
+          "admin-ops-controller"
+        ],
+        "operationId": "dashboard",
+        "parameters": [
+          {
+            "name": "range",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "7d"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "object"
+                  }
                 }
               }
             }
@@ -1358,6 +3321,73 @@
           },
           "extraFee": {
             "type": "number"
+          }
+        }
+      },
+      "QuoteItemRequest": {
+        "type": "object",
+        "properties": {
+          "itemName": {
+            "type": "string"
+          },
+          "itemType": {
+            "type": "string"
+          },
+          "itemDescription": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "lengthCm": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "widthCm": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "heightCm": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "unitWeightKg": {
+            "type": "number",
+            "format": "double"
+          },
+          "unitVolumeCbm": {
+            "type": "number",
+            "format": "double"
+          },
+          "fragile": {
+            "type": "boolean"
+          },
+          "upright": {
+            "type": "boolean"
+          },
+          "noStack": {
+            "type": "boolean"
+          },
+          "bottomOnly": {
+            "type": "boolean"
+          },
+          "rotatable": {
+            "type": "boolean"
+          },
+          "stackable": {
+            "type": "boolean"
+          },
+          "maxStackWeightKg": {
+            "type": "number",
+            "format": "double"
+          },
+          "handlingTags": {
+            "type": "string"
+          },
+          "sortOrder": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -1474,6 +3504,12 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/QuoteChecklistItemRequest"
+            }
+          },
+          "quoteItems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuoteItemRequest"
             }
           },
           "stops": {
@@ -1607,6 +3643,12 @@
             "type": "string",
             "format": "date-time"
           },
+          "quoteItems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuoteItemResponse"
+            }
+          },
           "checklistItems": {
             "type": "array",
             "items": {
@@ -1618,6 +3660,77 @@
             "items": {
               "$ref": "#/components/schemas/QuoteStopResponse"
             }
+          }
+        }
+      },
+      "QuoteItemResponse": {
+        "type": "object",
+        "properties": {
+          "quoteItemId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "itemName": {
+            "type": "string"
+          },
+          "itemType": {
+            "type": "string"
+          },
+          "itemDescription": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "lengthCm": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "widthCm": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "heightCm": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "unitWeightKg": {
+            "type": "number",
+            "format": "double"
+          },
+          "unitVolumeCbm": {
+            "type": "number",
+            "format": "double"
+          },
+          "fragile": {
+            "type": "boolean"
+          },
+          "upright": {
+            "type": "boolean"
+          },
+          "noStack": {
+            "type": "boolean"
+          },
+          "bottomOnly": {
+            "type": "boolean"
+          },
+          "rotatable": {
+            "type": "boolean"
+          },
+          "stackable": {
+            "type": "boolean"
+          },
+          "maxStackWeightKg": {
+            "type": "number",
+            "format": "double"
+          },
+          "handlingTags": {
+            "type": "string"
+          },
+          "sortOrder": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -1675,6 +3788,15 @@
           "maxVolume": {
             "type": "number"
           },
+          "cargoLength": {
+            "type": "number"
+          },
+          "cargoWidth": {
+            "type": "number"
+          },
+          "cargoHeight": {
+            "type": "number"
+          },
           "name": {
             "type": "string"
           },
@@ -1720,6 +3842,15 @@
             "type": "number"
           },
           "maxVolume": {
+            "type": "number"
+          },
+          "cargoLength": {
+            "type": "number"
+          },
+          "cargoWidth": {
+            "type": "number"
+          },
+          "cargoHeight": {
             "type": "number"
           },
           "name": {
@@ -1802,7 +3933,89 @@
           }
         }
       },
+      "SettlementResponse": {
+        "type": "object",
+        "properties": {
+          "settlementId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "matchId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "driverId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "shipperId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "totalFare": {
+            "type": "number"
+          },
+          "platformFee": {
+            "type": "number"
+          },
+          "fastFee": {
+            "type": "number"
+          },
+          "driverPayout": {
+            "type": "number"
+          },
+          "shipperPaymentStatus": {
+            "type": "string"
+          },
+          "shipperPaymentMethod": {
+            "type": "string"
+          },
+          "shipperPaidAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "settlementType": {
+            "type": "string"
+          },
+          "settlementStatus": {
+            "type": "string"
+          },
+          "dueDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "QuoteCreateRequest": {
+        "required": [
+          "basePrice",
+          "cargoName",
+          "cargoType",
+          "destinationAddress",
+          "destinationLat",
+          "destinationLng",
+          "distanceKm",
+          "loadMethod",
+          "originAddress",
+          "originLat",
+          "originLng",
+          "unloadMethod",
+          "vehicleBodyType",
+          "vehicleType",
+          "weightKg"
+        ],
         "type": "object",
         "properties": {
           "truckId": {
@@ -1810,32 +4023,54 @@
             "format": "int64"
           },
           "originAddress": {
+            "maxLength": 255,
+            "minLength": 0,
             "type": "string"
           },
           "destinationAddress": {
+            "maxLength": 255,
+            "minLength": 0,
             "type": "string"
           },
           "originLat": {
+            "maximum": 90,
+            "exclusiveMaximum": false,
+            "minimum": -90,
+            "exclusiveMinimum": false,
             "type": "number",
             "format": "double"
           },
           "originLng": {
+            "maximum": 180,
+            "exclusiveMaximum": false,
+            "minimum": -180,
+            "exclusiveMinimum": false,
             "type": "number",
             "format": "double"
           },
           "destinationLat": {
+            "maximum": 90,
+            "exclusiveMaximum": false,
+            "minimum": -90,
+            "exclusiveMinimum": false,
             "type": "number",
             "format": "double"
           },
           "destinationLng": {
+            "maximum": 180,
+            "exclusiveMaximum": false,
+            "minimum": -180,
+            "exclusiveMinimum": false,
             "type": "number",
             "format": "double"
           },
           "distanceKm": {
+            "minimum": 1,
             "type": "integer",
             "format": "int32"
           },
           "weightKg": {
+            "minimum": 1,
             "type": "integer",
             "format": "int32"
           },
@@ -1850,12 +4085,16 @@
             "type": "string"
           },
           "cargoName": {
+            "maxLength": 100,
+            "minLength": 0,
             "type": "string"
           },
           "cargoType": {
             "type": "string"
           },
           "cargoDesc": {
+            "maxLength": 500,
+            "minLength": 0,
             "type": "string"
           },
           "basePrice": {
@@ -1885,6 +4124,12 @@
               "$ref": "#/components/schemas/QuoteChecklistItemRequest"
             }
           },
+          "quoteItems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuoteItemRequest"
+            }
+          },
           "stops": {
             "type": "array",
             "items": {
@@ -1903,6 +4148,28 @@
           "quotePublicId": {
             "type": "string",
             "format": "uuid"
+          },
+          "originLat": {
+            "type": "number",
+            "format": "double"
+          },
+          "originLng": {
+            "type": "number",
+            "format": "double"
+          },
+          "destinationLat": {
+            "type": "number",
+            "format": "double"
+          },
+          "destinationLng": {
+            "type": "number",
+            "format": "double"
+          },
+          "stops": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuoteStopResponse"
+            }
           }
         }
       },
@@ -2185,6 +4452,23 @@
           "status": {
             "type": "string"
           },
+          "matchGroupKey": {
+            "type": "string"
+          },
+          "matchGroupType": {
+            "type": "string"
+          },
+          "matchGroupOrder": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "locationSharingEnabled": {
+            "type": "boolean"
+          },
+          "locationSharingUpdatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
           "acceptedAt": {
             "type": "string",
             "format": "date-time"
@@ -2196,6 +4480,814 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "InquiryCreateRequest": {
+        "required": [
+          "content",
+          "title"
+        ],
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          }
+        }
+      },
+      "InquiryResponse": {
+        "type": "object",
+        "properties": {
+          "inquiryId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "shipperId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "driverId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "writerType": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "answer": {
+            "type": "string"
+          },
+          "answeredByAdminId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "answeredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "MultiDirectionsRequest": {
+        "type": "object",
+        "properties": {
+          "waypoints": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Waypoint"
+            }
+          }
+        }
+      },
+      "Waypoint": {
+        "type": "object",
+        "properties": {
+          "lat": {
+            "type": "number",
+            "format": "double"
+          },
+          "lng": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "Place": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "latitude": {
+            "type": "number",
+            "format": "double"
+          },
+          "longitude": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "RouteRequest": {
+        "type": "object",
+        "properties": {
+          "origin": {
+            "$ref": "#/components/schemas/Place"
+          },
+          "destination": {
+            "$ref": "#/components/schemas/Place"
+          },
+          "waypoints": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Place"
+            }
+          }
+        }
+      },
+      "RouteResponse": {
+        "type": "object",
+        "properties": {
+          "distanceMeters": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "durationSeconds": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "segmentCount": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "BatchDistanceRequest": {
+        "type": "object",
+        "properties": {
+          "pairs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DistancePair"
+            }
+          }
+        }
+      },
+      "DistancePair": {
+        "type": "object",
+        "properties": {
+          "fromLat": {
+            "type": "number",
+            "format": "double"
+          },
+          "fromLng": {
+            "type": "number",
+            "format": "double"
+          },
+          "toLat": {
+            "type": "number",
+            "format": "double"
+          },
+          "toLng": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "BatchDistanceResponse": {
+        "type": "object",
+        "properties": {
+          "distances": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CachedDistanceResponse"
+            }
+          },
+          "error": {
+            "type": "string"
+          }
+        }
+      },
+      "CachedDistanceResponse": {
+        "type": "object",
+        "properties": {
+          "distanceM": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "durationS": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "isEstimate": {
+            "type": "boolean"
+          },
+          "error": {
+            "type": "string"
+          }
+        }
+      },
+      "AssemblyParameters": {
+        "type": "object",
+        "properties": {
+          "radiusKm": {
+            "type": "number",
+            "format": "double"
+          },
+          "directionAngleDegrees": {
+            "type": "number",
+            "format": "double"
+          },
+          "maxCombineCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "consolidationWeight": {
+            "type": "number",
+            "format": "double"
+          },
+          "profitWeight": {
+            "type": "number",
+            "format": "double"
+          },
+          "routeWeight": {
+            "type": "number",
+            "format": "double"
+          },
+          "fuelCostPerKm": {
+            "type": "number",
+            "format": "double"
+          },
+          "baseHourlyCost": {
+            "type": "number",
+            "format": "double"
+          },
+          "maxRecommendations": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "validWeights": {
+            "type": "boolean"
+          }
+        }
+      },
+      "DriverState": {
+        "type": "object",
+        "properties": {
+          "driverId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "currentLocation": {
+            "$ref": "#/components/schemas/Place"
+          },
+          "endLocation": {
+            "$ref": "#/components/schemas/Place"
+          },
+          "remainingCbm": {
+            "type": "number",
+            "format": "double"
+          },
+          "remainingWeight": {
+            "type": "number",
+            "format": "double"
+          },
+          "combinePreference": {
+            "type": "string",
+            "enum": [
+              "ALLOW",
+              "DISALLOW",
+              "HOME_ROUTE"
+            ]
+          },
+          "truckId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "inTransitCargos": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InTransitCargo"
+            }
+          },
+          "remainingDeliveries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Place"
+            }
+          },
+          "availableAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "InTransitCargo": {
+        "type": "object",
+        "properties": {
+          "cargoId": {
+            "type": "string"
+          },
+          "volumeCbm": {
+            "type": "number",
+            "format": "double"
+          },
+          "weightKg": {
+            "type": "number",
+            "format": "double"
+          },
+          "quoteId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "destination": {
+            "$ref": "#/components/schemas/Place"
+          }
+        }
+      },
+      "Quote": {
+        "type": "object",
+        "properties": {
+          "quoteId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/Place"
+          },
+          "destination": {
+            "$ref": "#/components/schemas/Place"
+          },
+          "volumeCbm": {
+            "type": "number",
+            "format": "double"
+          },
+          "weightKg": {
+            "type": "number",
+            "format": "double"
+          },
+          "allowCombine": {
+            "type": "boolean"
+          },
+          "finalPrice": {
+            "type": "number",
+            "format": "double"
+          },
+          "scheduledDate": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lengthCm": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "widthCm": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "heightCm": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "rotatable": {
+            "type": "boolean"
+          },
+          "stackable": {
+            "type": "boolean"
+          },
+          "fragile": {
+            "type": "boolean"
+          },
+          "noStack": {
+            "type": "boolean"
+          },
+          "bottomOnly": {
+            "type": "boolean"
+          },
+          "maxStackWeight": {
+            "type": "number",
+            "format": "double"
+          },
+          "status": {
+            "type": "string"
+          },
+          "handling": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "FRAGILE",
+                "UPRIGHT",
+                "KEEP_DRY",
+                "EASY_BREAK"
+              ]
+            }
+          },
+          "combineAllowed": {
+            "type": "boolean"
+          }
+        }
+      },
+      "RouteAssemblyRequest": {
+        "type": "object",
+        "properties": {
+          "driverState": {
+            "$ref": "#/components/schemas/DriverState"
+          },
+          "candidateQuotes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Quote"
+            }
+          },
+          "parameters": {
+            "$ref": "#/components/schemas/AssemblyParameters"
+          },
+          "selectedQuoteIds": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "SIMPLE",
+              "SMART"
+            ]
+          },
+          "valid": {
+            "type": "boolean"
+          },
+          "effectiveParameters": {
+            "$ref": "#/components/schemas/AssemblyParameters"
+          },
+          "effectiveMode": {
+            "type": "string",
+            "enum": [
+              "SIMPLE",
+              "SMART"
+            ]
+          }
+        }
+      },
+      "CargoVisit": {
+        "type": "object",
+        "properties": {
+          "sequence": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "quoteId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "PICKUP",
+              "DELIVERY"
+            ]
+          },
+          "location": {
+            "$ref": "#/components/schemas/Place"
+          },
+          "address": {
+            "type": "string"
+          },
+          "estimatedArrivalTime": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "distanceFromPrev": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "durationFromPrev": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "RecommendedRoute": {
+        "type": "object",
+        "properties": {
+          "rank": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "quoteIds": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "visitOrder": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CargoVisit"
+            }
+          },
+          "routeType": {
+            "type": "string",
+            "enum": [
+              "SINGLE",
+              "BUNDLED",
+              "HOME_ROUTE"
+            ]
+          },
+          "estimatedTotalDistanceM": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "estimatedTotalTimeS": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "emptyRunDistanceM": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "routeDeviationM": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalRevenue": {
+            "type": "number",
+            "format": "double"
+          },
+          "estimatedCost": {
+            "type": "number",
+            "format": "double"
+          },
+          "estimatedProfit": {
+            "type": "number",
+            "format": "double"
+          },
+          "profitPerKm": {
+            "type": "number",
+            "format": "double"
+          },
+          "totalCbm": {
+            "type": "number",
+            "format": "double"
+          },
+          "totalWeight": {
+            "type": "number",
+            "format": "double"
+          },
+          "cbmUtilization": {
+            "type": "number",
+            "format": "double"
+          },
+          "weightUtilization": {
+            "type": "number",
+            "format": "double"
+          },
+          "finalScore": {
+            "type": "number",
+            "format": "double"
+          },
+          "scoreBreakdown": {
+            "$ref": "#/components/schemas/ScoreBreakdown"
+          },
+          "scheduleViolations": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "calibrationId": {
+            "type": "string"
+          },
+          "bundled": {
+            "type": "boolean"
+          },
+          "single": {
+            "type": "boolean"
+          }
+        }
+      },
+      "RouteAssemblyResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          },
+          "recommendations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RecommendedRoute"
+            }
+          },
+          "totalCandidates": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "filteredCandidates": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "combinationsEvaluated": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "processingTimeMs": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "ScoreBreakdown": {
+        "type": "object",
+        "properties": {
+          "consolidationScore": {
+            "type": "number",
+            "format": "double"
+          },
+          "profitScore": {
+            "type": "number",
+            "format": "double"
+          },
+          "routeScore": {
+            "type": "number",
+            "format": "double"
+          },
+          "consolidationWeighted": {
+            "type": "number",
+            "format": "double"
+          },
+          "profitWeighted": {
+            "type": "number",
+            "format": "double"
+          },
+          "routeWeighted": {
+            "type": "number",
+            "format": "double"
+          },
+          "description": {
+            "type": "string"
+          },
+          "expectedUtilityFactor": {
+            "type": "number",
+            "format": "double"
+          },
+          "acceptProbability": {
+            "type": "number",
+            "format": "double"
+          },
+          "onTimeProbability": {
+            "type": "number",
+            "format": "double"
+          },
+          "modelConfidence": {
+            "type": "number",
+            "format": "double"
+          },
+          "decisionSource": {
+            "type": "string"
+          },
+          "schedulePenalty": {
+            "type": "number",
+            "format": "double"
+          },
+          "riskPenalty": {
+            "type": "number",
+            "format": "double"
+          },
+          "topFactors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "RouteCalibrationStatusResponse": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "calibrated": {
+            "type": "boolean"
+          },
+          "sampleCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "minSamples": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "lookbackSamples": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "consolidationWeight": {
+            "type": "number",
+            "format": "double"
+          },
+          "profitWeight": {
+            "type": "number",
+            "format": "double"
+          },
+          "routeWeight": {
+            "type": "number",
+            "format": "double"
+          },
+          "message": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "RouteCalibrationFeedbackRequest": {
+        "type": "object",
+        "properties": {
+          "calibrationId": {
+            "type": "string"
+          },
+          "accepted": {
+            "type": "boolean"
+          },
+          "completedOnTime": {
+            "type": "boolean"
+          },
+          "cancelled": {
+            "type": "boolean"
+          },
+          "realizedProfit": {
+            "type": "number",
+            "format": "double"
+          },
+          "note": {
+            "type": "string"
+          },
+          "valid": {
+            "type": "boolean"
+          }
+        }
+      },
+      "RouteCalibrationFeedbackResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "calibrationId": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "RouteAcceptRequest": {
+        "type": "object",
+        "properties": {
+          "driverId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "quoteIds": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "valid": {
+            "type": "boolean"
+          }
+        }
+      },
+      "RouteAcceptResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          },
+          "requestedCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "acceptedCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "acceptedQuoteIds": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
           }
         }
       },
@@ -2219,7 +5311,248 @@
           }
         }
       },
+      "CargoItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "length": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "height": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "weight": {
+            "type": "number",
+            "format": "double"
+          },
+          "stopOrder": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "rotatable": {
+            "type": "boolean"
+          },
+          "stackable": {
+            "type": "boolean"
+          },
+          "fragile": {
+            "type": "boolean"
+          },
+          "noStack": {
+            "type": "boolean"
+          },
+          "bottomOnly": {
+            "type": "boolean"
+          },
+          "maxStackWeight": {
+            "type": "number",
+            "format": "double"
+          },
+          "handling": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "FRAGILE",
+                "UPRIGHT",
+                "KEEP_DRY",
+                "EASY_BREAK"
+              ]
+            }
+          },
+          "uprightFromHandling": {
+            "type": "boolean"
+          },
+          "fragileFromHandling": {
+            "type": "boolean"
+          },
+          "easyBreakFromHandling": {
+            "type": "boolean"
+          },
+          "vulnerableFromHandling": {
+            "type": "boolean"
+          }
+        }
+      },
+      "LoadPlanRequest": {
+        "type": "object",
+        "properties": {
+          "truck": {
+            "$ref": "#/components/schemas/Truck"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CargoItem"
+            }
+          }
+        }
+      },
+      "Truck": {
+        "type": "object",
+        "properties": {
+          "truckId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "length": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "height": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxWeight": {
+            "type": "number",
+            "format": "double"
+          },
+          "doorPosition": {
+            "type": "string"
+          }
+        }
+      },
+      "LoadPlanResponse": {
+        "type": "object",
+        "properties": {
+          "placements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Placement"
+            }
+          },
+          "unplaced": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CargoItem"
+            }
+          },
+          "stats": {
+            "$ref": "#/components/schemas/Stats"
+          }
+        }
+      },
+      "Placement": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "x": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "y": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "z": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "length": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "height": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "weight": {
+            "type": "number",
+            "format": "double"
+          },
+          "stopOrder": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "stackable": {
+            "type": "boolean"
+          },
+          "orientation": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "fragile": {
+            "type": "boolean"
+          },
+          "noStack": {
+            "type": "boolean"
+          },
+          "bottomOnly": {
+            "type": "boolean"
+          },
+          "maxStackWeight": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "Stats": {
+        "type": "object",
+        "properties": {
+          "utilization": {
+            "type": "number",
+            "format": "double"
+          },
+          "totalWeight": {
+            "type": "number",
+            "format": "double"
+          },
+          "placedCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "unplacedCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "violations": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "LoadPlanSavedResponse": {
+        "type": "object",
+        "properties": {
+          "planId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "result": {
+            "$ref": "#/components/schemas/LoadPlanResponse"
+          }
+        }
+      },
       "TruckCreateRequest": {
+        "required": [
+          "insurance",
+          "maxWeight",
+          "name",
+          "tonnage",
+          "vehicleBodyType",
+          "vehicleType"
+        ],
         "type": "object",
         "properties": {
           "vehicleType": {
@@ -2237,7 +5570,18 @@
           "maxVolume": {
             "type": "number"
           },
+          "cargoLength": {
+            "type": "number"
+          },
+          "cargoWidth": {
+            "type": "number"
+          },
+          "cargoHeight": {
+            "type": "number"
+          },
           "name": {
+            "maxLength": 20,
+            "minLength": 0,
             "type": "string"
           },
           "imageUrl": {
@@ -2314,6 +5658,97 @@
           }
         }
       },
+      "RouteRecommendRequest": {
+        "required": [
+          "currentLat",
+          "currentLng"
+        ],
+        "type": "object",
+        "properties": {
+          "currentLat": {
+            "maximum": 90,
+            "exclusiveMaximum": false,
+            "minimum": -90,
+            "exclusiveMinimum": false,
+            "type": "number",
+            "format": "double"
+          },
+          "currentLng": {
+            "maximum": 180,
+            "exclusiveMaximum": false,
+            "minimum": -180,
+            "exclusiveMinimum": false,
+            "type": "number",
+            "format": "double"
+          },
+          "endLat": {
+            "maximum": 90,
+            "exclusiveMaximum": false,
+            "minimum": -90,
+            "exclusiveMinimum": false,
+            "type": "number",
+            "format": "double"
+          },
+          "endLng": {
+            "maximum": 180,
+            "exclusiveMaximum": false,
+            "minimum": -180,
+            "exclusiveMinimum": false,
+            "type": "number",
+            "format": "double"
+          },
+          "combinePreference": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "loadedWeightKg": {
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "type": "number",
+            "format": "double"
+          },
+          "loadedVolumeCbm": {
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "type": "number",
+            "format": "double"
+          },
+          "maxPickupDistanceKm": {
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "type": "number",
+            "format": "double"
+          },
+          "selectedQuoteIds": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        }
+      },
+      "LoadPlanPreviewRequest": {
+        "required": [
+          "quoteIds"
+        ],
+        "type": "object",
+        "properties": {
+          "truckId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "quoteIds": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        }
+      },
       "DeliveryPhotoResponse": {
         "type": "object",
         "properties": {
@@ -2358,22 +5793,150 @@
           }
         }
       },
+      "GpsLogUpsertRequest": {
+        "required": [
+          "lat",
+          "lng"
+        ],
+        "type": "object",
+        "properties": {
+          "lat": {
+            "maximum": 90,
+            "exclusiveMaximum": false,
+            "minimum": -90,
+            "exclusiveMinimum": false,
+            "type": "number",
+            "format": "double"
+          },
+          "lng": {
+            "maximum": 180,
+            "exclusiveMaximum": false,
+            "minimum": -180,
+            "exclusiveMinimum": false,
+            "type": "number",
+            "format": "double"
+          },
+          "speedKmh": {
+            "maximum": 250,
+            "exclusiveMaximum": false,
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "type": "number",
+            "format": "double"
+          },
+          "bearing": {
+            "maximum": 360,
+            "exclusiveMaximum": false,
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "GpsLogUpsertResponse": {
+        "type": "object",
+        "properties": {
+          "gpsLogId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "matchId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "loggedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deduplicated": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "BatchAcceptMatchRequest": {
+        "required": [
+          "matchIds"
+        ],
+        "type": "object",
+        "properties": {
+          "matchIds": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "routeType": {
+            "type": "string"
+          },
+          "orderedQuoteIds": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        }
+      },
+      "BatchAcceptMatchResponse": {
+        "type": "object",
+        "properties": {
+          "matchGroupKey": {
+            "type": "string"
+          },
+          "matchGroupType": {
+            "type": "string"
+          },
+          "acceptedCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "matches": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MatchResponse"
+            }
+          }
+        }
+      },
       "ShipperSignupRequest": {
+        "required": [
+          "address",
+          "bizRegNo",
+          "companyName",
+          "email",
+          "name",
+          "ownerName",
+          "password",
+          "phone"
+        ],
         "type": "object",
         "properties": {
           "email": {
             "type": "string"
           },
           "password": {
+            "maxLength": 100,
+            "minLength": 8,
+            "pattern": "^(?=.*[a-zA-Z])(?=.*\\d).*$",
             "type": "string"
           },
           "name": {
+            "maxLength": 50,
+            "minLength": 2,
             "type": "string"
           },
           "companyName": {
+            "maxLength": 100,
+            "minLength": 0,
             "type": "string"
           },
           "phone": {
+            "pattern": "^01[0-9]-?\\d{3,4}-?\\d{4}$",
             "type": "string"
           },
           "address": {
@@ -2383,12 +5946,15 @@
             "type": "string"
           },
           "bizRegNo": {
+            "pattern": "^\\d{3}-?\\d{2}-?\\d{5}$",
             "type": "string"
           },
           "bizPhone": {
+            "pattern": "^0\\d{1,2}-?\\d{3,4}-?\\d{4}$",
             "type": "string"
           },
           "openDate": {
+            "pattern": "^\\d{8}$",
             "type": "string"
           },
           "ownerName": {
@@ -2406,12 +5972,18 @@
         }
       },
       "LoginRequest": {
+        "required": [
+          "email",
+          "password"
+        ],
         "type": "object",
         "properties": {
           "email": {
             "type": "string"
           },
           "password": {
+            "maxLength": 100,
+            "minLength": 4,
             "type": "string"
           }
         }
@@ -2422,28 +5994,52 @@
           "accessToken": {
             "type": "string"
           },
+          "refreshToken": {
+            "type": "string"
+          },
           "tokenType": {
             "type": "string"
           },
           "expiresIn": {
             "type": "integer",
             "format": "int64"
+          },
+          "role": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string"
           }
         }
       },
       "DriverSignupRequest": {
+        "required": [
+          "address",
+          "bankAccount",
+          "bankName",
+          "email",
+          "name",
+          "password",
+          "phone"
+        ],
         "type": "object",
         "properties": {
           "email": {
             "type": "string"
           },
           "password": {
+            "maxLength": 100,
+            "minLength": 8,
+            "pattern": "^(?=.*[a-zA-Z])(?=.*\\d).*$",
             "type": "string"
           },
           "name": {
+            "maxLength": 50,
+            "minLength": 2,
             "type": "string"
           },
           "phone": {
+            "pattern": "^01[0-9]-?\\d{3,4}-?\\d{4}$",
             "type": "string"
           },
           "address": {
@@ -2456,6 +6052,7 @@
             "type": "string"
           },
           "bankAccount": {
+            "pattern": "^\\d{10,14}$",
             "type": "string"
           }
         }
@@ -2466,6 +6063,24 @@
           "driverId": {
             "type": "integer",
             "format": "int64"
+          }
+        }
+      },
+      "AdminSanctionCreateRequest": {
+        "type": "object",
+        "properties": {
+          "targetId": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -2483,6 +6098,60 @@
           },
           "publish": {
             "type": "boolean"
+          }
+        }
+      },
+      "TrackingShareUpdateRequest": {
+        "required": [
+          "enabled"
+        ],
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "TrackingShareStateResponse": {
+        "type": "object",
+        "properties": {
+          "matchId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AdminUserStatusUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "TruckApprovalUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "approved": {
+            "type": "boolean"
+          }
+        }
+      },
+      "InquiryAnswerRequest": {
+        "required": [
+          "answer"
+        ],
+        "type": "object",
+        "properties": {
+          "answer": {
+            "type": "string"
           }
         }
       },
@@ -2537,6 +6206,163 @@
           }
         }
       },
+      "DriverLocation": {
+        "type": "object",
+        "properties": {
+          "lat": {
+            "type": "number",
+            "format": "double"
+          },
+          "lng": {
+            "type": "number",
+            "format": "double"
+          },
+          "speedKmh": {
+            "type": "number",
+            "format": "double"
+          },
+          "bearing": {
+            "type": "number",
+            "format": "double"
+          },
+          "loggedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "HistoryPoint": {
+        "type": "object",
+        "properties": {
+          "lat": {
+            "type": "number",
+            "format": "double"
+          },
+          "lng": {
+            "type": "number",
+            "format": "double"
+          },
+          "loggedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "TrackingResponse": {
+        "type": "object",
+        "properties": {
+          "matchId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "matchStatus": {
+            "type": "string"
+          },
+          "locationSharingEnabled": {
+            "type": "boolean"
+          },
+          "locationSharingUpdatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastReceivedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "missingSignalWarning": {
+            "type": "boolean"
+          },
+          "currentLocation": {
+            "$ref": "#/components/schemas/DriverLocation"
+          },
+          "recentPath": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HistoryPoint"
+            }
+          }
+        }
+      },
+      "TruckSpecReferenceResponse": {
+        "type": "object",
+        "properties": {
+          "vehicleType": {
+            "type": "string"
+          },
+          "vehicleTypeKr": {
+            "type": "string"
+          },
+          "vehicleBodyType": {
+            "type": "string"
+          },
+          "categoryKr": {
+            "type": "string"
+          },
+          "tonnage": {
+            "type": "number"
+          },
+          "maxWeight": {
+            "type": "number"
+          },
+          "maxWeightDisplay": {
+            "type": "string"
+          },
+          "maxVolume": {
+            "type": "number"
+          },
+          "cargoLengthCm": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "cargoWidthCm": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "cargoHeightCm": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "palletCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "palletStandardMm": {
+            "type": "string"
+          },
+          "doorPosition": {
+            "type": "string"
+          },
+          "sourceName": {
+            "type": "string"
+          }
+        }
+      },
+      "PricingRateReferenceResponse": {
+        "type": "object",
+        "properties": {
+          "rangeKey": {
+            "type": "string"
+          },
+          "minDistanceKm": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxDistanceKm": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "vehicleType": {
+            "type": "string"
+          },
+          "baseRateWon": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "sourceName": {
+            "type": "string"
+          }
+        }
+      },
       "NotificationResponse": {
         "type": "object",
         "properties": {
@@ -2572,6 +6398,81 @@
           }
         }
       },
+      "DriverQuoteSummaryResponse": {
+        "type": "object",
+        "properties": {
+          "quoteId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "originAddress": {
+            "type": "string"
+          },
+          "destinationAddress": {
+            "type": "string"
+          },
+          "originLat": {
+            "type": "number",
+            "format": "double"
+          },
+          "originLng": {
+            "type": "number",
+            "format": "double"
+          },
+          "destinationLat": {
+            "type": "number",
+            "format": "double"
+          },
+          "destinationLng": {
+            "type": "number",
+            "format": "double"
+          },
+          "cargoName": {
+            "type": "string"
+          },
+          "cargoType": {
+            "type": "string"
+          },
+          "cargoDesc": {
+            "type": "string"
+          },
+          "finalPrice": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "distanceKm": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "weightKg": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "volumeCbm": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "itemCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "allowCombine": {
+            "type": "boolean"
+          },
+          "vehicleType": {
+            "type": "string"
+          },
+          "vehicleBodyType": {
+            "type": "string"
+          },
+          "loadMethod": {
+            "type": "string"
+          },
+          "unloadMethod": {
+            "type": "string"
+          }
+        }
+      },
       "ChecklistItemResponse": {
         "type": "object",
         "properties": {
@@ -2603,6 +6504,23 @@
           "sortOrder": {
             "type": "integer",
             "format": "int32"
+          }
+        }
+      },
+      "MeResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
           }
         }
       }

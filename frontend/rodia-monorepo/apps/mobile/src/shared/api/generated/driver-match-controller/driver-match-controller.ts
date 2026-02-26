@@ -4,15 +4,48 @@
  * OpenAPI definition
  * OpenAPI spec version: v0
  */
+import type {
+  BatchAcceptMatchRequest
+} from '.././schemas';
+
 import { customInstance } from '../../orval/custom-instance';
 
 
 
+  export const startTransit = (
+    matchId: number,
+ ) => {
+      return customInstance<Blob>(
+      {url: `/api/driver/matches/${matchId}/start`, method: 'POST',
+        responseType: 'blob'
+    },
+      );
+    }
+  export const completeTransit = (
+    matchId: number,
+ ) => {
+      return customInstance<Blob>(
+      {url: `/api/driver/matches/${matchId}/complete`, method: 'POST',
+        responseType: 'blob'
+    },
+      );
+    }
   export const acceptMatch = (
-    matchId: string,
+    matchId: number,
  ) => {
       return customInstance<Blob>(
       {url: `/api/driver/matches/${matchId}/accept`, method: 'POST',
+        responseType: 'blob'
+    },
+      );
+    }
+  export const acceptMatches = (
+    batchAcceptMatchRequest: BatchAcceptMatchRequest,
+ ) => {
+      return customInstance<Blob>(
+      {url: `/api/driver/matches/accept-batch`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: batchAcceptMatchRequest,
         responseType: 'blob'
     },
       );
@@ -27,7 +60,7 @@ import { customInstance } from '../../orval/custom-instance';
       );
     }
   export const getMatch1 = (
-    matchId: string,
+    matchId: number,
  ) => {
       return customInstance<Blob>(
       {url: `/api/driver/matches/${matchId}`, method: 'GET',
@@ -36,7 +69,7 @@ import { customInstance } from '../../orval/custom-instance';
       );
     }
   export const cancelMatch1 = (
-    matchId: string,
+    matchId: number,
  ) => {
       return customInstance<void>(
       {url: `/api/driver/matches/${matchId}`, method: 'DELETE'
@@ -52,7 +85,10 @@ import { customInstance } from '../../orval/custom-instance';
     },
       );
     }
-  export type AcceptMatchResult = NonNullable<Awaited<ReturnType<typeof acceptMatch>>>
+  export type StartTransitResult = NonNullable<Awaited<ReturnType<typeof startTransit>>>
+export type CompleteTransitResult = NonNullable<Awaited<ReturnType<typeof completeTransit>>>
+export type AcceptMatchResult = NonNullable<Awaited<ReturnType<typeof acceptMatch>>>
+export type AcceptMatchesResult = NonNullable<Awaited<ReturnType<typeof acceptMatches>>>
 export type GetOpenMatchesResult = NonNullable<Awaited<ReturnType<typeof getOpenMatches>>>
 export type GetMatch1Result = NonNullable<Awaited<ReturnType<typeof getMatch1>>>
 export type CancelMatch1Result = NonNullable<Awaited<ReturnType<typeof cancelMatch1>>>

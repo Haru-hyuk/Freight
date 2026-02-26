@@ -6,5 +6,5 @@
  */
 
 export type GetByMatchIdParams = {
-arg1: number;
+matchId: number;
 };

@@ -6,15 +6,32 @@
  */
 
 export interface ShipperSignupRequest {
-  email?: string;
-  password?: string;
-  name?: string;
-  companyName?: string;
-  phone?: string;
-  address?: string;
+  email: string;
+  /**
+   * @minLength 8
+   * @maxLength 100
+   * @pattern ^(?=.*[a-zA-Z])(?=.*\d).*$
+   */
+  password: string;
+  /**
+   * @minLength 2
+   * @maxLength 50
+   */
+  name: string;
+  /**
+   * @minLength 0
+   * @maxLength 100
+   */
+  companyName: string;
+  /** @pattern ^01[0-9]-?\d{3,4}-?\d{4}$ */
+  phone: string;
+  address: string;
   addressDetail?: string;
-  bizRegNo?: string;
+  /** @pattern ^\d{3}-?\d{2}-?\d{5}$ */
+  bizRegNo: string;
+  /** @pattern ^0\d{1,2}-?\d{3,4}-?\d{4}$ */
   bizPhone?: string;
+  /** @pattern ^\d{8}$ */
   openDate?: string;
-  ownerName?: string;
+  ownerName: string;
 }

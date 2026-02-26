@@ -4,8 +4,14 @@
  * OpenAPI definition
  * OpenAPI spec version: v0
  */
+import type { QuoteStopResponse } from './quoteStopResponse';
 
 export interface QuoteCreateResponse {
   quoteId?: number;
   quotePublicId?: string;
+  originLat?: number;
+  originLng?: number;
+  destinationLat?: number;
+  destinationLng?: number;
+  stops?: QuoteStopResponse[];
 }
