@@ -87,7 +87,7 @@ export function UserTable({
 
               <TableBody>
                 {items.map((u) => (
-                  <TableRow key={u.id}>
+                  <TableRow key={u.id} className="cursor-pointer hover:bg-muted" onClick={() => onOpenDetail(u.id)}>
                     <TableCell>
                       <RoleBadge role={u.role} />
                     </TableCell>
@@ -110,10 +110,14 @@ export function UserTable({
 
                     <TableCell className="text-right">
                       <div className="inline-flex gap-2">
-                        <Button type="button" variant="secondary" onClick={() => onOpenDetail(u.id)}>
-                          상세
-                        </Button>
-                        <Button type="button" variant="secondary" onClick={() => openSanction(u)}>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openSanction(u);
+                          }}
+                        >
                           제재
                         </Button>
                       </div>

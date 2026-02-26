@@ -1,4 +1,4 @@
-export type SettlementApprovalStatus = "PENDING" | "APPROVED" | "REJECTED";
+﻿export type SettlementApprovalStatus = "PENDING" | "APPROVED" | "REJECTED";
 export type SettlementProgressStatus = "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
 
 export type SettlementApprovalRow = {
@@ -9,9 +9,16 @@ export type SettlementApprovalRow = {
   shipperName: string;
   dueDate: string;
   totalFare: number;
+  platformFee?: number;
+  fastFee?: number;
   driverPayout: number;
   settlementStatus: SettlementProgressStatus;
   approvalStatus: SettlementApprovalStatus;
+  shipperPaymentStatus?: string;
+  shipperPaymentMethod?: string;
+  completedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
   reviewMemo?: string;
 };
 

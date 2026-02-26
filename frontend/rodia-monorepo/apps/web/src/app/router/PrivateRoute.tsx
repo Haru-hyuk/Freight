@@ -1,7 +1,8 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
+import { getSession } from "@/shared/lib/auth/session";
 
 function isAuthed(): boolean {
-  return Boolean(localStorage.getItem("rodia_admin_token"));
+  return Boolean(getSession()?.accessToken || localStorage.getItem("rodia_admin_token"));
 }
 
 export default function PrivateRoute() {

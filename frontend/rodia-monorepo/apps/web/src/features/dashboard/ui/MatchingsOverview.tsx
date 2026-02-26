@@ -1,10 +1,9 @@
-// src/features/dashboard/ui/MatchingsOverview.tsx
-import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/shadcn/card";
-import { Skeleton } from "@/shared/ui/shadcn/skeleton";
-import { Badge } from "@/shared/ui/shadcn/badge";
-import { Separator } from "@/shared/ui/shadcn/separator";
 import type { MatchingDetail } from "@/features/admin/model/types";
 import { formatKRW } from "@/shared/lib/utils";
+import { Badge } from "@/shared/ui/shadcn/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/shadcn/card";
+import { Separator } from "@/shared/ui/shadcn/separator";
+import { Skeleton } from "@/shared/ui/shadcn/skeleton";
 
 type Props = {
   loading: boolean;
@@ -12,27 +11,26 @@ type Props = {
 };
 
 const statusLabelMap: Record<string, string> = {
-  PENDING: "대기중",
-  ACCEPTED: "수락됨",
+  PENDING: "대기",
+  ACCEPTED: "수락",
   IN_TRANSIT: "진행중",
   COMPLETED: "완료",
-  CANCELED: "취소됨",
+  CANCELED: "취소",
 };
 
-const statusColorMap: Record<string, string> = {
-  PENDING: "bg-yellow-100 text-yellow-800",
-  ACCEPTED: "bg-blue-100 text-blue-800",
-  IN_TRANSIT: "bg-purple-100 text-purple-800",
-  COMPLETED: "bg-green-100 text-green-800",
-  CANCELED: "bg-gray-100 text-gray-800",
-};
+function toStatusVariant(status: string): "default" | "secondary" | "outline" | "destructive" {
+  if (status === "COMPLETED") return "secondary";
+  if (status === "CANCELED") return "destructive";
+  if (status === "PENDING") return "outline";
+  return "default";
+}
 
 export function MatchingsOverview({ loading, matches }: Props) {
   if (loading) {
     return (
-      <Card className="rounded-lg border border-border lg:col-span-2">
+      <Card className="border-border/70 bg-gradient-to-br from-background to-muted lg:col-span-2">
         <CardHeader>
-          <CardTitle className="text-base font-bold">최근 매칭</CardTitle>
+          <CardTitle className="text-lg font-semibold">최근 배차</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <Skeleton className="h-20 w-full" />
@@ -45,58 +43,56 @@ export function MatchingsOverview({ loading, matches }: Props) {
 
   if (matches.length === 0) {
     return (
-      <Card className="rounded-lg border border-border lg:col-span-2">
+      <Card className="border-border/70 bg-gradient-to-br from-background to-muted lg:col-span-2">
         <CardHeader>
-          <CardTitle className="text-base font-bold">최근 매칭</CardTitle>
+          <CardTitle className="text-lg font-semibold">최근 배차</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">최근 매칭 이력이 없습니다.</p>
+          <p className="text-base text-foreground/70">최근 매칭 이력이 없습니다.</p>
         </CardContent>
       </Card>
     );
   }
 
   return (
-    <Card className="rounded-lg border border-border lg:col-span-2">
+    <Card className="border-border/70 bg-gradient-to-br from-background to-muted lg:col-span-2">
       <CardHeader className="pb-3">
-        <CardTitle className="text-base font-bold">최근 배차 (배송)</CardTitle>
+        <CardTitle className="text-lg font-semibold">최근 배차 (배송)</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         {matches.map((match, idx) => (
-          <div key={match.matchId}>
+          <div key={match.matchId} className="rounded-xl border border-border/60 bg-background/70 p-3">
             <div className="space-y-2">
-              <div className="flex gap-2 items-start justify-between">
+              <div className="flex items-start justify-between gap-2">
                 <div className="flex-1">
-                  <p className="font-semibold text-sm">{match.shipperName}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {match.originAddress} → {match.destinationAddress}
+                  <p className="text-base font-semibold">{match.shipperName}</p>
+                  <p className="text-sm text-foreground/70">
+                    {match.originAddress}
+                    {" -> "}
+                    {match.destinationAddress}
                   </p>
                 </div>
-                <Badge
-                  variant="outline"
-                  className={`flex-shrink-0 ${statusColorMap[match.status] || "bg-gray-100 text-gray-800"}`}
-                >
-                  {statusLabelMap[match.status] || match.status}
-                </Badge>
+                <Badge variant={toStatusVariant(match.status)}>{statusLabelMap[match.status] || match.status}</Badge>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="grid grid-cols-2 gap-2 text-sm">
                 <div>
-                  <span className="text-muted-foreground">기사: </span>
+                  <span className="text-foreground/70">기사: </span>
                   <span className="font-medium">{match.driverName}</span>
                 </div>
                 <div className="text-right">
-                  <span className="font-bold text-primary">{formatKRW(match.agreedPrice)}</span>
+                  <span className="font-semibold">{formatKRW(match.agreedPrice)}</span>
                 </div>
               </div>
 
-              <div className="flex gap-4 text-xs text-muted-foreground">
+              <div className="flex gap-4 text-sm text-foreground/70">
                 <span>{match.distanceKm}km</span>
                 <span>예상 {match.estimatedMinutes}분</span>
-                {match.actualMinutes && <span>실제 {match.actualMinutes}분</span>}
+                {match.actualMinutes ? <span>실제 {match.actualMinutes}분</span> : null}
               </div>
             </div>
-            {idx < matches.length - 1 && <Separator className="mt-3" />}
+
+            {idx < matches.length - 1 ? <Separator className="mt-3" /> : null}
           </div>
         ))}
       </CardContent>

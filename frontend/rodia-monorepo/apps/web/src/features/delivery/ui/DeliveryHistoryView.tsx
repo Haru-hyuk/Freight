@@ -36,10 +36,10 @@ export function DeliveryHistoryView() {
   }, [load]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-7 rounded-xl bg-muted/40 p-4 sm:p-6">
       <div>
-        <h2 className="text-2xl font-semibold text-foreground">배송 이력</h2>
-        <p className="mt-1 text-sm text-foreground">ERD의 matches, settlements 기준으로 배송 완료/진행 이력을 조회합니다.</p>
+        <h2 className="text-3xl font-semibold tracking-tight">배송 이력</h2>
+        <p className="mt-2 text-base text-foreground/70">matches, settlements 기준으로 배송 완료/진행 이력을 조회합니다.</p>
       </div>
 
       <DeliveryHistoryFilters value={filters} onChange={setFilters} onSubmit={load} loading={loading} />

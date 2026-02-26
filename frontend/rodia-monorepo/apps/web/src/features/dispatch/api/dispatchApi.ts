@@ -1,26 +1,83 @@
 import type {
+  DeviationSeverity,
   DispatchDriverOption,
   DispatchForceAssignPayload,
   DispatchQuery,
   DispatchResponse,
   DispatchRow,
+  DispatchMatchStatus,
+  DispatchPaymentStatus,
+  DispatchSettlementStatus,
 } from "@/features/dispatch/model/types";
+import { apiPaths } from "@/shared/lib/api/endpoints";
 import { apiClient } from "@/shared/lib/api/client";
 import { appendActivityLog } from "@/shared/lib/activity-log";
 import { isMockModeEnabled } from "@/shared/lib/mock-mode";
+
+type BackendMatch = {
+  matchId: number | null;
+  quoteId: number | null;
+  driverId: number | null;
+  accepted: boolean;
+  status: string;
+  acceptedAt: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+
+type BackendQuote = {
+  quoteId: number | null;
+  originAddress: string;
+  destinationAddress: string;
+  distanceKm: number | null;
+  cargoName: string | null;
+  desiredPrice: number | null;
+  finalPrice: number | null;
+  volumeCbm: number | null;
+};
+
+type BackendSettlement = {
+  settlementId: number | null;
+  matchId: number | null;
+  totalFare: number | null;
+  platformFee: number | null;
+  driverPayout: number | null;
+  shipperPaymentStatus: string | null;
+  settlementStatus: string | null;
+  completedAt: string | null;
+};
+
+type BackendNotification = {
+  notificationId: number;
+  matchId: number | null;
+  type: string | null;
+  message: string;
+  isRead: boolean;
+  createdAt: string | null;
+};
+
+type BackendTruck = {
+  truckId: number | null;
+  driverId: number | null;
+  vehicleType: string | null;
+  vehicleBodyType: string | null;
+  maxVolume: number | null;
+  maxWeight: number | null;
+  name: string | null;
+};
 
 const MOCK_DISPATCH_ROWS: DispatchRow[] = [
   {
     matchId: "M-3201",
     quoteId: "Q-1042",
-    shipperName: "Hanul Foods",
-    cargoType: "Frozen",
-    originAddress: "Incheon Port Logistics Center",
-    destinationAddress: "Yongsan Cold Storage Hub",
+    shipperName: "샘플 화주",
+    cargoType: "냉장",
+    originAddress: "인천 물류센터",
+    destinationAddress: "서울 도착지",
     requestedAt: "2026-02-19 07:30",
     departAt: "2026-02-19 09:00",
-    driverName: "Kim Minsu",
-    truckName: "11t Refrigerated",
+    driverName: "샘플 기사",
+    truckName: "11t 냉장",
     matchStatus: "READY",
     accepted: true,
     currentVolumeCbm: 8.5,
@@ -37,10 +94,10 @@ const MOCK_DISPATCH_ROWS: DispatchRow[] = [
   {
     matchId: "M-3202",
     quoteId: "Q-1043",
-    shipperName: "Mirae Furniture",
-    cargoType: "Pallet",
-    originAddress: "Paju Industrial Complex A",
-    destinationAddress: "Suwon Regional Warehouse",
+    shipperName: "샘플 화주",
+    cargoType: "팔레트",
+    originAddress: "파주 집하장",
+    destinationAddress: "수원 창고",
     requestedAt: "2026-02-19 06:50",
     driverName: undefined,
     truckName: undefined,
@@ -57,163 +114,434 @@ const MOCK_DISPATCH_ROWS: DispatchRow[] = [
     unreadNotificationCount: 3,
     deviationSeverity: "NONE",
   },
-  {
-    matchId: "M-3203",
-    quoteId: "Q-1041",
-    shipperName: "BluePharm",
-    cargoType: "Medical",
-    originAddress: "Gimpo Bio Hub",
-    destinationAddress: "Daejeon Hospital Supply Center",
-    requestedAt: "2026-02-18 21:10",
-    departAt: "2026-02-19 01:10",
-    arriveAt: "2026-02-19 04:40",
-    driverName: "Park Jiho",
-    truckName: "5t Box Truck",
-    matchStatus: "IN_TRANSIT",
-    accepted: true,
-    currentVolumeCbm: 10,
-    remainingVolumeCbm: 0,
-    routeDistanceKm: 148,
-    totalFare: 710000,
-    driverPayout: 560000,
-    platformFee: 68000,
-    paymentStatus: "COMPLETED",
-    settlementStatus: "PROCESSING",
-    unreadNotificationCount: 0,
-    deviationSeverity: "MODERATE",
-  },
-  {
-    matchId: "M-3204",
-    quoteId: "Q-1036",
-    shipperName: "Neo Electronics",
-    cargoType: "High Value",
-    originAddress: "Pangyo Distribution Campus",
-    destinationAddress: "Busan Harbor Transit Yard",
-    requestedAt: "2026-02-18 14:20",
-    departAt: "2026-02-18 15:00",
-    arriveAt: "2026-02-18 21:30",
-    driverName: "Lee Hyewon",
-    truckName: "8.5t Wing Body",
-    matchStatus: "COMPLETED",
-    accepted: true,
-    currentVolumeCbm: 14.2,
-    remainingVolumeCbm: 0,
-    routeDistanceKm: 386,
-    totalFare: 1380000,
-    driverPayout: 1080000,
-    platformFee: 120000,
-    paymentStatus: "COMPLETED",
-    settlementStatus: "COMPLETED",
-    unreadNotificationCount: 0,
-    deviationSeverity: "NONE",
-  },
-  {
-    matchId: "M-3205",
-    quoteId: "Q-1031",
-    shipperName: "Green Retail",
-    cargoType: "Mixed",
-    originAddress: "Seongnam Crossdock",
-    destinationAddress: "Gwangju Last Mile Terminal",
-    requestedAt: "2026-02-18 10:05",
-    departAt: "2026-02-18 11:00",
-    driverName: "Choi Daehan",
-    truckName: "3.5t Box Truck",
-    matchStatus: "CANCELLED",
-    accepted: true,
-    currentVolumeCbm: 3.4,
-    remainingVolumeCbm: 4.8,
-    routeDistanceKm: 290,
-    totalFare: 640000,
-    driverPayout: 0,
-    platformFee: 0,
-    paymentStatus: "FAILED",
-    settlementStatus: "FAILED",
-    unreadNotificationCount: 2,
-    deviationSeverity: "SEVERE",
-  },
-  {
-    matchId: "M-3206",
-    quoteId: "Q-1028",
-    shipperName: "Omega Parts",
-    cargoType: "Bulk",
-    originAddress: "Cheonan Manufacturing Zone",
-    destinationAddress: "Iksan Spare Parts Depot",
-    requestedAt: "2026-02-17 22:15",
-    departAt: "2026-02-18 00:40",
-    arriveAt: "2026-02-18 03:10",
-    driverName: "Yoon Sejin",
-    truckName: "14t Tractor",
-    matchStatus: "COMPLETED",
-    accepted: true,
-    currentVolumeCbm: 18,
-    remainingVolumeCbm: 0,
-    routeDistanceKm: 122,
-    totalFare: 840000,
-    driverPayout: 680000,
-    platformFee: 76000,
-    paymentStatus: "REFUNDED",
-    settlementStatus: "PENDING",
-    unreadNotificationCount: 1,
-    deviationSeverity: "MODERATE",
-  },
 ];
 
 const MOCK_DRIVER_OPTIONS: DispatchDriverOption[] = [
-  { driverId: "D-1201", driverName: "김민수", truckName: "11t Refrigerated", maxVolumeCbm: 20, currentVolumeCbm: 8.5 },
-  { driverId: "D-1211", driverName: "박현우", truckName: "8.5t Wing Body", maxVolumeCbm: 28, currentVolumeCbm: 9.4 },
-  { driverId: "D-1217", driverName: "정수연", truckName: "5t Box Truck", maxVolumeCbm: 14, currentVolumeCbm: 3.2 },
-  { driverId: "D-1230", driverName: "최도윤", truckName: "3.5t Box Truck", maxVolumeCbm: 11, currentVolumeCbm: 2.8 },
+  { driverId: "D-1201", driverName: "샘플 기사 1", truckName: "11t 냉장", maxVolumeCbm: 20, currentVolumeCbm: 8.5 },
+  { driverId: "D-1211", driverName: "샘플 기사 2", truckName: "8.5t 윙바디", maxVolumeCbm: 28, currentVolumeCbm: 9.4 },
+  { driverId: "D-1217", driverName: "샘플 기사 3", truckName: "5t 탑차", maxVolumeCbm: 14, currentVolumeCbm: 3.2 },
 ];
 
-function filterMockDispatchRows(query: DispatchQuery): DispatchResponse {
-  const keyword = (query.q ?? "").toLowerCase();
+const liveAssignmentOverrides = new Map<
+  number,
+  {
+    driverId: string;
+    driverName: string;
+    truckName: string;
+    updatedAt: string;
+  }
+>();
 
-  const filtered = MOCK_DISPATCH_ROWS.filter((row) => {
-    const statusMatched = query.status ? row.matchStatus === query.status : true;
-    const dispatchStateMatched = query.dispatchState
-      ? query.dispatchState === "ASSIGNED"
-        ? row.accepted
-        : !row.accepted
-      : true;
-    const paymentStatusMatched = query.paymentStatus ? row.paymentStatus === query.paymentStatus : true;
-    const settlementStatusMatched = query.settlementStatus ? row.settlementStatus === query.settlementStatus : true;
-    const keywordMatched = keyword
-      ? [
-          row.matchId,
-          row.quoteId,
-          row.shipperName,
-          row.cargoType,
-          row.originAddress,
-          row.destinationAddress,
-          row.driverName ?? "",
-          row.truckName ?? "",
-        ]
-          .join(" ")
-          .toLowerCase()
-          .includes(keyword)
-      : true;
+const liveRowsCache = new Map<number, DispatchRow>();
 
-    return statusMatched && dispatchStateMatched && paymentStatusMatched && settlementStatusMatched && keywordMatched;
-  });
+function toRecord(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+}
 
-  const start = (query.page - 1) * query.size;
-  const end = start + query.size;
+function toStringValue(value: unknown, fallback = ""): string {
+  if (typeof value === "string") return value;
+  if (typeof value === "number") return String(value);
+  return fallback;
+}
 
+function toNumberValue(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+function toBooleanValue(value: unknown): boolean {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") return value.toLowerCase() === "true";
+  return Boolean(value);
+}
+
+function pickListPayload(payload: unknown): unknown[] {
+  if (Array.isArray(payload)) return payload;
+  const row = toRecord(payload);
+  const candidates = [row.items, row.data, row.content, row.list, row.result];
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) return candidate;
+  }
+  return [];
+}
+
+function toDisplayDate(value: string | null | undefined): string {
+  if (!value) return "-";
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) return value;
+  return new Date(parsed).toISOString().slice(0, 16).replace("T", " ");
+}
+
+function normalizeMatchStatus(value: string): DispatchMatchStatus {
+  const status = value.trim().toUpperCase();
+  if (status === "IN_TRANSIT" || status === "TRANSIT" || status === "MOVING") return "IN_TRANSIT";
+  if (status === "COMPLETED" || status === "DONE" || status === "DELIVERED") return "COMPLETED";
+  if (status === "CANCELLED" || status === "CANCELED" || status === "CANCEL") return "CANCELLED";
+  return "READY";
+}
+
+function normalizePaymentStatus(value: string | null | undefined): DispatchPaymentStatus {
+  const status = (value ?? "").trim().toUpperCase();
+  if (status === "COMPLETED" || status === "PAID") return "COMPLETED";
+  if (status === "FAILED" || status === "CANCELLED") return "FAILED";
+  if (status === "REFUNDED") return "REFUNDED";
+  return "PENDING";
+}
+
+function normalizeSettlementStatus(value: string | null | undefined): DispatchSettlementStatus {
+  const status = (value ?? "").trim().toUpperCase();
+  if (status === "PROCESSING") return "PROCESSING";
+  if (status === "COMPLETED") return "COMPLETED";
+  if (status === "FAILED" || status === "REJECTED") return "FAILED";
+  return "PENDING";
+}
+
+function inferDeviationSeverity(text: string, status: DispatchMatchStatus): DeviationSeverity {
+  if (/(deviat|detour|route|이탈|critical|severe)/i.test(text)) return "SEVERE";
+  if (/(delay|late|warning|지연|경고)/i.test(text)) return "MODERATE";
+  if (status === "CANCELLED") return "SEVERE";
+  return "NONE";
+}
+
+function parseMatchId(input: string): number | null {
+  const prefixed = /^M-(\d+)$/i.exec(input.trim());
+  if (prefixed) return Number(prefixed[1]);
+  const parsed = Number(input);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function resolveDriverMyMatchesPath(): string {
+  return `${apiPaths.driverMatches.replace(/\/$/, "")}/me`;
+}
+
+function resolveSettlementMePath(basePath: string): string {
+  const base = basePath.replace(/\/$/, "");
+  return base.endsWith("/me") ? base : `${base}/me`;
+}
+
+function mapBackendMatch(raw: unknown): BackendMatch {
+  const row = toRecord(raw);
   return {
-    items: filtered.slice(start, end),
-    total: filtered.length,
+    matchId: toNumberValue(row.matchId ?? row.id),
+    quoteId: toNumberValue(row.quoteId),
+    driverId: toNumberValue(row.driverId),
+    accepted: toBooleanValue(row.accepted),
+    status: toStringValue(row.status, "READY"),
+    acceptedAt: toStringValue(row.acceptedAt, "") || null,
+    createdAt: toStringValue(row.createdAt, "") || null,
+    updatedAt: toStringValue(row.updatedAt, "") || null,
   };
 }
 
-export async function fetchDispatchRows(query: DispatchQuery): Promise<DispatchResponse> {
-  if (isMockModeEnabled()) return filterMockDispatchRows(query);
+function mapBackendQuote(raw: unknown): BackendQuote {
+  const row = toRecord(raw);
+  return {
+    quoteId: toNumberValue(row.quoteId ?? row.id),
+    originAddress: toStringValue(row.originAddress, "-"),
+    destinationAddress: toStringValue(row.destinationAddress, "-"),
+    distanceKm: toNumberValue(row.distanceKm),
+    cargoName: toStringValue(row.cargoName, "") || null,
+    desiredPrice: toNumberValue(row.desiredPrice),
+    finalPrice: toNumberValue(row.finalPrice),
+    volumeCbm: toNumberValue(row.volumeCbm),
+  };
+}
 
-  try {
-    const response = await apiClient.get<DispatchResponse>("/admin/dispatch", { params: query });
-    return response.data;
-  } catch {
-    return { items: [], total: 0 };
+function mapBackendSettlement(raw: unknown): BackendSettlement {
+  const row = toRecord(raw);
+  return {
+    settlementId: toNumberValue(row.settlementId ?? row.id),
+    matchId: toNumberValue(row.matchId),
+    totalFare: toNumberValue(row.totalFare),
+    platformFee: toNumberValue(row.platformFee),
+    driverPayout: toNumberValue(row.driverPayout),
+    shipperPaymentStatus: toStringValue(row.shipperPaymentStatus, "") || null,
+    settlementStatus: toStringValue(row.settlementStatus, "") || null,
+    completedAt: toStringValue(row.completedAt, "") || null,
+  };
+}
+
+function mapBackendNotification(raw: unknown): BackendNotification | null {
+  const row = toRecord(raw);
+  const notificationId = toNumberValue(row.notificationId ?? row.id);
+  if (notificationId === null) return null;
+
+  return {
+    notificationId,
+    matchId: toNumberValue(row.matchId),
+    type: toStringValue(row.type, "") || null,
+    message: toStringValue(row.message, ""),
+    isRead: Boolean(row.isRead),
+    createdAt: toStringValue(row.createdAt, "") || null,
+  };
+}
+
+function mapBackendTruck(raw: unknown): BackendTruck {
+  const row = toRecord(raw);
+  return {
+    truckId: toNumberValue(row.truckId ?? row.id),
+    driverId: toNumberValue(row.driverId),
+    vehicleType: toStringValue(row.vehicleType, "") || null,
+    vehicleBodyType: toStringValue(row.vehicleBodyType, "") || null,
+    maxVolume: toNumberValue(row.maxVolume),
+    maxWeight: toNumberValue(row.maxWeight),
+    name: toStringValue(row.name, "") || null,
+  };
+}
+
+function mergeMatches(rows: BackendMatch[]): BackendMatch[] {
+  const merged = new Map<number, BackendMatch>();
+  for (const row of rows) {
+    if (typeof row.matchId !== "number") continue;
+    const current = merged.get(row.matchId);
+    if (!current) {
+      merged.set(row.matchId, row);
+      continue;
+    }
+
+    const currentTime = Date.parse(current.updatedAt ?? current.createdAt ?? "");
+    const rowTime = Date.parse(row.updatedAt ?? row.createdAt ?? "");
+    const latest = rowTime >= currentTime ? row : current;
+    merged.set(row.matchId, {
+      ...current,
+      ...row,
+      status: latest.status,
+      updatedAt: latest.updatedAt,
+      acceptedAt: latest.acceptedAt ?? current.acceptedAt,
+      driverId: row.driverId ?? current.driverId,
+      quoteId: row.quoteId ?? current.quoteId,
+      accepted: current.accepted || row.accepted,
+    });
   }
+  return Array.from(merged.values());
+}
+
+async function fetchMatchesByPath(path: string): Promise<BackendMatch[]> {
+  try {
+    const response = await apiClient.get<unknown>(path);
+    return pickListPayload(response.data).map(mapBackendMatch);
+  } catch {
+    return [];
+  }
+}
+
+async function fetchQuotes(): Promise<BackendQuote[]> {
+  try {
+    const response = await apiClient.get<unknown>(apiPaths.shipperQuotes);
+    return pickListPayload(response.data).map(mapBackendQuote);
+  } catch {
+    return [];
+  }
+}
+
+async function fetchSettlementsByPath(path: string): Promise<BackendSettlement[]> {
+  try {
+    const response = await apiClient.get<unknown>(path);
+    return pickListPayload(response.data).map(mapBackendSettlement);
+  } catch {
+    return [];
+  }
+}
+
+async function fetchNotifications(): Promise<BackendNotification[]> {
+  try {
+    const response = await apiClient.get<unknown>(apiPaths.notificationsMe);
+    return pickListPayload(response.data)
+      .map(mapBackendNotification)
+      .filter((row): row is BackendNotification => row !== null);
+  } catch {
+    return [];
+  }
+}
+
+async function fetchTrucks(): Promise<BackendTruck[]> {
+  try {
+    const response = await apiClient.get<unknown>(apiPaths.driverTrucks);
+    return pickListPayload(response.data).map(mapBackendTruck);
+  } catch {
+    return [];
+  }
+}
+
+function applyAssignmentOverrides(rows: DispatchRow[]): DispatchRow[] {
+  return rows.map((row) => {
+    const matchId = parseMatchId(row.matchId);
+    if (matchId === null) return row;
+    const override = liveAssignmentOverrides.get(matchId);
+    if (!override) return row;
+    return {
+      ...row,
+      accepted: true,
+      driverName: override.driverName,
+      truckName: override.truckName,
+    };
+  });
+}
+
+function applyQueryFilter(rows: DispatchRow[], query: DispatchQuery): DispatchRow[] {
+  const keyword = (query.q ?? "").trim().toLowerCase();
+
+  return rows.filter((row) => {
+    if (query.status && row.matchStatus !== query.status) return false;
+    if (query.dispatchState) {
+      if (query.dispatchState === "ASSIGNED" && !row.accepted) return false;
+      if (query.dispatchState === "WAITING" && row.accepted) return false;
+    }
+    if (query.paymentStatus && row.paymentStatus !== query.paymentStatus) return false;
+    if (query.settlementStatus && row.settlementStatus !== query.settlementStatus) return false;
+
+    if (!keyword) return true;
+    const text = [
+      row.matchId,
+      row.quoteId,
+      row.shipperName,
+      row.cargoType,
+      row.originAddress,
+      row.destinationAddress,
+      row.driverName ?? "",
+      row.truckName ?? "",
+    ]
+      .join(" ")
+      .toLowerCase();
+
+    return text.includes(keyword);
+  });
+}
+
+function paginateRows(rows: DispatchRow[], page: number, size: number): DispatchResponse {
+  const start = (page - 1) * size;
+  return {
+    items: rows.slice(start, start + size),
+    total: rows.length,
+  };
+}
+
+async function buildLiveRows(): Promise<DispatchRow[]> {
+  const [shipperMatches, openDriverMatches, myDriverMatches, quotes, shipperSettlements, driverSettlements, notifications, trucks] =
+    await Promise.all([
+      fetchMatchesByPath(apiPaths.shipperMatchesMe),
+      fetchMatchesByPath(apiPaths.driverMatches),
+      fetchMatchesByPath(resolveDriverMyMatchesPath()),
+      fetchQuotes(),
+      fetchSettlementsByPath(resolveSettlementMePath(apiPaths.shipperSettlements)),
+      fetchSettlementsByPath(resolveSettlementMePath(apiPaths.driverSettlements)),
+      fetchNotifications(),
+      fetchTrucks(),
+    ]);
+
+  const quoteMap = new Map<number, BackendQuote>();
+  for (const quote of quotes) {
+    if (typeof quote.quoteId !== "number") continue;
+    quoteMap.set(quote.quoteId, quote);
+  }
+
+  const settlementMap = new Map<number, BackendSettlement>();
+  for (const settlement of [...shipperSettlements, ...driverSettlements]) {
+    if (typeof settlement.matchId !== "number") continue;
+    settlementMap.set(settlement.matchId, settlement);
+  }
+
+  const truckByDriverMap = new Map<number, BackendTruck>();
+  for (const truck of trucks) {
+    if (typeof truck.driverId !== "number") continue;
+    if (!truckByDriverMap.has(truck.driverId)) truckByDriverMap.set(truck.driverId, truck);
+  }
+
+  const unreadCountByMatch = new Map<number, number>();
+  const signalByMatch = new Map<number, string>();
+  for (const notification of notifications) {
+    if (typeof notification.matchId !== "number") continue;
+    if (!notification.isRead) {
+      unreadCountByMatch.set(notification.matchId, (unreadCountByMatch.get(notification.matchId) ?? 0) + 1);
+    }
+    const previous = signalByMatch.get(notification.matchId) ?? "";
+    signalByMatch.set(notification.matchId, `${previous} ${notification.type ?? ""} ${notification.message}`);
+  }
+
+  const mergedMatches = mergeMatches([...shipperMatches, ...openDriverMatches, ...myDriverMatches]);
+
+  const rows = mergedMatches
+    .filter((match) => typeof match.matchId === "number")
+    .map((match) => {
+      const matchId = match.matchId as number;
+      const quote = typeof match.quoteId === "number" ? quoteMap.get(match.quoteId) : undefined;
+      const settlement = settlementMap.get(matchId);
+      const status = normalizeMatchStatus(match.status);
+      const driverId = match.driverId;
+      const truck = typeof driverId === "number" ? truckByDriverMap.get(driverId) : undefined;
+
+      const paymentStatus = normalizePaymentStatus(settlement?.shipperPaymentStatus);
+      const settlementStatus = settlement?.settlementStatus
+        ? normalizeSettlementStatus(settlement.settlementStatus)
+        : status === "COMPLETED"
+          ? "PROCESSING"
+          : status === "CANCELLED"
+            ? "FAILED"
+            : "PENDING";
+      const totalFare = settlement?.totalFare ?? quote?.finalPrice ?? quote?.desiredPrice ?? 0;
+      const driverPayout = settlement?.driverPayout ?? 0;
+      const platformFee = settlement?.platformFee ?? Math.max(totalFare - driverPayout, 0);
+      const signalText = signalByMatch.get(matchId) ?? "";
+      const unreadCount = unreadCountByMatch.get(matchId) ?? 0;
+
+      return {
+        matchId: `M-${matchId}`,
+        quoteId: typeof match.quoteId === "number" ? `Q-${match.quoteId}` : "-",
+        shipperName: "화주",
+        cargoType: quote?.cargoName ?? "화물",
+        originAddress: quote?.originAddress ?? "-",
+        destinationAddress: quote?.destinationAddress ?? "-",
+        requestedAt: toDisplayDate(match.createdAt),
+        departAt: match.acceptedAt ? toDisplayDate(match.acceptedAt) : undefined,
+        arriveAt: settlement?.completedAt ? toDisplayDate(settlement.completedAt) : undefined,
+        driverName: typeof driverId === "number" ? `기사-${driverId}` : undefined,
+        truckName: (truck?.name ?? [truck?.vehicleType, truck?.vehicleBodyType].filter(Boolean).join(" ").trim()) || undefined,
+        matchStatus: status,
+        accepted: Boolean(match.accepted) || typeof driverId === "number",
+        currentVolumeCbm: quote?.volumeCbm ?? 0,
+        remainingVolumeCbm: Boolean(match.accepted) ? 0 : quote?.volumeCbm ?? 0,
+        routeDistanceKm: quote?.distanceKm ?? 0,
+        totalFare,
+        driverPayout,
+        platformFee,
+        paymentStatus,
+        settlementStatus,
+        unreadNotificationCount: unreadCount,
+        deviationSeverity: inferDeviationSeverity(signalText, status),
+      } satisfies DispatchRow;
+    })
+    .sort((a, b) => Date.parse(b.requestedAt) - Date.parse(a.requestedAt));
+
+  return applyAssignmentOverrides(rows);
+}
+
+function cacheLiveRows(rows: DispatchRow[]): void {
+  liveRowsCache.clear();
+  for (const row of rows) {
+    const matchId = parseMatchId(row.matchId);
+    if (matchId === null) continue;
+    liveRowsCache.set(matchId, row);
+  }
+}
+
+function filterMockDispatchRows(query: DispatchQuery): DispatchResponse {
+  const filtered = applyQueryFilter(MOCK_DISPATCH_ROWS, query);
+  return paginateRows(filtered, query.page, query.size);
+}
+
+export async function fetchDispatchRows(query: DispatchQuery): Promise<DispatchResponse> {
+  if (isMockModeEnabled()) {
+    return filterMockDispatchRows(query);
+  }
+
+  const rows = await buildLiveRows();
+  cacheLiveRows(rows);
+  const filtered = applyQueryFilter(rows, query);
+  return paginateRows(filtered, query.page, query.size);
 }
 
 export async function fetchAssignableDrivers(matchId: string): Promise<DispatchDriverOption[]> {
@@ -223,12 +551,42 @@ export async function fetchAssignableDrivers(matchId: string): Promise<DispatchD
     return [...MOCK_DRIVER_OPTIONS];
   }
 
-  try {
-    const response = await apiClient.get<DispatchDriverOption[]>(`/admin/dispatch/${matchId}/drivers`);
-    return response.data;
-  } catch {
-    return [];
+  const [trucks, rowsResponse] = await Promise.all([
+    fetchTrucks(),
+    fetchDispatchRows({ page: 1, size: 400 }),
+  ]);
+
+  const currentVolumeByDriver = new Map<string, number>();
+  for (const row of rowsResponse.items) {
+    if (!row.driverName) continue;
+    const driverId = row.driverName.replace("기사-", "D-");
+    currentVolumeByDriver.set(driverId, (currentVolumeByDriver.get(driverId) ?? 0) + row.currentVolumeCbm);
   }
+
+  const options = trucks
+    .filter((truck) => typeof truck.driverId === "number")
+    .map((truck) => {
+      const driverId = `D-${truck.driverId}`;
+      const maxVolume = truck.maxVolume ?? truck.maxWeight ?? 0;
+      const truckName =
+        (truck.name ?? [truck.vehicleType, truck.vehicleBodyType].filter(Boolean).join(" ").trim()) || "차량";
+      return {
+        driverId,
+        driverName: `기사-${truck.driverId}`,
+        truckName,
+        maxVolumeCbm: maxVolume,
+        currentVolumeCbm: currentVolumeByDriver.get(driverId) ?? 0,
+      } satisfies DispatchDriverOption;
+    });
+
+  const unique = new Map<string, DispatchDriverOption>();
+  for (const option of options) {
+    if (!unique.has(option.driverId)) unique.set(option.driverId, option);
+  }
+
+  return Array.from(unique.values()).sort(
+    (a, b) => b.maxVolumeCbm - b.currentVolumeCbm - (a.maxVolumeCbm - a.currentVolumeCbm),
+  );
 }
 
 export async function forceAssignDispatchDriver(payload: DispatchForceAssignPayload): Promise<DispatchRow | null> {
@@ -244,21 +602,41 @@ export async function forceAssignDispatchDriver(payload: DispatchForceAssignPayl
       action: "DISPATCH_ASSIGNED",
       targetId: payload.matchId,
       mode: "MOCK",
-      message: `매칭 ${payload.matchId}에 강제 배차를 수행했습니다.`,
+      message: `매칭 ${payload.matchId} 기사 지정 완료`,
     });
     return row;
   }
 
-  try {
-    const response = await apiClient.post<DispatchRow>(`/admin/dispatch/${payload.matchId}/force-assign`, payload);
-    appendActivityLog({
-      action: "DISPATCH_ASSIGNED",
-      targetId: payload.matchId,
-      mode: "REAL",
-      message: `매칭 ${payload.matchId}에 강제 배차를 수행했습니다.`,
-    });
-    return response.data;
-  } catch {
-    return null;
-  }
+  const matchId = parseMatchId(payload.matchId);
+  if (matchId === null) return null;
+
+  const options = await fetchAssignableDrivers(payload.matchId);
+  const targetDriver = options.find((item) => item.driverId === payload.driverId);
+  if (!targetDriver) return null;
+
+  liveAssignmentOverrides.set(matchId, {
+    driverId: payload.driverId,
+    driverName: targetDriver.driverName,
+    truckName: targetDriver.truckName,
+    updatedAt: new Date().toISOString(),
+  });
+
+  appendActivityLog({
+    action: "DISPATCH_ASSIGNED",
+    targetId: payload.matchId,
+    mode: "REAL",
+    message: `매칭 ${payload.matchId} 기사 지정 요청 - 서버 전용 배차 API 미지원으로 세션에 반영`,
+  });
+
+  const cached = liveRowsCache.get(matchId);
+  if (!cached) return null;
+
+  const updated: DispatchRow = {
+    ...cached,
+    accepted: true,
+    driverName: targetDriver.driverName,
+    truckName: targetDriver.truckName,
+  };
+  liveRowsCache.set(matchId, updated);
+  return updated;
 }

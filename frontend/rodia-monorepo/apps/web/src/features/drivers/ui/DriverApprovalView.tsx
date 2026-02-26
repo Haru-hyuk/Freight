@@ -25,10 +25,10 @@ export function DriverApprovalView() {
   }, [load]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-7 rounded-xl bg-muted/40 p-4 sm:p-6">
       <div>
-        <h2 className="text-2xl font-semibold text-foreground">차주 승인</h2>
-        <p className="mt-1 text-sm text-foreground">drivers, trucks 기반으로 차주 계정 승인 요청을 검토합니다.</p>
+        <h2 className="text-3xl font-semibold tracking-tight">기사 승인</h2>
+        <p className="mt-2 text-base text-foreground/70">기사 계정 승인 신청을 검토하고 승인/거부를 처리합니다.</p>
       </div>
 
       <DriverApprovalTable rows={rows} loading={loading} onOpenReview={setSelected} />

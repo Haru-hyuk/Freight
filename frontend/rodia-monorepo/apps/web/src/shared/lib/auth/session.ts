@@ -1,6 +1,6 @@
 // src/shared/lib/auth/session.ts
 
-type Session = {
+export type Session = {
   accessToken: string;
   refreshToken?: string;
 };

@@ -10,7 +10,7 @@ type ApprovalBadgeProps = {
 };
 
 export function DriverLicenseBadge({ status }: LicenseBadgeProps) {
-  if (status === "VERIFIED") return <Badge variant="secondary">인증완료</Badge>;
+  if (status === "VERIFIED") return <Badge variant="secondary">인증 완료</Badge>;
   return <Badge variant="destructive">미인증</Badge>;
 }
 

@@ -1,9 +1,3 @@
-// src/app/layouts/AdminSidebarConfig.tsx
-/**
- * 관리자 웹 사이드바 구성
- * 화물 운송 플랫폼 관리 기능 중심
- */
-
 export type NavItem = {
   label: string;
   to: string;
@@ -24,19 +18,18 @@ export type NavGroup = {
 export const ADMIN_NAV_GROUPS: NavGroup[] = [
   {
     title: "메인",
-    description: "핵심 대시보드 및 현황",
+    description: "운영 현황 요약",
     items: [
       {
-        label: "통합 대시보드",
+        label: "운영 대시보드",
         to: "/dashboard",
         icon: "layout-dashboard",
       },
     ],
   },
-
   {
-    title: "배송 관리",
-    description: "배송, 배차, 견적, 매칭 관리",
+    title: "운송 관리",
+    description: "견적, 배차, 매칭, 배송",
     items: [
       {
         label: "배송 실시간 모니터링",
@@ -65,10 +58,9 @@ export const ADMIN_NAV_GROUPS: NavGroup[] = [
       },
     ],
   },
-
   {
     title: "회원 관리",
-    description: "화주, 기사, 차량 승인",
+    description: "전체 회원, 화주, 차주",
     items: [
       {
         label: "전체 회원",
@@ -81,12 +73,12 @@ export const ADMIN_NAV_GROUPS: NavGroup[] = [
         icon: "briefcase",
       },
       {
-        label: "기사 관리",
+        label: "차주 관리",
         to: "/users/drivers",
         icon: "user-check",
       },
       {
-        label: "기사 승인",
+        label: "차주 승인",
         to: "/drivers/approvals",
         icon: "check-circle",
       },
@@ -98,41 +90,24 @@ export const ADMIN_NAV_GROUPS: NavGroup[] = [
       },
     ],
   },
-
   {
-    title: "정산 & 결제",
-    description: "결제, 정산, 출금 관리",
+    title: "정산 관리",
+    description: "정산 승인, 출금 요청, 정산 이력",
     items: [
       {
-        label: "정산 승인",
-        to: "/settlement/approvals",
-        icon: "credit-card",
-        badge: { count: 8, variant: "info" },
-      },
-      {
-        label: "정산 이력",
-        to: "/settlement/history",
-        icon: "receipt",
-      },
-      {
-        label: "정산 상세",
-        to: "/settlement/details",
-        icon: "bar-chart-3",
-      },
-      {
-        label: "출금 관리",
-        to: "/withdrawals",
+        label: "정산 관리",
+        to: "/settlement",
         icon: "wallet",
+        badge: { count: 8, variant: "info" },
       },
     ],
   },
-
   {
     title: "운영 관리",
-    description: "요금, 제재, 로그, 설정",
+    description: "요율, 이탈, 제재, 로그",
     items: [
       {
-        label: "배송 요금표",
+        label: "배송 요율표",
         to: "/ops/pricing",
         icon: "tag",
       },
@@ -143,7 +118,7 @@ export const ADMIN_NAV_GROUPS: NavGroup[] = [
         badge: { count: 7, variant: "danger" },
       },
       {
-        label: "제재 관리",
+        label: "제재 로그",
         to: "/ops/sanctions/logs",
         icon: "ban",
       },
@@ -153,16 +128,14 @@ export const ADMIN_NAV_GROUPS: NavGroup[] = [
         icon: "log",
       },
       {
-        label: "시스템 설정",
+        label: "설정",
         to: "/settings",
         icon: "settings",
-        disabled: true,
       },
     ],
   },
 ];
 
-// 페이지명 매핑
 export function getPageName(pathname: string): string {
   for (const group of ADMIN_NAV_GROUPS) {
     for (const item of group.items) {
@@ -171,5 +144,6 @@ export function getPageName(pathname: string): string {
       }
     }
   }
-  return "페이지";
+
+  return "운영";
 }

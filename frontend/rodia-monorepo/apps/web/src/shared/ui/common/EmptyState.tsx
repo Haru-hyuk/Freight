@@ -28,19 +28,19 @@ export function EmptyState({
   action
 }: EmptyStateProps) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-lg border border-border bg-muted/50 px-6 py-12 text-center">
+    <div className="flex flex-col items-center justify-center rounded-lg border border-slate-300 bg-slate-100/50 px-6 py-12 text-center">
       {icon ? (
-        <div className="mb-4 text-muted-foreground">
+        <div className="mb-4 text-slate-600">
           {icon}
         </div>
       ) : (
-        <AlertCircle className="mb-4 h-12 w-12 text-muted-foreground" />
+        <AlertCircle className="mb-4 h-12 w-12 text-slate-600" />
       )}
       
-      <h3 className="text-lg font-semibold text-foreground">{title}</h3>
+      <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
       
       {description && (
-        <p className="mt-2 text-sm text-muted-foreground max-w-sm">
+        <p className="mt-2 text-sm text-slate-600 max-w-sm">
           {description}
         </p>
       )}

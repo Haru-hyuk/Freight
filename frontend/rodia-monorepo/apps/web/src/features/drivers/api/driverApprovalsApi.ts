@@ -1,29 +1,213 @@
 import { DRIVER_APPROVAL_MOCK_ROWS } from "@/features/drivers/model/mockData";
 import type { DriverApprovalReviewPayload, DriverApprovalRow } from "@/features/drivers/model/types";
-import { apiClient } from "@/shared/lib/api/client";
 import { appendActivityLog } from "@/shared/lib/activity-log";
+import { apiClient } from "@/shared/lib/api/client";
+import { apiPaths } from "@/shared/lib/api/endpoints";
 import { isMockModeEnabled } from "@/shared/lib/mock-mode";
+
+type BackendTruck = {
+  truckId: number | null;
+  driverId: number | null;
+  vehicleType: string | null;
+  vehicleBodyType: string | null;
+  name: string | null;
+  approved: boolean | null;
+  insurance: string | null;
+  tonnage: number | null;
+  maxWeight: number | null;
+  maxVolume: number | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+
+const reviewOverrides = new Map<
+  string,
+  {
+    approvalStatus: DriverApprovalRow["approvalStatus"];
+    reviewMemo?: string;
+  }
+>();
 
 let driverRowsStore: DriverApprovalRow[] = [...DRIVER_APPROVAL_MOCK_ROWS];
 
-export async function fetchDriverApprovals(): Promise<DriverApprovalRow[]> {
-  if (isMockModeEnabled()) return [...driverRowsStore];
+function toRecord(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+}
 
+function toStringValue(value: unknown, fallback = ""): string {
+  if (typeof value === "string") return value;
+  if (typeof value === "number") return String(value);
+  return fallback;
+}
+
+function toNumberValue(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+function pickListPayload(payload: unknown): unknown[] {
+  if (Array.isArray(payload)) return payload;
+  const row = toRecord(payload);
+  const candidates = [row.items, row.data, row.content, row.list, row.result];
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) return candidate;
+  }
+  return [];
+}
+
+function toDisplayDate(value: string | null | undefined): string {
+  if (!value) return "-";
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) return value;
+  return new Date(parsed).toISOString().slice(0, 16).replace("T", " ");
+}
+
+function parseDriverId(input: string): number | null {
+  const prefixed = /^D-(\d+)$/i.exec(input.trim());
+  if (prefixed) return Number(prefixed[1]);
+
+  const parsed = Number(input);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function mapBackendTruck(raw: unknown): BackendTruck {
+  const row = toRecord(raw);
+  return {
+    truckId: toNumberValue(row.truckId ?? row.id),
+    driverId: toNumberValue(row.driverId),
+    vehicleType: toStringValue(row.vehicleType, "") || null,
+    vehicleBodyType: toStringValue(row.vehicleBodyType, "") || null,
+    name: toStringValue(row.name, "") || null,
+    approved: typeof row.approved === "boolean" ? row.approved : null,
+    insurance: toStringValue(row.insurance, "") || null,
+    tonnage: toNumberValue(row.tonnage),
+    maxWeight: toNumberValue(row.maxWeight),
+    maxVolume: toNumberValue(row.maxVolume),
+    createdAt: toStringValue(row.createdAt, "") || null,
+    updatedAt: toStringValue(row.updatedAt, "") || null,
+  };
+}
+
+function toVehicleSummary(truck: BackendTruck): string {
+  const detail = [truck.vehicleType, truck.vehicleBodyType].filter(Boolean).join(" ").trim();
+  return (truck.name ?? detail) || "Unknown vehicle";
+}
+
+function compareByDateDesc(a: string | null | undefined, b: string | null | undefined): number {
+  const aTime = Date.parse(a ?? "");
+  const bTime = Date.parse(b ?? "");
+  const safeA = Number.isFinite(aTime) ? aTime : 0;
+  const safeB = Number.isFinite(bTime) ? bTime : 0;
+  return safeB - safeA;
+}
+
+function deriveRowsFromTrucks(trucks: BackendTruck[]): DriverApprovalRow[] {
+  const grouped = new Map<number, BackendTruck[]>();
+  for (const truck of trucks) {
+    if (typeof truck.driverId !== "number") continue;
+    const rows = grouped.get(truck.driverId) ?? [];
+    rows.push(truck);
+    grouped.set(truck.driverId, rows);
+  }
+
+  const rows = Array.from(grouped.entries()).map(([driverId, items]) => {
+    const sorted = [...items].sort((a, b) => compareByDateDesc(a.updatedAt ?? a.createdAt, b.updatedAt ?? b.createdAt));
+    const latest = sorted[0];
+    const allVerified = items.every((item) => Boolean(item.insurance && item.insurance.trim().length > 0));
+
+    const anyApproved = items.some((item) => item.approved === true);
+    const anyRejected = items.some((item) => item.approved === false);
+    const defaultApprovalStatus: DriverApprovalRow["approvalStatus"] = anyApproved
+      ? "APPROVED"
+      : anyRejected
+        ? "REJECTED"
+        : "PENDING";
+
+    const row: DriverApprovalRow = {
+      driverId: `D-${driverId}`,
+      requestedAt: toDisplayDate(latest?.createdAt ?? null),
+      name: `Driver-${driverId}`,
+      phone: "-",
+      vehicleSummary: latest ? toVehicleSummary(latest) : "Unknown vehicle",
+      licenseStatus: allVerified ? "VERIFIED" : "UNVERIFIED",
+      approvalStatus: defaultApprovalStatus,
+      documents: undefined,
+      reviewMemo: undefined,
+    };
+
+    const override = reviewOverrides.get(row.driverId);
+    if (!override) return row;
+
+    return {
+      ...row,
+      approvalStatus: override.approvalStatus,
+      reviewMemo: override.reviewMemo,
+    };
+  });
+
+  const statusRank: Record<DriverApprovalRow["approvalStatus"], number> = {
+    PENDING: 0,
+    REJECTED: 1,
+    APPROVED: 2,
+  };
+
+  return rows.sort((a, b) => {
+    const rankDiff = statusRank[a.approvalStatus] - statusRank[b.approvalStatus];
+    if (rankDiff !== 0) return rankDiff;
+    return compareByDateDesc(a.requestedAt, b.requestedAt);
+  });
+}
+
+async function fetchBackendTrucks(): Promise<BackendTruck[]> {
   try {
-    const response = await apiClient.get<DriverApprovalRow[]>("/admin/drivers/approvals");
-    return response.data;
+    const response = await apiClient.get<unknown>(apiPaths.driverTrucks);
+    return pickListPayload(response.data).map(mapBackendTruck);
   } catch {
     return [];
   }
 }
 
+async function tryUpdateTruckApproval(truckId: number, approved: boolean): Promise<boolean> {
+  const basePath = apiPaths.driverTrucks.replace(/\/$/, "");
+  try {
+    const currentResponse = await apiClient.get<unknown>(`${basePath}/${truckId}`);
+    const current = mapBackendTruck(currentResponse.data);
+    await apiClient.put(`${basePath}/${truckId}`, {
+      vehicleType: current.vehicleType,
+      vehicleBodyType: current.vehicleBodyType,
+      tonnage: current.tonnage,
+      maxWeight: current.maxWeight,
+      maxVolume: current.maxVolume,
+      name: current.name,
+      approved,
+      insurance: current.insurance,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function fetchDriverApprovals(): Promise<DriverApprovalRow[]> {
+  if (isMockModeEnabled()) return [...driverRowsStore];
+
+  const trucks = await fetchBackendTrucks();
+  return deriveRowsFromTrucks(trucks);
+}
+
 export async function reviewDriverApproval(payload: DriverApprovalReviewPayload): Promise<void> {
+  const nextStatus: DriverApprovalRow["approvalStatus"] = payload.action === "APPROVE" ? "APPROVED" : "REJECTED";
+
   if (isMockModeEnabled()) {
     driverRowsStore = driverRowsStore.map((row) => {
       if (row.driverId !== payload.driverId) return row;
       return {
         ...row,
-        approvalStatus: payload.action === "APPROVE" ? "APPROVED" : "REJECTED",
+        approvalStatus: nextStatus,
         reviewMemo: payload.reason?.trim() || undefined,
       };
     });
@@ -32,23 +216,39 @@ export async function reviewDriverApproval(payload: DriverApprovalReviewPayload)
       action: "DRIVER_APPROVAL_REVIEWED",
       targetId: payload.driverId,
       mode: "MOCK",
-      message: `차주 ${payload.driverId} 승인 심사를 ${payload.action === "APPROVE" ? "승인" : "거절"} 처리했습니다.`,
+      message: `Driver ${payload.driverId} review ${payload.action === "APPROVE" ? "approved" : "rejected"}`,
     });
     return;
   }
 
-  try {
-    await apiClient.post(`/admin/drivers/approvals/${payload.driverId}/review`, {
-      action: payload.action,
-      reason: payload.reason,
-    });
-    appendActivityLog({
-      action: "DRIVER_APPROVAL_REVIEWED",
-      targetId: payload.driverId,
-      mode: "REAL",
-      message: `차주 ${payload.driverId} 승인 심사를 ${payload.action === "APPROVE" ? "승인" : "거절"} 처리했습니다.`,
-    });
-  } catch {
-    // no-op
+  reviewOverrides.set(payload.driverId, {
+    approvalStatus: nextStatus,
+    reviewMemo: payload.reason?.trim() || undefined,
+  });
+
+  const driverNumber = parseDriverId(payload.driverId);
+  let remoteApplied = false;
+
+  if (driverNumber !== null) {
+    const trucks = await fetchBackendTrucks();
+    const targetTrucks = trucks.filter((truck) => truck.driverId === driverNumber);
+
+    if (targetTrucks.length > 0) {
+      const results = await Promise.all(
+        targetTrucks
+          .filter((truck) => typeof truck.truckId === "number")
+          .map((truck) => tryUpdateTruckApproval(truck.truckId as number, payload.action === "APPROVE")),
+      );
+      remoteApplied = results.some(Boolean);
+    }
   }
+
+  appendActivityLog({
+    action: "DRIVER_APPROVAL_REVIEWED",
+    targetId: payload.driverId,
+    mode: "REAL",
+    message: remoteApplied
+      ? `Driver ${payload.driverId} review synced to backend`
+      : `Driver ${payload.driverId} review stored in local session (backend API not available)`,
+  });
 }

@@ -1,20 +1,27 @@
+import * as React from "react";
 import { useSyncExternalStore } from "react";
 
+import { fetchRemoteActivityLogs } from "@/features/ops/api/activityApi";
 import type { AdminActivityLog } from "@/shared/lib/activity-log";
 import { getActivityLogs, subscribeActivityLogs } from "@/shared/lib/activity-log";
-import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/shadcn/card";
+import { useMockMode } from "@/shared/lib/hooks/useMockMode";
+import { useRefreshCooldown } from "@/shared/lib/hooks/useRefreshCooldown";
+import { Alert, AlertDescription, AlertTitle } from "@/shared/ui/shadcn/alert";
 import { Badge } from "@/shared/ui/shadcn/badge";
+import { Button } from "@/shared/ui/shadcn/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/shadcn/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/shared/ui/shadcn/table";
 
 const ACTION_LABELS: Record<AdminActivityLog["action"], string> = {
   QUOTE_UPDATED: "견적 수정",
   QUOTE_NOTIFICATION_SENT: "견적 알림 발송",
-  PRICING_UPDATED: "금액 기준 수정",
-  PRICING_NOTIFICATION_SENT: "금액 알림 발송",
-  DISPATCH_ASSIGNED: "배차 강제 지정",
-  DRIVER_APPROVAL_REVIEWED: "차주 승인 심사",
-  SETTLEMENT_REVIEWED: "정산 승인 심사",
-  LIVE_ALERT_SENT: "실시간 카카오 알림",
+  PRICING_UPDATED: "요율 정책 수정",
+  PRICING_NOTIFICATION_SENT: "요율 알림 발송",
+  DISPATCH_ASSIGNED: "배차 지정",
+  DRIVER_APPROVAL_REVIEWED: "차주 승인 검토",
+  TRUCK_APPROVAL_REVIEWED: "차량 승인 검토",
+  SETTLEMENT_REVIEWED: "정산 승인 검토",
+  LIVE_ALERT_SENT: "실시간 알림 발송",
 };
 
 function formatDateTime(value: string): string {
@@ -23,47 +30,106 @@ function formatDateTime(value: string): string {
   return date.toLocaleString("ko-KR", { hour12: false });
 }
 
+function mergeLogs(localLogs: AdminActivityLog[], remoteLogs: AdminActivityLog[]): AdminActivityLog[] {
+  const merged = [...remoteLogs, ...localLogs];
+  const unique = Array.from(new Map(merged.map((row) => [row.id, row])).values());
+  return unique.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
 export function ActivityLogView() {
-  const logs = useSyncExternalStore(subscribeActivityLogs, getActivityLogs, getActivityLogs);
+  const localLogs = useSyncExternalStore(subscribeActivityLogs, getActivityLogs, getActivityLogs);
+  const { enabled: mockModeEnabled } = useMockMode();
+  const { remainingSeconds, isCoolingDown, startCooldown } = useRefreshCooldown(5);
+  const [remoteLogs, setRemoteLogs] = React.useState<AdminActivityLog[]>([]);
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const load = React.useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const rows = await fetchRemoteActivityLogs();
+      setRemoteLogs(rows);
+    } catch {
+      setRemoteLogs([]);
+      setError("활동 로그를 불러오지 못했습니다.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    void load();
+  }, [load, mockModeEnabled]);
+
+  const logs = React.useMemo(() => mergeLogs(localLogs, remoteLogs), [localLogs, remoteLogs]);
 
   return (
-    <div className="space-y-6 min-h-screen bg-background text-foreground">
-      <div>
-        <h1 className="text-2xl font-semibold">활동 로그</h1>
-        <p className="text-sm text-foreground">관리자 작업과 알림 발송 이력을 시간 순으로 확인합니다.</p>
+    <div className="min-h-screen space-y-6 bg-background text-foreground">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-semibold">활동 로그</h1>
+          <p className="text-base text-foreground opacity-70">관리자 조작 이력과 서버 활동 타임라인을 함께 확인합니다.</p>
+        </div>
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={() => {
+            if (!startCooldown()) return;
+            void load();
+          }}
+          disabled={loading || isCoolingDown}
+        >
+          {loading ? "불러오는 중..." : isCoolingDown ? `${remainingSeconds}s` : "새로고침"}
+        </Button>
       </div>
+
+      {error ? (
+        <Alert variant="destructive">
+          <AlertTitle>활동 로그 조회 실패</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : null}
 
       <Card className="rounded-lg border border-border bg-background">
         <CardHeader>
           <CardTitle>최근 활동</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="rounded-lg border border-border bg-background overflow-hidden">
+          <div className="overflow-hidden rounded-lg border border-border bg-background">
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted">
-                  <TableHead>시간</TableHead>
-                  <TableHead>작업</TableHead>
+                  <TableHead>발생 시각</TableHead>
+                  <TableHead>활동 유형</TableHead>
                   <TableHead>대상 ID</TableHead>
-                  <TableHead>모드</TableHead>
-                  <TableHead>내용</TableHead>
+                  <TableHead>데이터 모드</TableHead>
+                  <TableHead>메시지</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {logs.length === 0 ? (
+                {loading && logs.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-foreground">
-                      기록된 활동 로그가 없습니다.
+                    <TableCell colSpan={5} className="text-center text-foreground opacity-70">
+                      활동 로그를 불러오는 중입니다.
+                    </TableCell>
+                  </TableRow>
+                ) : logs.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-foreground opacity-70">
+                      활동 로그가 없습니다.
                     </TableCell>
                   </TableRow>
                 ) : (
                   logs.map((item) => (
                     <TableRow key={item.id}>
                       <TableCell>{formatDateTime(item.createdAt)}</TableCell>
-                      <TableCell>{ACTION_LABELS[item.action]}</TableCell>
+                      <TableCell>{ACTION_LABELS[item.action] ?? "기타 활동"}</TableCell>
                       <TableCell>{item.targetId ?? "-"}</TableCell>
                       <TableCell>
-                        <Badge variant={item.mode === "MOCK" ? "secondary" : "outline"}>{item.mode}</Badge>
+                        <Badge variant={item.mode === "MOCK" ? "secondary" : "outline"}>
+                          {item.mode === "MOCK" ? "모의" : "실데이터"}
+                        </Badge>
                       </TableCell>
                       <TableCell>{item.message}</TableCell>
                     </TableRow>
