@@ -7,6 +7,7 @@
 import type {
   DriverSignupRequest,
   LoginRequest,
+  RefreshBody,
   ShipperSignupRequest
 } from '.././schemas';
 
@@ -32,6 +33,17 @@ import { customInstance } from '../../orval/custom-instance';
       {url: `/api/auth/shipper/login`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: loginRequest,
+        responseType: 'blob'
+    },
+      );
+    }
+  export const refresh = (
+    refreshBody: RefreshBody,
+ ) => {
+      return customInstance<Blob>(
+      {url: `/api/auth/refresh`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: refreshBody,
         responseType: 'blob'
     },
       );
@@ -77,9 +89,20 @@ import { customInstance } from '../../orval/custom-instance';
     },
       );
     }
+  export const me = (
+    
+ ) => {
+      return customInstance<Blob>(
+      {url: `/api/auth/me`, method: 'GET',
+        responseType: 'blob'
+    },
+      );
+    }
   export type ShipperSignupResult = NonNullable<Awaited<ReturnType<typeof shipperSignup>>>
 export type ShipperLoginResult = NonNullable<Awaited<ReturnType<typeof shipperLogin>>>
+export type RefreshResult = NonNullable<Awaited<ReturnType<typeof refresh>>>
 export type LogoutResult = NonNullable<Awaited<ReturnType<typeof logout>>>
 export type DriverSignupResult = NonNullable<Awaited<ReturnType<typeof driverSignup>>>
 export type DriverLoginResult = NonNullable<Awaited<ReturnType<typeof driverLogin>>>
 export type AdminLoginResult = NonNullable<Awaited<ReturnType<typeof adminLogin>>>
+export type MeResult = NonNullable<Awaited<ReturnType<typeof me>>>

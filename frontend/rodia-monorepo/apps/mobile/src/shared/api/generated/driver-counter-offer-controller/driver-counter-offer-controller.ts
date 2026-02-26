@@ -13,7 +13,7 @@ import { customInstance } from '../../orval/custom-instance';
 
 
   export const createCounterOffer = (
-    quoteId: string,
+    quoteId: number,
     counterOfferCreateRequest: CounterOfferCreateRequest,
  ) => {
       return customInstance<Blob>(
