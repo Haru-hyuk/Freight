@@ -13,3 +13,6 @@
 
 # lockfiles keep stable
 pnpm-lock.yaml text eol=lf
+
+# generated API client code (review noise reduction)
+apps/mobile/src/shared/api/generated/** linguist-generated=true
