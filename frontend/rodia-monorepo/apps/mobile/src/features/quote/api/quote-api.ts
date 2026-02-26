@@ -144,6 +144,8 @@ function pickFirstStringFrom(objects: AnyObj[], keys: string[], fallback = ""): 
 
 function parseStatus(input: unknown): QuoteStatusApi {
   const raw = safeString(input, "").toUpperCase();
+  if (raw === "READY" || raw === "REQUESTED") return "OPEN";
+  if (raw === "ACCEPTED") return "ASSIGNED";
   if (raw === "CANCELLED" || raw === "CANCEL" || raw === "CANCELED") return "CANCELED";
   if (raw === "COMPLETED" || raw === "DONE" || raw === "FINISHED") return "DROPOFF";
   return (QUOTE_STATUS.find((status) => status === raw) ?? "OPEN") as QuoteStatusApi;

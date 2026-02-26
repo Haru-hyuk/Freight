@@ -2,6 +2,7 @@ import React from "react";
 import { Alert, InteractionManager, LayoutAnimation, Pressable, StyleSheet, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { cancelShipperMatch, createShipperMatch, listMyShipperMatches, type ShipperMatchItem } from "@/features/matching/api";
@@ -622,6 +623,13 @@ export default function QuoteDetailPage() {
       task.cancel();
     };
   }, [actionQuoteId, loadMatchSnapshot]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (actionQuoteId <= 0) return;
+      void refreshQuoteAndMatchData();
+    }, [actionQuoteId, refreshQuoteAndMatchData])
+  );
 
   const handleCreateMatch = React.useCallback(async () => {
     if (isMatchSubmitting) return;

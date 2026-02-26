@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Pressable, StyleSheet, View } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
 
 import type { QuoteListItem, QuoteStatusApi } from "@/entities/quote/model/quote.types";
 import { listShipperQuotes } from "@/features/quote/api";
@@ -761,12 +762,17 @@ export default function QuoteListPage() {
 
   useEffect(() => {
     isMountedRef.current = true;
-    loadQuoteList();
 
     return () => {
       isMountedRef.current = false;
     };
-  }, [loadQuoteList]);
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadQuoteList();
+    }, [loadQuoteList])
+  );
 
   const { inProgressList, completedList, canceledList, filteredList, counts } = useQuoteList(quotes, activeTab, activeSort);
   const isFilteredEmpty = filteredList.length === 0;
