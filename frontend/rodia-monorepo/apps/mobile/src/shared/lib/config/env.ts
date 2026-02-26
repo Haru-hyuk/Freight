@@ -97,7 +97,7 @@ export function getApiBaseUrl(): string {
 
 // auth 토큰 재발급 경로
 export function getAuthRefreshPath(): string {
-  return readString("EXPO_PUBLIC_AUTH_REFRESH_PATH", "/auth/refresh");
+  return readString("EXPO_PUBLIC_AUTH_REFRESH_PATH", "/api/auth/refresh");
 }
 
 export type ApiMode = "mock" | "server";
