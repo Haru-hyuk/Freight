@@ -157,10 +157,14 @@ function toFiniteNumber(value: unknown): number | null {
   return parsed;
 }
 
-function isResolvedCoordinate(value: unknown): boolean {
-  const parsed = toFiniteNumber(value);
-  if (parsed === null) return false;
-  return Math.abs(parsed) > 0;
+function isResolvedLatLng(lat: unknown, lng: unknown): boolean {
+  const safeLat = toFiniteNumber(lat);
+  const safeLng = toFiniteNumber(lng);
+  if (safeLat === null || safeLng === null) return false;
+  if (Math.abs(safeLat) <= 0.001 || Math.abs(safeLng) <= 0.001) return false;
+  if (Math.abs(safeLat) > 90) return false;
+  if (Math.abs(safeLng) > 180) return false;
+  return true;
 }
 
 function isStrictPositiveNumber(value: unknown): boolean {
@@ -267,12 +271,12 @@ function QuoteCreatePageInner() {
       ...stops.map((stop) => (stop as { address?: unknown })?.address),
     ];
 
-    if (!isResolvedCoordinate(payload?.originLat) || !isResolvedCoordinate(payload?.originLng)) {
+    if (!isResolvedLatLng(payload?.originLat, payload?.originLng)) {
       Alert.alert("견적 요청 실패", "출발지 위치가 확정되지 않았어요. 주소 검색 결과에서 선택해 위치를 확정해 주세요.");
       return;
     }
 
-    if (!isResolvedCoordinate(payload?.destinationLat) || !isResolvedCoordinate(payload?.destinationLng)) {
+    if (!isResolvedLatLng(payload?.destinationLat, payload?.destinationLng)) {
       Alert.alert("견적 요청 실패", "도착지 위치가 확정되지 않았어요. 주소 검색 결과에서 선택해 위치를 확정해 주세요.");
       return;
     }
