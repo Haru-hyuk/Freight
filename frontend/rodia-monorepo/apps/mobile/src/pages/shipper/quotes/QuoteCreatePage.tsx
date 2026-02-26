@@ -173,6 +173,12 @@ function isStrictPositiveNumber(value: unknown): boolean {
   return parsed > 0;
 }
 
+function isNonNegativeNumber(value: unknown): boolean {
+  const parsed = toFiniteNumber(value);
+  if (parsed === null) return false;
+  return parsed >= 0;
+}
+
 function QuoteCreatePageInner() {
   const theme = useAppTheme();
   const styles = useStyles();
@@ -301,8 +307,8 @@ function QuoteCreatePageInner() {
       return;
     }
 
-    if (!isStrictPositiveNumber(payload?.volumeCbm)) {
-      Alert.alert("견적 요청 실패", "화물 부피가 확정되지 않았어요. 화물 정보를 확인해주세요.");
+    if (!isNonNegativeNumber(payload?.volumeCbm)) {
+      Alert.alert("견적 요청 실패", "화물 부피 값이 유효하지 않아요. 화물 정보를 확인해주세요.");
       return;
     }
 

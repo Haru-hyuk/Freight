@@ -1,6 +1,78 @@
 ﻿# Mobile Changelog
 
 ## 2026-02-26
+- PR/브랜치: `work/mobile-driver-api-align`
+- 범주 태그: `[policy] [api] [ui]`
+- 변경 요약:
+  - `src/entities/quote/model/quote.types.ts`에서 `QuoteStatusApi`를 확장해 `ACCEPTED` 및 미인식 상태 문자열을 보존할 수 있도록 정리함.
+  - `src/features/quote/api/quote-api.ts`와 `src/features/quote/model/useQuoteDetail.ts`에서 미인식 status를 `OPEN`으로 강등하던 fallback을 제거하고 원본 status를 유지하도록 변경함.
+  - `src/pages/shipper/quotes/QuoteDetailPage.tsx`에서 `quote.status`가 `OPEN/READY/UNKNOWN`인데 `match.status`가 더 진척된 경우 `effectiveStatus`로 승격해 정책 CTA/배지 계산에 반영함.
+- 영향 범위:
+  - 사용자 관점: Driver 수락/제안 이후 화주 상세에서 상태가 `OPEN`으로 회귀해 보이는 문제가 줄고, 정책 CTA가 실제 진행 상태에 맞게 표시됨.
+  - 개발자 관점: 상태 정규화 경로가 “강등” 중심에서 “보존 + 최소 승격”으로 바뀌어 상태 정책 디버깅이 쉬워짐.
+- 파일 변경 목록:
+  - 수정:
+    - `src/entities/quote/model/quote.types.ts`
+    - `src/features/quote/api/quote-api.ts`
+    - `src/features/quote/model/quoteActionMatrix.ts`
+    - `src/features/quote/model/useQuoteDetail.ts`
+    - `src/pages/shipper/quotes/QuoteDetailPage.tsx`
+    - `docs/CHANGELOG.md`
+  - 추가:
+    - 없음
+  - 삭제:
+    - 없음
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과
+- 미해결 항목 (이번 PR에서 실패/포기한 작업):
+  - 없음
+- 후속 작업 (다음 PR 후보):
+  - [ ] 실서버 status 토큰(`ASSIGNED_CONFIRMED` 등) 목록을 백엔드 계약과 맞춰 alias 확장 필요 여부 확인
+
+- PR/브랜치: `work/mobile-driver-api-align`
+- 범주 태그: `[api] [policy] [ui]`
+- 변경 요약:
+  - `src/features/matching/model/useMatchDetail.ts`에서 Driver 상세 quote 조회를 `getShipperQuoteDetailByIdentifier` 대신 Driver 전용 summary 로더로 교체함.
+  - `src/features/matching/api/driver-orders-api.ts`에서 Driver summary 응답의 래퍼(`data/result/payload/quote/summary`)와 Blob/JSON 파싱을 정규화해 카드/상세용 필드 누락을 줄임.
+  - `src/features/matching/api/driver-orders-parser.ts`와 `driver-orders-mapper.ts`에서 화물/운임 파생값 fallback(`cargoName -> cargoDesc -> cargoType`, `final -> desired -> base`)을 추가해 오더마켓 카드 공란 노출을 완화함.
+  - `src/features/quote/api/quote-api.ts`의 상태 파서에 `ACCEPTED -> ASSIGNED`, `READY/REQUESTED -> OPEN` 매핑을 추가해 화주 상태가 `OPEN`으로 잘못 회귀되는 케이스를 보정함.
+  - `src/pages/shipper/matchings/MatchingListPage.tsx`에서 `ACCEPTED` 상태를 진행 흐름으로 반영하고, focus 시점 자동 재조회로 Driver 수락/제안 이후 화주 화면 상태 반영을 보강함.
+  - `src/pages/shipper/quotes/QuoteListPage.tsx`, `src/pages/shipper/quotes/QuoteDetailPage.tsx`에 focus 재조회 경로를 추가해 화면 복귀 시 최신 상태를 즉시 반영함.
+  - `QuoteDetail/QuoteList/MatchingList/DriverOrdersBoard`의 focus 재조회는 “첫 focus 스킵 + in-flight 방지 + 1.5초 throttle”로 통일해 과도 새로고침(중복 refetch)과 리스너성 중복 호출을 완화함.
+  - `src/features/quote/model/quoteCreateDraft.ts`, `useQuoteCreateDraft.ts`, `quoteCreateRequestMapper.ts`, `QuoteCreatePage.tsx`에서 기본 품목값(박스) 및 품목 설명 직렬화를 보강하고, 부피 가드를 `0 이상` 기준으로 완화함.
+- 영향 범위:
+  - 사용자 관점: Driver 오더마켓/상세의 공란 노출이 줄고, Driver 제안/수락 후 화주 목록·상세 상태 반영이 화면 복귀 시 더 안정적으로 갱신됨.
+  - 개발자 관점: Driver quote summary 파싱 경계와 화주 상태 반영 경로(focus refetch + 상태 정규화)가 명확해져 API 정합성 디버깅이 쉬워짐.
+- 파일 변경 목록:
+  - 수정:
+    - `src/features/matching/api/driver-orders-api.ts`
+    - `src/features/matching/api/driver-orders-parser.ts`
+    - `src/features/matching/api/driver-orders-mapper.ts`
+    - `src/features/matching/model/useMatchDetail.ts`
+    - `src/features/quote/api/quote-api.ts`
+    - `src/pages/shipper/matchings/MatchingListPage.tsx`
+    - `src/pages/shipper/quotes/QuoteListPage.tsx`
+    - `src/pages/shipper/quotes/QuoteDetailPage.tsx`
+    - `src/widgets/driver-orders/DriverOrdersBoard.tsx`
+    - `src/features/quote/model/quoteCreateDraft.ts`
+    - `src/features/quote/model/useQuoteCreateDraft.ts`
+    - `src/features/quote/model/quoteCreateRequestMapper.ts`
+    - `src/pages/shipper/quotes/QuoteCreatePage.tsx`
+    - `docs/CHANGELOG.md`
+  - 추가:
+    - 없음
+  - 삭제:
+    - 없음
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과
+- 미해결 항목 (이번 PR에서 실패/포기한 작업):
+  - Driver/화주 수동 네트워크 검증 4건 수행 — 원인: CLI 환경에서 앱 실행/네트워크 패널 검증 불가 / PR QA에서 확인 필요
+- 후속 작업 (다음 PR 후보):
+  - [ ] Driver 오더마켓/상세에서 quote summary 응답 필드(출/도착/거리/운임)가 카드와 상세에 채워지는지 실서버로 확인
+  - [ ] Driver 수락/제안 후 화주 `QuoteListPage`/`MatchingListPage`/`QuoteDetailPage` 복귀 시 상태 반영(요청접수→배차완료/협의중) 확인
+
 - PR/브랜치: `work/mobile-auth-signup-strict-id`
 - 범주 태그: `[api] [policy]`
 - 변경 요약:

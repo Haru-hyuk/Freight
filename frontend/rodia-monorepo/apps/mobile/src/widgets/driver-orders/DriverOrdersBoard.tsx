@@ -9,6 +9,7 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -51,6 +52,7 @@ type ToastState = {
 
 const NETWORK_ERROR_TEXT = "네트워크 요청에 실패했습니다. 잠시 후 다시 시도해 주세요.";
 const TOAST_DURATION_MS = 2000;
+const FOCUS_REFETCH_THROTTLE_MS = 1500;
 
 const EMPTY_OVERVIEW: DriverOrdersOverview = {
   marketOrders: [],
@@ -739,6 +741,7 @@ export function DriverOrdersBoard({ activeTab, onChangeTab }: DriverOrdersBoardP
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cardNavLockRef = useRef(false);
   const lastCardNavIdRef = useRef(0);
+  const focusRefetchMetaRef = useRef({ hasFocusedOnce: false, inFlight: false, lastRefetchAt: 0 });
 
   const showToast = useCallback((message: string) => {
     if (toastTimerRef.current) {
@@ -787,6 +790,29 @@ export function DriverOrdersBoard({ activeTab, onChangeTab }: DriverOrdersBoardP
   useEffect(() => {
     void loadOrders("initial");
   }, [loadOrders]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const focusMeta = focusRefetchMetaRef.current;
+      if (!focusMeta.hasFocusedOnce) {
+        focusMeta.hasFocusedOnce = true;
+        return undefined;
+      }
+
+      const now = Date.now();
+      if (focusMeta.inFlight || now - focusMeta.lastRefetchAt < FOCUS_REFETCH_THROTTLE_MS) {
+        return undefined;
+      }
+
+      focusMeta.inFlight = true;
+      focusMeta.lastRefetchAt = now;
+      void loadOrders("refresh").finally(() => {
+        focusMeta.inFlight = false;
+      });
+
+      return undefined;
+    }, [loadOrders])
+  );
 
   useEffect(() => {
     let mounted = true;

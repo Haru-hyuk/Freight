@@ -85,7 +85,7 @@ function buildMethodText(quote: ParsedDriverOrderQuote | null): string | undefin
 
 function buildCargoText(quote: ParsedDriverOrderQuote | null): string | undefined {
   if (!quote) return undefined;
-  return toOptionalText(quote.cargoName);
+  return toOptionalText(quote.cargoName) ?? toOptionalText(quote.cargoDesc) ?? toOptionalText(quote.cargoType);
 }
 
 function resolvePrice(quote: ParsedDriverOrderQuote | null): { priceValue?: number; priceText?: string } {
@@ -93,7 +93,12 @@ function resolvePrice(quote: ParsedDriverOrderQuote | null): { priceValue?: numb
 
   const finalPrice = Number.isFinite(quote.finalPrice) ? quote.finalPrice : undefined;
   const desiredPrice = Number.isFinite(quote.desiredPrice) ? quote.desiredPrice : undefined;
-  const value = (finalPrice && finalPrice > 0 ? finalPrice : desiredPrice) ?? 0;
+  const basePrice = Number.isFinite(quote.basePrice) ? quote.basePrice : undefined;
+  const value =
+    (finalPrice && finalPrice > 0 ? finalPrice : undefined) ??
+    (desiredPrice && desiredPrice > 0 ? desiredPrice : undefined) ??
+    (basePrice && basePrice > 0 ? basePrice : undefined) ??
+    0;
   if (value <= 0) return {};
 
   return {

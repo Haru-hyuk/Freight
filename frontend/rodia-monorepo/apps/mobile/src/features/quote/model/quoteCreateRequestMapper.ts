@@ -11,6 +11,11 @@ import { DEFAULT_LOAD_METHOD, DEFAULT_UNLOAD_METHOD, toActorOnlyWorkMethod } fro
 const VEHICLE_TYPE_BY_TON_INDEX: QuoteVehicleType[] = ["TON_1", "TON_2_5", "TON_5"];
 const VEHICLE_BODY_BY_TYPE_INDEX: QuoteVehicleBodyType[] = ["CARGO", "WING_BODY", "TOP_CAR"];
 type QuoteCreateRequestPayload = QuoteCreateRequestDto & { basePrice: number };
+const CARGO_CATEGORY_LABELS: Readonly<Record<string, string>> = {
+  BOX: "박스",
+  PALLET: "파렛트",
+  FURNITURE: "가구",
+};
 
 function digitsOnly(input?: string) {
   return (input ?? "").replace(/[^\d]/g, "");
@@ -64,15 +69,32 @@ function mapVehicleBodyType(typeIdx?: number): QuoteVehicleBodyType {
   return VEHICLE_BODY_BY_TYPE_INDEX[idx] ?? "CARGO";
 }
 
+function resolveCargoItemName(item: QuoteCreateDraft["cargoList"][number]): string {
+  const typedName = String(item?.type ?? "").trim();
+  if (typedName) return typedName;
+
+  const category = String(item?.itemCategory ?? "")
+    .trim()
+    .toUpperCase();
+  return CARGO_CATEGORY_LABELS[category] ?? "화물";
+}
+
 function summarizeCargoName(draft: QuoteCreateDraft) {
-  const firstNamed = (draft.cargoList ?? []).find((item) => (item?.type ?? "").trim().length > 0);
-  if (firstNamed?.type) return firstNamed.type.trim();
+  const firstItem = (draft.cargoList ?? [])[0];
+  if (firstItem) return resolveCargoItemName(firstItem);
+
+  const firstNamed = (draft.cargoList ?? []).find((item) => resolveCargoItemName(item).trim().length > 0);
+  if (firstNamed) return resolveCargoItemName(firstNamed).trim();
   return "일반 화물";
 }
 
 function summarizeCargoDesc(draft: QuoteCreateDraft) {
   const names = (draft.cargoList ?? [])
-    .map((item) => (item?.type ?? "").trim())
+    .map((item) => {
+      const name = resolveCargoItemName(item);
+      const quantity = Math.max(toInt(item?.quantity, 1), 1);
+      return quantity > 1 ? `${name} x${quantity}` : name;
+    })
     .filter((name) => name.length > 0);
   if (!names.length) return "화물 정보 미입력";
   return names.slice(0, 5).join(", ");

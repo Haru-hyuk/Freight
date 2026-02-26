@@ -2,6 +2,7 @@ import React from "react";
 import { Alert, InteractionManager, LayoutAnimation, Pressable, StyleSheet, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { cancelShipperMatch, createShipperMatch, listMyShipperMatches, type ShipperMatchItem } from "@/features/matching/api";
@@ -12,7 +13,7 @@ import {
   rejectShipperCounterOffer,
 } from "@/features/counter-offer/api";
 import { deleteShipperQuote } from "@/features/quote/api";
-import { resolveTonePalette, type DecisionActionId } from "@/features/quote/model/quoteActionMatrix";
+import { getQuoteActionPolicy, resolveTonePalette, type DecisionActionId } from "@/features/quote/model/quoteActionMatrix";
 import { useQuoteDetail, type QuoteActionsContext } from "@/features/quote/model/useQuoteDetail";
 import { formatWorkMethodLabel } from "@/features/quote/model/workMethod";
 import { BottomActionRouter } from "@/features/quote/ui/actions/BottomActionRouter";
@@ -50,6 +51,21 @@ const POLICY_ACTION_UI_STATES: ReadonlySet<CustomerUiState> = new Set([
   CUSTOMER_UI_STATE.COMPLETED,
   CUSTOMER_UI_STATE.CANCELED,
 ]);
+const STATUS_PROMOTION_SOURCE_STATES: ReadonlySet<string> = new Set([
+  BACKEND_STATUS.READY,
+  BACKEND_STATUS.OPEN,
+  BACKEND_STATUS.UNKNOWN,
+]);
+const STATUS_PROMOTION_TARGET_STATES: ReadonlySet<string> = new Set([
+  BACKEND_STATUS.NEGOTIATING,
+  BACKEND_STATUS.ASSIGNED,
+  BACKEND_STATUS.ACCEPTED,
+  BACKEND_STATUS.PICKUP,
+  BACKEND_STATUS.TRANSIT,
+  BACKEND_STATUS.DROPOFF,
+  BACKEND_STATUS.CANCELED,
+]);
+const FOCUS_REFETCH_THROTTLE_MS = 1500;
 
 const EMPTY_MATCH_SNAPSHOT: MatchSnapshot = { cancelableMatch: null, nonCanceledMatch: null };
 const VEHICLE_SECTION_TITLES = new Set(["차량/화물", "차량 정보", "화물 정보"]);
@@ -329,6 +345,19 @@ function normalizeMatchStatus(value: unknown): string {
   return normalized === BACKEND_STATUS.UNKNOWN ? "" : normalized;
 }
 
+function resolveEffectiveQuoteStatus(quoteStatus: unknown, matchStatus: unknown): string {
+  const quoteText = toText(quoteStatus);
+  const quoteNormalized = normalizeStatus(quoteText);
+  const normalizedMatchStatus = normalizeMatchStatus(matchStatus);
+  if (!normalizedMatchStatus) return quoteText;
+
+  if (STATUS_PROMOTION_SOURCE_STATES.has(quoteNormalized) && STATUS_PROMOTION_TARGET_STATES.has(normalizedMatchStatus)) {
+    return normalizedMatchStatus;
+  }
+
+  return quoteText || normalizedMatchStatus;
+}
+
 function isCanceledMatchStatus(value: unknown): boolean {
   return normalizeMatchStatus(value) === BACKEND_STATUS.CANCELED;
 }
@@ -553,6 +582,8 @@ export default function QuoteDetailPage() {
   const [matchHydrated, setMatchHydrated] = React.useState(false);
   const [bottomBarHeight, setBottomBarHeight] = React.useState(0);
   const matchLoadTokenRef = React.useRef(0);
+  const focusRefetchMetaRef = React.useRef({ hasFocusedOnce: false, lastRefetchAt: 0 });
+  const refreshInFlightRef = React.useRef<Promise<void> | null>(null);
 
   const quoteIdentifier = readRouteParamText(params.id);
   const routeQuoteId = parsePositiveIntParam(params.id);
@@ -563,11 +594,6 @@ export default function QuoteDetailPage() {
   }, [routeQuoteId, view.quote.quoteId]);
 
   const isBlockedByFetchState = view.isLoading || Boolean(view.errorMessage);
-  const quoteUiState = React.useMemo(
-    () => getCustomerUiStateFromBackendStatus(toText(view.quote.status)),
-    [view.quote.status]
-  );
-  const palette = resolveTonePalette(theme, view.policy);
   const activeQuoteMatch = React.useMemo(
     () => matchSnapshot.cancelableMatch ?? matchSnapshot.nonCanceledMatch ?? null,
     [matchSnapshot.cancelableMatch, matchSnapshot.nonCanceledMatch]
@@ -575,6 +601,21 @@ export default function QuoteDetailPage() {
   const hasActiveQuoteMatch = Boolean(activeQuoteMatch);
   const cancelTargetMatchId = React.useMemo(() => parsePositiveInt(activeQuoteMatch?.matchId), [activeQuoteMatch?.matchId]);
   const isCancelIdInvalid = hasActiveQuoteMatch && cancelTargetMatchId <= 0;
+  const effectiveQuoteStatus = React.useMemo(
+    () => resolveEffectiveQuoteStatus(view.quote.status, activeQuoteMatch?.status),
+    [activeQuoteMatch?.status, view.quote.status]
+  );
+  const effectivePolicy = React.useMemo(() => getQuoteActionPolicy(effectiveQuoteStatus), [effectiveQuoteStatus]);
+  const effectiveActionsContext = React.useMemo(
+    () => ({ ...view.actionsContext, status: effectiveQuoteStatus }),
+    [effectiveQuoteStatus, view.actionsContext]
+  );
+  const quoteUiState = React.useMemo(
+    () => getCustomerUiStateFromBackendStatus(effectiveQuoteStatus),
+    [effectiveQuoteStatus]
+  );
+  const palette = resolveTonePalette(theme, effectivePolicy);
+  const effectiveStatusLabel = effectivePolicy.badgeLabel || view.commandCenter.statusLabel;
 
   const loadMatchSnapshot = React.useCallback(async (targetQuoteId: number): Promise<MatchSnapshot> => {
     const safeQuoteId = parsePositiveInt(targetQuoteId);
@@ -594,9 +635,25 @@ export default function QuoteDetailPage() {
   }, []);
 
   const refreshQuoteAndMatchData = React.useCallback(async () => {
-    const tasks: Array<Promise<unknown>> = [view.refetch()];
-    if (actionQuoteId > 0) tasks.push(loadMatchSnapshot(actionQuoteId));
-    await Promise.all(tasks);
+    if (refreshInFlightRef.current) {
+      await refreshInFlightRef.current;
+      return;
+    }
+
+    const task = (async () => {
+      const tasks: Array<Promise<unknown>> = [view.refetch()];
+      if (actionQuoteId > 0) tasks.push(loadMatchSnapshot(actionQuoteId));
+      await Promise.all(tasks);
+    })();
+
+    refreshInFlightRef.current = task;
+    try {
+      await task;
+    } finally {
+      if (refreshInFlightRef.current === task) {
+        refreshInFlightRef.current = null;
+      }
+    }
   }, [actionQuoteId, loadMatchSnapshot, view.refetch]);
 
   React.useEffect(() => {
@@ -622,6 +679,25 @@ export default function QuoteDetailPage() {
       task.cancel();
     };
   }, [actionQuoteId, loadMatchSnapshot]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (actionQuoteId <= 0) return undefined;
+
+      const focusMeta = focusRefetchMetaRef.current;
+      if (!focusMeta.hasFocusedOnce) {
+        focusMeta.hasFocusedOnce = true;
+        return undefined;
+      }
+
+      const now = Date.now();
+      if (now - focusMeta.lastRefetchAt < FOCUS_REFETCH_THROTTLE_MS) return undefined;
+      focusMeta.lastRefetchAt = now;
+
+      void refreshQuoteAndMatchData();
+      return undefined;
+    }, [actionQuoteId, refreshQuoteAndMatchData])
+  );
 
   const handleCreateMatch = React.useCallback(async () => {
     if (isMatchSubmitting) return;
@@ -785,7 +861,7 @@ export default function QuoteDetailPage() {
   }, []);
 
   const spacing = safeNumber(theme.layout.spacing.base, 4);
-  const shouldUsePolicyActionBar = POLICY_ACTION_UI_STATES.has(quoteUiState) && Boolean(view.policy.bottomBar);
+  const shouldUsePolicyActionBar = POLICY_ACTION_UI_STATES.has(quoteUiState) && Boolean(effectivePolicy.bottomBar);
   const bottomTitle = hasActiveQuoteMatch ? "배차 요청 취소" : "배차 요청";
   const bottomVariant = hasActiveQuoteMatch ? "destructive" : "primary";
   const handlePressBottomAction = React.useCallback(() => {
@@ -804,9 +880,9 @@ export default function QuoteDetailPage() {
         </View>
       ) : shouldUsePolicyActionBar ? (
         <BottomActionRouter
-          ctx={view.actionsContext}
-          bottomBar={view.policy.bottomBar}
-          guards={view.policy.guards}
+          ctx={effectiveActionsContext}
+          bottomBar={effectivePolicy.bottomBar}
+          guards={effectivePolicy.guards}
           onCancelRequest={handlePolicyCancelRequest}
           onRunAction={(action, ctx) => runPolicyAction(action, ctx)}
         />
@@ -851,7 +927,7 @@ export default function QuoteDetailPage() {
             <View style={styles.statusRow}>
               <View style={[styles.statusBadge, { backgroundColor: palette.badgeBg, borderColor: palette.badgeBorder }]}>
                 <AppText style={[styles.statusText, { color: palette.badgeText }]} numberOfLines={1}>
-                  {view.commandCenter.statusLabel}
+                  {effectiveStatusLabel}
                 </AppText>
               </View>
               <AppText style={styles.statusMeta} numberOfLines={1}>
