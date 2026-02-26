@@ -131,3 +131,33 @@ pnpm start -- --clear
   - `EXPO_PUBLIC_*` 값은 번들에 포함되어 노출될 수 있습니다.
 - 운영/배포 환경의 민감 정보는 팀의 배포 환경변수 체계(EAS env/secrets 등)로 관리합니다.
 
+## 9) Generated API 코드 운영 정책
+
+현재 `apps/mobile`은 아래 generated 코드를 **커밋 유지**합니다.
+
+- 경로: `src/shared/api/generated/**` (schemas/types/controllers)
+- 생성 도구: `orval` (`apps/mobile/orval.config.js`)
+
+커밋 유지로 결정한 이유:
+- 앱 코드가 generated 모듈을 직접 import하고 있음
+  - 예: `src/features/quote/api/quote-api.ts`, `src/features/matching/api/shipper-match-api.ts`
+- 레포 내 CI/EAS 전용 "빌드 전 API generate 보장 스텝"이 현재 정의되어 있지 않음
+- remote 환경에서 generate 실패 시(네트워크/환경변수/백엔드 접근 이슈) 빌드 리스크가 커짐
+
+따라서 현재 정책은 다음과 같습니다.
+
+- generated 파일은 수동 편집 금지
+- OpenAPI 스펙 변경 시 아래 순서로 재생성 후 함께 커밋
+```bash
+pnpm -C apps/mobile api:gen
+```
+- 위 명령은 내부적으로 다음을 수행
+  - `orval:fetch` (`scripts/orval/fix-openapi-pathparams.mjs`)
+  - `orval --config ./orval.config.js`
+
+## 10) EAS/원격 빌드 환경변수 주의
+
+- `.env.local`은 로컬 전용이며 git에 포함되지 않습니다.
+- EAS 원격 빌드에서는 로컬 `.env.local`이 없을 수 있습니다.
+- 원격 빌드는 EAS 환경변수(또는 `eas env:pull` 기반 워크플로)로 별도 주입해야 합니다.
+- 특히 `EXPO_PUBLIC_*` 값과 OpenAPI 관련 값(`ORVAL_OPENAPI_SOURCE`, `OPENAPI_SOURCE`)의 적용 위치를 분리해서 관리하세요.
