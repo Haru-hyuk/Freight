@@ -349,8 +349,11 @@ function toMockQuoteCreateRequest(payload: QuoteCreateRequestDto): QuoteCreateRe
         .filter((stop) => Boolean(stop.address.trim()))
     : undefined;
 
+  const basePrice = Math.max(0, safeInt(payload?.desiredPrice, 0));
+
   return {
     ...payload,
+    basePrice,
     stops,
   };
 }
