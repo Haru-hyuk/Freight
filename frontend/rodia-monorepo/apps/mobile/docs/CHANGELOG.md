@@ -1,6 +1,32 @@
 ﻿# Mobile Changelog
 
 ## 2026-02-26
+- PR/브랜치: `work/mobile-driver-api-align`
+- 범주 태그: `[api] [policy]`
+- 변경 요약:
+  - `src/features/matching/model/useMatchDetail.ts`에서 Driver 상세 quote 조회를 `getShipperQuoteDetailByIdentifier` 대신 Driver 전용 summary 로더로 교체함.
+  - `src/features/matching/api/driver-orders-api.ts`에 `getDriverQuoteSummaryDetail`를 추가하고, Driver 목록 quote 조회도 `/api/driver/quotes/{quoteId}/summary` 기반으로 통일함.
+  - generated `getQuoteSummary` 응답 타입이 `Blob`으로 생성된 경우까지 포함해 payload 파싱을 정규화하고, Driver 화면에서 필요한 quote 필드를 최소 매핑하도록 정리함.
+- 영향 범위:
+  - 사용자 관점: Driver 상세/목록에서 화주 전용 quote API 호출로 인한 권한 오류(403) 가능성을 줄이고 Driver 전용 조회 경로로 동작이 일치함.
+  - 개발자 관점: Driver 화면의 quote 데이터 소스가 Driver API로 단일화되어 API 정합성 추적이 쉬워짐.
+- 파일 변경 목록:
+  - 수정:
+    - `src/features/matching/model/useMatchDetail.ts`
+    - `src/features/matching/api/driver-orders-api.ts`
+    - `docs/CHANGELOG.md`
+  - 추가:
+    - 없음
+  - 삭제:
+    - 없음
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과
+- 미해결 항목 (이번 PR에서 실패/포기한 작업):
+  - Driver 화면 수동 네트워크 검증 2건 수행 — 원인: CLI 환경에서 앱 실행/네트워크 패널 검증 불가 / PR QA에서 확인 필요
+- 후속 작업 (다음 PR 후보):
+  - [ ] Driver 계정으로 매칭 상세 진입 시 `/api/shipper/quotes` 호출 0회, `/api/driver/quotes/{id}/summary` 호출 여부를 네트워크 패널에서 확인
+
 - PR/브랜치: `work/mobile-auth-signup-strict-id`
 - 범주 태그: `[api] [policy]`
 - 변경 요약:

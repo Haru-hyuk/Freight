@@ -1,5 +1,5 @@
 import type { QuoteDetailResponse } from "@/entities/quote/model/quote.types";
-import { getShipperQuoteDetailByIdentifier } from "@/features/quote/api";
+import { getQuoteSummary, type DriverQuoteSummaryResponse } from "@/shared/api/generated";
 import { getDriverMatchMode } from "@/shared/lib/config/env";
 import type { BadgeTone } from "@/shared/lib/policy";
 import {
@@ -80,6 +80,112 @@ const FILTER_LABELS: Record<DriverOrderFilterKey, string> = {
   URGENT: "긴급",
 };
 
+function toOptionalText(value: unknown): string | undefined {
+  return typeof value === "string" ? value.trim() || undefined : undefined;
+}
+
+function toOptionalNumber(value: unknown): number | undefined {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+async function parseDriverQuoteSummaryPayload(payload: unknown): Promise<DriverQuoteSummaryResponse | null> {
+  if (!payload) return null;
+
+  if (typeof payload === "object") {
+    if (typeof Blob !== "undefined" && payload instanceof Blob) {
+      try {
+        const text = (await payload.text()).trim();
+        if (!text) return null;
+        const parsed = JSON.parse(text);
+        return parsed && typeof parsed === "object" ? (parsed as DriverQuoteSummaryResponse) : null;
+      } catch {
+        return null;
+      }
+    }
+
+    return payload as DriverQuoteSummaryResponse;
+  }
+
+  if (typeof payload === "string") {
+    const text = payload.trim();
+    if (!text) return null;
+
+    try {
+      const parsed = JSON.parse(text);
+      return parsed && typeof parsed === "object" ? (parsed as DriverQuoteSummaryResponse) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}
+
+function toQuoteDetailFromDriverSummary(
+  summary: DriverQuoteSummaryResponse,
+  fallbackQuoteId: number
+): QuoteDetailResponse | null {
+  const resolvedQuoteId = parseDriverOrderPositiveInt(summary.quoteId) || fallbackQuoteId;
+  if (resolvedQuoteId <= 0) return null;
+
+  const finalPrice = toOptionalNumber(summary.finalPrice) ?? 0;
+
+  return {
+    quoteId: resolvedQuoteId,
+    quotePublicId: undefined,
+    shipperId: 0,
+    truckId: 0,
+    originAddress: toOptionalText(summary.originAddress) ?? "",
+    originAddressDetail: undefined,
+    destinationAddress: toOptionalText(summary.destinationAddress) ?? "",
+    destinationAddressDetail: undefined,
+    originLat: toOptionalNumber(summary.originLat) ?? 0,
+    originLng: toOptionalNumber(summary.originLng) ?? 0,
+    destinationLat: toOptionalNumber(summary.destinationLat) ?? 0,
+    destinationLng: toOptionalNumber(summary.destinationLng) ?? 0,
+    distanceKm: toOptionalNumber(summary.distanceKm) ?? 0,
+    weightKg: toOptionalNumber(summary.weightKg) ?? 0,
+    volumeCbm: toOptionalNumber(summary.volumeCbm) ?? 0,
+    vehicleType: toOptionalText(summary.vehicleType) ?? "",
+    vehicleBodyType: toOptionalText(summary.vehicleBodyType) ?? "",
+    cargoName: toOptionalText(summary.cargoName) ?? "",
+    cargoType: toOptionalText(summary.cargoType) ?? "",
+    cargoDesc: toOptionalText(summary.cargoDesc) ?? "",
+    basePrice: finalPrice,
+    distancePrice: 0,
+    extraPrice: 0,
+    desiredPrice: finalPrice,
+    finalPrice,
+    allowCombine: Boolean(summary.allowCombine),
+    loadMethod: toOptionalText(summary.loadMethod) ?? "",
+    unloadMethod: toOptionalText(summary.unloadMethod) ?? "",
+    status: "OPEN",
+    createdAt: "",
+    updatedAt: "",
+    senderName: undefined,
+    senderPhone: undefined,
+    receiverName: undefined,
+    receiverPhone: undefined,
+    checklistItems: [],
+    stops: [],
+  };
+}
+
+export async function getDriverQuoteSummaryDetail(quoteId: number): Promise<QuoteDetailResponse | null> {
+  const safeQuoteId = parseDriverOrderPositiveInt(quoteId);
+  if (safeQuoteId <= 0) return null;
+
+  try {
+    const raw = (await getQuoteSummary(safeQuoteId)) as unknown;
+    const summary = await parseDriverQuoteSummaryPayload(raw);
+    if (!summary) return null;
+    return toQuoteDetailFromDriverSummary(summary, safeQuoteId);
+  } catch {
+    return null;
+  }
+}
+
 async function loadQuoteDetailsByIds(quoteIds: number[]): Promise<Map<number, QuoteDetailResponse>> {
   const map = new Map<number, QuoteDetailResponse>();
   const safeQuoteIds = Array.from(
@@ -90,7 +196,7 @@ async function loadQuoteDetailsByIds(quoteIds: number[]): Promise<Map<number, Qu
   const entries = await Promise.all(
     safeQuoteIds.map(async (quoteId) => {
       try {
-        const quote = await getShipperQuoteDetailByIdentifier(String(quoteId));
+        const quote = await getDriverQuoteSummaryDetail(quoteId);
         if (!quote) return null;
         return [quoteId, quote] as const;
       } catch {
