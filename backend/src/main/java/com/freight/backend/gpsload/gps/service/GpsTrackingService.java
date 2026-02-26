@@ -6,6 +6,9 @@ import com.freight.backend.gpsload.gps.model.TrackingResponse;
 import com.freight.backend.gpsload.gps.model.TrackingResponse.DriverLocation;
 import com.freight.backend.gpsload.gps.model.TrackingResponse.RoutePoint;
 import com.freight.backend.gpsload.gps.repository.GpsTrackingLogRepository;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -60,6 +63,7 @@ public class GpsTrackingService {
         if (since != null) {
             return gpsLogRepository.findByMatchIdAndLoggedAtAfterOrderByLoggedAtDesc(matchId, since);
         }
-        return gpsLogRepository.findRecentByMatchId(matchId, limit);
+        Pageable pageable = PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "loggedAt"));
+        return gpsLogRepository.findRecentByMatchId(matchId, pageable);
     }
 }
