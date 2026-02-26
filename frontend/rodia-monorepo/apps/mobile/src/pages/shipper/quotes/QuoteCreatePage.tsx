@@ -268,12 +268,12 @@ function QuoteCreatePageInner() {
     ];
 
     if (!isResolvedCoordinate(payload?.originLat) || !isResolvedCoordinate(payload?.originLng)) {
-      Alert.alert("견적 요청 실패", "출발지 좌표가 확정되지 않았어요. 출발지를 다시 선택해주세요.");
+      Alert.alert("견적 요청 실패", "출발지 위치가 확정되지 않았어요. 주소 검색 결과에서 선택해 위치를 확정해 주세요.");
       return;
     }
 
     if (!isResolvedCoordinate(payload?.destinationLat) || !isResolvedCoordinate(payload?.destinationLng)) {
-      Alert.alert("견적 요청 실패", "도착지 좌표가 확정되지 않았어요. 도착지를 다시 선택해주세요.");
+      Alert.alert("견적 요청 실패", "도착지 위치가 확정되지 않았어요. 주소 검색 결과에서 선택해 위치를 확정해 주세요.");
       return;
     }
 

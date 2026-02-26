@@ -27,6 +27,15 @@ function toNumber(input: unknown, fallback = 0) {
   return Number.isFinite(value) ? value : fallback;
 }
 
+function readFirstFiniteNumber(source: Record<string, unknown>, keys: string[], fallback = 0) {
+  for (const key of keys) {
+    const value = source[key];
+    const parsed = typeof value === "number" ? value : Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return fallback;
+}
+
 function clampIndex(index: number, length: number) {
   if (length <= 0) return 0;
   if (!Number.isFinite(index)) return 0;
@@ -140,16 +149,22 @@ function buildChecklistItems(draft: QuoteCreateDraft): QuoteCreateRequestDto["ch
 export function buildQuoteCreateRequest(draft: QuoteCreateDraft): QuoteCreateRequestPayload {
   const originAddress = joinAddress(draft.startAddr, draft.startAddrDetail);
   const destinationAddress = joinAddress(draft.endAddr, draft.endAddrDetail);
+  const extendedDraft = draft as QuoteCreateDraft & Record<string, unknown>;
+  const originLat = readFirstFiniteNumber(extendedDraft, ["originLat", "startLat", "srcLat"], 0);
+  const originLng = readFirstFiniteNumber(extendedDraft, ["originLng", "startLng", "srcLng"], 0);
+  const destinationLat = readFirstFiniteNumber(extendedDraft, ["destinationLat", "endLat", "destLat"], 0);
+  const destinationLng = readFirstFiniteNumber(extendedDraft, ["destinationLng", "endLng", "destLng"], 0);
+  const distanceKm = readFirstFiniteNumber(extendedDraft, ["distanceKm", "distance"], 0);
 
   return {
     truckId: Math.max(1, toInt(draft.truckId, 1)),
     originAddress,
     destinationAddress,
-    originLat: toNumber(draft.originLat, 0),
-    originLng: toNumber(draft.originLng, 0),
-    destinationLat: toNumber(draft.destinationLat, 0),
-    destinationLng: toNumber(draft.destinationLng, 0),
-    distanceKm: toNumber(draft.distanceKm, 0),
+    originLat,
+    originLng,
+    destinationLat,
+    destinationLng,
+    distanceKm,
     weightKg: calculateWeightKg(draft),
     volumeCbm: calculateVolumeCbm(draft),
     vehicleType: mapVehicleType(draft.tonIdx),

@@ -91,6 +91,7 @@
 - 변경 요약:
   - `src/features/quote/model/quoteCreateRequestMapper.ts`에서 quote create payload 생성 규칙을 유지하면서 `basePrice`를 포함하고 거리값 강제 보정을 제거함.
   - `src/pages/shipper/quotes/QuoteCreatePage.tsx` submit SSOT에 `basePrice > 0` 및 `loadMethod/unloadMethod` actor-only 최종 가드를 추가해 미충족 시 요청을 차단함.
+  - 주소 확정 후 좌표 준비 판단이 실제 플로우와 맞도록 좌표 필드 해석을 보강하고, 좌표 미준비 안내 문구를 “주소 검색 결과 선택으로 위치 확정” 중심으로 정리함.
   - `src/features/quote/api/quote-api.ts` sanitize 경로를 정규화 중심으로 정리하고, `basePrice` 보존 및 상하차 actor-only 마지막 방어를 고정함.
   - `src/features/quote/model/workMethod.ts`에 actor-only 판별 함수(`isActorOnlyWorkMethod`)를 추가해 page/api가 동일 기준을 사용하도록 맞춤.
 - 영향 범위:
