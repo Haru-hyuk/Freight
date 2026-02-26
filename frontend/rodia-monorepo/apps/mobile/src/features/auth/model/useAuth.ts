@@ -117,6 +117,10 @@ function isValidOpenDate(v: string): boolean {
   return date.getFullYear() === y && date.getMonth() === m - 1 && date.getDate() === d;
 }
 
+function isPositiveSignupId(v: unknown): v is number {
+  return typeof v === "number" && Number.isFinite(v) && v > 0;
+}
+
 function readMockAuthMode(): boolean {
   return isMockAuthEnabled();
 }
@@ -391,27 +395,39 @@ async function signUpImpl(params: SignUpParams) {
         openDate,
       });
       const res = await authApi.shipperSignup(payload);
-      const shipperId = typeof res?.shipperId === "number" ? res.shipperId : null;
-      if (shipperId && shipperId > 0) {
+      const shipperId = res?.shipperId;
+      if (isPositiveSignupId(shipperId)) {
         await verificationStorage.setPendingRole(role);
         setState({ pendingVerificationRole: role });
         return loginAfterSignupOrContinue({ email, password, role });
       }
 
-      setState({ isBusy: false, errorMessage: toSignupErrorMessage(res?.errorCode, res?.message) });
+      setState({
+        isBusy: false,
+        errorMessage: toSignupErrorMessage(
+          res?.errorCode,
+          res?.message ?? "회원가입 응답에서 화주 식별자(shipperId)를 확인하지 못했습니다."
+        ),
+      });
       return false;
     }
 
     const payload = buildDriverSignupPayload({ email, password, name, phone, role });
     const res = await authApi.driverSignup(payload);
-    const driverId = typeof res?.driverId === "number" ? res.driverId : null;
-    if (driverId && driverId > 0) {
+    const driverId = res?.driverId;
+    if (isPositiveSignupId(driverId)) {
       await verificationStorage.setPendingRole(role);
       setState({ pendingVerificationRole: role });
       return loginAfterSignupOrContinue({ email, password, role });
     }
 
-    setState({ isBusy: false, errorMessage: toSignupErrorMessage(res?.errorCode, res?.message) });
+    setState({
+      isBusy: false,
+      errorMessage: toSignupErrorMessage(
+        res?.errorCode,
+        res?.message ?? "회원가입 응답에서 기사 식별자(driverId)를 확인하지 못했습니다."
+      ),
+    });
     return false;
   } catch (e: any) {
     const msg = typeof e?.message === "string" ? e.message : "Signup failed.";

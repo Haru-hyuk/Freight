@@ -1,6 +1,33 @@
 ﻿# Mobile Changelog
 
 ## 2026-02-26
+- PR/브랜치: `work/mobile-auth-signup-strict-id`
+- 범주 태그: `[api] [policy]`
+- 변경 요약:
+  - `src/features/auth/api/auth-api.ts`에서 회원가입 응답 ID 누락 시 `2xx`만으로 `driverId/shipperId = 1`로 처리하던 fallback을 제거함.
+  - 회원가입 응답에서 명시적 식별자(`driverId`/`shipperId`)를 확인하지 못하면 `UNKNOWN` 실패와 사용자 노출 메시지를 반환하도록 변경함.
+  - `src/features/auth/model/useAuth.ts`에서 가입 성공 판정을 양수 ID 수신으로 고정하고, ID 누락 시 자동 로그인 진입을 차단함.
+- 영향 범위:
+  - 사용자 관점: 서버가 ID 없는 가입 응답을 반환하는 경우, 성공으로 오인하지 않고 실패로 안내됨.
+  - 개발자 관점: 가입 성공 조건이 “명시적 ID 수신”으로 단일화되어 auth 흐름 정합성이 개선됨.
+- 파일 변경 목록:
+  - 수정:
+    - `src/features/auth/api/auth-api.ts`
+    - `src/features/auth/model/useAuth.ts`
+    - `docs/CHANGELOG.md`
+  - 추가:
+    - 없음
+  - 삭제:
+    - 없음
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과
+- 미해결 항목 (이번 PR에서 실패/포기한 작업):
+  - 없음
+- 후속 작업 (다음 PR 후보):
+  - [ ] 백엔드 회원가입 응답 스펙(`driverId`/`shipperId`) 고정 여부 및 계약 테스트 추가 검토
+  - [ ] 로그인 토큰 `sub/userId` 고정값 이슈는 백엔드 영역에서 별도 진단
+
 - PR/브랜치: `work/mobile-eslint-self-contained`
 - 범주 태그: `[infra] [docs]`
 - 변경 요약:
@@ -490,5 +517,6 @@
   - `features/matching/api/shipper-match-api.ts`, `features/counter-offer/api/counter-offer-api.ts`, `features/matching/api/driver-orders-api.ts`의 상태 normalize 중복 정리
   - `features/quote/model/quoteActionMatrix.ts`와 `pages/shipper/quotes/QuoteDetailPage.tsx`의 CTA 정책 소스 일치화
   - Driver/Shipper 상세/목록 흐름에서 정책 모듈 적용 범위를 단계적으로 확대
+
 
 
