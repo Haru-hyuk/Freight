@@ -5,6 +5,7 @@ import com.freight.backend.dto.counter.CounterOfferResponse;
 import com.freight.backend.exception.CustomException;
 import com.freight.backend.exception.ErrorCode;
 import com.freight.backend.service.CounterOfferService;
+import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -36,7 +37,7 @@ public class DriverCounterOfferController {
     public ResponseEntity<CounterOfferResponse> createCounterOffer(
             @AuthenticationPrincipal UserDetails userDetails,
             @PathVariable Long quoteId,
-            @RequestBody CounterOfferCreateRequest request
+            @Valid @RequestBody CounterOfferCreateRequest request
     ) {
         Long driverId = requireDriverId(userDetails);
         CounterOfferResponse response = counterOfferService.createOffer(driverId, quoteId, request);

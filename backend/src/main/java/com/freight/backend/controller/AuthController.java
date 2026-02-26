@@ -2,6 +2,7 @@ package com.freight.backend.controller;
 
 import com.freight.backend.dto.auth.LoginRequest;
 import com.freight.backend.dto.auth.MeResponse;
+import com.freight.backend.dto.auth.RefreshTokenRequest;
 import com.freight.backend.dto.auth.TokenResponse;
 import com.freight.backend.entity.Admin;
 import com.freight.backend.entity.Driver;
@@ -18,6 +19,7 @@ import com.freight.backend.dto.shipper.ShipperSignupResponse;
 import com.freight.backend.service.AuthService;
 import com.freight.backend.service.DriverSignupService;
 import com.freight.backend.service.ShipperSignupService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -42,27 +44,27 @@ public class AuthController {
     private final AdminRepository adminRepository;
 
     @PostMapping("/driver/login")
-    public ResponseEntity<TokenResponse> driverLogin(@RequestBody LoginRequest req) {
+    public ResponseEntity<TokenResponse> driverLogin(@Valid @RequestBody LoginRequest req) {
         return ResponseEntity.ok(authService.loginDriver(req));
     }
 
     @PostMapping("/shipper/login")
-    public ResponseEntity<TokenResponse> shipperLogin(@RequestBody LoginRequest req) {
+    public ResponseEntity<TokenResponse> shipperLogin(@Valid @RequestBody LoginRequest req) {
         return ResponseEntity.ok(authService.loginShipper(req));
     }
 
     @PostMapping("/admin/login")
-    public ResponseEntity<TokenResponse> adminLogin(@RequestBody LoginRequest req) {
+    public ResponseEntity<TokenResponse> adminLogin(@Valid @RequestBody LoginRequest req) {
         return ResponseEntity.ok(authService.loginAdmin(req));
     }
 
     @PostMapping("/shipper/signup")
-    public ResponseEntity<ShipperSignupResponse> shipperSignup(@RequestBody ShipperSignupRequest req) {
+    public ResponseEntity<ShipperSignupResponse> shipperSignup(@Valid @RequestBody ShipperSignupRequest req) {
         return ResponseEntity.ok(shipperSignupService.signup(req));
     }
 
     @PostMapping("/driver/signup")
-    public ResponseEntity<DriverSignupResponse> driverSignup(@RequestBody DriverSignupRequest req) {
+    public ResponseEntity<DriverSignupResponse> driverSignup(@Valid @RequestBody DriverSignupRequest req) {
         return ResponseEntity.ok(driverSignupService.signup(req));
     }
 
@@ -72,12 +74,8 @@ public class AuthController {
     }
 
     @PostMapping("/refresh")
-    public ResponseEntity<TokenResponse> refresh(@RequestBody java.util.Map<String, String> body) {
-        String refreshToken = body.get("refreshToken");
-        if (refreshToken == null || refreshToken.isBlank()) {
-            throw new CustomException(ErrorCode.INVALID_REQUEST);
-        }
-        return ResponseEntity.ok(authService.refreshToken(refreshToken));
+    public ResponseEntity<TokenResponse> refresh(@Valid @RequestBody RefreshTokenRequest body) {
+        return ResponseEntity.ok(authService.refreshToken(body.getRefreshToken()));
     }
 
     @GetMapping("/me")
