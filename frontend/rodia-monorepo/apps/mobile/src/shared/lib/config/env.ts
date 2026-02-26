@@ -118,7 +118,8 @@ export function isMockMode(): boolean {
 }
 
 export function isMockAuthEnabled(): boolean {
-  return isMockMode();
+  // auth mock은 API 모드와 분리해 명시적으로만 활성화한다.
+  return readBool("EXPO_PUBLIC_MOCK_AUTH", false);
 }
 
 export function isMockQuoteEnabled(): boolean {
