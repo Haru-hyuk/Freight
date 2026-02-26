@@ -6,7 +6,7 @@ import type {
   QuoteVehicleType,
 } from "@/entities/quote/dto";
 import { EXTRA_OPTIONS, type QuoteCreateDraft } from "@/features/quote/model/quoteCreateDraft";
-import { DEFAULT_LOAD_METHOD, DEFAULT_UNLOAD_METHOD, normalizeWorkMethodValue } from "@/features/quote/model/workMethod";
+import { DEFAULT_LOAD_METHOD, DEFAULT_UNLOAD_METHOD, toActorOnlyWorkMethod } from "@/features/quote/model/workMethod";
 
 const VEHICLE_TYPE_BY_TON_INDEX: QuoteVehicleType[] = ["TON_1", "TON_2_5", "TON_5"];
 const VEHICLE_BODY_BY_TYPE_INDEX: QuoteVehicleBodyType[] = ["CARGO", "WING_BODY", "TOP_CAR"];
@@ -151,8 +151,8 @@ export function buildQuoteCreateRequest(draft: QuoteCreateDraft): QuoteCreateReq
     cargoDesc: summarizeCargoDesc(draft),
     desiredPrice: resolveDesiredPrice(draft),
     allowCombine: !!draft.isPool,
-    loadMethod: normalizeWorkMethodValue(draft.loadMethod, DEFAULT_LOAD_METHOD),
-    unloadMethod: normalizeWorkMethodValue(draft.unloadMethod, DEFAULT_UNLOAD_METHOD),
+    loadMethod: toActorOnlyWorkMethod(draft.loadMethod, DEFAULT_LOAD_METHOD),
+    unloadMethod: toActorOnlyWorkMethod(draft.unloadMethod, DEFAULT_UNLOAD_METHOD),
     checklistItems: buildChecklistItems(draft),
     stops: buildStops(draft),
   };
