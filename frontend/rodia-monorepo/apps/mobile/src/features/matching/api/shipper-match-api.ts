@@ -156,7 +156,7 @@ export async function cancelShipperMatch(matchId: number): Promise<void> {
     return;
   }
 
-  await cancelShipperMatchGenerated(String(safeMatchId));
+  await cancelShipperMatchGenerated(safeMatchId);
 }
 
 export async function listOpenDriverMatches(): Promise<DriverMatchItem[]> {
@@ -207,7 +207,7 @@ export async function getDriverMatch(matchId: number): Promise<DriverMatchItem |
     return toSingleDriverMatch(getMockFlowDriverMatch(safeMatchId));
   }
 
-  const data = await getDriverMatchGenerated(String(safeMatchId));
+  const data = await getDriverMatchGenerated(safeMatchId);
   return toSingleDriverMatch(data);
 }
 
@@ -220,7 +220,7 @@ export async function acceptDriverMatch(matchId: number): Promise<DriverMatchIte
     return toSingleDriverMatch(acceptMockFlowDriverMatch(safeMatchId));
   }
 
-  const data = await acceptDriverMatchGenerated(String(safeMatchId));
+  const data = await acceptDriverMatchGenerated(safeMatchId);
   return toSingleDriverMatch(data);
 }
 
@@ -254,5 +254,5 @@ export async function cancelDriverMatch(matchId: number): Promise<void> {
     return;
   }
 
-  await cancelDriverMatchGenerated(String(safeMatchId));
+  await cancelDriverMatchGenerated(safeMatchId);
 }
