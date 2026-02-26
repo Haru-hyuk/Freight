@@ -150,6 +150,24 @@ function hasBrokenAddressText(value?: string) {
   return /\?{2,}/.test(v);
 }
 
+function toFiniteNumber(value: unknown): number | null {
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(parsed)) return null;
+  return parsed;
+}
+
+function isResolvedCoordinate(value: unknown): boolean {
+  const parsed = toFiniteNumber(value);
+  if (parsed === null) return false;
+  return Math.abs(parsed) > 0;
+}
+
+function isStrictPositiveNumber(value: unknown): boolean {
+  const parsed = toFiniteNumber(value);
+  if (parsed === null) return false;
+  return parsed > 0;
+}
+
 function QuoteCreatePageInner() {
   const theme = useAppTheme();
   const styles = useStyles();
@@ -242,6 +260,31 @@ function QuoteCreatePageInner() {
       payload?.destinationAddress,
       ...stops.map((stop) => (stop as { address?: unknown })?.address),
     ];
+
+    if (!isResolvedCoordinate(payload?.originLat) || !isResolvedCoordinate(payload?.originLng)) {
+      Alert.alert("견적 요청 실패", "출발지 좌표가 확정되지 않았어요. 출발지를 다시 선택해주세요.");
+      return;
+    }
+
+    if (!isResolvedCoordinate(payload?.destinationLat) || !isResolvedCoordinate(payload?.destinationLng)) {
+      Alert.alert("견적 요청 실패", "도착지 좌표가 확정되지 않았어요. 도착지를 다시 선택해주세요.");
+      return;
+    }
+
+    if (!isStrictPositiveNumber(payload?.distanceKm)) {
+      Alert.alert("견적 요청 실패", "운행 거리가 확정되지 않았어요. 경로를 다시 확인해주세요.");
+      return;
+    }
+
+    if (!isStrictPositiveNumber(payload?.weightKg)) {
+      Alert.alert("견적 요청 실패", "화물 중량이 확정되지 않았어요. 화물 정보를 확인해주세요.");
+      return;
+    }
+
+    if (!isStrictPositiveNumber(payload?.volumeCbm)) {
+      Alert.alert("견적 요청 실패", "화물 부피가 확정되지 않았어요. 화물 정보를 확인해주세요.");
+      return;
+    }
 
     if (addressCandidates.some((address) => hasBrokenAddressText(String(address ?? "")))) {
       Alert.alert("견적 요청 실패", "주소 문자열이 깨져 있어요. 주소를 다시 선택해주세요.");
