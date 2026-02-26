@@ -1,5 +1,35 @@
 ﻿# Mobile Changelog
 
+## 2026-02-26
+- PR/브랜치: `work/mobile-eslint-self-contained`
+- 범주 태그: `[infra] [docs]`
+- 변경 요약:
+  - `apps/mobile/package.json`에 `eslint`, `@typescript-eslint/parser`, `@typescript-eslint/eslint-plugin`을 mobile `devDependencies`로 직접 선언함.
+  - `apps/mobile/package.json` scripts에 `lint`, `lint:fix`를 추가해 mobile 패키지 단독 lint 실행 경로를 명시함.
+  - `pnpm install` 후 `pnpm -C rodia-monorepo/apps/mobile exec node -e "require.resolve(...)"` 검증으로 `apps/web` 경로 의존 없이 eslint 관련 모듈 해석이 가능함을 확인함.
+- 영향 범위:
+  - 사용자 관점: 앱 런타임 동작 변화 없음.
+  - 개발자 관점: mobile 패키지에서 lint 의존성과 실행 스크립트가 명시되어 독립 실행 안정성이 향상됨.
+- 파일 변경 목록:
+  - 수정:
+    - `apps/mobile/package.json`
+    - `pnpm-lock.yaml`
+    - `apps/mobile/docs/CHANGELOG.md`
+  - 추가:
+    - 없음
+  - 삭제:
+    - 없음
+- 검증 결과:
+  - `pnpm -C rodia-monorepo/apps/mobile exec eslint --version`: 통과 (`v9.39.2`)
+  - `pnpm -C rodia-monorepo/apps/mobile exec eslint .`: 통과
+  - `pnpm -C rodia-monorepo/apps/mobile lint`: 통과
+  - `pnpm -C rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 실패 (기존 타입 오류 9건, `src/features/counter-offer/api/counter-offer-api.ts`, `src/features/matching/api/shipper-match-api.ts`, `src/features/quote/api/quote-api.ts`)
+- 미해결 항목 (이번 PR에서 실패/포기한 작업):
+  - `pnpm -C rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false` 통과 — 원인: 이번 범위 외 기존 타입 오류 존재 / 다음 PR에서 해결 필요
+- 후속 작업 (다음 PR 후보):
+  - [ ] `src/features/counter-offer/api/counter-offer-api.ts`의 string-to-number 인자 타입 오류 정리
+  - [ ] `src/features/matching/api/shipper-match-api.ts` 및 `src/features/quote/api/quote-api.ts`의 타입 불일치 정리
+
 ## 2026-02-25
 - PR/브랜치: `work/format-utils-migration`
 - 범주 태그: `[refactor] [ui] [infra]`
