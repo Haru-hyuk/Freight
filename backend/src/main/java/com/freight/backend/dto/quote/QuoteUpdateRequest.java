@@ -29,5 +29,6 @@ public class QuoteUpdateRequest {
     private String loadMethod;
     private String unloadMethod;
     private List<QuoteChecklistItemRequest> checklistItems;
+    private List<QuoteItemRequest> quoteItems;
     private List<QuoteStopRequest> stops;
 }

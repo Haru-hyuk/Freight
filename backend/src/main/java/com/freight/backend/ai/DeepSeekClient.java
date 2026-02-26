@@ -35,6 +35,16 @@ public class DeepSeekClient {
     private final RestTemplate restTemplate = new RestTemplate();
 
     public Optional<String> generateAdvice(String prompt) {
+        String systemPrompt =
+                "You are an expert freight dispatch analyst. " +
+                "Return concise Korean advice for shippers. " +
+                "Output plain text only, no markdown, no bullets, no emojis. " +
+                "Keep it to 1-2 sentences with practical wording. " +
+                "Focus on dispatch speed likelihood, load safety, and price fitness.";
+        return generateText(systemPrompt, prompt, 0.2, 200);
+    }
+
+    public Optional<String> generateText(String systemPrompt, String userPrompt, double temperature, int maxTokens) {
         if (!enabled || apiKey == null || apiKey.isBlank()) {
             return Optional.empty();
         }
@@ -46,16 +56,11 @@ public class DeepSeekClient {
         ChatCompletionRequest body = new ChatCompletionRequest(
                 model,
                 List.of(
-                        new Message("system",
-                                "You are an expert freight dispatch analyst. " +
-                                "Return concise Korean advice for shippers. " +
-                                "Output plain text only, no markdown, no bullets, no emojis. " +
-                                "Keep it to 1-2 sentences with practical wording. " +
-                                "Focus on dispatch speed likelihood, load safety, and price fitness."),
-                        new Message("user", prompt)
+                        new Message("system", systemPrompt == null ? "" : systemPrompt),
+                        new Message("user", userPrompt == null ? "" : userPrompt)
                 ),
-                0.2,
-                200
+                temperature,
+                maxTokens
         );
 
         try {
@@ -88,12 +93,7 @@ public class DeepSeekClient {
         @JsonProperty("max_tokens")
         private final Integer maxTokens;
 
-        public ChatCompletionRequest(
-                String model,
-                List<Message> messages,
-                Double temperature,
-                Integer maxTokens
-        ) {
+        public ChatCompletionRequest(String model, List<Message> messages, Double temperature, Integer maxTokens) {
             this.model = model;
             this.messages = messages;
             this.temperature = temperature;
@@ -128,4 +128,3 @@ public class DeepSeekClient {
         }
     }
 }
-

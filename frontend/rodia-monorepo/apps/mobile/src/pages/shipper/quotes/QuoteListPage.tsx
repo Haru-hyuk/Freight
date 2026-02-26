@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Pressable, StyleSheet, View } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
 
 import type { QuoteListItem, QuoteStatusApi } from "@/entities/quote/model/quote.types";
 import { listShipperQuotes } from "@/features/quote/api";
@@ -11,6 +12,8 @@ import {
   type QuoteActionPolicy,
   type QuoteTonePaletteKey,
 } from "@/features/quote/model/quoteActionMatrix";
+import { formatDateTime, formatDistance, formatKrw } from "@/shared/lib/format/display";
+import { CUSTOMER_UI_STATE, getCustomerUiStateFromBackendStatus, type CustomerUiState } from "@/shared/lib/policy";
 import { safeNumber, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppCard } from "@/shared/ui/kit/AppCard";
@@ -21,17 +24,12 @@ import { AppText } from "@/shared/ui/kit/AppText";
 import { PageScaffold } from "@/widgets/layout/PageScaffold";
 import { RequestQuoteFab } from "@/widgets/shipper/RequestQuoteFab";
 
-type QuoteListTab = "ongoing" | "completed";
-type QuoteListFilter = "ALL" | "ACTION_REQUIRED" | "IN_PROGRESS";
+type QuoteListTab = "ALL" | "IN_PROGRESS" | "COMPLETED" | "CANCELED";
 type QuoteListSort = "LATEST" | "PRICE";
-
-type QuoteListControls = {
-  activeFilter: QuoteListFilter;
-  activeSort: QuoteListSort;
-};
 
 type QuoteListViewItem = {
   quote: QuoteListItem;
+  uiState: CustomerUiState;
   policy: QuoteActionPolicy;
   statusLabel: string;
   ctaText: string;
@@ -39,26 +37,21 @@ type QuoteListViewItem = {
   priceText: string;
   createdAtLabel: string;
   cargoText: string;
-  waypointText?: string;
   priceValue: number;
   recencyValue: number;
 };
 
 type QuoteListResult = {
-  actionRequiredList: QuoteListViewItem[];
   inProgressList: QuoteListViewItem[];
-  closedList: QuoteListViewItem[];
+  completedList: QuoteListViewItem[];
+  canceledList: QuoteListViewItem[];
+  filteredList: QuoteListViewItem[];
   counts: {
-    ongoing: number;
-    completed: number;
-    actionRequired: number;
+    all: number;
     inProgress: number;
-    closed: number;
+    completed: number;
+    canceled: number;
   };
-};
-
-type QuoteListMockItem = QuoteListItem & {
-  waypointAddresses?: string[];
 };
 
 type ToneStyleGroup = {
@@ -81,18 +74,29 @@ type QuoteListCardProps = {
   onPress: (quoteId: number, quotePublicId: string | undefined, status: QuoteStatusApi) => void;
 };
 
-const KRW = new Intl.NumberFormat("ko-KR");
+type QuoteListSectionProps = {
+  title: string;
+  iconName: keyof typeof Ionicons.glyphMap;
+  tone: QuoteTonePaletteKey;
+  items: QuoteListViewItem[];
+  onPressCard: QuoteListCardProps["onPress"];
+};
 
-const FILTER_OPTIONS: Array<{ key: QuoteListFilter; label: string }> = [
+const COMPLETED_UI_STATES = new Set<CustomerUiState>([CUSTOMER_UI_STATE.COMPLETED]);
+const CANCELED_UI_STATES = new Set<CustomerUiState>([CUSTOMER_UI_STATE.CANCELED]);
+
+const TAB_OPTIONS: Array<{ key: QuoteListTab; label: string }> = [
   { key: "ALL", label: "전체" },
-  { key: "ACTION_REQUIRED", label: "확인 필요" },
-  { key: "IN_PROGRESS", label: "운송 현황" },
+  { key: "IN_PROGRESS", label: "진행중" },
+  { key: "COMPLETED", label: "완료됨" },
+  { key: "CANCELED", label: "취소됨" },
 ];
 
 const SORT_OPTIONS: Array<{ key: QuoteListSort; label: string }> = [
   { key: "LATEST", label: "최신순" },
   { key: "PRICE", label: "금액순" },
 ];
+const FOCUS_REFETCH_THROTTLE_MS = 1500;
 
 const useStyles = createThemedStyles((theme) => {
   const c = theme.colors;
@@ -151,42 +155,10 @@ const useStyles = createThemedStyles((theme) => {
     controlRow: {
       flexDirection: "row",
       alignItems: "center",
-      justifyContent: "space-between",
-      gap: spacing * 2,
+      justifyContent: "flex-end",
       paddingHorizontal: spacing * 5,
       paddingTop: spacing * 3,
       paddingBottom: spacing * 2,
-    },
-    filterGroup: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing,
-      flex: 1,
-      minHeight: 44,
-    },
-    filterChipBase: {
-      minHeight: 36,
-      paddingHorizontal: spacing * 2,
-      borderRadius: 999,
-      borderWidth: 1,
-      borderColor: c.borderDefault,
-      backgroundColor: c.bgSurface,
-      justifyContent: "center",
-      alignItems: "center",
-    },
-    filterChipActive: {
-      borderColor: tint(c.brandPrimary, 0.3, c.borderDefault),
-      backgroundColor: tint(c.brandPrimary, 0.08, c.bgSurfaceAlt),
-    },
-    filterChipText: {
-      color: c.textSub,
-      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
-      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
-      fontWeight: "700",
-    },
-    filterChipTextActive: {
-      color: c.brandPrimary,
-      fontWeight: "900",
     },
 
     sortSegment: {
@@ -366,25 +338,6 @@ const useStyles = createThemedStyles((theme) => {
       fontSize: 14,
     },
 
-    waypointRow: {
-      minHeight: 24,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing,
-      marginBottom: spacing,
-    },
-    waypointIcon: {
-      color: c.textSub,
-      fontSize: 14,
-    },
-    waypointText: {
-      flex: 1,
-      color: c.textSub,
-      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
-      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
-      fontWeight: "700",
-    },
-
     bottomRow: {
       minHeight: 44,
       flexDirection: "row",
@@ -497,25 +450,9 @@ function toSafeNumber(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
-function formatKrw(value: number): string {
-  const safeValue = Math.max(0, Math.round(toSafeNumber(value)));
-  return `${KRW.format(safeValue)}원`;
-}
-
 function toDateValue(iso: string): number {
   const value = new Date(iso).getTime();
   return Number.isFinite(value) ? value : 0;
-}
-
-function formatDateTime(iso: string): string {
-  const date = new Date(iso);
-  if (!Number.isFinite(date.getTime())) return "시간 정보 없음";
-
-  const month = date.getMonth() + 1;
-  const day = date.getDate();
-  const hour = String(date.getHours()).padStart(2, "0");
-  const minute = String(date.getMinutes()).padStart(2, "0");
-  return `${month}월 ${day}일 ${hour}:${minute}`;
 }
 
 function getPriceValue(quote: QuoteListItem): number {
@@ -524,114 +461,95 @@ function getPriceValue(quote: QuoteListItem): number {
   return finalPrice > 0 ? finalPrice : desiredPrice;
 }
 
-function formatWaypointText(waypointAddresses?: string[]): string | undefined {
-  if (!waypointAddresses?.length) return undefined;
-  if (waypointAddresses.length === 1) return `경유지 1곳: ${waypointAddresses[0]}`;
-  return `경유지 ${waypointAddresses.length}곳: ${waypointAddresses[0]} 외 ${waypointAddresses.length - 1}곳`;
-}
-
-function toViewItem(quote: QuoteListMockItem): QuoteListViewItem {
+function toViewItem(quote: QuoteListItem): QuoteListViewItem {
+  const uiState = getCustomerUiStateFromBackendStatus(quote.status);
   const policy = getQuoteActionPolicy(quote.status);
   const priceValue = getPriceValue(quote);
 
   return {
     quote,
+    uiState,
     policy,
     statusLabel: policy.badgeLabel,
     ctaText: policy.ctaLabel,
     isPriceCta: policy.listCtaKind === "price",
-    priceText: formatKrw(priceValue),
-    createdAtLabel: formatDateTime(quote.createdAt),
+    priceText: formatKrw(priceValue, "0원"),
+    createdAtLabel: formatDateTime(quote.createdAt, "시간 정보 없음"),
     cargoText: `${quote.vehicleType} ${quote.vehicleBodyType} · ${quote.cargoName}`,
-    waypointText: formatWaypointText(quote.waypointAddresses),
     priceValue,
     recencyValue: toDateValue(quote.createdAt),
   };
 }
 
-function sortActionRequiredLatest(a: QuoteListViewItem, b: QuoteListViewItem): number {
+function isCompletedUiState(uiState: CustomerUiState): boolean {
+  return COMPLETED_UI_STATES.has(uiState);
+}
+
+function isCanceledUiState(uiState: CustomerUiState): boolean {
+  return CANCELED_UI_STATES.has(uiState);
+}
+
+function sortLatest(a: QuoteListViewItem, b: QuoteListViewItem): number {
   return b.recencyValue - a.recencyValue;
 }
 
-function sortActionRequiredPrice(a: QuoteListViewItem, b: QuoteListViewItem): number {
+function sortPrice(a: QuoteListViewItem, b: QuoteListViewItem): number {
   if (b.priceValue !== a.priceValue) return b.priceValue - a.priceValue;
   return b.recencyValue - a.recencyValue;
 }
 
 function sortInProgressLatest(a: QuoteListViewItem, b: QuoteListViewItem): number {
   if (a.policy.stageOrder !== b.policy.stageOrder) return a.policy.stageOrder - b.policy.stageOrder;
-  return b.recencyValue - a.recencyValue;
+  return sortLatest(a, b);
 }
 
 function sortInProgressPrice(a: QuoteListViewItem, b: QuoteListViewItem): number {
   if (a.policy.stageOrder !== b.policy.stageOrder) return a.policy.stageOrder - b.policy.stageOrder;
-  if (b.priceValue !== a.priceValue) return b.priceValue - a.priceValue;
-  return b.recencyValue - a.recencyValue;
+  return sortPrice(a, b);
 }
 
-function sortClosedLatest(a: QuoteListViewItem, b: QuoteListViewItem): number {
-  return b.recencyValue - a.recencyValue;
-}
-
-function sortClosedPrice(a: QuoteListViewItem, b: QuoteListViewItem): number {
-  if (b.priceValue !== a.priceValue) return b.priceValue - a.priceValue;
-  return b.recencyValue - a.recencyValue;
-}
-
-function useQuoteList(quotes: QuoteListMockItem[], controls: QuoteListControls): QuoteListResult {
+function useQuoteList(quotes: QuoteListItem[], activeTab: QuoteListTab, activeSort: QuoteListSort): QuoteListResult {
   const allItems = useMemo(() => quotes.map(toViewItem), [quotes]);
 
   const groupedSorted = useMemo(() => {
-    const actionRequired = allItems.filter((item) => item.policy.category === "actionRequired");
-    const inProgress = allItems.filter((item) => item.policy.category === "inProgress");
-    const closed = allItems.filter((item) => item.policy.category === "closed");
+    const inProgress = allItems.filter(
+      (item) => !isCompletedUiState(item.uiState) && !isCanceledUiState(item.uiState)
+    );
+    const completed = allItems.filter((item) => isCompletedUiState(item.uiState));
+    const canceled = allItems.filter((item) => isCanceledUiState(item.uiState));
 
-    if (controls.activeSort === "PRICE") {
+    if (activeSort === "PRICE") {
       return {
-        actionRequiredList: [...actionRequired].sort(sortActionRequiredPrice),
         inProgressList: [...inProgress].sort(sortInProgressPrice),
-        closedList: [...closed].sort(sortClosedPrice),
+        completedList: [...completed].sort(sortPrice),
+        canceledList: [...canceled].sort(sortPrice),
       };
     }
 
     return {
-      actionRequiredList: [...actionRequired].sort(sortActionRequiredLatest),
       inProgressList: [...inProgress].sort(sortInProgressLatest),
-      closedList: [...closed].sort(sortClosedLatest),
+      completedList: [...completed].sort(sortLatest),
+      canceledList: [...canceled].sort(sortLatest),
     };
-  }, [allItems, controls.activeSort]);
+  }, [activeSort, allItems]);
 
-  const filteredOngoing = useMemo(() => {
-    if (controls.activeFilter === "ACTION_REQUIRED") {
-      return {
-        actionRequiredList: groupedSorted.actionRequiredList,
-        inProgressList: [] as QuoteListViewItem[],
-      };
-    }
-
-    if (controls.activeFilter === "IN_PROGRESS") {
-      return {
-        actionRequiredList: [] as QuoteListViewItem[],
-        inProgressList: groupedSorted.inProgressList,
-      };
-    }
-
-    return {
-      actionRequiredList: groupedSorted.actionRequiredList,
-      inProgressList: groupedSorted.inProgressList,
-    };
-  }, [controls.activeFilter, groupedSorted.actionRequiredList, groupedSorted.inProgressList]);
+  const filteredList = useMemo(() => {
+    if (activeTab === "IN_PROGRESS") return groupedSorted.inProgressList;
+    if (activeTab === "COMPLETED") return groupedSorted.completedList;
+    if (activeTab === "CANCELED") return groupedSorted.canceledList;
+    return [...groupedSorted.inProgressList, ...groupedSorted.completedList, ...groupedSorted.canceledList];
+  }, [activeTab, groupedSorted.canceledList, groupedSorted.completedList, groupedSorted.inProgressList]);
 
   return {
-    actionRequiredList: filteredOngoing.actionRequiredList,
-    inProgressList: filteredOngoing.inProgressList,
-    closedList: groupedSorted.closedList,
+    inProgressList: groupedSorted.inProgressList,
+    completedList: groupedSorted.completedList,
+    canceledList: groupedSorted.canceledList,
+    filteredList,
     counts: {
-      ongoing: groupedSorted.actionRequiredList.length + groupedSorted.inProgressList.length,
-      completed: groupedSorted.closedList.length,
-      actionRequired: groupedSorted.actionRequiredList.length,
+      all: groupedSorted.inProgressList.length + groupedSorted.completedList.length + groupedSorted.canceledList.length,
       inProgress: groupedSorted.inProgressList.length,
-      closed: groupedSorted.closedList.length,
+      completed: groupedSorted.completedList.length,
+      canceled: groupedSorted.canceledList.length,
     },
   };
 }
@@ -708,7 +626,7 @@ function QuoteListCardBase({ item, onPress }: QuoteListCardProps) {
   const toneKey = resolveTonePalette(theme, item.policy).key;
   const toneStyles = useMemo(() => getToneStyles(toneKey, styles), [toneKey, styles]);
   const isClosed = item.policy.category === "closed";
-  const safeDistanceKm = Number.isFinite(item.quote.distanceKm) ? item.quote.distanceKm : 0;
+  const safeDistanceText = formatDistance(item.quote.distanceKm, "0.0km", 1);
 
   return (
     <Pressable
@@ -740,20 +658,11 @@ function QuoteListCardBase({ item, onPress }: QuoteListCardProps) {
             </AppText>
           </View>
 
-          {item.waypointText ? (
-            <View style={styles.waypointRow}>
-              <Ionicons name="navigate-outline" style={styles.waypointIcon} />
-              <AppText style={styles.waypointText} numberOfLines={1}>
-                {item.waypointText}
-              </AppText>
-            </View>
-          ) : null}
-
           <View style={styles.bottomRow}>
             <View style={styles.cargoWrap}>
               <Ionicons name="cube-outline" style={styles.cargoIcon} />
               <AppText style={styles.cargoText} numberOfLines={1}>
-                {`${item.cargoText} · ${safeDistanceKm.toFixed(1)}km`}
+                {`${item.cargoText} · ${safeDistanceText}`}
               </AppText>
             </View>
 
@@ -783,31 +692,57 @@ function areEqual(prev: QuoteListCardProps, next: QuoteListCardProps) {
     prev.item.quote.status === next.item.quote.status &&
     prev.item.quote.finalPrice === next.item.quote.finalPrice &&
     prev.item.createdAtLabel === next.item.createdAtLabel &&
-    prev.item.policy.tone === next.item.policy.tone &&
-    prev.item.waypointText === next.item.waypointText
+    prev.item.policy.tone === next.item.policy.tone
   );
 }
 
 const QuoteListCard = React.memo(QuoteListCardBase, areEqual);
+
+function getStableKey(item: QuoteListViewItem, index: number): string {
+  const safeId = Number.isInteger(item.quote.quoteId) && item.quote.quoteId > 0 ? String(item.quote.quoteId) : "na";
+  const safeCreatedAt =
+    typeof item.quote.createdAt === "string" && item.quote.createdAt.length > 0 ? item.quote.createdAt : "na";
+  return `${safeId}-${safeCreatedAt}-${index}`;
+}
+
+function QuoteListSection({ title, iconName, tone, items, onPressCard }: QuoteListSectionProps) {
+  const styles = useStyles();
+
+  if (items.length <= 0) return null;
+
+  return (
+    <View style={styles.section}>
+      <SectionHeader iconName={iconName} title={title} count={items.length} tone={tone} />
+      {items.map((item, index) => (
+        <View key={getStableKey(item, index)} style={styles.cardWrapper}>
+          <QuoteListCard item={item} onPress={onPressCard} />
+        </View>
+      ))}
+    </View>
+  );
+}
 
 export default function QuoteListPage() {
   const styles = useStyles();
   const theme = useAppTheme();
   const router = useRouter();
   const isMountedRef = useRef(true);
+  const focusRefetchMetaRef = useRef({ hasFocusedOnce: false, inFlight: false, lastRefetchAt: 0 });
 
-  const [activeTab, setActiveTab] = useState<QuoteListTab>("ongoing");
-  const [activeFilter, setActiveFilter] = useState<QuoteListFilter>("ALL");
+  const [activeTab, setActiveTab] = useState<QuoteListTab>("ALL");
   const [activeSort, setActiveSort] = useState<QuoteListSort>("LATEST");
-  const [quotes, setQuotes] = useState<QuoteListMockItem[]>([]);
+  const [quotes, setQuotes] = useState<QuoteListItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const loadQuoteList = useCallback(async () => {
+  const loadQuoteList = useCallback(async (mode: "initial" | "focus" | "manual" = "initial") => {
     if (!isMountedRef.current) return;
 
-    setIsLoading(true);
-    setErrorMessage(null);
+    const shouldShowBlockingLoader = mode === "initial" || mode === "manual";
+    if (shouldShowBlockingLoader) {
+      setIsLoading(true);
+      setErrorMessage(null);
+    }
 
     try {
       const response = await listShipperQuotes();
@@ -821,10 +756,12 @@ export default function QuoteListPage() {
           ? error.message.trim()
           : "견적 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.";
 
-      setQuotes([]);
+      if (shouldShowBlockingLoader) {
+        setQuotes([]);
+      }
       setErrorMessage(message);
     } finally {
-      if (isMountedRef.current) {
+      if (isMountedRef.current && shouldShowBlockingLoader) {
         setIsLoading(false);
       }
     }
@@ -832,33 +769,45 @@ export default function QuoteListPage() {
 
   useEffect(() => {
     isMountedRef.current = true;
-    loadQuoteList();
+    void loadQuoteList("initial");
 
     return () => {
       isMountedRef.current = false;
     };
   }, [loadQuoteList]);
 
-  const { actionRequiredList, inProgressList, closedList, counts } = useQuoteList(quotes, {
-    activeFilter,
-    activeSort,
-  });
+  useFocusEffect(
+    useCallback(() => {
+      const focusMeta = focusRefetchMetaRef.current;
+      if (!focusMeta.hasFocusedOnce) {
+        focusMeta.hasFocusedOnce = true;
+        return undefined;
+      }
 
-  const isOngoingEmpty = actionRequiredList.length === 0 && inProgressList.length === 0;
-  const isClosedEmpty = closedList.length === 0;
+      const now = Date.now();
+      if (focusMeta.inFlight || now - focusMeta.lastRefetchAt < FOCUS_REFETCH_THROTTLE_MS) {
+        return undefined;
+      }
 
-  const ongoingEmptyDescription = useMemo(() => {
-    if (activeFilter === "ACTION_REQUIRED") return "지금 확인이 필요한 견적이 없습니다.";
-    if (activeFilter === "IN_PROGRESS") return "현재 운송 중인 내역이 없습니다.";
-    return "새로운 운송 요청 후 진행 상태를 확인할 수 있습니다.";
-  }, [activeFilter]);
+      focusMeta.inFlight = true;
+      focusMeta.lastRefetchAt = now;
+      void loadQuoteList("focus").finally(() => {
+        focusMeta.inFlight = false;
+      });
 
-  const handlePressTab = useCallback((tab: QuoteListTab) => {
-    setActiveTab(tab);
-    if (tab === "completed") {
-      setActiveFilter("ALL");
-    }
-  }, []);
+      return undefined;
+    }, [loadQuoteList])
+  );
+
+  const { inProgressList, completedList, canceledList, filteredList, counts } = useQuoteList(quotes, activeTab, activeSort);
+  const isFilteredEmpty = filteredList.length === 0;
+
+  const emptyDescription = useMemo(() => {
+    if (activeTab === "IN_PROGRESS") return "현재 진행 중인 운송 내역이 없습니다.";
+    if (activeTab === "COMPLETED") return "완료된 운송 내역이 없습니다.";
+    if (activeTab === "CANCELED") return "취소된 운송 내역이 없습니다.";
+    return "운송 요청을 시작하면 이용 내역을 확인할 수 있습니다.";
+  }, [activeTab]);
 
   const handlePressCard = useCallback(
     (quoteId: number, quotePublicId: string | undefined, status: QuoteStatusApi) => {
@@ -884,40 +833,28 @@ export default function QuoteListPage() {
       }
     >
       <View style={styles.tabContainer}>
-        <Pressable style={styles.tabButton} onPress={() => handlePressTab("ongoing")}>
-          <AppText style={activeTab === "ongoing" ? styles.tabTextActive : styles.tabText}>진행 중</AppText>
-          <AppText style={styles.tabCountText}>{`${counts.ongoing}건`}</AppText>
-          {activeTab === "ongoing" ? <View style={styles.tabIndicator} /> : null}
-        </Pressable>
+        {TAB_OPTIONS.map((tab) => {
+          const isActive = activeTab === tab.key;
+          const count =
+            tab.key === "ALL"
+              ? counts.all
+              : tab.key === "IN_PROGRESS"
+                ? counts.inProgress
+                : tab.key === "COMPLETED"
+                  ? counts.completed
+                  : counts.canceled;
 
-        <Pressable style={styles.tabButton} onPress={() => handlePressTab("completed")}>
-          <AppText style={activeTab === "completed" ? styles.tabTextActive : styles.tabText}>완료됨</AppText>
-          <AppText style={styles.tabCountText}>{`${counts.completed}건`}</AppText>
-          {activeTab === "completed" ? <View style={styles.tabIndicator} /> : null}
-        </Pressable>
+          return (
+            <Pressable key={tab.key} style={styles.tabButton} onPress={() => setActiveTab(tab.key)}>
+              <AppText style={isActive ? styles.tabTextActive : styles.tabText}>{tab.label}</AppText>
+              <AppText style={styles.tabCountText}>{`${count}건`}</AppText>
+              {isActive ? <View style={styles.tabIndicator} /> : null}
+            </Pressable>
+          );
+        })}
       </View>
 
       <View style={styles.controlRow}>
-        <View style={styles.filterGroup}>
-          {FILTER_OPTIONS.map((option) => {
-            const isDisabled = activeTab !== "ongoing";
-            const isActive = activeFilter === option.key && !isDisabled;
-
-            return (
-              <Pressable
-                key={option.key}
-                disabled={isDisabled}
-                onPress={() => setActiveFilter(option.key)}
-                style={[styles.filterChipBase, isActive && styles.filterChipActive]}
-              >
-                <AppText style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>
-                  {option.label}
-                </AppText>
-              </Pressable>
-            );
-          })}
-        </View>
-
         <View style={styles.sortSegment}>
           {SORT_OPTIONS.map((option) => {
             const isActive = activeSort === option.key;
@@ -929,9 +866,7 @@ export default function QuoteListPage() {
                 style={[styles.sortButtonBase, isActive && styles.sortButtonActive]}
               >
                 <Ionicons name="swap-vertical-outline" style={[styles.sortIcon, isActive && styles.sortIconActive]} />
-                <AppText style={[styles.sortButtonText, isActive && styles.sortButtonTextActive]}>
-                  {option.label}
-                </AppText>
+                <AppText style={[styles.sortButtonText, isActive && styles.sortButtonTextActive]}>{option.label}</AppText>
               </Pressable>
             );
           })}
@@ -946,95 +881,57 @@ export default function QuoteListPage() {
             title="견적 목록을 불러오지 못했어요"
             description={errorMessage}
             retryLabel="다시 시도"
-            onRetry={loadQuoteList}
+            onRetry={() => {
+              void loadQuoteList("manual");
+            }}
             fullScreen={false}
           />
-        ) : activeTab === "ongoing" ? (
-          isOngoingEmpty ? (
-            <AppEmptyState
-              title="조건에 맞는 견적이 없어요"
-              description={ongoingEmptyDescription}
-              action={{ label: "견적 요청하기", onPress: () => router.push("/(shipper)/quotes/create") }}
+        ) : isFilteredEmpty ? (
+          <AppEmptyState
+            title="조건에 맞는 이용 내역이 없어요"
+            description={emptyDescription}
+            action={{ label: "견적 요청하기", onPress: () => router.push("/(shipper)/quotes/create") }}
+          />
+        ) : activeTab === "ALL" ? (
+          <>
+            <QuoteListSection
+              title="진행 중"
+              iconName="car-outline"
+              tone="progress"
+              items={inProgressList}
+              onPressCard={handlePressCard}
             />
-          ) : (
-            <>
-              {actionRequiredList.length > 0 ? (
-                <View style={styles.section}>
-                  <SectionHeader
-                    iconName="alert-circle-outline"
-                    title="확인 필요"
-                    count={actionRequiredList.length}
-                    tone="attention"
-                  />
-                  {actionRequiredList.map((item, index) => {
-                    const safeId =
-                      Number.isInteger(item.quote.quoteId) && item.quote.quoteId > 0 ? String(item.quote.quoteId) : "na";
-                    const safeCreatedAt =
-                      typeof item.quote.createdAt === "string" && item.quote.createdAt.length > 0
-                        ? item.quote.createdAt
-                        : "na";
-                    const stableKey = `${safeId}-${safeCreatedAt}-${index}`;
-
-                    return (
-                      <View key={stableKey} style={styles.cardWrapper}>
-                        <QuoteListCard item={item} onPress={handlePressCard} />
-                      </View>
-                    );
-                  })}
-                </View>
-              ) : null}
-
-              {inProgressList.length > 0 ? (
-                <View style={styles.section}>
-                  <SectionHeader
-                    iconName="car-outline"
-                    title="운송 현황"
-                    count={inProgressList.length}
-                    tone="progress"
-                  />
-                  {inProgressList.map((item, index) => {
-                    const safeId =
-                      Number.isInteger(item.quote.quoteId) && item.quote.quoteId > 0 ? String(item.quote.quoteId) : "na";
-                    const safeCreatedAt =
-                      typeof item.quote.createdAt === "string" && item.quote.createdAt.length > 0
-                        ? item.quote.createdAt
-                        : "na";
-                    const stableKey = `${safeId}-${safeCreatedAt}-${index}`;
-
-                    return (
-                      <View key={stableKey} style={styles.cardWrapper}>
-                        <QuoteListCard item={item} onPress={handlePressCard} />
-                      </View>
-                    );
-                  })}
-                </View>
-              ) : null}
-            </>
-          )
-        ) : isClosedEmpty ? (
-          <AppEmptyState title="완료된 운송 내역이 없어요" description="완료된 건은 이곳에서 확인할 수 있습니다." />
-        ) : (
-          <View style={styles.section}>
-            <SectionHeader
+            <QuoteListSection
+              title="완료됨"
               iconName="checkmark-circle-outline"
-              title="완료 내역"
-              count={closedList.length}
               tone="closed"
+              items={completedList}
+              onPressCard={handlePressCard}
             />
-            {closedList.map((item, index) => {
-              const safeId =
-                Number.isInteger(item.quote.quoteId) && item.quote.quoteId > 0 ? String(item.quote.quoteId) : "na";
-              const safeCreatedAt =
-                typeof item.quote.createdAt === "string" && item.quote.createdAt.length > 0 ? item.quote.createdAt : "na";
-              const stableKey = `${safeId}-${safeCreatedAt}-${index}`;
-
-              return (
-                <View key={stableKey} style={styles.cardWrapper}>
-                  <QuoteListCard item={item} onPress={handlePressCard} />
-                </View>
-              );
-            })}
-          </View>
+            <QuoteListSection
+              title="취소됨"
+              iconName="close-circle-outline"
+              tone="closed"
+              items={canceledList}
+              onPressCard={handlePressCard}
+            />
+          </>
+        ) : (
+          <QuoteListSection
+            title={
+              activeTab === "IN_PROGRESS" ? "진행 중" : activeTab === "COMPLETED" ? "완료됨" : "취소됨"
+            }
+            iconName={
+              activeTab === "IN_PROGRESS"
+                ? "car-outline"
+                : activeTab === "COMPLETED"
+                  ? "checkmark-circle-outline"
+                  : "close-circle-outline"
+            }
+            tone={activeTab === "IN_PROGRESS" ? "progress" : "closed"}
+            items={filteredList}
+            onPressCard={handlePressCard}
+          />
         )}
       </View>
     </PageScaffold>

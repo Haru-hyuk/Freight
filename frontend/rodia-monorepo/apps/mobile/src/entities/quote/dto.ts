@@ -2,7 +2,14 @@
 export type QuoteVehicleType = "TON_1" | "TON_2_5" | "TON_5";
 export type QuoteVehicleBodyType = "CARGO" | "WING_BODY" | "TOP_CAR";
 export type QuoteCargoType = "GENERAL" | "FROZEN";
-export type QuoteWorkMethod = "SHIPPER" | "DRIVER";
+export type QuoteWorkMethod =
+  | "SHIPPER"
+  | "DRIVER"
+  | "SHIPPER:MANUAL"
+  | "DRIVER:MANUAL"
+  | "DRIVER:FORKLIFT"
+  | "DRIVER:LADDER"
+  | "DRIVER:WAIST_BEAR";
 
 export type QuoteChecklistItemDto = {
   checklistItemId: number;

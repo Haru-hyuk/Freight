@@ -11,6 +11,11 @@ export interface MatchResponse {
   driverId?: number;
   accepted?: boolean;
   status?: string;
+  matchGroupKey?: string;
+  matchGroupType?: string;
+  matchGroupOrder?: number;
+  locationSharingEnabled?: boolean;
+  locationSharingUpdatedAt?: string;
   acceptedAt?: string;
   createdAt?: string;
   updatedAt?: string;

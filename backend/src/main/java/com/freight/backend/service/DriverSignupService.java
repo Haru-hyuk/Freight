@@ -32,6 +32,7 @@ public class DriverSignupService {
                 .bankName(req.getBankName())
                 .bankAccount(req.getBankAccount())
                 .licenseVerified(false)
+                .status("ACTIVE")
                 .build();
 
         Driver saved = driverRepository.save(driver);

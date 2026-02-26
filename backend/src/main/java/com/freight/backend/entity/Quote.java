@@ -18,6 +18,12 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
+/**
+ * 견적 엔티티
+ * - 화주가 등록하는 운송 요청 정보
+ * - 출발지/도착지, 화물정보, 희망가격 포함
+ * - 상태: OPEN → MATCHED → IN_TRANSIT → DELIVERED
+ */
 @Entity
 @Table(name = "quotes")
 @Getter
@@ -183,9 +189,17 @@ public class Quote {
         this.unloadMethod = unloadMethod;
     }
 
-    /**
-     * 견적 상태를 MATCHED로 변경 (기사가 수락 시)
-     */
+    /** 견적 상태를 IN_TRANSIT로 변경 (운송 시작 시) */
+    public void markInTransit() {
+        this.status = "IN_TRANSIT";
+    }
+
+    /** 견적 상태를 DELIVERED로 변경 (운송 완료 시) */
+    public void markDelivered() {
+        this.status = "DELIVERED";
+    }
+
+    /** 견적 상태를 MATCHED로 변경 (기사가 수락 시) */
     public void markMatched() {
         this.status = "MATCHED";
     }

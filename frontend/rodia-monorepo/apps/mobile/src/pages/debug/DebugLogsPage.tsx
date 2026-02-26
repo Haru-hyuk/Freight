@@ -3,6 +3,10 @@ import React from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { Redirect, useRouter } from "expo-router";
 
+import {
+  buildDriverOrderDetailParams,
+  loadDriverOrdersOverview,
+} from "@/features/matching/api";
 import { isApiDebugLogsEnabled } from "@/shared/lib/config/env";
 import { debugLogStore, type DebugLogGroup, type DebugLogTag } from "@/shared/lib/debug/debugLogStore";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
@@ -131,6 +135,35 @@ const useStyles = createThemedStyles((theme) => {
       lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
       fontWeight: "600",
     },
+    devToolsCard: {
+      padding: spacing * 3,
+      gap: spacing * 2,
+      borderRadius: safeNumber(theme.layout.radii.card, 16),
+      borderWidth: 1,
+      borderColor: c.borderDefault,
+      backgroundColor: c.bgSurface,
+    },
+    devToolsTitle: {
+      color: c.textMain,
+      fontSize: safeNumber(theme.typography.scale.detail.size, 14),
+      lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20),
+      fontWeight: "900",
+    },
+    devToolsDesc: {
+      color: c.textMuted,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
+      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
+      fontWeight: "600",
+    },
+    devToolsButtons: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: spacing,
+    },
+    devToolButton: {
+      flexGrow: 1,
+      minWidth: 120,
+    },
 
     chipSection: {
       gap: spacing,
@@ -249,6 +282,7 @@ export default function DebugLogsPage() {
   const [activeTag, setActiveTag] = React.useState<DebugLogTag | "ALL">("ALL");
   const [statusFilter, setStatusFilter] = React.useState<StatusFilter>("ALL");
   const [sortMode, setSortMode] = React.useState<SortMode>("LATEST");
+  const [isRunSampleLoading, setIsRunSampleLoading] = React.useState(false);
   const [groups, setGroups] = React.useState<DebugLogGroup[]>(() => debugLogStore.getGroupSnapshot());
 
   React.useEffect(() => {
@@ -290,6 +324,29 @@ export default function DebugLogsPage() {
     debugLogStore.clear();
   }, []);
 
+  const openRunDetailSample = React.useCallback(async () => {
+    if (isRunSampleLoading) return;
+
+    setIsRunSampleLoading(true);
+    try {
+      const overview = await loadDriverOrdersOverview();
+      const sampleCard = overview.myOrders[0] ?? overview.marketOrders[0] ?? null;
+      if (!sampleCard) {
+        router.push("/(driver)/run/current");
+        return;
+      }
+
+      router.push({
+        pathname: "/(driver)/run/[id]",
+        params: buildDriverOrderDetailParams(sampleCard),
+      });
+    } catch {
+      router.push("/(driver)/run/current");
+    } finally {
+      setIsRunSampleLoading(false);
+    }
+  }, [isRunSampleLoading, router]);
+
   return (
     <PageScaffold
       title="API Debug Logs"
@@ -314,6 +371,34 @@ export default function DebugLogsPage() {
           autoCapitalize="none"
           autoCorrect={false}
         />
+
+        <View style={styles.devToolsCard}>
+          <AppText style={styles.devToolsTitle}>Dev Tools</AppText>
+          <AppText style={styles.devToolsDesc}>mock-flow 상태 제어와 API smoke 점검 화면으로 바로 이동합니다.</AppText>
+          <View style={styles.devToolsButtons}>
+            <AppButton
+              title="Mock Flow Control"
+              variant="secondary"
+              style={styles.devToolButton}
+              onPress={() => router.push("/mock-flow")}
+            />
+            <AppButton
+              title="Orval Smoke"
+              variant="secondary"
+              style={styles.devToolButton}
+              onPress={() => router.push("/debug/orval-smoke")}
+            />
+            <AppButton
+              title="Run Detail 샘플"
+              variant="secondary"
+              style={styles.devToolButton}
+              loading={isRunSampleLoading}
+              onPress={() => {
+                void openRunDetailSample();
+              }}
+            />
+          </View>
+        </View>
 
         <View style={styles.chipSection}>
           <AppText style={styles.chipTitle}>Tag</AppText>

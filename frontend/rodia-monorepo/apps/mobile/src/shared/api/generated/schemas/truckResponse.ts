@@ -13,6 +13,9 @@ export interface TruckResponse {
   tonnage?: number;
   maxWeight?: number;
   maxVolume?: number;
+  cargoLength?: number;
+  cargoWidth?: number;
+  cargoHeight?: number;
   name?: string;
   imageUrl?: string;
   approved?: boolean;

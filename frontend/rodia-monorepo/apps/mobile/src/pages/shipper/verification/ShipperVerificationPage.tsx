@@ -6,6 +6,7 @@ import type { VerificationResult } from "@/entities/verification/types";
 import { useAuth } from "@/features/auth/model/useAuth";
 import { useVerificationRequest } from "@/features/verification/model/useVerificationRequest";
 import { OcrScanner } from "@/features/verification/ui/OcrScanner";
+import { formatDateTime } from "@/shared/lib/format/display";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppButton } from "@/shared/ui/kit/AppButton";
 import { AppCard } from "@/shared/ui/kit/AppCard";
@@ -38,18 +39,6 @@ const useStyles = createThemedStyles((t) =>
     },
   })
 );
-
-function formatDateTime(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-
-  const yyyy = date.getFullYear();
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
-  const dd = String(date.getDate()).padStart(2, "0");
-  const hh = String(date.getHours()).padStart(2, "0");
-  const min = String(date.getMinutes()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd} ${hh}:${min}`;
-}
 
 export function ShipperVerificationPage() {
   const router = useRouter();

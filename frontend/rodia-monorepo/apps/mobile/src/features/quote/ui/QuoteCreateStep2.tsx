@@ -5,7 +5,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { safeNumber, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
 import type { AppTheme } from "@/shared/theme/types";
-import { AppButton } from "@/shared/ui/kit/AppButton";
+import { QUOTE_CREATE_STEP2 } from "@/shared/lib/dev/mockPayloads";
+import { MockAutofillButton } from "@/shared/ui/dev/MockAutofillButton";
 import { AppText } from "@/shared/ui/kit/AppText";
 import {
   getQuoteFlatCardStyle,
@@ -58,11 +59,11 @@ function digitsOnly(input: string) {
 const useStyles = createThemedStyles((theme: AppTheme) => {
   const c = theme.colors;
   const spacing = safeNumber(theme.layout.spacing.base, 4);
-  const radiusControl = safeNumber(theme.layout.radii.control, 12);
   const flatCard = getQuoteFlatCardStyle(theme);
 
   return StyleSheet.create({
     container: { gap: spacing * 2, paddingBottom: spacing * 6 },
+    devToolsWrap: { alignItems: "flex-end", marginBottom: spacing },
     
     // Cargo Card
     cargoCard: {
@@ -200,7 +201,7 @@ const useStyles = createThemedStyles((theme: AppTheme) => {
 export function QuoteCreateStep2() {
   const theme = useAppTheme();
   const styles = useStyles();
-  const { draft, addCargo, removeCargo, updateCargo } = useQuoteCreateDraft();
+  const { draft, patchDraft, addCargo, removeCargo, updateCargo } = useQuoteCreateDraft();
   
   // 💡 단일 ID 대신, 여러 개의 열린 아코디언 ID를 저장하는 Set 사용
   const [expandedIds, setExpandedIds] = useState<Set<number>>(() => {
@@ -308,6 +309,10 @@ export function QuoteCreateStep2() {
 
   return (
     <ScrollView {...QUOTE_SCROLL_VIEW_PROPS} contentContainerStyle={styles.container}>
+      <View style={styles.devToolsWrap}>
+        <MockAutofillButton onFill={() => patchDraft(QUOTE_CREATE_STEP2)} label="Fill Quote Step 2" />
+      </View>
+
       {(draft?.cargoList ?? []).map((cargo, index) => {
         // 💡 Set에 해당 화물의 ID가 포함되어 있는지 확인하여 열림/닫힘 결정
         const isOpen = expandedIds.has(cargo.id);

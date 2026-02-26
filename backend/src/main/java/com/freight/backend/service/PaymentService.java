@@ -4,12 +4,13 @@ import com.freight.backend.dto.payment.PaymentConfirmRequest;
 import com.freight.backend.dto.payment.PaymentPrepareRequest;
 import com.freight.backend.dto.payment.PaymentPrepareResponse;
 import com.freight.backend.dto.payment.PaymentResponse;
+import com.freight.backend.entity.Match;
 import com.freight.backend.entity.Payment;
 import com.freight.backend.entity.Payment.PaymentMethod;
+import com.freight.backend.entity.Quote;
+import com.freight.backend.entity.Settlement;
 import com.freight.backend.exception.CustomException;
 import com.freight.backend.exception.ErrorCode;
-import com.freight.backend.entity.Match;
-import com.freight.backend.entity.Quote;
 import com.freight.backend.repository.MatchRepository;
 import com.freight.backend.repository.PaymentRepository;
 import com.freight.backend.repository.QuoteRepository;
@@ -26,7 +27,9 @@ import org.springframework.stereotype.Service;
 
 /**
  * 결제 서비스
- * - 토스 결제 준비/승인, 조회
+ * - 토스페이먼츠 결제 준비/승인
+ * - 결제 내역 조회
+ * - 정산 연동
  */
 @Service
 @RequiredArgsConstructor
@@ -36,15 +39,16 @@ public class PaymentService {
     private final MatchRepository matchRepository;
     private final QuoteRepository quoteRepository;
     private final TossPaymentsClient tossPaymentsClient;
+    private final SettlementService settlementService;
 
     @Value("${toss.payments.client-key:}")
     private String clientKey;
 
-    /**
-     * 해당 매칭의 견적을 만든 화주만 결제 가능.
-     * matchId → Match → Quote → shipperId와 요청자 shipperId 일치 여부 검사.
-     */
-    private void ensureShipperOwnsMatch(Long matchId, Long shipperId) {
+    @Value("${toss.payments.test-mode:false}")
+    private boolean tossTestMode;
+
+    /** 화주 본인 매칭인지 검증 */
+    private MatchQuote ensureShipperOwnsMatch(Long matchId, Long shipperId) {
         Match match = matchRepository.findById(matchId)
                 .orElseThrow(() -> new CustomException(ErrorCode.MATCH_NOT_FOUND));
         Quote quote = quoteRepository.findById(match.getQuoteId())
@@ -52,9 +56,9 @@ public class PaymentService {
         if (!quote.getShipperId().equals(shipperId)) {
             throw new CustomException(ErrorCode.AUTH_FORBIDDEN);
         }
+        return new MatchQuote(match, quote);
     }
 
-    /** 결제 단건 조회 (해당 결제의 매칭 견적 소유 화주만 가능) */
     @Transactional
     public PaymentResponse getById(Long paymentId, Long shipperId) {
         Payment payment = paymentRepository.findById(paymentId)
@@ -63,7 +67,6 @@ public class PaymentService {
         return PaymentResponse.from(payment);
     }
 
-    /** 매칭 ID로 결제 목록 조회 (해당 매칭 견적 소유 화주만 가능) */
     @Transactional
     public List<PaymentResponse> getByMatchId(Long matchId, Long shipperId) {
         ensureShipperOwnsMatch(matchId, shipperId);
@@ -72,7 +75,7 @@ public class PaymentService {
                 .collect(Collectors.toList());
     }
 
-    /** 화주가 결제한 결제 목록 조회 (본인 견적의 매칭에 대한 모든 결제, 최신순) */
+    /** 화주의 전체 결제 내역 조회 */
     @Transactional
     public List<PaymentResponse> getShipperPayments(Long shipperId) {
         List<Long> quoteIds = quoteRepository.findByShipperId(shipperId).stream()
@@ -92,22 +95,37 @@ public class PaymentService {
                 .collect(Collectors.toList());
     }
 
-    /**
-     * 토스 결제 준비.
-     * orderId 생성 후 DB에 PENDING 결제 저장, clientKey/orderId/amount/orderName 반환.
-     * 프론트는 이 값으로 토스 결제창 호출 → 성공 시 paymentKey를 confirm으로 전달.
-     * 해당 매칭의 견적 소유 화주만 호출 가능.
-     */
+    /** 토스페이먼츠 결제 준비 (orderId 생성) */
     @Transactional
     public PaymentPrepareResponse prepareForToss(PaymentPrepareRequest req, Long shipperId) {
-        ensureShipperOwnsMatch(req.getMatchId(), shipperId);
-        if (!tossPaymentsClient.isConfigured()) {
+        MatchQuote matchQuote = ensureShipperOwnsMatch(req.getMatchId(), shipperId);
+        if (!tossPaymentsClient.isConfigured() && !tossTestMode) {
             throw new CustomException(ErrorCode.INVALID_REQUEST);
         }
+
+        Match match = matchQuote.match();
+        Quote quote = matchQuote.quote();
+        // 매칭 상태 검증: 수락됨 + 진행중이어야 결제 가능
+        if (!Boolean.TRUE.equals(match.getAccepted())
+                || match.getStatus() == Match.Status.CANCELLED
+                || match.getStatus() == Match.Status.COMPLETED) {
+            throw new CustomException(ErrorCode.INVALID_REQUEST);
+        }
+        // 이미 결제 완료된 매칭은 중복 결제 불가
+        if (paymentRepository.existsByMatchIdAndStatus(req.getMatchId(), Payment.PaymentStatus.COMPLETED)) {
+            throw new CustomException(ErrorCode.INVALID_REQUEST);
+        }
+        // 결제 금액과 견적 금액 일치 검증
+        if (quote.getFinalPrice() == null || req.getAmount() == null
+                || quote.getFinalPrice().longValue() != req.getAmount()) {
+            throw new CustomException(ErrorCode.INVALID_REQUEST);
+        }
+
+        // 주문번호 생성: FRT-{UUID 16자리}
         String orderId = "FRT-" + UUID.randomUUID().toString().replace("-", "").substring(0, 16).toUpperCase();
         String orderName = req.getOrderName() != null && !req.getOrderName().isBlank()
                 ? req.getOrderName()
-                : "화물운송 견적 결제";
+                : "Freight payment";
 
         Payment payment = Payment.builder()
                 .matchId(req.getMatchId())
@@ -128,23 +146,25 @@ public class PaymentService {
                 .build();
     }
 
-    /**
-     * 토스 결제 승인.
-     * orderId로 DB 결제 조회 → 금액 일치 검증 → 토스 승인 API 호출 → 성공 시 COMPLETED, pgRef(paymentKey) 저장.
-     * 해당 매칭의 견적 소유 화주만 호출 가능.
-     */
+    /** 토스페이먼츠 결제 승인 및 정산 생성 */
     @Transactional
     public PaymentResponse confirmWithToss(PaymentConfirmRequest req, Long shipperId) {
         Payment payment = paymentRepository.findByOrderNo(req.getOrderId())
                 .orElseThrow(() -> new CustomException(ErrorCode.INVALID_REQUEST));
 
-        ensureShipperOwnsMatch(payment.getMatchId(), shipperId);
+        MatchQuote matchQuote = ensureShipperOwnsMatch(payment.getMatchId(), shipperId);
+        if (matchQuote.match().getStatus() == Match.Status.CANCELLED) {
+            throw new CustomException(ErrorCode.INVALID_REQUEST);
+        }
 
         if (payment.getStatus() != Payment.PaymentStatus.PENDING) {
             throw new CustomException(ErrorCode.INVALID_REQUEST);
         }
+        if (paymentRepository.existsByMatchIdAndStatus(payment.getMatchId(), Payment.PaymentStatus.COMPLETED)) {
+            throw new CustomException(ErrorCode.INVALID_REQUEST);
+        }
 
-        // 준비 시 저장한 금액과 요청 금액 일치 여부 검증 (위변조 방지)
+        // 결제 금액 위변조 검증 (준비 시 금액 vs 승인 요청 금액)
         Integer expectedAmount = payment.getTotalAmount();
         if (expectedAmount == null || req.getAmount() == null
                 || expectedAmount.longValue() != req.getAmount()) {
@@ -153,32 +173,79 @@ public class PaymentService {
             throw new CustomException(ErrorCode.INVALID_REQUEST);
         }
 
-        // 토스페이먼츠 승인 API 호출
-        TossPaymentConfirmResponse tossResponse;
-        try {
-            tossResponse = tossPaymentsClient.confirm(
-                    req.getPaymentKey(),
-                    req.getOrderId(),
-                    req.getAmount()
-            );
-        } catch (Exception e) {
-            payment.fail();
-            paymentRepository.flush();
-            throw new CustomException(ErrorCode.INVALID_REQUEST);
+        // 테스트 모드: test_ 접두사 paymentKey는 토스 API 호출 없이 승인
+        boolean useLocalTestConfirm = tossTestMode
+                && req.getPaymentKey() != null
+                && req.getPaymentKey().startsWith("test_");
+
+        if (useLocalTestConfirm) {
+            payment.complete(LocalDateTime.now(), req.getPaymentKey());
+        } else {
+            if (!tossPaymentsClient.isConfigured()) {
+                throw new CustomException(ErrorCode.INVALID_REQUEST);
+            }
+
+            // 토스페이먼츠 결제 승인 API 호출
+            TossPaymentConfirmResponse tossResponse;
+            try {
+                tossResponse = tossPaymentsClient.confirm(
+                        req.getPaymentKey(),
+                        req.getOrderId(),
+                        req.getAmount()
+                );
+            } catch (Exception e) {
+                payment.fail();
+                paymentRepository.flush();
+                throw new CustomException(ErrorCode.INVALID_REQUEST);
+            }
+
+            if (tossResponse == null || !tossResponse.isDone()) {
+                payment.fail();
+                paymentRepository.flush();
+                throw new CustomException(ErrorCode.INVALID_REQUEST);
+            }
+
+            LocalDateTime approvedAt = tossResponse.getApprovedAtAsLocalDateTime();
+            payment.complete(approvedAt != null ? approvedAt : LocalDateTime.now(), tossResponse.getPaymentKey());
         }
 
-        // 토스 응답이 성공이 아니면 실패 처리
-        if (tossResponse == null || !tossResponse.isDone()) {
-            payment.fail();
-            paymentRepository.flush();
-            throw new CustomException(ErrorCode.INVALID_REQUEST);
-        }
-
-        // 승인 성공: 결제 완료 처리, pgRef에 토스 paymentKey 저장
-        LocalDateTime approvedAt = tossResponse.getApprovedAtAsLocalDateTime();
-        payment.complete(approvedAt != null ? approvedAt : LocalDateTime.now(), tossResponse.getPaymentKey());
         paymentRepository.flush();
+        createSettlementAfterPayment(payment, matchQuote.match(), matchQuote.quote());
 
         return PaymentResponse.from(payment);
+    }
+
+    /** 결제 완료 후 정산 레코드 생성 */
+    private void createSettlementAfterPayment(Payment payment, Match match, Quote quote) {
+        if (payment == null || match == null || quote == null) {
+            throw new CustomException(ErrorCode.INVALID_REQUEST);
+        }
+        if (match.getDriverId() == null) {
+            throw new CustomException(ErrorCode.INVALID_REQUEST);
+        }
+
+        settlementService.createAfterPaymentConfirm(
+                payment.getOrderNo(),
+                payment.getTotalAmount() == null ? 0L : payment.getTotalAmount().longValue(),
+                match.getMatchId(),
+                match.getDriverId(),
+                quote.getShipperId(),
+                Settlement.SettlementType.NORMAL,
+                resolveSettlementPaymentMethod(payment.getMethod())
+        );
+    }
+
+    private Settlement.ShipperPaymentMethod resolveSettlementPaymentMethod(PaymentMethod paymentMethod) {
+        if (paymentMethod == null) {
+            return Settlement.ShipperPaymentMethod.CARD;
+        }
+        return switch (paymentMethod) {
+            case TRANSFER -> Settlement.ShipperPaymentMethod.TRANSFER;
+            case PREPAID -> Settlement.ShipperPaymentMethod.PREPAID;
+            case CARD -> Settlement.ShipperPaymentMethod.CARD;
+        };
+    }
+
+    private record MatchQuote(Match match, Quote quote) {
     }
 }

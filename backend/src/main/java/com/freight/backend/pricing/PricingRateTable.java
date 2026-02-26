@@ -1,18 +1,19 @@
 package com.freight.backend.pricing;
 
-import tools.jackson.databind.ObjectMapper;
-import java.io.InputStream;
-import java.util.Map;
-import org.springframework.core.io.ClassPathResource;
+import java.util.Optional;
 import org.springframework.stereotype.Component;
 
+/**
+ * 운임 기준 조회 컴포넌트.
+ * 조회 소스는 DB 테이블(pricing_rate_catalog) 단일 사용.
+ */
 @Component
 public class PricingRateTable {
 
-    private final Map<String, Map<String, Integer>> rates;
+    private final PricingRateCatalogRepository pricingRateCatalogRepository;
 
-    public PricingRateTable(ObjectMapper objectMapper) {
-        this.rates = loadRates(objectMapper);
+    public PricingRateTable(PricingRateCatalogRepository pricingRateCatalogRepository) {
+        this.pricingRateCatalogRepository = pricingRateCatalogRepository;
     }
 
     public Integer getRate(int distanceKm, PricingVehicleType vehicleType) {
@@ -20,21 +21,9 @@ public class PricingRateTable {
         if (rangeKey == null || vehicleType == null) {
             return null;
         }
-        Map<String, Integer> rangeRates = rates.get(rangeKey);
-        if (rangeRates == null) {
-            return null;
-        }
-        return rangeRates.get(vehicleType.name());
-    }
 
-    @SuppressWarnings("unchecked")
-    private Map<String, Map<String, Integer>> loadRates(ObjectMapper objectMapper) {
-        try (InputStream is = new ClassPathResource("pricing_rate_table.json").getInputStream()) {
-            Map<String, Object> root = objectMapper.readValue(is, Map.class);
-            Object ranges = root.get("ranges");
-            return (Map<String, Map<String, Integer>>) ranges;
-        } catch (Exception e) {
-            throw new IllegalStateException("Failed to load pricing_rate_table.json", e);
-        }
+        Optional<PricingRateCatalog> dbRate =
+                pricingRateCatalogRepository.findByRangeKeyAndVehicleType(rangeKey, vehicleType.name());
+        return dbRate.map(PricingRateCatalog::getBaseRateWon).orElse(null);
     }
 }

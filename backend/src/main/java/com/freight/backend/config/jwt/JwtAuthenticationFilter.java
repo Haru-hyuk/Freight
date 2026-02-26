@@ -7,9 +7,12 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.User;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -20,6 +23,7 @@ import java.util.Collections;
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
+    private static final Logger log = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
     private final JwtTokenProvider jwtTokenProvider;
 
     @Override
@@ -48,14 +52,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 String userId = jwtTokenProvider.getUserIdFromToken(token);
                 String role = jwtTokenProvider.getRoleFromToken(token);
                 String authority = toAuthority(role);
+                var authorities = Collections.singletonList(new SimpleGrantedAuthority(authority));
+                User principal = new User(userId, "", authorities);
+
+                log.debug("JWT Auth - userId: {}, role: {}, authority: {}", userId, role, authority);
 
                 UsernamePasswordAuthenticationToken authentication =
                         new UsernamePasswordAuthenticationToken(
-                                userId,
+                                principal,
                                 null,
-                                Collections.singletonList(
-                                        new SimpleGrantedAuthority(authority)
-                                )
+                                authorities
                         );
 
                 SecurityContextHolder.getContext().setAuthentication(authentication);
@@ -74,9 +80,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (role == null || role.isBlank()) {
             return "ROLE_USER";
         }
-        if (role.startsWith("ROLE_")) {
-            return role;
+        String normalized = role.toUpperCase();
+        if (normalized.startsWith("ROLE_")) {
+            return normalized;
         }
-        return "ROLE_" + role;
+        return "ROLE_" + normalized;
     }
 }

@@ -14,7 +14,7 @@ import { customInstance } from '../../orval/custom-instance';
 
 
   export const get1 = (
-    announcementId: string,
+    announcementId: number,
  ) => {
       return customInstance<Blob>(
       {url: `/api/admin/announcements/${announcementId}`, method: 'GET',
@@ -23,7 +23,7 @@ import { customInstance } from '../../orval/custom-instance';
       );
     }
   export const update = (
-    announcementId: string,
+    announcementId: number,
     announcementUpdateRequest: AnnouncementUpdateRequest,
  ) => {
       return customInstance<Blob>(
@@ -35,7 +35,7 @@ import { customInstance } from '../../orval/custom-instance';
       );
     }
   export const _delete = (
-    announcementId: string,
+    announcementId: number,
  ) => {
       return customInstance<void>(
       {url: `/api/admin/announcements/${announcementId}`, method: 'DELETE'
@@ -51,7 +51,7 @@ import { customInstance } from '../../orval/custom-instance';
     },
       );
     }
-  export const create = (
+  export const create2 = (
     announcementCreateRequest: AnnouncementCreateRequest,
  ) => {
       return customInstance<Blob>(
@@ -66,4 +66,4 @@ import { customInstance } from '../../orval/custom-instance';
 export type UpdateResult = NonNullable<Awaited<ReturnType<typeof update>>>
 export type _DeleteResult = NonNullable<Awaited<ReturnType<typeof _delete>>>
 export type ListAllResult = NonNullable<Awaited<ReturnType<typeof listAll>>>
-export type CreateResult = NonNullable<Awaited<ReturnType<typeof create>>>
+export type Create2Result = NonNullable<Awaited<ReturnType<typeof create2>>>

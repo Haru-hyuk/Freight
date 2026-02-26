@@ -1,0 +1,678 @@
+﻿# Mobile Changelog
+
+## 2026-02-26
+- PR/브랜치: `work/mobile-driver-api-align`
+- 범주 태그: `[policy] [api] [ui]`
+- 변경 요약:
+  - `src/entities/quote/model/quote.types.ts`에서 `QuoteStatusApi`를 확장해 `ACCEPTED` 및 미인식 상태 문자열을 보존할 수 있도록 정리함.
+  - `src/features/quote/api/quote-api.ts`와 `src/features/quote/model/useQuoteDetail.ts`에서 미인식 status를 `OPEN`으로 강등하던 fallback을 제거하고 원본 status를 유지하도록 변경함.
+  - `src/pages/shipper/quotes/QuoteDetailPage.tsx`에서 `quote.status`가 `OPEN/READY/UNKNOWN`인데 `match.status`가 더 진척된 경우 `effectiveStatus`로 승격해 정책 CTA/배지 계산에 반영함.
+- 영향 범위:
+  - 사용자 관점: Driver 수락/제안 이후 화주 상세에서 상태가 `OPEN`으로 회귀해 보이는 문제가 줄고, 정책 CTA가 실제 진행 상태에 맞게 표시됨.
+  - 개발자 관점: 상태 정규화 경로가 “강등” 중심에서 “보존 + 최소 승격”으로 바뀌어 상태 정책 디버깅이 쉬워짐.
+- 파일 변경 목록:
+  - 수정:
+    - `src/entities/quote/model/quote.types.ts`
+    - `src/features/quote/api/quote-api.ts`
+    - `src/features/quote/model/quoteActionMatrix.ts`
+    - `src/features/quote/model/useQuoteDetail.ts`
+    - `src/pages/shipper/quotes/QuoteDetailPage.tsx`
+    - `docs/CHANGELOG.md`
+  - 추가:
+    - 없음
+  - 삭제:
+    - 없음
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과
+- 미해결 항목 (이번 PR에서 실패/포기한 작업):
+  - 없음
+- 후속 작업 (다음 PR 후보):
+  - [ ] 실서버 status 토큰(`ASSIGNED_CONFIRMED` 등) 목록을 백엔드 계약과 맞춰 alias 확장 필요 여부 확인
+
+- PR/브랜치: `work/mobile-driver-api-align`
+- 범주 태그: `[api] [policy] [ui]`
+- 변경 요약:
+  - `src/features/matching/model/useMatchDetail.ts`에서 Driver 상세 quote 조회를 `getShipperQuoteDetailByIdentifier` 대신 Driver 전용 summary 로더로 교체함.
+  - `src/features/matching/api/driver-orders-api.ts`에서 Driver summary 응답의 래퍼(`data/result/payload/quote/summary`)와 Blob/JSON 파싱을 정규화해 카드/상세용 필드 누락을 줄임.
+  - `src/features/matching/api/driver-orders-parser.ts`와 `driver-orders-mapper.ts`에서 화물/운임 파생값 fallback(`cargoName -> cargoDesc -> cargoType`, `final -> desired -> base`)을 추가해 오더마켓 카드 공란 노출을 완화함.
+  - `src/features/quote/api/quote-api.ts`의 상태 파서에 `ACCEPTED -> ASSIGNED`, `READY/REQUESTED -> OPEN` 매핑을 추가해 화주 상태가 `OPEN`으로 잘못 회귀되는 케이스를 보정함.
+  - `src/pages/shipper/matchings/MatchingListPage.tsx`에서 `ACCEPTED` 상태를 진행 흐름으로 반영하고, focus 시점 자동 재조회로 Driver 수락/제안 이후 화주 화면 상태 반영을 보강함.
+  - `src/pages/shipper/quotes/QuoteListPage.tsx`, `src/pages/shipper/quotes/QuoteDetailPage.tsx`에 focus 재조회 경로를 추가해 화면 복귀 시 최신 상태를 즉시 반영함.
+  - `QuoteDetail/QuoteList/MatchingList/DriverOrdersBoard`의 focus 재조회는 “첫 focus 스킵 + in-flight 방지 + 1.5초 throttle”로 통일해 과도 새로고침(중복 refetch)과 리스너성 중복 호출을 완화함.
+  - `src/features/quote/model/quoteCreateDraft.ts`, `useQuoteCreateDraft.ts`, `quoteCreateRequestMapper.ts`, `QuoteCreatePage.tsx`에서 기본 품목값(박스) 및 품목 설명 직렬화를 보강하고, 부피 가드를 `0 이상` 기준으로 완화함.
+- 영향 범위:
+  - 사용자 관점: Driver 오더마켓/상세의 공란 노출이 줄고, Driver 제안/수락 후 화주 목록·상세 상태 반영이 화면 복귀 시 더 안정적으로 갱신됨.
+  - 개발자 관점: Driver quote summary 파싱 경계와 화주 상태 반영 경로(focus refetch + 상태 정규화)가 명확해져 API 정합성 디버깅이 쉬워짐.
+- 파일 변경 목록:
+  - 수정:
+    - `src/features/matching/api/driver-orders-api.ts`
+    - `src/features/matching/api/driver-orders-parser.ts`
+    - `src/features/matching/api/driver-orders-mapper.ts`
+    - `src/features/matching/model/useMatchDetail.ts`
+    - `src/features/quote/api/quote-api.ts`
+    - `src/pages/shipper/matchings/MatchingListPage.tsx`
+    - `src/pages/shipper/quotes/QuoteListPage.tsx`
+    - `src/pages/shipper/quotes/QuoteDetailPage.tsx`
+    - `src/widgets/driver-orders/DriverOrdersBoard.tsx`
+    - `src/features/quote/model/quoteCreateDraft.ts`
+    - `src/features/quote/model/useQuoteCreateDraft.ts`
+    - `src/features/quote/model/quoteCreateRequestMapper.ts`
+    - `src/pages/shipper/quotes/QuoteCreatePage.tsx`
+    - `docs/CHANGELOG.md`
+  - 추가:
+    - 없음
+  - 삭제:
+    - 없음
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과
+- 미해결 항목 (이번 PR에서 실패/포기한 작업):
+  - Driver/화주 수동 네트워크 검증 4건 수행 — 원인: CLI 환경에서 앱 실행/네트워크 패널 검증 불가 / PR QA에서 확인 필요
+- 후속 작업 (다음 PR 후보):
+  - [ ] Driver 오더마켓/상세에서 quote summary 응답 필드(출/도착/거리/운임)가 카드와 상세에 채워지는지 실서버로 확인
+  - [ ] Driver 수락/제안 후 화주 `QuoteListPage`/`MatchingListPage`/`QuoteDetailPage` 복귀 시 상태 반영(요청접수→배차완료/협의중) 확인
+
+- PR/브랜치: `work/mobile-auth-signup-strict-id`
+- 범주 태그: `[api] [policy]`
+- 변경 요약:
+  - `src/features/auth/api/auth-api.ts`에서 회원가입 응답 ID 누락 시 `2xx`만으로 `driverId/shipperId = 1`로 처리하던 fallback을 제거함.
+  - 회원가입 응답에서 명시적 식별자(`driverId`/`shipperId`)를 확인하지 못하면 `UNKNOWN` 실패와 사용자 노출 메시지를 반환하도록 변경함.
+  - `src/features/auth/model/useAuth.ts`에서 가입 성공 판정을 양수 ID 수신으로 고정하고, ID 누락 시 자동 로그인 진입을 차단함.
+- 영향 범위:
+  - 사용자 관점: 서버가 ID 없는 가입 응답을 반환하는 경우, 성공으로 오인하지 않고 실패로 안내됨.
+  - 개발자 관점: 가입 성공 조건이 “명시적 ID 수신”으로 단일화되어 auth 흐름 정합성이 개선됨.
+- 파일 변경 목록:
+  - 수정:
+    - `src/features/auth/api/auth-api.ts`
+    - `src/features/auth/model/useAuth.ts`
+    - `docs/CHANGELOG.md`
+  - 추가:
+    - 없음
+  - 삭제:
+    - 없음
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과
+- 미해결 항목 (이번 PR에서 실패/포기한 작업):
+  - 없음
+- 후속 작업 (다음 PR 후보):
+  - [ ] 백엔드 회원가입 응답 스펙(`driverId`/`shipperId`) 고정 여부 및 계약 테스트 추가 검토
+  - [ ] 로그인 토큰 `sub/userId` 고정값 이슈는 백엔드 영역에서 별도 진단
+
+- PR/브랜치: `work/mobile-eslint-self-contained`
+- 범주 태그: `[infra] [docs]`
+- 변경 요약:
+  - `apps/mobile/package.json`에 `eslint`, `@typescript-eslint/parser`, `@typescript-eslint/eslint-plugin`을 mobile `devDependencies`로 직접 선언함.
+  - `apps/mobile/package.json` scripts에 `lint`, `lint:fix`를 추가해 mobile 패키지 단독 lint 실행 경로를 명시함.
+  - `pnpm install` 후 `pnpm -C rodia-monorepo/apps/mobile exec node -e "require.resolve(...)"` 검증으로 `apps/web` 경로 의존 없이 eslint 관련 모듈 해석이 가능함을 확인함.
+- 영향 범위:
+  - 사용자 관점: 앱 런타임 동작 변화 없음.
+  - 개발자 관점: mobile 패키지에서 lint 의존성과 실행 스크립트가 명시되어 독립 실행 안정성이 향상됨.
+- 파일 변경 목록:
+  - 수정:
+    - `apps/mobile/package.json`
+    - `pnpm-lock.yaml`
+    - `apps/mobile/docs/CHANGELOG.md`
+  - 추가:
+    - 없음
+  - 삭제:
+    - 없음
+- 검증 결과:
+  - `pnpm -C rodia-monorepo/apps/mobile exec eslint --version`: 통과 (`v9.39.2`)
+  - `pnpm -C rodia-monorepo/apps/mobile exec eslint .`: 통과
+  - `pnpm -C rodia-monorepo/apps/mobile lint`: 통과
+  - `pnpm -C rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 실패 (기존 타입 오류 9건, `src/features/counter-offer/api/counter-offer-api.ts`, `src/features/matching/api/shipper-match-api.ts`, `src/features/quote/api/quote-api.ts`)
+- 미해결 항목 (이번 PR에서 실패/포기한 작업):
+  - `pnpm -C rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false` 통과 — 원인: 이번 범위 외 기존 타입 오류 존재 / 다음 PR에서 해결 필요
+- 후속 작업 (다음 PR 후보):
+  - [ ] `src/features/counter-offer/api/counter-offer-api.ts`의 string-to-number 인자 타입 오류 정리
+  - [ ] `src/features/matching/api/shipper-match-api.ts` 및 `src/features/quote/api/quote-api.ts`의 타입 불일치 정리
+
+- PR/브랜치: `work/mobile-auth-real-api-align`
+- 범주 태그: `[api] [mock] [policy] [ui]`
+- 변경 요약:
+  - `src/shared/lib/config/env.ts`에서 auth mock 기본값을 `EXPO_PUBLIC_MOCK_AUTH` 명시값 기반으로 변경해 mock auth가 기본 활성화되지 않도록 정리함.
+  - `src/features/auth/api/auth-api.ts`에서 실서버 로그인 role 결정 시 mock 추론을 제거하고, 회원가입 응답 ID 누락 시 실패를 유지해 서버 응답 정합성 기준을 고정함.
+  - `src/features/auth/model/useAuth.ts`와 `src/features/auth/ui/forms/SignUpForm.tsx`에서 driver/shipper 가입 필수 입력(주소/상세주소/기사 계좌정보)을 실제 값으로 받도록 통일하고 placeholder 대체값을 제거함.
+  - 가입 성공 판정은 `driverId/shipperId > 0`일 때만 허용하고, ID 누락 시 자동 로그인으로 진행하지 않도록 실패 처리 흐름을 유지함.
+- 영향 범위:
+  - 사용자 관점: 필수값이 누락된 가입 요청은 즉시 차단되며, 서버가 ID 없는 응답을 줄 경우 가입 성공으로 오인하지 않음.
+  - 개발자 관점: mock/real auth 경계가 분리되고, 가입 페이로드 구성 기준이 실입력 기반으로 정리되어 디버깅과 API 정합성 확인이 쉬워짐.
+- 파일 변경 목록:
+  - 수정:
+    - `src/shared/lib/config/env.ts`
+    - `src/features/auth/api/auth-api.ts`
+    - `src/features/auth/model/useAuth.ts`
+    - `src/features/auth/ui/forms/SignUpForm.tsx`
+    - `docs/CHANGELOG.md`
+  - 추가:
+    - 없음
+  - 삭제:
+    - 없음
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과
+- 미해결 항목 (이번 PR에서 실패/포기한 작업):
+  - 없음
+- 후속 작업 (다음 PR 후보):
+  - [ ] auth 서버 스펙 문서에 driver/shipper signup 필수 필드 및 응답 ID 필드 계약을 명시하고 클라이언트 계약 테스트 추가 검토
+
+- PR/브랜치: `work/mobile-quote-create-payload-guardrail`
+- 범주 태그: `[api] [policy] [ui]`
+- 변경 요약:
+  - `src/features/quote/model/quoteCreateRequestMapper.ts`에서 quote create payload 생성 규칙을 유지하면서 `basePrice`를 포함하고 거리값 강제 보정을 제거함.
+  - `src/pages/shipper/quotes/QuoteCreatePage.tsx` submit SSOT에 `basePrice > 0` 및 `loadMethod/unloadMethod` actor-only 최종 가드를 추가해 미충족 시 요청을 차단함.
+  - 주소 확정 후 좌표 준비 판단이 실제 플로우와 맞도록 좌표 필드 해석을 보강하고, 좌표 미준비 안내 문구를 “주소 검색 결과 선택으로 위치 확정” 중심으로 정리함.
+  - 좌표 검증은 단일 값 체크에서 위도/경도 쌍 검증(`lat<=90`, `lng<=180`)으로 변경해 정상 경도 값(예: 126.x)이 차단되지 않도록 보정함.
+  - `src/features/quote/ui/QuoteCreateStep1.tsx`에서 출발/도착 좌표가 준비되면 하버사인 기반 추정 거리(`distanceKm`)를 자동 반영해 submit distance 가드와 플로우를 일치시킴.
+  - `src/features/quote/api/quote-api.ts` sanitize 경로를 정규화 중심으로 정리하고, `basePrice` 보존 및 상하차 actor-only 마지막 방어를 고정함.
+  - `src/features/quote/model/workMethod.ts`에 actor-only 판별 함수(`isActorOnlyWorkMethod`)를 추가해 page/api가 동일 기준을 사용하도록 맞춤.
+- 영향 범위:
+  - 사용자 관점: 기본 운임/상하차 방식이 확정되지 않은 경우 견적 요청이 차단되어 잘못된 전송이 줄어듦.
+  - 개발자 관점: mapper(page 전) / page(요청 차단) / api(최종 sanitize) 책임이 분리되어 quote create 디버깅 경계가 명확해짐.
+- 파일 변경 목록:
+  - 수정:
+    - `src/features/quote/model/quoteCreateRequestMapper.ts`
+    - `src/pages/shipper/quotes/QuoteCreatePage.tsx`
+    - `src/features/quote/api/quote-api.ts`
+    - `src/features/quote/model/workMethod.ts`
+    - `docs/CHANGELOG.md`
+  - 추가:
+    - 없음
+  - 삭제:
+    - 없음
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과
+- 미해결 항목 (이번 PR에서 실패/포기한 작업):
+  - 수동 테스트 2건 수행 — 원인: CLI 환경에서 앱 실행/네트워크 패널 검증 불가 / PR QA에서 확인 필요
+- 후속 작업 (다음 PR 후보):
+  - [ ] quote create 수동 QA 시나리오(정상 요청/`basePrice=0` 차단) 결과를 캡처해 회귀 기준으로 문서화
+
+- PR/브랜치: `work/mobile-quote-baseprice-guard`
+- 범주 태그: `[api] [policy] [ui]`
+- 변경 요약:
+  - `src/features/quote/model/quoteCreateRequestMapper.ts`에서 견적 생성 payload에 `basePrice`를 포함하도록 수정함.
+  - `basePrice` 매핑은 `draft.basePrice ?? draft.desiredPrice ?? 0` 기준으로만 해석하고, mapper 단계에서 임의 보정값을 넣지 않도록 유지함.
+  - `src/pages/shipper/quotes/QuoteCreatePage.tsx` submit 직전에 `basePrice > 0` 가드를 추가해 미충족 시 에러를 노출하고 요청을 차단함.
+- 영향 범위:
+  - 사용자 관점: 기본 운임이 확정되지 않은 상태에서는 견적 요청이 진행되지 않고 즉시 안내 메시지가 노출됨.
+  - 개발자 관점: 견적 생성 payload에 `basePrice`가 명시적으로 포함되고, submit SSOT 가드가 추가되어 전송 조건이 명확해짐.
+- 파일 변경 목록:
+  - 수정:
+    - `src/features/quote/model/quoteCreateRequestMapper.ts`
+    - `src/pages/shipper/quotes/QuoteCreatePage.tsx`
+    - `docs/CHANGELOG.md`
+  - 추가:
+    - 없음
+  - 삭제:
+    - 없음
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과
+- 미해결 항목 (이번 PR에서 실패/포기한 작업):
+  - 없음
+- 후속 작업 (다음 PR 후보):
+  - [ ] `features/quote/api/quote-api.ts` sanitize 경로에서도 `basePrice` 전달 보존이 필요한지 서버 스펙 기준으로 점검
+
+## 2026-02-25
+- PR/브랜치: `work/format-utils-migration`
+- 범주 태그: `[refactor] [ui] [infra]`
+- 변경 요약:
+  - `src/shared/lib/format/display.ts`를 공통 포맷 SSOT로 확장해 `formatKrw`, `formatDistance`, `formatDateTime`을 추가함.
+  - 기존 `formatKrwAmount`, `formatShortDateTime`는 호환용으로 유지해 기존 사용처 회귀 없이 단계적 이관이 가능하도록 정리함.
+  - `driver-orders-mapper`, `DriverMatchDetailPage`, `QuoteDetailPage`의 로컬 포맷 함수를 제거하고 공통 display 유틸로 치환함.
+  - `QuoteListPage`, `useQuoteDetail`, `ShipperTaxInvoiceHistoryPage`의 잔여 원화/거리/날짜 포맷 중복을 공통 display 유틸로 추가 이관함.
+  - `apps/mobile/docs/CODEX_RULES.md`를 추가해 PowerShell 한 줄 실행(`&&` 금지), 한국어 인코딩 검증/원복 절차를 작업 규칙으로 문서화함.
+  - 로컬 PowerShell 프로필(`$PROFILE`)에 UTF-8 출력/입력 설정을 적용하고 새 세션에서 한글 출력 동작을 확인함.
+  - 포맷 결과는 기존 화면 기준(원화 쉼표+원, 거리 소수 1자리, 날짜 `M/D HH:mm`)을 유지하도록 맞춤.
+- 영향 범위:
+  - 사용자 관점: Driver/Quote 주요 화면과 세금계산서 발행내역의 거리·금액·시간 표기가 기존과 동일한 형태로 일관되게 노출됨.
+  - 개발자 관점: 중복 포맷 함수가 줄어 포맷 변경 시 수정 지점이 `shared/lib/format`로 수렴되고, PowerShell/인코딩 실수 방지 규칙이 문서로 고정됨.
+- 파일 변경 목록:
+  - 수정:
+    - `src/shared/lib/format/display.ts`
+    - `src/features/matching/api/driver-orders-mapper.ts`
+    - `src/pages/driver/matches/DriverMatchDetailPage.tsx`
+    - `src/pages/shipper/quotes/QuoteDetailPage.tsx`
+    - `src/pages/shipper/quotes/QuoteListPage.tsx`
+    - `src/features/quote/model/useQuoteDetail.ts`
+    - `src/pages/shipper/settings/ShipperTaxInvoiceHistoryPage.tsx`
+    - `docs/CODEX_RULES.md`
+    - `docs/CHANGELOG.md`
+  - 추가:
+    - 없음
+  - 삭제:
+    - 없음
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+- 후속 작업 (다음 PR 후보):
+  - `ShipperVerificationPage`, `DriverVerificationPage`의 날짜 포맷 함수를 동일 기준으로 통합 검토.
+## 2026-02-25
+- PR/브랜치: `work/matching-quote-actions`
+- 범주 태그: `[matching] [quote] [routing] [refactor]`
+- 변경 요약:
+  - 견적 상세 정책 CTA 액션(`acceptOffer`, `rejectOffer`, `cancelRequest`)을 실제 API 뮤테이션에 연결함.
+  - 기존 화주 매칭 생성/취소 CTA 흐름은 유지하고, 정책 액션이 정의된 uiState에 한해서만 정책 액션 라우터로 전환함.
+  - route snapshot 정규화 로직을 단일 유틸로 분리하고 `app/(driver)/run/[id].tsx`와 `useMatchDetail`에서 공통 사용하도록 통일함.
+  - 공통 표시 포맷 유틸(원화 금액, 단축 날짜/시간)을 추가해 중복 포맷 함수를 선별 통합함.
+- 영향 범위:
+  - 사용자 관점: 화주 견적 상세 CTA가 협상/취소 핵심 액션에서 로컬 플레이스홀더 대신 실제 서버/mock 뮤테이션을 호출함.
+  - 개발자 관점: route snapshot 파싱/변환 경로가 단일 소스로 정리되어 유지보수가 쉬워짐.
+- 파일 변경 목록:
+  - 추가:
+    - `src/features/matching/model/matchDetailRouteSnapshot.ts`
+    - `src/shared/lib/format/display.ts`
+  - 수정:
+    - `app/(driver)/run/[id].tsx`
+    - `app/(driver)/matches/[id].tsx`
+    - `src/features/matching/model/useMatchDetail.ts`
+    - `src/pages/shipper/quotes/QuoteDetailPage.tsx`
+    - `src/features/matching/api/driver-orders-mapper.ts`
+    - `docs/CHANGELOG.md`
+  - 삭제:
+    - 없음
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+- 후속 작업 (다음 PR 후보):
+  - 결제 도메인 API 확정 후 `pay` CTA를 실제 결제 흐름/API에 연결.
+  - 잔여 `formatDistance`/`formatKrw`/`formatDateTime` 중복 함수를 소규모 PR 단위로 공통 포맷 모듈로 이관.
+
+## 2026-02-25
+- PR/브랜치: `work/driver-complete`
+- 범주 태그: `[routing] [policy] [ui] [docs]`
+- 변경 요약:
+  - Driver canonical 라우팅을 재점검하고 `/(driver)/run/[id]`를 단일 상세 진입 경로로 유지함.
+  - 레거시 alias(`/(driver)/drive`, `/(driver)/matches/*`)는 리다이렉트 전용으로 유지하고 상세 구현 중복 없이 정리함.
+  - 동일 `uiState` 그룹 내 정렬 안정화를 위한 tie-break 기준 추가:
+    정책 `uiState` 우선순위 → 타임스탬프(`updatedAt`/`createdAt`) 내림차순 → `matchId` 내림차순.
+  - 레거시 `driverMatchStatus.ts` 유틸을 사용처 0 확인 후 제거함.
+- 영향 범위:
+  - 사용자 관점: 동일 `uiState` 카드가 여러 개일 때 목록 순서가 새로고침 시 뒤집히지 않음.
+  - 개발자 관점: Driver 라우팅이 canonical로 유지되어 유지보수가 쉬워짐.
+- 파일 변경 목록:
+  - 수정:
+    - `src/features/matching/api/driver-orders-parser.ts`
+    - `src/features/matching/api/driver-orders-mapper.ts`
+    - `src/features/matching/api/driver-orders-api.ts`
+    - `docs/CHANGELOG.md`
+  - 추가:
+    - 없음
+  - 삭제:
+    - `src/features/matching/model/driverMatchStatus.ts`
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+- 후속 작업 (다음 PR 후보):
+  - alias 제거 시점은 `docs/DRIVER_RUN_CANONICAL.md` 체크리스트 및 모니터링 기간과 맞춰 결정.
+
+## 2026-02-25
+- PR/브랜치: `refactor/driver-orders-sort-uistate`
+- 범주 태그: `[policy] [ui] [routing] [docs]`
+- 변경 요약:
+  - `driver-orders` 정렬 우선순위를 raw status 비교에서 policy 기반 `uiState` 우선순위 계산으로 전환함.
+  - 정렬 로직은 `driverPolicy`의 `getDriverOrderSortPriority(uiState)`를 단일 기준으로 사용하도록 수렴함.
+  - 목록 카드 정렬은 mock/server 공통 파이프라인에서 동일하게 적용되고, UI 레벨 추가 정렬은 유지하지 않음.
+  - `DRIVER_RUN_CANONICAL.md`에 alias 제거 전 체크리스트(deeplink/로그/QA/앱내 경로 수렴)를 추가함.
+- 영향 범위:
+  - 사용자 관점: 목록 카드의 상태별 우선순위 정렬이 일관되게 표시됨.
+  - 개발자 관점: 정렬 기준이 정책 단일 함수에 모여 후속 상태 정책 변경 시 수정 포인트가 명확해짐.
+- 파일 변경 목록:
+  - 수정:
+    - `src/shared/lib/policy/driverPolicy.ts`
+    - `src/features/matching/api/driver-orders-mapper.ts`
+    - `docs/DRIVER_RUN_CANONICAL.md`
+    - `docs/CHANGELOG.md`
+  - 추가:
+    - 없음
+  - 삭제:
+    - 없음
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+- 후속 작업 (다음 PR 후보):
+  - 정렬 tie-break(동일 uiState 내 시간 우선순위)의 정책화 여부 검토
+  - alias route 제거 시점에 모니터링 지표 캡처 자동화 검토
+
+## 2026-02-25
+- PR/브랜치: `refactor/driver-run-policy-strip`
+- 범주 태그: `[routing] [policy] [ui] [infra]`
+- 변경 요약:
+  - Driver run canonical 운영 원칙 문서를 추가하고 canonical 경로를 `/(driver)/run/[id]`로 명시함.
+  - legacy alias(`/(driver)/drive`, `/(driver)/matches/*`) 제거 기준을 문서에 고정함:
+    - 2주간 crash/404 0건, 내부 직접 이동 경로 run 수렴, 외부 deep link/문서 소비처 제거.
+  - 운행 목록 카드 스트립 색/상태 문구를 raw status 비교가 아니라 policy badge tone/label 기반으로 일원화함.
+  - debug 허브에 `Run Detail 샘플` 진입 버튼을 추가해 `/run/[id]` 상세 검증 경로를 확보함(샘플 없으면 `/run/current` fallback).
+- 영향 범위:
+  - 사용자 관점: 운행 카드 상태 표시 일관성 향상, 기존 플로우/동작 변화 없음.
+  - 개발자 관점: run canonical 정책과 alias 제거 기준이 문서화되어 라우팅 정리 기준이 명확해짐.
+- 파일 변경 목록:
+  - 수정:
+    - `src/features/matching/api/driver-orders-api.ts`
+    - `src/features/matching/api/driver-orders-mapper.ts`
+    - `src/widgets/driver-orders/DriverOrdersBoard.tsx`
+    - `src/pages/debug/DebugLogsPage.tsx`
+    - `app/(driver)/matches/[id].tsx`
+    - `app/(driver)/matches/me.tsx`
+    - `docs/CHANGELOG.md`
+  - 추가:
+    - `docs/DRIVER_RUN_CANONICAL.md`
+  - 삭제:
+    - 없음
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+- 후속 작업 (다음 PR 후보):
+  - `driver-orders` 정렬 우선순위 계산의 uiState 중심 전환 검토
+  - alias route 삭제 시점에 deep link/QA 시나리오 동기화 체크리스트 추가
+
+## 2026-02-25
+- PR/브랜치: `fix/driver-drive-route-wiring`
+- 범주 태그: `[routing] [ui] [policy]`
+- 변경 요약:
+  - driver 운행 상세 진입 경로를 `/(driver)/run/[id]`로 고정하고, 목록 카드 상세 이동 경로도 동일 경로를 사용하도록 정리함.
+  - `/(driver)/drive`와 `/(driver)/matches/*`는 레거시 alias로 유지하되 모두 `/(driver)/run/*`으로 리다이렉트하도록 통일함.
+  - 미연결 상태였던 `DriverDrivePage.tsx`를 제거해 운행 화면 구현 소스를 `DriverMatchDetailPage` 단일 경로로 정리함.
+  - 운행 상세(`DriverMatchDetailPage`)의 상태/CTA 계산은 기존대로 policy(`getDriverUiStateFromBackendStatus`, `getDriverCta`) 소비 경로를 유지함.
+- 영향 범위:
+  - 사용자 관점: drive/matches 경로 진입 시 동일한 run 화면으로 수렴하며 404 없이 일관되게 동작.
+  - 개발자 관점: 운행 화면 라우팅 중복과 미사용 페이지가 정리되어 유지보수 난이도 감소.
+- 파일 변경 목록:
+  - 수정:
+    - `app/(driver)/drive.tsx`
+    - `app/(driver)/matches/[id].tsx`
+    - `app/(driver)/matches/me.tsx`
+    - `src/widgets/driver-orders/DriverOrdersBoard.tsx`
+    - `docs/CHANGELOG.md`
+  - 추가:
+    - 없음
+  - 삭제:
+    - `src/pages/driver/drive/DriverDrivePage.tsx`
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+- 후속 작업 (다음 PR 후보):
+  - driver routes에서 `run` canonical 정책을 문서화하고 필요 시 `matches` alias 제거 시점 확정
+  - 운행 목록 카드 상태 스트립 색상/문구 계산의 policy 기반 일원화 검토
+
+## 2026-02-25
+- PR/브랜치: `refactor/shipper-match-parsing-boundary`
+- 범주 태그: `[api] [mock] [infra] [routing]`
+- 변경 요약:
+  - `shipper-match-parser.ts`를 추가해 매칭 응답의 payload unwrap, id coercion, nullable/status 정규화를 parser 경계로 분리함.
+  - `shipper-match-api.ts`는 mock/server 데이터 조회 뒤 parser 결과를 소비해 목록/단건/도메인 로직을 처리하는 구조로 정리함.
+  - mock/server 모두 동일 parser 파이프라인(`parseMatchListResponse`, `parseSingleMatchResponse`)을 사용하도록 통일함.
+  - `pages/shipper/settings/_mock.ts`를 `features/shipper-settings/api/shipper-settings-mock.ts`로 이동해 pages 레이어 mock 의존을 제거함.
+  - `src/shared/lib/mock/` 빈 폴더를 정리했고, `src/shared/lib/geo/distance.ts`는 실제 사용처 확인 후 유지함.
+  - parser/mapper 경계 혼동을 줄이기 위해 `driver-orders-parser.ts`, `driver-orders-mapper.ts`, `shipper-match-parser.ts` 상단에 역할 정의를 추가함.
+- 영향 범위:
+  - 사용자 관점: 매칭/설정 화면 UI 동작 변화 없이 import 경로 정리 및 내부 구조 개선만 반영됨.
+  - 개발자 관점: API 파싱 책임과 pages mock 위치가 정리되어 경계/응집도가 개선됨.
+- 파일 변경 목록:
+  - 수정:
+    - `src/features/matching/api/driver-orders-mapper.ts`
+    - `src/features/matching/api/driver-orders-parser.ts`
+    - `src/features/matching/api/shipper-match-api.ts`
+    - `src/pages/shipper/settings/ShipperSettingsHomePage.tsx`
+    - `src/pages/shipper/settings/ShipperBusinessInfoPage.tsx`
+    - `src/pages/shipper/settings/ShipperVerificationManagePage.tsx`
+    - `src/pages/shipper/settings/ShipperAccountEditPage.tsx`
+    - `src/pages/shipper/settings/ShipperAddressBookPage.tsx`
+    - `src/pages/shipper/settings/ShipperPaymentMethodsPage.tsx`
+    - `src/pages/shipper/settings/ShipperTaxInvoiceHistoryPage.tsx`
+    - `docs/CHANGELOG.md`
+  - 추가:
+    - `src/features/matching/api/shipper-match-parser.ts`
+    - `src/features/shipper-settings/api/shipper-settings-mock.ts`
+  - 삭제:
+    - `src/pages/shipper/settings/_mock.ts`
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+- 후속 작업 (다음 PR 후보):
+  - `app/(driver)/drive.tsx`가 `/(driver)/run/[id]`로 리다이렉트되고 `DriverDrivePage.tsx`가 미연결 상태이므로 라우팅/정책 소비 정합성 재검토
+  - `useMatchDetail.ts` 내부 route snapshot 정규화 보조 로직의 parser/공통 유틸 정리 검토
+  - driver orders/quote detail의 시간·금액 포맷 함수 중복을 공통 유틸로 분리할지 별도 PR에서 확정
+
+## 2026-02-25
+- PR/브랜치: `refactor/driver-orders-parsing-boundary`
+- 범주 태그: `[api] [mock] [infra]`
+- 변경 요약:
+  - `driver-orders-parser.ts`를 추가해 driver orders 소스(match/quote)의 기본 파싱/정규화 책임을 API/mapper 밖으로 분리함.
+  - `driver-orders-api.ts`는 모드 분기/데이터 조회 후 `parseDriverOrderSource` + `mapDriverOrderCard`를 호출하는 파이프라인 중심으로 정리함.
+  - quoteId 수집/양수 정수 보정 로직을 parser 유틸로 통일해 mock/server 모두 같은 변환 흐름을 타도록 맞춤.
+  - `driver-orders-mapper.ts`는 파싱 완료 입력을 소비해 카드/태그/정렬 계산 역할에 집중하도록 조정함.
+- 영향 범위:
+  - 사용자 관점: 목록/상세 UI 동작 및 응답 형태 변경 없음(리팩토링 전용).
+  - 개발자 관점: 파싱 경계가 분리되어 API 책임이 줄고 mock/server 파이프라인 추적이 쉬워짐.
+- 파일 변경 목록:
+  - 수정:
+    - `src/features/matching/api/driver-orders-api.ts`
+    - `src/features/matching/api/driver-orders-mapper.ts`
+    - `docs/CHANGELOG.md`
+  - 추가:
+    - `src/features/matching/api/driver-orders-parser.ts`
+  - 삭제:
+    - 없음
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+- 후속 작업 (다음 PR 후보):
+  - `shipper-match-api`의 응답 파싱 유틸도 도메인별 parser 모듈로 단계 분리 검토
+  - driver orders 카드 포맷팅(거리/시간/가격)의 공통 포맷 유틸 정리 검토
+
+## 2026-02-25
+- PR/브랜치: `chore/debug-hub-and-driverorders-mapper`
+- 범주 태그: `[infra] [routing] [mock]`
+- 변경 요약:
+  - `DebugLogsPage`에 `Dev Tools` 허브 섹션을 추가하고 `Mock Flow Control`/`Orval Smoke`로 원클릭 이동 버튼을 배치함.
+  - 경로는 Expo Router 실제 라우팅 기준으로 `"/mock-flow"`와 `"/debug/orval-smoke"`를 사용해 진입 안정성을 맞춤.
+  - `driver-orders-api`의 카드 매핑/태그 구성/정렬 계산을 `driver-orders-mapper.ts`로 선별 분리해 API 파일 복잡도를 낮춤.
+- 영향 범위:
+  - 사용자 관점: 일반 사용자 플로우 영향 없음(debug 영역 전용 개선).
+  - 개발자 관점: 디버그 도구 접근성이 좋아지고 driver-orders 매핑 책임이 mapper로 응집되어 유지보수가 쉬워짐.
+- 파일 변경 목록:
+  - 수정:
+    - `src/pages/debug/DebugLogsPage.tsx`
+    - `src/features/matching/api/driver-orders-api.ts`
+    - `docs/CHANGELOG.md`
+  - 추가:
+    - `src/features/matching/api/driver-orders-mapper.ts`
+  - 삭제:
+    - 없음
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+- 후속 작업 (다음 PR 후보):
+  - debug landing 전용 페이지가 필요하면 `app/debug/index`로 허브를 독립
+  - driver-orders 서버 응답 파싱/매핑 경계 분리를 추가 검토
+
+## 2026-02-25
+- PR/브랜치: `chore/mock-flow-entry-and-selectors`
+- 범주 태그: `[mock] [routing] [infra]`
+- 변경 요약:
+  - debug 목록 페이지 상단에 `Mock Flow Control` 버튼을 추가하고 `/mock-flow`로 바로 진입 가능하게 연결함.
+  - `driver-orders-api`에 남아 있던 mock 전용 풀/태그/AI추천 가공 로직을 `mock-flow/selectors.ts`로 선별 이관함.
+  - API 레이어는 mock 모드에서 `waitRandom` + selector 결과 소비 중심으로 정리해 mock 가공 응집도를 높임.
+- 영향 범위:
+  - 사용자 관점: 일반 사용자 플로우 변화 없음, debug 진입점에서만 dev 기능 접근성 향상.
+  - 개발자 관점: driver-orders mock 가공 책임이 selector 계층으로 이동해 API 파일 복잡도가 감소함.
+- 파일 변경 목록:
+  - 수정:
+    - `src/pages/debug/DebugLogsPage.tsx`
+    - `src/features/matching/api/driver-orders-api.ts`
+    - `src/shared/lib/mock-flow/selectors.ts`
+    - `docs/CHANGELOG.md`
+  - 추가:
+    - 없음
+  - 삭제:
+    - 없음
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+- 후속 작업 (다음 PR 후보):
+  - debug landing에서 `orval-smoke`/`mock-flow` 통합 진입 허브 구성
+  - 필요 시 driver-orders 서버/목업 공통 매핑 로직을 별도 mapper 모듈로 분리
+
+## 2026-02-25
+- PR/브랜치: `chore/mock-flow-dev-tools`
+- 범주 태그: `[mock] [infra] [routing]`
+- 변경 요약:
+  - dev 전용 라우트 `/(dev)/mock-flow`와 `MockFlowControlPage`를 추가해 quote/match/counter-offer 상태를 앱 내에서 직접 조작할 수 있게 함.
+  - mock-flow mutation에 `견적 상태 단계 이동`, `매칭 상태 단계 이동`, `역제안 삭제`를 추가해 상태 케이스 검증을 한 화면에서 수행 가능하게 함.
+  - `driver-orders-api`의 mock 지연을 `mock-flow/waitRandom(500~900ms)` 공통 유틸로 통일함.
+  - 미사용 레거시 mock 파일(`MockHub`, `mockShipperQuotes`, `mockShipperQuoteDetails`, `driverMatchMockStore`)을 제거해 mock-flow SSOT 의존도로 정리함.
+- 영향 범위:
+  - 사용자 관점: 일반(shipper/driver) 화면 UX 변경 없음, dev 라우트에서만 제어 기능 노출.
+  - 개발자 관점: mock 상태 조작/재현이 빨라지고 분산 mock 경로가 정리되어 추적 및 유지보수 비용이 감소함.
+- 파일 변경 목록:
+  - 수정:
+    - `src/shared/lib/mock-flow/mutations.ts`
+    - `src/features/matching/api/driver-orders-api.ts`
+    - `docs/CHANGELOG.md`
+  - 추가:
+    - `app/(dev)/mock-flow.tsx`
+    - `src/pages/debug/MockFlowControlPage.tsx`
+  - 삭제:
+    - `src/shared/lib/mock/MockHub.ts`
+    - `src/features/quote/api/mockShipperQuotes.ts`
+    - `src/features/quote/api/mockShipperQuoteDetails.ts`
+    - `src/features/matching/model/driverMatchMockStore.ts`
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+- 후속 작업 (다음 PR 후보):
+  - dev 진입점(예: debug 목록)에서 `/(dev)/mock-flow` 바로가기 추가
+  - driver-orders mock 가공 로직을 필요 범위 내 `mock-flow/selectors.ts`로 단계 이관
+
+## 2026-02-25
+- PR/브랜치: `feature/policy-apply-core`
+- 범주 태그: `[policy] [api] [ui]`
+- 변경 요약:
+  - `matching/counter-offer` API 레이어의 상태 normalize 중복을 제거하고 `@/shared/lib/policy/normalizeStatus` 기반으로 통일함.
+  - `quoteActionMatrix`를 customer policy(`uiState`) 기반으로 재구성해 배지/CTA 라벨/상태 해석 소스를 정책 SSOT로 일치시킴.
+  - `QuoteListPage`, `QuoteDetailPage`, `DriverMatchDetailPage`에서 상태 분기 기준을 raw status 비교 대신 uiState/policy 소비로 전환함.
+- 영향 범위:
+  - 사용자 관점: 기존 목록/상세 플로우와 UI 구조는 유지되며 상태/CTA 표시 기준의 일관성이 올라감.
+  - 개발자 관점: 정책 외부 status 문자열 가공 지점을 줄여 후속 화면 확장 시 분기 중복과 불일치 위험이 감소함.
+- 파일 변경 목록:
+  - 수정:
+    - `src/features/counter-offer/api/counter-offer-api.ts`
+    - `src/features/matching/api/driver-orders-api.ts`
+    - `src/features/matching/api/shipper-match-api.ts`
+    - `src/features/quote/model/quoteActionMatrix.ts`
+    - `src/features/quote/model/useQuoteDetail.ts`
+    - `src/pages/driver/matches/DriverMatchDetailPage.tsx`
+    - `src/pages/shipper/quotes/QuoteDetailPage.tsx`
+    - `src/pages/shipper/quotes/QuoteListPage.tsx`
+    - `docs/CHANGELOG.md`
+  - 추가:
+    - 없음
+  - 삭제:
+    - 없음
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+- 후속 작업 (다음 PR 후보):
+  - `driverMatchStatus.ts` 등 잔존 레거시 상태 유틸을 policy 기반으로 정리
+  - Quote/Driver 상세의 실제 액션 처리(결제/협상/재요청)를 정책 CTA ID 중심으로 연결
+
+## 2026-02-25
+- PR/브랜치: `feature/mock-flow-e2e-driver-shipper`
+- 범주 태그: `[infra]`
+- 변경 요약:
+  - `apps/mobile` 패키지 루트에 Flat Config(`eslint.config.cjs`)를 추가해 `pnpm -C ... exec eslint .` 실행 시 설정 탐색 실패가 나지 않도록 정리함.
+  - TypeScript 파서를 명시하고 경고 중심 규칙으로 조정해, 기존 레거시 코드베이스에서도 lint가 즉시 중단되지 않게 기본선을 맞춤.
+  - generated 코드/스크립트/설정 파일을 lint 대상에서 제외해 실개발 대상 소스 위주로 신호를 받도록 스코프를 정리함.
+- 영향 범위:
+  - 사용자 관점: 런타임 영향 없음.
+  - 개발자 관점: lint가 “config not found/파싱 실패” 단계에서 “실제 규칙 경고” 단계로 전환되어 후속 리팩토링/정책 적용 작업 착수가 쉬워짐.
+- 파일 변경 목록:
+  - 수정:
+    - `docs/CHANGELOG.md`
+  - 추가:
+    - `apps/mobile/eslint.config.cjs`
+  - 삭제:
+    - 없음
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과(0 errors, warnings only)
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+- 후속 작업 (다음 PR 후보):
+  - 남은 warning(미사용 변수/unused eslint-disable/console)를 우선순위별로 정리
+  - 공통 eslint flat config를 monorepo base로 승격하고 앱별 override만 유지
+
+## 2026-02-25
+- PR/브랜치: `feature/mock-flow-e2e-driver-shipper`
+- 범주 태그: `[mock] [api] [infra]`
+- 변경 요약:
+  - `src/shared/lib/mock-flow/`를 신규 추가해 화주 견적/상세, 기사 매칭(open/my/detail), 역제안 데이터를 단일 인메모리 SSOT로 통합함.
+  - `features/quote/api/quote-api.ts`, `features/matching/api/shipper-match-api.ts`, `features/counter-offer/api/counter-offer-api.ts`의 mock 분기를 `mock-flow`로 연결해 UI/훅 분기 없이 동일 상태 흐름을 공유하도록 정리함.
+  - mock 모드에서 `GET /api/driver/matches/{id}`가 store 기반으로 항상 조회 가능해져 상세 화면 개발 시 403으로 막히던 흐름을 우회 검증할 수 있게 함(서버 모드는 기존 동작 유지).
+  - mock fetch/mutation 지연을 `waitRandom(500~900ms)` 공통 유틸로 통일해 실서버 체감과 로딩/중복클릭 방어 시나리오를 유지함.
+- 영향 범위:
+  - 사용자 관점: mock 모드에서 Shipper ↔ Driver 매칭 생성/수락/상태 반영 흐름을 끝까지 수동 검증 가능.
+  - 개발자 관점: 기존 분산 mock 파일 의존도를 줄이고, API 레이어만 교체해 목록/상세/역제안의 상태 동기화 포인트를 단일 스토어로 고정.
+- 파일 변경 목록:
+  - 수정:
+    - `src/features/quote/api/quote-api.ts`
+    - `src/features/matching/api/shipper-match-api.ts`
+    - `src/features/counter-offer/api/counter-offer-api.ts`
+    - `docs/CHANGELOG.md`
+  - 추가:
+    - `src/shared/lib/mock-flow/types.ts`
+    - `src/shared/lib/mock-flow/delay.ts`
+    - `src/shared/lib/mock-flow/seed.ts`
+    - `src/shared/lib/mock-flow/store.ts`
+    - `src/shared/lib/mock-flow/selectors.ts`
+    - `src/shared/lib/mock-flow/mutations.ts`
+    - `src/shared/lib/mock-flow/index.ts`
+  - 삭제:
+    - 없음
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+- 후속 작업 (다음 PR 후보):
+  - 기존 `MockHub`/`mockShipperQuotes`/`mockShipperQuoteDetails` 미사용 경로 정리 및 제거
+  - dev 전용 `mock-flow` 상태 제어 라우트(`app/(dev)/mock-flow.tsx`) 추가
+  - driver-orders-api 내부의 개별 지연/가공 로직을 필요 시 `mock-flow` selector 계층으로 단계적 이관
+
+## 2026-02-24
+- PR/브랜치: `feature/policy-foundation`
+- 범주 태그: `[policy] [infra]`
+- 변경 요약:
+  - `src/shared/lib/policy/`에 uiState-first 정책 모듈 11개 파일을 추가해 상태/CTA/Badge/Toast/API 에러 정책의 단일 진실 소스를 마련함.
+  - UI 소비 기준은 `uiState` 우선으로 설계하고, 레거시/목업 호환을 위한 `BackendStatus -> UiState` 변환 함수는 compat 용도로 제한함.
+  - 상태 정규화는 `normalizeStatus.ts`로 단일화하고 정책 외부에서 새 normalize 로직을 추가하지 않도록 기반을 고정함.
+  - 화면 런타임 동작/디자인/API 응답 구조 변경 없이 정책 기반과 문서 운영 체계만 확장함.
+- 영향 범위:
+  - 사용자 관점: 런타임 동작 변화 없음.
+  - 개발자 관점: 이후 PR에서 정책 import 경로(`@/shared/lib/policy`)를 사용해 중복 상태/CTA 계산 로직을 단계적으로 통합할 수 있음.
+- 파일 변경 목록:
+  - 수정:
+    - 없음
+  - 추가:
+    - `src/shared/lib/policy/types.ts`
+    - `src/shared/lib/policy/normalizeStatus.ts`
+    - `src/shared/lib/policy/customerPolicy.ts`
+    - `src/shared/lib/policy/driverPolicy.ts`
+    - `src/shared/lib/policy/photoGatePolicy.ts`
+    - `src/shared/lib/policy/invoicePolicy.ts`
+    - `src/shared/lib/policy/badgePolicy.ts`
+    - `src/shared/lib/policy/progressPolicy.ts`
+    - `src/shared/lib/policy/toastPolicy.ts`
+    - `src/shared/lib/policy/apiErrorPolicy.ts`
+    - `src/shared/lib/policy/index.ts`
+    - `docs/CHANGELOG.md`
+    - `docs/CHANGELOG.template.md`
+    - `docs/CONTRIBUTING_DOCS.md`
+  - 삭제:
+    - 없음
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 실패 (ESLint flat config 파일 `eslint.config.*` 부재)
+- 후속 작업 (다음 PR 후보):
+  - `features/matching/api/shipper-match-api.ts`, `features/counter-offer/api/counter-offer-api.ts`, `features/matching/api/driver-orders-api.ts`의 상태 normalize 중복 정리
+  - `features/quote/model/quoteActionMatrix.ts`와 `pages/shipper/quotes/QuoteDetailPage.tsx`의 CTA 정책 소스 일치화
+  - Driver/Shipper 상세/목록 흐름에서 정책 모듈 적용 범위를 단계적으로 확대

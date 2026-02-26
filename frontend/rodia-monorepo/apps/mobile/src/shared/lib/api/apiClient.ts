@@ -1,6 +1,6 @@
 // apps/mobile/src/shared/lib/api/apiClient.ts
 import axios, {
-  AxiosError,
+  type AxiosError,
   type AxiosInstance,
   type AxiosResponse,
   type InternalAxiosRequestConfig,
@@ -57,27 +57,13 @@ function extractTokens(data: unknown): Partial<AuthTokens> | null {
 
 let refreshInFlight: Promise<string | null> | null = null;
 
-function safeGetRefreshPaths(): string[] {
-  const candidates: string[] = [];
-
-  function pushCandidate(value: unknown) {
-    const normalized = String(value ?? "").trim();
-    if (!normalized) return;
-    if (candidates.includes(normalized)) return;
-    candidates.push(normalized);
-  }
-
+function safeGetRefreshPath(): string {
   try {
-    const p = getAuthRefreshPath?.();
-    pushCandidate(p);
+    const path = getAuthRefreshPath?.();
+    return String(path ?? "").trim();
   } catch {
-    // ignore
+    return "";
   }
-
-  // 환경값이 비어 있거나 스펙과 다른 경우를 대비한 안전 후보.
-  pushCandidate("/api/auth/refresh");
-  pushCandidate("/auth/refresh");
-  return candidates;
 }
 
 function buildSessionExpiredError(originalError?: unknown): SessionExpiredApiError {
@@ -239,8 +225,8 @@ function addApiLog(entry: {
   );
 }
 
-async function refreshAccessToken(baseURL: string, refreshPaths: string[]): Promise<string | null> {
-  if (!Array.isArray(refreshPaths) || refreshPaths.length <= 0) return null;
+async function refreshAccessToken(baseURL: string, refreshPath: string): Promise<string | null> {
+  if (!isTruthyString(refreshPath)) return null;
   const refreshToken = await tokenStorage.getRefreshToken();
   const accessToken = await tokenStorage.getAccessToken();
 
@@ -253,31 +239,24 @@ async function refreshAccessToken(baseURL: string, refreshPaths: string[]): Prom
     headers: { "Content-Type": "application/json" },
   });
 
-  for (const refreshPathRaw of refreshPaths) {
-    const refreshPath = (refreshPathRaw ?? "").trim();
-    if (!refreshPath) continue;
+  try {
+    const res = await refreshClient.post(refreshPath.trim(), { refreshToken: refreshToken.trim() });
+    const tokens = extractTokens((res as AxiosResponse)?.data);
 
-    try {
-      const res = await refreshClient.post(refreshPath, { refreshToken: refreshToken.trim() });
-      const tokens = extractTokens((res as AxiosResponse)?.data);
+    const nextAccess = (tokens?.accessToken ?? "").trim();
+    const nextRefresh = (tokens?.refreshToken ?? "").trim();
 
-      const nextAccess = (tokens?.accessToken ?? "").trim();
-      const nextRefresh = (tokens?.refreshToken ?? "").trim();
+    if (!nextAccess) return null;
 
-      if (!nextAccess) continue;
+    await tokenStorage.setTokens({
+      accessToken: nextAccess,
+      refreshToken: nextRefresh || refreshToken.trim(),
+    });
 
-      await tokenStorage.setTokens({
-        accessToken: nextAccess,
-        refreshToken: nextRefresh || refreshToken.trim(),
-      });
-
-      return nextAccess;
-    } catch {
-      // 다음 후보 경로를 시도한다.
-    }
+    return nextAccess;
+  } catch {
+    return null;
   }
-
-  return null;
 }
 
 function setAuthHeader(config: InternalAxiosRequestConfig, accessToken: string, force: boolean) {
@@ -437,8 +416,8 @@ export function createApiClient(): AxiosInstance {
       if (original._retry) return Promise.reject(error);
       original._retry = true;
 
-      const refreshPaths = safeGetRefreshPaths();
-      if (refreshPaths.length <= 0) {
+      const refreshPath = safeGetRefreshPath();
+      if (!isTruthyString(refreshPath)) {
         await tokenStorage.clearTokens();
         return Promise.reject(buildSessionExpiredError(error));
       }
@@ -457,7 +436,7 @@ export function createApiClient(): AxiosInstance {
       }
 
       if (!refreshInFlight) {
-        refreshInFlight = refreshAccessToken(baseURL, refreshPaths).finally(() => {
+        refreshInFlight = refreshAccessToken(baseURL, refreshPath).finally(() => {
           refreshInFlight = null;
         });
       }

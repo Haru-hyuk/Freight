@@ -1,14 +1,17 @@
 package com.freight.backend.controller;
 
+import com.freight.backend.dto.match.BatchAcceptMatchRequest;
+import com.freight.backend.dto.match.BatchAcceptMatchResponse;
 import com.freight.backend.dto.match.MatchResponse;
-import com.freight.backend.exception.CustomException;
-import com.freight.backend.exception.ErrorCode;
 import com.freight.backend.service.MatchService;
+import com.freight.backend.util.SecurityUtils;
+import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -28,27 +31,15 @@ public class DriverMatchController {
 
     private final MatchService matchService;
 
-    private static Long requireDriverId(Authentication authentication) {
-        if (authentication == null
-                || !authentication.getAuthorities().contains(new SimpleGrantedAuthority("ROLE_DRIVER"))) {
-            throw new CustomException(ErrorCode.AUTH_FORBIDDEN);
-        }
-        try {
-            return Long.parseLong(authentication.getName());
-        } catch (NumberFormatException e) {
-            throw new CustomException(ErrorCode.AUTH_UNAUTHORIZED);
-        }
-    }
-
     /**
      * 수락 가능 매칭 목록 (아직 아무도 수락하지 않은 매칭)
      * GET /api/driver/matches
      */
     @GetMapping
     public ResponseEntity<List<MatchResponse>> getOpenMatches(
-            Authentication authentication
+            @AuthenticationPrincipal UserDetails userDetails
     ) {
-        requireDriverId(authentication);
+        SecurityUtils.requireDriverId(userDetails);
         List<MatchResponse> matches = matchService.getOpenMatches();
         return ResponseEntity.ok(matches);
     }
@@ -59,9 +50,9 @@ public class DriverMatchController {
      */
     @GetMapping("/me")
     public ResponseEntity<List<MatchResponse>> getMyMatches(
-            Authentication authentication
+            @AuthenticationPrincipal UserDetails userDetails
     ) {
-        Long driverId = requireDriverId(authentication);
+        Long driverId = SecurityUtils.requireDriverId(userDetails);
         List<MatchResponse> matches = matchService.getDriverMatches(driverId);
         return ResponseEntity.ok(matches);
     }
@@ -72,11 +63,53 @@ public class DriverMatchController {
      */
     @PostMapping("/{matchId}/accept")
     public ResponseEntity<MatchResponse> acceptMatch(
-            Authentication authentication,
+            @AuthenticationPrincipal UserDetails userDetails,
             @PathVariable Long matchId
     ) {
-        Long driverId = requireDriverId(authentication);
+        Long driverId = SecurityUtils.requireDriverId(userDetails);
         MatchResponse response = matchService.acceptMatch(driverId, matchId);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * 매칭 다건 수락 (기사)
+     * POST /api/driver/matches/accept-batch
+     */
+    @PostMapping("/accept-batch")
+    public ResponseEntity<BatchAcceptMatchResponse> acceptMatches(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @Valid @RequestBody BatchAcceptMatchRequest request
+    ) {
+        Long driverId = SecurityUtils.requireDriverId(userDetails);
+        BatchAcceptMatchResponse response = matchService.acceptMatches(driverId, request);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * 운송 시작 (기사)
+     * POST /api/driver/matches/{matchId}/start
+     */
+    @PostMapping("/{matchId}/start")
+    public ResponseEntity<MatchResponse> startTransit(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable Long matchId
+    ) {
+        Long driverId = SecurityUtils.requireDriverId(userDetails);
+        MatchResponse response = matchService.startTransit(driverId, matchId);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * 운송 완료 (기사)
+     * POST /api/driver/matches/{matchId}/complete
+     */
+    @PostMapping("/{matchId}/complete")
+    public ResponseEntity<MatchResponse> completeTransit(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable Long matchId
+    ) {
+        Long driverId = SecurityUtils.requireDriverId(userDetails);
+        MatchResponse response = matchService.completeTransit(driverId, matchId);
         return ResponseEntity.ok(response);
     }
 
@@ -86,10 +119,10 @@ public class DriverMatchController {
      */
     @DeleteMapping("/{matchId}")
     public ResponseEntity<Void> cancelMatch(
-            Authentication authentication,
+            @AuthenticationPrincipal UserDetails userDetails,
             @PathVariable Long matchId
     ) {
-        Long userId = requireDriverId(authentication);
+        Long userId = SecurityUtils.requireDriverId(userDetails);
         matchService.cancelMatch(userId, "ROLE_DRIVER", matchId);
         return ResponseEntity.noContent().build();
     }
@@ -100,10 +133,10 @@ public class DriverMatchController {
      */
     @GetMapping("/{matchId}")
     public ResponseEntity<MatchResponse> getMatch(
-            Authentication authentication,
+            @AuthenticationPrincipal UserDetails userDetails,
             @PathVariable Long matchId
     ) {
-        Long userId = requireDriverId(authentication);
+        Long userId = SecurityUtils.requireDriverId(userDetails);
         MatchResponse response = matchService.getMatch(matchId, userId, "ROLE_DRIVER");
         return ResponseEntity.ok(response);
     }

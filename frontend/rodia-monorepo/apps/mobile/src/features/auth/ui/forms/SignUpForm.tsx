@@ -6,15 +6,20 @@ import { AppButton } from "@/shared/ui/kit/AppButton";
 import { AppInput } from "@/shared/ui/kit/AppInput";
 import { AppText } from "@/shared/ui/kit/AppText";
 import { useAuth } from "@/features/auth/model/useAuth";
-import { MOCK_EMAIL_BY_ROLE, MOCK_PASSWORD } from "@/features/auth/model/auth.consts";
 import type { AuthUserRole } from "@/features/auth/model/auth.types";
 import { AuthRoleTabs } from "@/features/auth/ui/AuthRoleTabs";
+import { SIGNUP_DRIVER, SIGNUP_SHIPPER } from "@/shared/lib/dev/mockPayloads";
+import { MockAutofillButton } from "@/shared/ui/dev/MockAutofillButton";
 
 type SignUpParams = {
   email: string;
   password: string;
   name: string;
   phone: string;
+  address?: string;
+  addressDetail?: string;
+  bankName?: string;
+  bankAccount?: string;
   role: AuthUserRole;
   companyName?: string;
   ownerName?: string;
@@ -50,6 +55,10 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const OPEN_DATE_DIGITS = 8;
 const BIZ_REG_MIN_DIGITS = 10;
 const PHONE_MIN_DIGITS = 10;
+const MOCK_ADDRESS = "서울특별시 강남구 테헤란로 1";
+const MOCK_ADDRESS_DETAIL = "101호";
+const MOCK_DRIVER_BANK_NAME = "국민은행";
+const MOCK_DRIVER_BANK_ACCOUNT = "123-456-789012";
 
 const useStyles = createThemedStyles((t) =>
   StyleSheet.create({
@@ -196,6 +205,10 @@ export function SignUpForm({
   const passwordRef = useRef<TextInput>(null);
   const confirmPasswordRef = useRef<TextInput>(null);
   const phoneRef = useRef<TextInput>(null);
+  const addressRef = useRef<TextInput>(null);
+  const addressDetailRef = useRef<TextInput>(null);
+  const bankNameRef = useRef<TextInput>(null);
+  const bankAccountRef = useRef<TextInput>(null);
   const companyNameRef = useRef<TextInput>(null);
   const ownerNameRef = useRef<TextInput>(null);
   const bizRegNoRef = useRef<TextInput>(null);
@@ -209,6 +222,10 @@ export function SignUpForm({
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
+  const [addressDetail, setAddressDetail] = useState("");
+  const [bankName, setBankName] = useState("");
+  const [bankAccount, setBankAccount] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [ownerName, setOwnerName] = useState("");
   const [bizRegNo, setBizRegNo] = useState("");
@@ -227,20 +244,38 @@ export function SignUpForm({
 
   useEffect(() => {
     if (!auth.isMockAuth) return;
-    const mockName = role === "driver" ? "Mock Driver" : "Mock Shipper";
-    const mockPhone = role === "driver" ? "010-1234-5678" : "010-9876-5432";
-    setName(mockName);
-    setEmail(role === "driver" ? (MOCK_EMAIL_BY_ROLE.driver ?? "") : (MOCK_EMAIL_BY_ROLE.shipper ?? ""));
-    setPassword(MOCK_PASSWORD ?? "");
-    setConfirmPassword(MOCK_PASSWORD ?? "");
-    setPhone(mockPhone);
-    if (role === "shipper") {
-      setCompanyName("로디아 화주");
-      setOwnerName(mockName);
-      setBizRegNo("123-45-67890");
-      setBizPhone(mockPhone);
-      setOpenDate("2020-01-01");
+    if (role === "driver") {
+      setName(SIGNUP_DRIVER.name);
+      setEmail(SIGNUP_DRIVER.email);
+      setPassword(SIGNUP_DRIVER.password);
+      setConfirmPassword(SIGNUP_DRIVER.confirmPassword);
+      setPhone(SIGNUP_DRIVER.phone);
+      setAddress(MOCK_ADDRESS);
+      setAddressDetail(MOCK_ADDRESS_DETAIL);
+      setBankName(MOCK_DRIVER_BANK_NAME);
+      setBankAccount(MOCK_DRIVER_BANK_ACCOUNT);
+      setCompanyName("");
+      setOwnerName("");
+      setBizRegNo("");
+      setBizPhone("");
+      setOpenDate("");
+      return;
     }
+
+    setName(SIGNUP_SHIPPER.name);
+    setEmail(SIGNUP_SHIPPER.email);
+    setPassword(SIGNUP_SHIPPER.password);
+    setConfirmPassword(SIGNUP_SHIPPER.confirmPassword);
+    setPhone(SIGNUP_SHIPPER.phone);
+    setAddress(MOCK_ADDRESS);
+    setAddressDetail(MOCK_ADDRESS_DETAIL);
+    setBankName("");
+    setBankAccount("");
+    setCompanyName(SIGNUP_SHIPPER.companyName);
+    setOwnerName(SIGNUP_SHIPPER.ownerName);
+    setBizRegNo(SIGNUP_SHIPPER.bizRegNo);
+    setBizPhone(SIGNUP_SHIPPER.bizPhone);
+    setOpenDate(SIGNUP_SHIPPER.openDate);
   }, [auth.isMockAuth, role]);
 
   const scrollIntoView = useCallback(
@@ -305,20 +340,65 @@ export function SignUpForm({
     [clearLocalError]
   );
 
+  const handleMockAutofill = useCallback(() => {
+    clearLocalError();
+
+    if (role === "driver") {
+      setName(SIGNUP_DRIVER.name);
+      setEmail(SIGNUP_DRIVER.email);
+      setPassword(SIGNUP_DRIVER.password);
+      setConfirmPassword(SIGNUP_DRIVER.confirmPassword);
+      setPhone(SIGNUP_DRIVER.phone);
+      setAddress(MOCK_ADDRESS);
+      setAddressDetail(MOCK_ADDRESS_DETAIL);
+      setBankName(MOCK_DRIVER_BANK_NAME);
+      setBankAccount(MOCK_DRIVER_BANK_ACCOUNT);
+      setCompanyName("");
+      setOwnerName("");
+      setBizRegNo("");
+      setBizPhone("");
+      setOpenDate("");
+      return;
+    }
+
+    setName(SIGNUP_SHIPPER.name);
+    setEmail(SIGNUP_SHIPPER.email);
+    setPassword(SIGNUP_SHIPPER.password);
+    setConfirmPassword(SIGNUP_SHIPPER.confirmPassword);
+    setPhone(SIGNUP_SHIPPER.phone);
+    setAddress(MOCK_ADDRESS);
+    setAddressDetail(MOCK_ADDRESS_DETAIL);
+    setBankName("");
+    setBankAccount("");
+    setCompanyName(SIGNUP_SHIPPER.companyName);
+    setOwnerName(SIGNUP_SHIPPER.ownerName);
+    setBizRegNo(SIGNUP_SHIPPER.bizRegNo);
+    setBizPhone(SIGNUP_SHIPPER.bizPhone);
+    setOpenDate(SIGNUP_SHIPPER.openDate);
+  }, [clearLocalError, role]);
+
   const isValid = useMemo(() => {
     const safeName = name?.trim() ?? "";
     const safeEmail = normalizeEmail(email);
     const safePassword = password ?? "";
     const safeConfirm = confirmPassword ?? "";
     const safePhone = phone ?? "";
+    const safeAddress = (address ?? "").trim();
+    const safeAddressDetail = (addressDetail ?? "").trim();
 
     if (!safeName) return false;
     if (!isEmailValid(safeEmail)) return false;
     if (safePassword.length < 6) return false;
     if (safePassword !== safeConfirm) return false;
     if (!isPhoneValid(safePhone)) return false;
+    if (!safeAddress) return false;
+    if (!safeAddressDetail) return false;
 
-    if (role !== "shipper") return true;
+    if (role === "driver") {
+      if (!(bankName ?? "").trim()) return false;
+      if (!(bankAccount ?? "").trim()) return false;
+      return true;
+    }
 
     if (!(companyName ?? "").trim()) return false;
     if (!(ownerName ?? "").trim()) return false;
@@ -326,9 +406,26 @@ export function SignUpForm({
     if (!isPhoneValid(bizPhone)) return false;
     if (!isOpenDateValid(openDate)) return false;
     return true;
-  }, [bizPhone, bizRegNo, companyName, confirmPassword, email, name, openDate, ownerName, password, phone, role]);
+  }, [
+    address,
+    addressDetail,
+    bankAccount,
+    bankName,
+    bizPhone,
+    bizRegNo,
+    companyName,
+    confirmPassword,
+    email,
+    name,
+    openDate,
+    ownerName,
+    password,
+    phone,
+    role,
+  ]);
 
   const phoneError = phone && !isPhoneValid(phone) ? "전화번호는 숫자 10자리 이상 입력해 주세요." : undefined;
+  const requiredError = "필수 입력값 누락";
   const bizPhoneError =
     role === "shipper" && bizPhone && !isPhoneValid(bizPhone) ? "사업장 연락처는 숫자 10자리 이상 입력해 주세요." : undefined;
   const bizRegNoError =
@@ -350,9 +447,13 @@ export function SignUpForm({
     const safePassword = password ?? "";
     const safeConfirm = confirmPassword ?? "";
     const safePhone = formatPhoneNumber(phone ?? "");
+    const safeAddress = (address ?? "").trim();
+    const safeAddressDetail = (addressDetail ?? "").trim();
+    const safeBankName = (bankName ?? "").trim();
+    const safeBankAccount = (bankAccount ?? "").trim();
 
-    if (!safeName) {
-      reportError("이름을 입력해 주세요.");
+    if (!safeName || !safeEmail || !safePassword || !safeConfirm || !safePhone || !safeAddress || !safeAddressDetail) {
+      reportError(requiredError);
       return;
     }
 
@@ -383,13 +484,8 @@ export function SignUpForm({
     const shipperOpenDate = normalizeOpenDate(openDate);
 
     if (role === "shipper") {
-      if (!shipperCompany) {
-        reportError("상호명을 입력해 주세요.");
-        return;
-      }
-
-      if (!shipperOwner) {
-        reportError("대표자명을 입력해 주세요.");
+      if (!shipperCompany || !shipperOwner || !shipperBizRegNo || !shipperBizPhone || !shipperOpenDate) {
+        reportError(requiredError);
         return;
       }
 
@@ -409,6 +505,11 @@ export function SignUpForm({
       }
     }
 
+    if (role === "driver" && (!safeBankName || !safeBankAccount)) {
+      reportError(requiredError);
+      return;
+    }
+
     submitInFlightRef.current = true;
 
     try {
@@ -417,6 +518,10 @@ export function SignUpForm({
         email: safeEmail,
         password: safePassword,
         phone: safePhone,
+        address: safeAddress,
+        addressDetail: safeAddressDetail,
+        bankName: role === "driver" ? safeBankName : undefined,
+        bankAccount: role === "driver" ? safeBankAccount : undefined,
         role,
         companyName: role === "shipper" ? shipperCompany : undefined,
         ownerName: role === "shipper" ? shipperOwner : undefined,
@@ -443,7 +548,11 @@ export function SignUpForm({
       submitInFlightRef.current = false;
     }
   }, [
+    address,
+    addressDetail,
     auth,
+    bankAccount,
+    bankName,
     bizPhone,
     bizRegNo,
     clearLocalError,
@@ -459,6 +568,7 @@ export function SignUpForm({
     password,
     phone,
     reportError,
+    requiredError,
     role,
   ]);
 
@@ -477,6 +587,7 @@ export function SignUpForm({
 
         <View style={s.formContainer}>
           <AuthRoleTabs role={role} onChange={onRoleChange} onBeforeChange={clearLocalError} disabled={auth.isBusy} />
+          <MockAutofillButton onFill={handleMockAutofill} label={role === "driver" ? "Fill Driver Signup" : "Fill Shipper Signup"} />
 
           <View style={s.inputs}>
             <AppInput
@@ -564,12 +675,44 @@ export function SignUpForm({
               returnKeyType="next"
               blurOnSubmit={false}
               onFocus={() => scrollIntoView(phoneRef.current ?? null)}
+              onSubmitEditing={() => focusInput(addressRef.current ?? null)}
+            />
+
+            <AppInput
+              ref={addressRef}
+              label="주소"
+              placeholder="주소를 입력해 주세요"
+              value={address}
+              shellStyle={s.inputShell}
+              onChangeText={(value) => {
+                clearLocalError();
+                setAddress(value ?? "");
+              }}
+              returnKeyType="next"
+              blurOnSubmit={false}
+              onFocus={() => scrollIntoView(addressRef.current ?? null)}
+              onSubmitEditing={() => focusInput(addressDetailRef.current ?? null)}
+            />
+
+            <AppInput
+              ref={addressDetailRef}
+              label="상세주소"
+              placeholder="상세주소를 입력해 주세요"
+              value={addressDetail}
+              shellStyle={s.inputShell}
+              onChangeText={(value) => {
+                clearLocalError();
+                setAddressDetail(value ?? "");
+              }}
+              returnKeyType="next"
+              blurOnSubmit={false}
+              onFocus={() => scrollIntoView(addressDetailRef.current ?? null)}
               onSubmitEditing={() => {
                 if (role === "shipper") {
                   focusInput(companyNameRef.current ?? null);
                   return;
                 }
-                handleSubmit();
+                focusInput(bankNameRef.current ?? null);
               }}
             />
 
@@ -654,7 +797,40 @@ export function SignUpForm({
                   onSubmitEditing={handleSubmit}
                 />
               </>
-            ) : null}
+            ) : (
+              <>
+                <AppInput
+                  ref={bankNameRef}
+                  label="은행명"
+                  placeholder="은행명을 입력해 주세요"
+                  value={bankName}
+                  shellStyle={s.inputShell}
+                  onChangeText={(value) => {
+                    clearLocalError();
+                    setBankName(value ?? "");
+                  }}
+                  returnKeyType="next"
+                  blurOnSubmit={false}
+                  onFocus={() => scrollIntoView(bankNameRef.current ?? null)}
+                  onSubmitEditing={() => focusInput(bankAccountRef.current ?? null)}
+                />
+
+                <AppInput
+                  ref={bankAccountRef}
+                  label="계좌번호"
+                  placeholder="계좌번호를 입력해 주세요"
+                  value={bankAccount}
+                  shellStyle={s.inputShell}
+                  onChangeText={(value) => {
+                    clearLocalError();
+                    setBankAccount(value ?? "");
+                  }}
+                  returnKeyType="done"
+                  onFocus={() => scrollIntoView(bankAccountRef.current ?? null)}
+                  onSubmitEditing={handleSubmit}
+                />
+              </>
+            )}
           </View>
 
           <View style={s.infoBox}>
@@ -667,7 +843,7 @@ export function SignUpForm({
               </AppText>
             ) : (
               <AppText variant="caption" style={s.infoBody}>
-                빠른 시작을 위해 필수 정보만 입력받고 있습니다.
+                기사 가입은 연락처/주소/계좌 필수값을 실정보로 입력해 주세요.
               </AppText>
             )}
             <AppText variant="caption" color="textMain" weight="700">

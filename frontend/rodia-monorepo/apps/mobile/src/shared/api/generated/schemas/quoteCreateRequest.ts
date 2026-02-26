@@ -5,30 +5,66 @@
  * OpenAPI spec version: v0
  */
 import type { QuoteChecklistItemRequest } from './quoteChecklistItemRequest';
+import type { QuoteItemRequest } from './quoteItemRequest';
 import type { QuoteStopRequest } from './quoteStopRequest';
 
 export interface QuoteCreateRequest {
   truckId?: number;
-  originAddress?: string;
-  destinationAddress?: string;
-  originLat?: number;
-  originLng?: number;
-  destinationLat?: number;
-  destinationLng?: number;
-  distanceKm?: number;
-  weightKg?: number;
+  /**
+   * @minLength 0
+   * @maxLength 255
+   */
+  originAddress: string;
+  /**
+   * @minLength 0
+   * @maxLength 255
+   */
+  destinationAddress: string;
+  /**
+   * @minimum -90
+   * @maximum 90
+   */
+  originLat: number;
+  /**
+   * @minimum -180
+   * @maximum 180
+   */
+  originLng: number;
+  /**
+   * @minimum -90
+   * @maximum 90
+   */
+  destinationLat: number;
+  /**
+   * @minimum -180
+   * @maximum 180
+   */
+  destinationLng: number;
+  /** @minimum 1 */
+  distanceKm: number;
+  /** @minimum 1 */
+  weightKg: number;
   volumeCbm?: number;
-  vehicleType?: string;
-  vehicleBodyType?: string;
-  cargoName?: string;
-  cargoType?: string;
+  vehicleType: string;
+  vehicleBodyType: string;
+  /**
+   * @minLength 0
+   * @maxLength 100
+   */
+  cargoName: string;
+  cargoType: string;
+  /**
+   * @minLength 0
+   * @maxLength 500
+   */
   cargoDesc?: string;
-  basePrice?: number;
+  basePrice: number;
   distancePrice?: number;
   desiredPrice?: number;
   allowCombine?: boolean;
-  loadMethod?: string;
-  unloadMethod?: string;
+  loadMethod: string;
+  unloadMethod: string;
   checklistItems?: QuoteChecklistItemRequest[];
+  quoteItems?: QuoteItemRequest[];
   stops?: QuoteStopRequest[];
 }
