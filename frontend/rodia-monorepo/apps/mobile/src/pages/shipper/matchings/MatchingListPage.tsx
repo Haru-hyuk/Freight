@@ -33,6 +33,7 @@ type MatchingItem = {
 };
 
 const TERMINAL_MATCH_STATUSES = new Set<string>([BACKEND_STATUS.CANCELED, BACKEND_STATUS.DROPOFF]);
+const FOCUS_REFETCH_THROTTLE_MS = 1500;
 
 function toSafeInt(value: unknown, fallback = 0): number {
   const parsed = typeof value === "number" ? value : Number(value);
@@ -150,6 +151,7 @@ export function MatchingListPage() {
   const theme = useAppTheme();
   const router = useRouter();
   const isMountedRef = useRef(true);
+  const focusRefetchMetaRef = useRef({ hasFocusedOnce: false, inFlight: false, lastRefetchAt: 0 });
 
   const [matchings, setMatchings] = useState<MatchingItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -197,11 +199,14 @@ export function MatchingListPage() {
     } as const;
   }, [cBlue, cMint, cBorder, subtleText]);
 
-  const loadMatches = useCallback(async () => {
+  const loadMatches = useCallback(async (mode: "initial" | "focus" | "manual" = "initial") => {
     if (!isMountedRef.current) return;
 
-    setIsLoading(true);
-    setErrorMessage(null);
+    const shouldShowBlockingLoader = mode === "initial" || mode === "manual";
+    if (shouldShowBlockingLoader) {
+      setIsLoading(true);
+      setErrorMessage(null);
+    }
 
     try {
       const list = await listShipperMatches();
@@ -213,10 +218,12 @@ export function MatchingListPage() {
     } catch (error) {
       if (!isMountedRef.current) return;
 
-      setMatchings([]);
+      if (shouldShowBlockingLoader) {
+        setMatchings([]);
+      }
       setErrorMessage(readErrorMessage(error));
     } finally {
-      if (isMountedRef.current) {
+      if (isMountedRef.current && shouldShowBlockingLoader) {
         setIsLoading(false);
       }
     }
@@ -224,15 +231,33 @@ export function MatchingListPage() {
 
   useEffect(() => {
     isMountedRef.current = true;
+    void loadMatches("initial");
 
     return () => {
       isMountedRef.current = false;
     };
-  }, []);
+  }, [loadMatches]);
 
   useFocusEffect(
     useCallback(() => {
-      void loadMatches();
+      const focusMeta = focusRefetchMetaRef.current;
+      if (!focusMeta.hasFocusedOnce) {
+        focusMeta.hasFocusedOnce = true;
+        return undefined;
+      }
+
+      const now = Date.now();
+      if (focusMeta.inFlight || now - focusMeta.lastRefetchAt < FOCUS_REFETCH_THROTTLE_MS) {
+        return undefined;
+      }
+
+      focusMeta.inFlight = true;
+      focusMeta.lastRefetchAt = now;
+      void loadMatches("focus").finally(() => {
+        focusMeta.inFlight = false;
+      });
+
+      return undefined;
     }, [loadMatches])
   );
 
@@ -245,7 +270,7 @@ export function MatchingListPage() {
         setCancellingMatchId(safeMatchId);
         await cancelShipperMatch(safeMatchId);
         if (!isMountedRef.current) return;
-        await loadMatches();
+        await loadMatches("manual");
       } catch (error) {
         if (!isMountedRef.current) return;
         Alert.alert("요청 취소 실패", readErrorMessage(error));
@@ -390,7 +415,9 @@ export function MatchingListPage() {
           title="매칭 목록을 불러오지 못했어요"
           description={errorMessage}
           retryLabel="다시 시도"
-          onRetry={loadMatches}
+          onRetry={() => {
+            void loadMatches("manual");
+          }}
           fullScreen={false}
         />
       ) : activeMatchings.length > 0 || completedMatchings.length > 0 ? (

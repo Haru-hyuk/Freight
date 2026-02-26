@@ -51,6 +51,7 @@ const POLICY_ACTION_UI_STATES: ReadonlySet<CustomerUiState> = new Set([
   CUSTOMER_UI_STATE.COMPLETED,
   CUSTOMER_UI_STATE.CANCELED,
 ]);
+const FOCUS_REFETCH_THROTTLE_MS = 1500;
 
 const EMPTY_MATCH_SNAPSHOT: MatchSnapshot = { cancelableMatch: null, nonCanceledMatch: null };
 const VEHICLE_SECTION_TITLES = new Set(["차량/화물", "차량 정보", "화물 정보"]);
@@ -554,6 +555,8 @@ export default function QuoteDetailPage() {
   const [matchHydrated, setMatchHydrated] = React.useState(false);
   const [bottomBarHeight, setBottomBarHeight] = React.useState(0);
   const matchLoadTokenRef = React.useRef(0);
+  const focusRefetchMetaRef = React.useRef({ hasFocusedOnce: false, lastRefetchAt: 0 });
+  const refreshInFlightRef = React.useRef<Promise<void> | null>(null);
 
   const quoteIdentifier = readRouteParamText(params.id);
   const routeQuoteId = parsePositiveIntParam(params.id);
@@ -595,9 +598,25 @@ export default function QuoteDetailPage() {
   }, []);
 
   const refreshQuoteAndMatchData = React.useCallback(async () => {
-    const tasks: Array<Promise<unknown>> = [view.refetch()];
-    if (actionQuoteId > 0) tasks.push(loadMatchSnapshot(actionQuoteId));
-    await Promise.all(tasks);
+    if (refreshInFlightRef.current) {
+      await refreshInFlightRef.current;
+      return;
+    }
+
+    const task = (async () => {
+      const tasks: Array<Promise<unknown>> = [view.refetch()];
+      if (actionQuoteId > 0) tasks.push(loadMatchSnapshot(actionQuoteId));
+      await Promise.all(tasks);
+    })();
+
+    refreshInFlightRef.current = task;
+    try {
+      await task;
+    } finally {
+      if (refreshInFlightRef.current === task) {
+        refreshInFlightRef.current = null;
+      }
+    }
   }, [actionQuoteId, loadMatchSnapshot, view.refetch]);
 
   React.useEffect(() => {
@@ -626,8 +645,20 @@ export default function QuoteDetailPage() {
 
   useFocusEffect(
     React.useCallback(() => {
-      if (actionQuoteId <= 0) return;
+      if (actionQuoteId <= 0) return undefined;
+
+      const focusMeta = focusRefetchMetaRef.current;
+      if (!focusMeta.hasFocusedOnce) {
+        focusMeta.hasFocusedOnce = true;
+        return undefined;
+      }
+
+      const now = Date.now();
+      if (now - focusMeta.lastRefetchAt < FOCUS_REFETCH_THROTTLE_MS) return undefined;
+      focusMeta.lastRefetchAt = now;
+
       void refreshQuoteAndMatchData();
+      return undefined;
     }, [actionQuoteId, refreshQuoteAndMatchData])
   );
 

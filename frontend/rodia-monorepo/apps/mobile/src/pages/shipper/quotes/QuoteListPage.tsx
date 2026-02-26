@@ -96,6 +96,7 @@ const SORT_OPTIONS: Array<{ key: QuoteListSort; label: string }> = [
   { key: "LATEST", label: "최신순" },
   { key: "PRICE", label: "금액순" },
 ];
+const FOCUS_REFETCH_THROTTLE_MS = 1500;
 
 const useStyles = createThemedStyles((theme) => {
   const c = theme.colors;
@@ -726,6 +727,7 @@ export default function QuoteListPage() {
   const theme = useAppTheme();
   const router = useRouter();
   const isMountedRef = useRef(true);
+  const focusRefetchMetaRef = useRef({ hasFocusedOnce: false, inFlight: false, lastRefetchAt: 0 });
 
   const [activeTab, setActiveTab] = useState<QuoteListTab>("ALL");
   const [activeSort, setActiveSort] = useState<QuoteListSort>("LATEST");
@@ -733,11 +735,14 @@ export default function QuoteListPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const loadQuoteList = useCallback(async () => {
+  const loadQuoteList = useCallback(async (mode: "initial" | "focus" | "manual" = "initial") => {
     if (!isMountedRef.current) return;
 
-    setIsLoading(true);
-    setErrorMessage(null);
+    const shouldShowBlockingLoader = mode === "initial" || mode === "manual";
+    if (shouldShowBlockingLoader) {
+      setIsLoading(true);
+      setErrorMessage(null);
+    }
 
     try {
       const response = await listShipperQuotes();
@@ -751,10 +756,12 @@ export default function QuoteListPage() {
           ? error.message.trim()
           : "견적 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.";
 
-      setQuotes([]);
+      if (shouldShowBlockingLoader) {
+        setQuotes([]);
+      }
       setErrorMessage(message);
     } finally {
-      if (isMountedRef.current) {
+      if (isMountedRef.current && shouldShowBlockingLoader) {
         setIsLoading(false);
       }
     }
@@ -762,15 +769,33 @@ export default function QuoteListPage() {
 
   useEffect(() => {
     isMountedRef.current = true;
+    void loadQuoteList("initial");
 
     return () => {
       isMountedRef.current = false;
     };
-  }, []);
+  }, [loadQuoteList]);
 
   useFocusEffect(
     useCallback(() => {
-      void loadQuoteList();
+      const focusMeta = focusRefetchMetaRef.current;
+      if (!focusMeta.hasFocusedOnce) {
+        focusMeta.hasFocusedOnce = true;
+        return undefined;
+      }
+
+      const now = Date.now();
+      if (focusMeta.inFlight || now - focusMeta.lastRefetchAt < FOCUS_REFETCH_THROTTLE_MS) {
+        return undefined;
+      }
+
+      focusMeta.inFlight = true;
+      focusMeta.lastRefetchAt = now;
+      void loadQuoteList("focus").finally(() => {
+        focusMeta.inFlight = false;
+      });
+
+      return undefined;
     }, [loadQuoteList])
   );
 
@@ -856,7 +881,9 @@ export default function QuoteListPage() {
             title="견적 목록을 불러오지 못했어요"
             description={errorMessage}
             retryLabel="다시 시도"
-            onRetry={loadQuoteList}
+            onRetry={() => {
+              void loadQuoteList("manual");
+            }}
             fullScreen={false}
           />
         ) : isFilteredEmpty ? (

@@ -10,6 +10,7 @@
   - `src/features/quote/api/quote-api.ts`의 상태 파서에 `ACCEPTED -> ASSIGNED`, `READY/REQUESTED -> OPEN` 매핑을 추가해 화주 상태가 `OPEN`으로 잘못 회귀되는 케이스를 보정함.
   - `src/pages/shipper/matchings/MatchingListPage.tsx`에서 `ACCEPTED` 상태를 진행 흐름으로 반영하고, focus 시점 자동 재조회로 Driver 수락/제안 이후 화주 화면 상태 반영을 보강함.
   - `src/pages/shipper/quotes/QuoteListPage.tsx`, `src/pages/shipper/quotes/QuoteDetailPage.tsx`에 focus 재조회 경로를 추가해 화면 복귀 시 최신 상태를 즉시 반영함.
+  - `QuoteDetail/QuoteList/MatchingList/DriverOrdersBoard`의 focus 재조회는 “첫 focus 스킵 + in-flight 방지 + 1.5초 throttle”로 통일해 과도 새로고침(중복 refetch)과 리스너성 중복 호출을 완화함.
   - `src/features/quote/model/quoteCreateDraft.ts`, `useQuoteCreateDraft.ts`, `quoteCreateRequestMapper.ts`, `QuoteCreatePage.tsx`에서 기본 품목값(박스) 및 품목 설명 직렬화를 보강하고, 부피 가드를 `0 이상` 기준으로 완화함.
 - 영향 범위:
   - 사용자 관점: Driver 오더마켓/상세의 공란 노출이 줄고, Driver 제안/수락 후 화주 목록·상세 상태 반영이 화면 복귀 시 더 안정적으로 갱신됨.
@@ -24,6 +25,7 @@
     - `src/pages/shipper/matchings/MatchingListPage.tsx`
     - `src/pages/shipper/quotes/QuoteListPage.tsx`
     - `src/pages/shipper/quotes/QuoteDetailPage.tsx`
+    - `src/widgets/driver-orders/DriverOrdersBoard.tsx`
     - `src/features/quote/model/quoteCreateDraft.ts`
     - `src/features/quote/model/useQuoteCreateDraft.ts`
     - `src/features/quote/model/quoteCreateRequestMapper.ts`
