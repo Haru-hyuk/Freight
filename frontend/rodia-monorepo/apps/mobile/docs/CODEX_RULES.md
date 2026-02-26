@@ -1,7 +1,7 @@
 # Codex Execution Rules (Mobile)
 
 ## Scope
-- 작업 기준 경로: `c:\lce\Freight\frontend\rodia-monorepo/apps/mobile`
+- 작업 기준 경로: `c:\lce\Freight\frontend\rodia-monorepo\apps\mobile`
 - 역할: 시니어 프론트엔드 개발자
 
 ## PowerShell Rules
@@ -76,6 +76,8 @@
 - 한 번에 많은 파일에 한국어 문자열을 추가하지 않는다.
 
 ## Preflight (Mandatory)
+> **브랜치 작업 시작 전 반드시 실행한다. 생략 불가.**
+
 ```bash
 git -C frontend/rodia-monorepo status --porcelain
 pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false
@@ -83,6 +85,8 @@ pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental fals
 - dirty 파일이 이번 PR 범위 외 변경이면 되돌리거나 별도 PR로 분리한다.
 
 ## Branch Creation (Workstream)
+> **신규 브랜치 생성 시 반드시 아래 순서대로 실행한다.**
+
 ```bash
 git switch develop
 git pull
@@ -93,12 +97,15 @@ git switch -c <workstream-브랜치명>
 - 포맷은 `type(scope): <한국어 설명>`을 사용한다.
 - `type(scope)`는 영문, 설명은 한국어로 작성한다.
 - 타입은 `feat`, `refactor`, `chore`, `fix`만 사용한다.
+- **커밋은 2~3개 고정**이다. 한 커밋으로 충분한 경우 1개도 허용한다.
 - 예시:
   - `refactor(driver): 운행 라우팅 정합성 및 정책 소비 수렴`
   - `refactor(driver-orders): uiState 정렬/tie-break 기준 통일`
   - `chore(debug): 검증 진입점 추가 및 문서/체인지로그 정리`
 
 ## Pre-PR Verification (Mandatory)
+> **PR 생성 전 반드시 실행한다. 오류가 있으면 PR을 열지 않는다.**
+
 ```bash
 pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .
 pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false
@@ -108,13 +115,48 @@ pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental fals
 ## Manual Test Result Rules
 - 수동 테스트 결과 값은 `PASS`, `FAIL`, `NOT RUN`, `PARTIAL`만 사용한다.
 
-## Final Output Format
-1. Change Log 요약 (한국어)
-2. 수정 파일 목록 (Added / Modified / Deleted)
-3. 검증 결과 (eslint / tsc)
-4. 수동 테스트 체크리스트 (`PASS` / `FAIL` / `NOT RUN` / `PARTIAL`)
-5. Git 명령 블록 (자동 실행 금지, 사용자가 직접 실행)
+---
 
+## Branch Completion Checklist (Mandatory)
+> **A1 / A2 / B1 / C1 / D1 등 브랜치 작업이 완료될 때마다 아래 순서를 빠짐없이 수행한다.**
+> 하나라도 생략하면 완료로 간주하지 않는다.
+
+### Step 1 — Pre-PR Verification
+```bash
+pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .
+pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false
+```
+
+### Step 2 — CHANGELOG 기록
+- `docs/CHANGELOG.template.md` 기준으로 `docs/CHANGELOG.md`에 신규 항목을 추가한다.
+- 필수 섹션: `PR/브랜치` / `범주 태그` / `변경 요약` / `영향 범위` / `파일 변경 목록` / `검증 결과` / `미해결 항목` / `후속 작업`
+- 비어 있는 필드는 `없음`으로 명시한다. 생략 불가.
+
+### Step 3 — Final Output 출력
+브랜치 완료 응답은 반드시 아래 형식으로 출력한다.
+
+**1. Change Log 요약 (한국어)**
+> 이번 브랜치에서 변경된 내용을 3~5줄로 요약한다.
+
+**2. 수정 파일 목록**
+| 구분 | 파일 경로 |
+|------|-----------|
+| Added | `...` |
+| Modified | `...` |
+| Deleted | `...` |
+
+**3. 검증 결과**
+| 항목 | 결과 |
+|------|------|
+| eslint | PASS / FAIL |
+| tsc | PASS / FAIL |
+
+**4. 수동 테스트 체크리스트**
+| 시나리오 | 결과 |
+|----------|------|
+| ... | PASS / FAIL / NOT RUN / PARTIAL |
+
+**5. Git 명령 블록** (자동 실행 금지 — 사용자가 직접 실행)
 ```bash
 # 브랜치 생성 (없을 경우만)
 git switch develop
@@ -128,6 +170,8 @@ git commit -m "<type>(<scope>): <한국어 설명>"
 # 푸시/PR 생성은 사용자가 직접
 git push -u origin HEAD
 ```
+
+---
 
 ## Git Operation Rules
 - Git 명령은 기본적으로 안내를 우선한다.
