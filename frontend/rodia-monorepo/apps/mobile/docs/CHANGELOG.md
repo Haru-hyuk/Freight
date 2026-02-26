@@ -86,6 +86,32 @@
 - 후속 작업 (다음 PR 후보):
   - [ ] auth 서버 스펙 문서에 driver/shipper signup 필수 필드 및 응답 ID 필드 계약을 명시하고 클라이언트 계약 테스트 추가 검토
 
+- PR/브랜치: `work/mobile-quote-baseprice-guard`
+- 범주 태그: `[api] [policy] [ui]`
+- 변경 요약:
+  - `src/features/quote/model/quoteCreateRequestMapper.ts`에서 견적 생성 payload에 `basePrice`를 포함하도록 수정함.
+  - `basePrice` 매핑은 `draft.basePrice ?? draft.desiredPrice ?? 0` 기준으로만 해석하고, mapper 단계에서 임의 보정값을 넣지 않도록 유지함.
+  - `src/pages/shipper/quotes/QuoteCreatePage.tsx` submit 직전에 `basePrice > 0` 가드를 추가해 미충족 시 에러를 노출하고 요청을 차단함.
+- 영향 범위:
+  - 사용자 관점: 기본 운임이 확정되지 않은 상태에서는 견적 요청이 진행되지 않고 즉시 안내 메시지가 노출됨.
+  - 개발자 관점: 견적 생성 payload에 `basePrice`가 명시적으로 포함되고, submit SSOT 가드가 추가되어 전송 조건이 명확해짐.
+- 파일 변경 목록:
+  - 수정:
+    - `src/features/quote/model/quoteCreateRequestMapper.ts`
+    - `src/pages/shipper/quotes/QuoteCreatePage.tsx`
+    - `docs/CHANGELOG.md`
+  - 추가:
+    - 없음
+  - 삭제:
+    - 없음
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과
+- 미해결 항목 (이번 PR에서 실패/포기한 작업):
+  - 없음
+- 후속 작업 (다음 PR 후보):
+  - [ ] `features/quote/api/quote-api.ts` sanitize 경로에서도 `basePrice` 전달 보존이 필요한지 서버 스펙 기준으로 점검
+
 ## 2026-02-25
 - PR/브랜치: `work/format-utils-migration`
 - 범주 태그: `[refactor] [ui] [infra]`
@@ -546,5 +572,4 @@
   - `features/matching/api/shipper-match-api.ts`, `features/counter-offer/api/counter-offer-api.ts`, `features/matching/api/driver-orders-api.ts`의 상태 normalize 중복 정리
   - `features/quote/model/quoteActionMatrix.ts`와 `pages/shipper/quotes/QuoteDetailPage.tsx`의 CTA 정책 소스 일치화
   - Driver/Shipper 상세/목록 흐름에서 정책 모듈 적용 범위를 단계적으로 확대
-
 
