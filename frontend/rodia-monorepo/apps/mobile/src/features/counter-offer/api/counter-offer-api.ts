@@ -146,7 +146,7 @@ export async function listShipperCounterOffers(quoteId: number): Promise<Counter
     return toCounterOfferList(listMockFlowShipperCounterOffers(safeQuoteId));
   }
 
-  const data = await getShipperCounterOffersGenerated(String(safeQuoteId));
+  const data = await getShipperCounterOffersGenerated(safeQuoteId);
   return toCounterOfferList(data);
 }
 
@@ -160,7 +160,7 @@ export async function acceptShipperCounterOffer(offerId: number): Promise<void> 
     return;
   }
 
-  await acceptShipperCounterOfferGenerated(String(safeOfferId));
+  await acceptShipperCounterOfferGenerated(safeOfferId);
 }
 
 export async function rejectShipperCounterOffer(offerId: number): Promise<void> {
@@ -173,7 +173,7 @@ export async function rejectShipperCounterOffer(offerId: number): Promise<void> 
     return;
   }
 
-  await rejectShipperCounterOfferGenerated(String(safeOfferId));
+  await rejectShipperCounterOfferGenerated(safeOfferId);
 }
 
 export async function createDriverCounterOffer(
@@ -197,7 +197,7 @@ export async function createDriverCounterOffer(
     return toSingleCounterOffer(createMockFlowDriverCounterOffer(safeQuoteId, payload));
   }
 
-  const data = await createDriverCounterOfferGenerated(String(safeQuoteId), payload);
+  const data = await createDriverCounterOfferGenerated(safeQuoteId, payload);
   return toSingleCounterOffer(data);
 }
 
