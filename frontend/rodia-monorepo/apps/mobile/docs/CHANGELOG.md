@@ -93,6 +93,7 @@
   - `src/pages/shipper/quotes/QuoteCreatePage.tsx` submit SSOT에 `basePrice > 0` 및 `loadMethod/unloadMethod` actor-only 최종 가드를 추가해 미충족 시 요청을 차단함.
   - 주소 확정 후 좌표 준비 판단이 실제 플로우와 맞도록 좌표 필드 해석을 보강하고, 좌표 미준비 안내 문구를 “주소 검색 결과 선택으로 위치 확정” 중심으로 정리함.
   - 좌표 검증은 단일 값 체크에서 위도/경도 쌍 검증(`lat<=90`, `lng<=180`)으로 변경해 정상 경도 값(예: 126.x)이 차단되지 않도록 보정함.
+  - `src/features/quote/ui/QuoteCreateStep1.tsx`에서 출발/도착 좌표가 준비되면 하버사인 기반 추정 거리(`distanceKm`)를 자동 반영해 submit distance 가드와 플로우를 일치시킴.
   - `src/features/quote/api/quote-api.ts` sanitize 경로를 정규화 중심으로 정리하고, `basePrice` 보존 및 상하차 actor-only 마지막 방어를 고정함.
   - `src/features/quote/model/workMethod.ts`에 actor-only 판별 함수(`isActorOnlyWorkMethod`)를 추가해 page/api가 동일 기준을 사용하도록 맞춤.
 - 영향 범위:

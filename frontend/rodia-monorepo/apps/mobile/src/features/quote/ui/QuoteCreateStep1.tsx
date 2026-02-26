@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   LayoutAnimation,
   Modal,
@@ -28,6 +28,7 @@ import {
 } from "@/features/quote/ui/QuoteCreateUiPrimitives";
 import { initLayoutAnimationForAndroid } from "@/shared/lib/ui/layoutAnimationInit";
 import { QUOTE_CREATE_STEP1 } from "@/shared/lib/dev/mockPayloads";
+import { estimateRouteKm, isValidCoord, type LatLng } from "@/shared/lib/geo/distance";
 import { safeNumber, tint } from "@/shared/theme/colorUtils";
 import type { AppTheme } from "@/shared/theme/types";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
@@ -64,6 +65,49 @@ type CoordinateResolveTask = {
   placeId?: string;
   details?: unknown;
 };
+
+function toFiniteNumber(value: unknown): number | null {
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function toResolvedDistanceKm(params: {
+  originLat: unknown;
+  originLng: unknown;
+  destinationLat: unknown;
+  destinationLng: unknown;
+  waypoints: Waypoint[];
+}): number {
+  const originLat = toFiniteNumber(params.originLat);
+  const originLng = toFiniteNumber(params.originLng);
+  const destinationLat = toFiniteNumber(params.destinationLat);
+  const destinationLng = toFiniteNumber(params.destinationLng);
+
+  if (
+    originLat === null ||
+    originLng === null ||
+    destinationLat === null ||
+    destinationLng === null ||
+    !isValidCoord(originLat, originLng) ||
+    !isValidCoord(destinationLat, destinationLng)
+  ) {
+    return 0;
+  }
+
+  const points: LatLng[] = [{ lat: originLat, lng: originLng }];
+  for (const waypoint of params.waypoints ?? []) {
+    const lat = toFiniteNumber(waypoint?.lat);
+    const lng = toFiniteNumber(waypoint?.lng);
+    if (lat === null || lng === null) continue;
+    if (!isValidCoord(lat, lng)) continue;
+    points.push({ lat, lng });
+  }
+  points.push({ lat: destinationLat, lng: destinationLng });
+
+  const estimatedKm = estimateRouteKm(points);
+  if (!Number.isFinite(estimatedKm) || estimatedKm <= 0) return 0;
+  return Math.max(1, Math.round(estimatedKm));
+}
 
 const useStyles = createThemedStyles((theme: AppTheme) => {
   const c = theme.colors;
@@ -200,6 +244,34 @@ export function QuoteCreateStep1() {
 
   const waypoints = draft?.waypoints ?? [];
   const canAddWaypoint = waypoints.length < MAX_WAYPOINTS;
+  const waypointCoordSignature = useMemo(
+    () => waypoints.map((waypoint) => `${waypoint?.id ?? 0}:${waypoint?.lat ?? ""}:${waypoint?.lng ?? ""}`).join("|"),
+    [waypoints]
+  );
+
+  useEffect(() => {
+    const nextDistanceKm = toResolvedDistanceKm({
+      originLat: draft?.originLat,
+      originLng: draft?.originLng,
+      destinationLat: draft?.destinationLat,
+      destinationLng: draft?.destinationLng,
+      waypoints,
+    });
+    const currentDistanceRaw = Number(draft?.distanceKm);
+    const currentDistanceKm = Number.isFinite(currentDistanceRaw) ? Math.trunc(currentDistanceRaw) : 0;
+    if (currentDistanceKm === nextDistanceKm) return;
+
+    patchDraft({ distanceKm: nextDistanceKm });
+  }, [
+    draft?.originLat,
+    draft?.originLng,
+    draft?.destinationLat,
+    draft?.destinationLng,
+    draft?.distanceKm,
+    patchDraft,
+    waypointCoordSignature,
+    waypoints,
+  ]);
 
   const openPostcode = (type: "start" | "end" | number) => {
     setTargetField(type);
