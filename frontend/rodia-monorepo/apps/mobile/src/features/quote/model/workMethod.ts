@@ -31,6 +31,12 @@ function toText(value: unknown): string {
   return String(value ?? "").trim();
 }
 
+function parseActorToken(value: string): WorkActor | null {
+  const token = value.split(":", 1)[0]?.trim().toUpperCase();
+  if (token === "SHIPPER" || token === "DRIVER") return token;
+  return null;
+}
+
 function parseActor(value: string): WorkActor | null {
   const normalized = value.toUpperCase();
   if (normalized.startsWith("SHIPPER")) return "SHIPPER";
@@ -69,13 +75,25 @@ export function normalizeWorkMethodValue(value: unknown, fallback: QuoteWorkMeth
 }
 
 export function mapDraftWorkMethodToApi(value: unknown): QuoteWorkMethod {
-  return normalizeWorkMethodValue(value, DEFAULT_LOAD_METHOD);
+  return toActorOnlyWorkMethod(value, DEFAULT_LOAD_METHOD);
 }
 
-export function toActorOnlyWorkMethod(value: unknown): QuoteWorkMethod {
-  const normalized = normalizeWorkMethodValue(value, DEFAULT_LOAD_METHOD);
-  const actor = parseActor(normalized);
-  return actor === "SHIPPER" ? "SHIPPER" : "DRIVER";
+export function toActorOnlyWorkMethod(
+  value: unknown,
+  fallback: QuoteWorkMethod = DEFAULT_LOAD_METHOD
+): WorkActor {
+  const fallbackActor = parseActorToken(toText(fallback)) ?? "DRIVER";
+  const raw = toText(value);
+  if (!raw) return fallbackActor;
+
+  const actorFromToken = parseActorToken(raw);
+  if (actorFromToken) return actorFromToken;
+
+  const actor = parseActor(raw);
+  if (actor) return actor;
+
+  const normalized = normalizeWorkMethodValue(raw, fallback);
+  return parseActorToken(normalized) ?? fallbackActor;
 }
 
 export function toDraftLoadMethod(value: unknown): QuoteWorkMethod {
