@@ -43,14 +43,14 @@ export type QuoteStopRequestDto = {
 };
 
 export type QuoteCreateRequestDto = {
-  truckId: number;
+  truckId?: number;
   originAddress: string;
   destinationAddress: string;
   originLat: number;
   originLng: number;
   destinationLat: number;
   destinationLng: number;
-  distanceKm: number;
+  distanceKm?: number;
   weightKg: number;
   volumeCbm: number;
   vehicleType: QuoteVehicleType;
