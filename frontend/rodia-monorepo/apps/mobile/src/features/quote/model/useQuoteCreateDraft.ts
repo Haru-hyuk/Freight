@@ -26,7 +26,7 @@ function createEmptyCargoItem(id: number): CargoItem {
   return {
     id,
     itemCategory: "BOX",
-    type: "",
+    type: "박스",
     quantity: "1",
     lengthCm: "",
     widthCm: "",

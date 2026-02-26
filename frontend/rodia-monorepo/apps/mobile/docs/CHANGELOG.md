@@ -2,18 +2,32 @@
 
 ## 2026-02-26
 - PR/브랜치: `work/mobile-driver-api-align`
-- 범주 태그: `[api] [policy]`
+- 범주 태그: `[api] [policy] [ui]`
 - 변경 요약:
   - `src/features/matching/model/useMatchDetail.ts`에서 Driver 상세 quote 조회를 `getShipperQuoteDetailByIdentifier` 대신 Driver 전용 summary 로더로 교체함.
-  - `src/features/matching/api/driver-orders-api.ts`에 `getDriverQuoteSummaryDetail`를 추가하고, Driver 목록 quote 조회도 `/api/driver/quotes/{quoteId}/summary` 기반으로 통일함.
-  - generated `getQuoteSummary` 응답 타입이 `Blob`으로 생성된 경우까지 포함해 payload 파싱을 정규화하고, Driver 화면에서 필요한 quote 필드를 최소 매핑하도록 정리함.
+  - `src/features/matching/api/driver-orders-api.ts`에서 Driver summary 응답의 래퍼(`data/result/payload/quote/summary`)와 Blob/JSON 파싱을 정규화해 카드/상세용 필드 누락을 줄임.
+  - `src/features/matching/api/driver-orders-parser.ts`와 `driver-orders-mapper.ts`에서 화물/운임 파생값 fallback(`cargoName -> cargoDesc -> cargoType`, `final -> desired -> base`)을 추가해 오더마켓 카드 공란 노출을 완화함.
+  - `src/features/quote/api/quote-api.ts`의 상태 파서에 `ACCEPTED -> ASSIGNED`, `READY/REQUESTED -> OPEN` 매핑을 추가해 화주 상태가 `OPEN`으로 잘못 회귀되는 케이스를 보정함.
+  - `src/pages/shipper/matchings/MatchingListPage.tsx`에서 `ACCEPTED` 상태를 진행 흐름으로 반영하고, focus 시점 자동 재조회로 Driver 수락/제안 이후 화주 화면 상태 반영을 보강함.
+  - `src/pages/shipper/quotes/QuoteListPage.tsx`, `src/pages/shipper/quotes/QuoteDetailPage.tsx`에 focus 재조회 경로를 추가해 화면 복귀 시 최신 상태를 즉시 반영함.
+  - `src/features/quote/model/quoteCreateDraft.ts`, `useQuoteCreateDraft.ts`, `quoteCreateRequestMapper.ts`, `QuoteCreatePage.tsx`에서 기본 품목값(박스) 및 품목 설명 직렬화를 보강하고, 부피 가드를 `0 이상` 기준으로 완화함.
 - 영향 범위:
-  - 사용자 관점: Driver 상세/목록에서 화주 전용 quote API 호출로 인한 권한 오류(403) 가능성을 줄이고 Driver 전용 조회 경로로 동작이 일치함.
-  - 개발자 관점: Driver 화면의 quote 데이터 소스가 Driver API로 단일화되어 API 정합성 추적이 쉬워짐.
+  - 사용자 관점: Driver 오더마켓/상세의 공란 노출이 줄고, Driver 제안/수락 후 화주 목록·상세 상태 반영이 화면 복귀 시 더 안정적으로 갱신됨.
+  - 개발자 관점: Driver quote summary 파싱 경계와 화주 상태 반영 경로(focus refetch + 상태 정규화)가 명확해져 API 정합성 디버깅이 쉬워짐.
 - 파일 변경 목록:
   - 수정:
-    - `src/features/matching/model/useMatchDetail.ts`
     - `src/features/matching/api/driver-orders-api.ts`
+    - `src/features/matching/api/driver-orders-parser.ts`
+    - `src/features/matching/api/driver-orders-mapper.ts`
+    - `src/features/matching/model/useMatchDetail.ts`
+    - `src/features/quote/api/quote-api.ts`
+    - `src/pages/shipper/matchings/MatchingListPage.tsx`
+    - `src/pages/shipper/quotes/QuoteListPage.tsx`
+    - `src/pages/shipper/quotes/QuoteDetailPage.tsx`
+    - `src/features/quote/model/quoteCreateDraft.ts`
+    - `src/features/quote/model/useQuoteCreateDraft.ts`
+    - `src/features/quote/model/quoteCreateRequestMapper.ts`
+    - `src/pages/shipper/quotes/QuoteCreatePage.tsx`
     - `docs/CHANGELOG.md`
   - 추가:
     - 없음
@@ -23,9 +37,10 @@
   - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
   - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과
 - 미해결 항목 (이번 PR에서 실패/포기한 작업):
-  - Driver 화면 수동 네트워크 검증 2건 수행 — 원인: CLI 환경에서 앱 실행/네트워크 패널 검증 불가 / PR QA에서 확인 필요
+  - Driver/화주 수동 네트워크 검증 4건 수행 — 원인: CLI 환경에서 앱 실행/네트워크 패널 검증 불가 / PR QA에서 확인 필요
 - 후속 작업 (다음 PR 후보):
-  - [ ] Driver 계정으로 매칭 상세 진입 시 `/api/shipper/quotes` 호출 0회, `/api/driver/quotes/{id}/summary` 호출 여부를 네트워크 패널에서 확인
+  - [ ] Driver 오더마켓/상세에서 quote summary 응답 필드(출/도착/거리/운임)가 카드와 상세에 채워지는지 실서버로 확인
+  - [ ] Driver 수락/제안 후 화주 `QuoteListPage`/`MatchingListPage`/`QuoteDetailPage` 복귀 시 상태 반영(요청접수→배차완료/협의중) 확인
 
 - PR/브랜치: `work/mobile-auth-signup-strict-id`
 - 범주 태그: `[api] [policy]`
