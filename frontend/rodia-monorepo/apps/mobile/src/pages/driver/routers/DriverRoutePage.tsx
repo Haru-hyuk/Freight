@@ -1,3 +1,4 @@
+// apps/mobile/src/pages/driver/routes/DriverRoutePage.tsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -16,7 +17,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   buildDriverOrderDetailParams,
   getDriverOrderFilterLabel,
-  getDriverQuoteSummaryDetail,
   loadDriverOrdersOverview,
   matchesDriverOrderFilter,
   probeDriverOrderDetailAccess,
@@ -26,12 +26,12 @@ import {
   type DriverOrdersOverview,
   type DriverOrdersTabKey,
 } from "@/features/matching/api";
-import { useActiveOrder } from "@/entities/order/model/active-order.store";
-import {
-  readDriverOrdersAiTooltipSeen,
-  writeDriverOrdersAiTooltipSeen,
-} from "@/shared/lib/storage/driverOrdersStorage";
-import { BADGE_TONE, type BadgeTone } from "@/shared/lib/policy";
+import { readDriverOrdersAiTooltipSeen, writeDriverOrdersAiTooltipSeen } from "@/shared/lib/storage/driverOrdersStorage";
+import { getDriverBadge } from "@/shared/lib/policy/badgePolicy";
+import { normalizeStatus } from "@/shared/lib/policy/normalizeStatus";
+import { DELIVERY_PROGRESS_STEPS, getActiveStepIndex } from "@/shared/lib/policy/progressPolicy";
+import { getDriverCta, getDriverUiStateFromBackendStatus } from "@/shared/lib/policy/driverPolicy";
+import { BADGE_TONE, CTA_VARIANT, type BadgeTone, type CtaVariant, type DriverUiState } from "@/shared/lib/policy/types";
 import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppButton } from "@/shared/ui/kit/AppButton";
@@ -42,19 +42,11 @@ import { AppSpinner } from "@/shared/ui/kit/AppSpinner";
 import { AppText } from "@/shared/ui/kit/AppText";
 import { PageScaffold } from "@/widgets/layout/PageScaffold";
 
-type DriverOrdersBoardProps = {
-  activeTab: DriverOrdersTabKey;
-  onChangeTab: (nextTab: DriverOrdersTabKey) => void;
-};
+type ToastState = { visible: boolean; message: string };
 
-type ToastState = {
-  visible: boolean;
-  message: string;
-};
-
-const NETWORK_ERROR_TEXT = "네트워크 요청에 실패했습니다. 잠시 후 다시 시도해 주세요.";
 const TOAST_DURATION_MS = 2000;
 const FOCUS_REFETCH_THROTTLE_MS = 1500;
+const NETWORK_ERROR_TEXT = "네트워크 요청에 실패했습니다. 잠시 후 다시 시도해 주세요.";
 
 const EMPTY_OVERVIEW: DriverOrdersOverview = {
   marketOrders: [],
@@ -106,61 +98,96 @@ function resolveStatusStripPalette(
   };
 }
 
-function resolveTagPalette(tagKey: string, colors: Record<string, string>): { bg: string; border: string; text: string } {
-  if (tagKey === "AI_RECOMMENDED") {
-    return {
-      bg: tint(colors.semanticInfo, 0.12, colors.bgSurface),
-      border: tint(colors.semanticInfo, 0.25, colors.borderDefault),
-      text: colors.semanticInfo,
-    };
-  }
-  if (tagKey === "URGENT") {
-    return {
-      bg: tint(colors.semanticDanger, 0.12, colors.bgSurface),
-      border: tint(colors.semanticDanger, 0.25, colors.borderDefault),
-      text: colors.semanticDanger,
-    };
-  }
-  if (tagKey === "COMBINED") {
-    return {
-      bg: tint(colors.semanticWarning, 0.12, colors.bgSurface),
-      border: tint(colors.semanticWarning, 0.25, colors.borderDefault),
-      text: colors.semanticWarning,
-    };
-  }
-  return {
-    bg: tint(colors.brandPrimary, 0.12, colors.bgSurface),
-    border: tint(colors.brandPrimary, 0.25, colors.borderDefault),
-    text: colors.brandPrimary,
-  };
+function toButtonVariant(variant: CtaVariant): "primary" | "secondary" | "destructive" {
+  if (variant === CTA_VARIANT.PRIMARY) return "primary";
+  if (variant === CTA_VARIANT.DESTRUCTIVE) return "destructive";
+  return "secondary";
+}
+
+function getRawStatus(card: DriverOrderCard): string {
+  const anyCard = card as unknown as Record<string, unknown>;
+  return safeString(
+    anyCard.rawBackendStatus ??
+      anyCard.backendStatus ??
+      anyCard.matchStatus ??
+      anyCard.status ??
+      anyCard.quoteStatus ??
+      "",
+    ""
+  );
+}
+
+function getDriverUiState(card: DriverOrderCard): DriverUiState {
+  const anyCard = card as unknown as Record<string, unknown>;
+  const uiState = anyCard.uiStateForDriver as DriverUiState | undefined;
+  if (uiState) return uiState;
+  return getDriverUiStateFromBackendStatus(getRawStatus(card));
+}
+
+function resolveSecondaryCtaLabel(uiState: DriverUiState, rawBackendStatus: string): string {
+  const normalized = normalizeStatus(rawBackendStatus);
+  if (uiState === "READY_TO_ACCEPT") return "운임 제안";
+  if (uiState === "NEGOTIATING") return "상세 보기";
+  if (uiState === "ASSIGNED" && normalized === "ASSIGNED") return "안내 보기";
+  if (uiState === "ASSIGNED") return "요청 보기";
+  if (uiState === "PICKUP_IN_PROGRESS" || uiState === "TRANSIT_IN_PROGRESS") return "요청 보기";
+  return "상세 보기";
 }
 
 const useStyles = createThemedStyles((theme) => {
   const spacing = safeNumber(theme?.layout?.spacing?.base, 4);
+
   const cSurface = safeString(theme?.colors?.bgSurface, "#FFFFFF");
   const cSurfaceAlt = safeString(theme?.colors?.bgSurfaceAlt, "#F8FAFC");
   const cLine = safeString(theme?.colors?.borderDefault, "#E2E8F0");
+
   const cTextMain = safeString(theme?.colors?.textMain, "#111827");
   const cTextSub = safeString(theme?.colors?.textSub, "#334155");
   const cTextMuted = safeString(theme?.colors?.textMuted, "#64748B");
   const cPrimary = safeString(theme?.colors?.brandPrimary, "#FF6A00");
 
   return StyleSheet.create({
-    root: {
-      flex: 1,
-      backgroundColor: cSurfaceAlt,
-    },
-    tabsWrap: {
+    root: { flex: 1, backgroundColor: cSurfaceAlt },
+    headerRow: {
       paddingHorizontal: spacing * 5,
       paddingTop: spacing * 3,
       paddingBottom: spacing * 2,
-      backgroundColor: cSurfaceAlt,
-    },
-    tabRow: {
       flexDirection: "row",
       alignItems: "center",
+      justifyContent: "space-between",
       gap: spacing * 2,
+      backgroundColor: cSurfaceAlt,
     },
+    headerTitle: {
+      color: cTextMain,
+      fontSize: safeNumber(theme?.typography?.scale?.heading?.size, 18) + 2,
+      lineHeight: safeNumber(theme?.typography?.scale?.heading?.lineHeight, 26) + 2,
+      fontWeight: "900",
+      letterSpacing: -0.3,
+    },
+    countPill: {
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: tint(cPrimary, 0.3, cLine),
+      backgroundColor: tint(cPrimary, 0.12, cSurface),
+      paddingHorizontal: spacing * 3,
+      minHeight: 28,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    countText: {
+      color: cPrimary,
+      fontSize: safeNumber(theme?.typography?.scale?.caption?.size, 12) + 1,
+      lineHeight: safeNumber(theme?.typography?.scale?.caption?.lineHeight, 16) + 2,
+      fontWeight: "900",
+    },
+
+    tabsWrap: {
+      paddingHorizontal: spacing * 5,
+      paddingBottom: spacing * 2,
+      backgroundColor: cSurfaceAlt,
+    },
+    tabRow: { flexDirection: "row", alignItems: "center", gap: spacing * 2 },
     tabButton: {
       flex: 1,
       borderWidth: 1,
@@ -184,9 +211,7 @@ const useStyles = createThemedStyles((theme) => {
       lineHeight: safeNumber(theme?.typography?.scale?.detail?.lineHeight, 20) + 2,
       fontWeight: "800",
     },
-    tabLabelActive: {
-      color: cPrimary,
-    },
+    tabLabelActive: { color: cPrimary },
     tabBadge: {
       minWidth: 22,
       height: 22,
@@ -204,6 +229,7 @@ const useStyles = createThemedStyles((theme) => {
       lineHeight: safeNumber(theme?.typography?.scale?.caption?.lineHeight, 16),
       fontWeight: "900",
     },
+
     stickyFilterWrap: {
       paddingHorizontal: spacing * 5,
       paddingVertical: spacing * 2,
@@ -211,11 +237,7 @@ const useStyles = createThemedStyles((theme) => {
       borderBottomWidth: 1,
       borderBottomColor: tint(cLine, 0.85, cLine),
     },
-    filterScroll: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing * 2,
-    },
+    filterScroll: { flexDirection: "row", alignItems: "center", gap: spacing * 2 },
     filterChip: {
       minHeight: 36,
       borderRadius: 999,
@@ -236,18 +258,13 @@ const useStyles = createThemedStyles((theme) => {
       lineHeight: safeNumber(theme?.typography?.scale?.detail?.lineHeight, 20),
       fontWeight: "800",
     },
-    filterChipTextActive: {
-      color: cPrimary,
-      fontWeight: "900",
-    },
-    listContent: {
-      paddingHorizontal: spacing * 5,
-      paddingTop: spacing * 3,
-      paddingBottom: spacing * 24,
-    },
-    cardPressable: {
-      position: "relative",
-    },
+    filterChipTextActive: { color: cPrimary, fontWeight: "900" },
+
+    listContent: { paddingHorizontal: spacing * 5, paddingTop: spacing * 3, paddingBottom: spacing * 28 },
+    separator: { height: spacing * 3 },
+
+    cardPressable: { position: "relative" },
+    cardPressed: { opacity: 0.86 },
     cardStrip: {
       position: "absolute",
       left: 0,
@@ -265,43 +282,11 @@ const useStyles = createThemedStyles((theme) => {
       paddingBottom: spacing * 4,
       gap: spacing * 3,
     },
-    topRow: {
-      flexDirection: "row",
-      alignItems: "flex-start",
-      justifyContent: "space-between",
-      gap: spacing * 2,
-    },
-    tagsRow: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: spacing,
-      flex: 1,
-    },
-    tagChip: {
-      borderRadius: 999,
-      borderWidth: 1,
-      minHeight: 24,
-      paddingHorizontal: spacing * 2,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    tagText: {
-      fontSize: safeNumber(theme?.typography?.scale?.caption?.size, 12),
-      lineHeight: safeNumber(theme?.typography?.scale?.caption?.lineHeight, 16),
-      fontWeight: "900",
-    },
-    topMeta: {
-      alignItems: "flex-end",
-      gap: 2,
-      minWidth: 84,
-    },
-    topMetaText: {
-      color: cTextMuted,
-      fontSize: safeNumber(theme?.typography?.scale?.caption?.size, 12),
-      lineHeight: safeNumber(theme?.typography?.scale?.caption?.lineHeight, 16),
-      fontWeight: "700",
-    },
+
+    topRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: spacing * 2 },
+    topLeft: { flex: 1, gap: spacing },
     statusChip: {
+      alignSelf: "flex-start",
       minHeight: 24,
       borderRadius: 999,
       borderWidth: 1,
@@ -315,6 +300,31 @@ const useStyles = createThemedStyles((theme) => {
       fontWeight: "900",
       letterSpacing: -0.2,
     },
+    stepChip: {
+      alignSelf: "flex-start",
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: tint(cTextMuted, 0.35, cLine),
+      backgroundColor: tint(cTextMuted, 0.08, cSurface),
+      minHeight: 24,
+      paddingHorizontal: spacing * 2,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    stepChipText: {
+      color: cTextMuted,
+      fontSize: safeNumber(theme?.typography?.scale?.caption?.size, 12),
+      lineHeight: safeNumber(theme?.typography?.scale?.caption?.lineHeight, 16),
+      fontWeight: "800",
+    },
+    topRight: { alignItems: "flex-end", gap: 2, minWidth: 88 },
+    metaText: {
+      color: cTextMuted,
+      fontSize: safeNumber(theme?.typography?.scale?.caption?.size, 12),
+      lineHeight: safeNumber(theme?.typography?.scale?.caption?.lineHeight, 16),
+      fontWeight: "700",
+    },
+
     routeWrap: {
       borderWidth: 1,
       borderColor: tint(cLine, 0.9, cLine),
@@ -326,10 +336,7 @@ const useStyles = createThemedStyles((theme) => {
       alignItems: "center",
       gap: spacing * 2,
     },
-    routeCol: {
-      flex: 1,
-      gap: 2,
-    },
+    routeCol: { flex: 1, gap: 2 },
     routeLabel: {
       color: cTextMuted,
       fontSize: safeNumber(theme?.typography?.scale?.caption?.size, 12),
@@ -342,12 +349,8 @@ const useStyles = createThemedStyles((theme) => {
       lineHeight: safeNumber(theme?.typography?.scale?.detail?.lineHeight, 20) + 2,
       fontWeight: "900",
     },
-    routeCenter: {
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 4,
-      minWidth: 74,
-    },
+    routeCenter: { alignItems: "center", justifyContent: "center", gap: 4, minWidth: 74 },
+    routeArrow: { color: cTextMuted, fontSize: 16 },
     routeDistanceChip: {
       borderRadius: 999,
       borderWidth: 1,
@@ -364,10 +367,7 @@ const useStyles = createThemedStyles((theme) => {
       lineHeight: safeNumber(theme?.typography?.scale?.caption?.lineHeight, 16),
       fontWeight: "900",
     },
-    routeArrow: {
-      color: cTextMuted,
-      fontSize: 16,
-    },
+
     specGrid: {
       flexDirection: "row",
       alignItems: "stretch",
@@ -387,9 +387,7 @@ const useStyles = createThemedStyles((theme) => {
       borderRightColor: tint(cLine, 0.9, cLine),
       backgroundColor: cSurface,
     },
-    specCellLast: {
-      borderRightWidth: 0,
-    },
+    specCellLast: { borderRightWidth: 0 },
     specLabel: {
       color: cTextMuted,
       fontSize: safeNumber(theme?.typography?.scale?.caption?.size, 12),
@@ -402,32 +400,9 @@ const useStyles = createThemedStyles((theme) => {
       lineHeight: safeNumber(theme?.typography?.scale?.detail?.lineHeight, 20),
       fontWeight: "800",
     },
-    bottomRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      gap: spacing * 2,
-    },
-    emptyDistanceChip: {
-      borderRadius: 999,
-      borderWidth: 1,
-      borderColor: tint(cTextMuted, 0.35, cLine),
-      backgroundColor: tint(cTextMuted, 0.08, cSurface),
-      minHeight: 28,
-      paddingHorizontal: spacing * 3,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    emptyDistanceText: {
-      color: cTextMuted,
-      fontSize: safeNumber(theme?.typography?.scale?.caption?.size, 12) + 1,
-      lineHeight: safeNumber(theme?.typography?.scale?.caption?.lineHeight, 16) + 2,
-      fontWeight: "800",
-    },
-    priceBlock: {
-      alignItems: "flex-end",
-      gap: 2,
-    },
+
+    bottomRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing * 2 },
+    priceBlock: { alignItems: "flex-end", gap: 2 },
     priceLabel: {
       color: cTextMuted,
       fontSize: safeNumber(theme?.typography?.scale?.caption?.size, 12),
@@ -441,13 +416,11 @@ const useStyles = createThemedStyles((theme) => {
       fontWeight: "900",
       letterSpacing: -0.2,
     },
-    fabWrap: {
-      position: "absolute",
-      right: spacing * 5,
-      zIndex: 25,
-      alignItems: "flex-end",
-      gap: spacing * 2,
-    },
+
+    ctaRow: { flexDirection: "row", gap: spacing * 2 },
+    ctaBtn: { flex: 1, minHeight: 44, borderRadius: 12 },
+
+    fabWrap: { position: "absolute", right: spacing * 5, zIndex: 25, alignItems: "flex-end", gap: spacing * 2 },
     tooltip: {
       maxWidth: 220,
       borderRadius: 12,
@@ -473,10 +446,8 @@ const useStyles = createThemedStyles((theme) => {
       shadowOffset: { width: 0, height: 6 },
       elevation: 8,
     },
-    fabText: {
-      fontSize: safeNumber(theme?.typography?.scale?.detail?.size, 14) + 1,
-      fontWeight: "900",
-    },
+    fabText: { fontSize: safeNumber(theme?.typography?.scale?.detail?.size, 14) + 1, fontWeight: "900" },
+
     aiOverlay: {
       ...StyleSheet.absoluteFillObject,
       backgroundColor: tint(cTextMain, 0.36, "#000000"),
@@ -491,14 +462,8 @@ const useStyles = createThemedStyles((theme) => {
       lineHeight: safeNumber(theme?.typography?.scale?.detail?.lineHeight, 20) + 2,
       fontWeight: "900",
     },
-    toastWrap: {
-      position: "absolute",
-      left: 0,
-      right: 0,
-      alignItems: "center",
-      zIndex: 45,
-      pointerEvents: "none",
-    },
+
+    toastWrap: { position: "absolute", left: 0, right: 0, alignItems: "center", zIndex: 45, pointerEvents: "none" },
     toastCard: {
       borderRadius: 999,
       minHeight: 36,
@@ -507,7 +472,7 @@ const useStyles = createThemedStyles((theme) => {
       justifyContent: "center",
       borderWidth: 1,
       borderColor: tint(cTextMain, 0.4, cLine),
-      backgroundColor: safeString(theme?.colors?.bgSurface, "#FFFFFF"),
+      backgroundColor: cSurface,
     },
     toastText: {
       color: cTextMain,
@@ -515,10 +480,9 @@ const useStyles = createThemedStyles((theme) => {
       lineHeight: safeNumber(theme?.typography?.scale?.detail?.lineHeight, 20),
       fontWeight: "800",
     },
-    refreshButton: {
-      minHeight: 40,
-      width: 40,
-    },
+
+    errorWrap: { paddingHorizontal: spacing * 5 },
+    refreshButton: { minHeight: 40, width: 40 },
     logoBadge: {
       width: 34,
       height: 34,
@@ -529,21 +493,45 @@ const useStyles = createThemedStyles((theme) => {
       alignItems: "center",
       justifyContent: "center",
     },
-    logoIcon: {
-      color: cPrimary,
-      fontSize: 18,
-    },
-    cardPressed: {
-      opacity: 0.86,
-    },
-    separator: {
-      height: spacing * 3,
-    },
-    errorWrap: {
-      paddingHorizontal: spacing * 5,
-    },
+    logoIcon: { color: cPrimary, fontSize: 18 },
   });
 });
+
+function DriverTabs({
+  activeTab,
+  myCount,
+  onChange,
+}: {
+  activeTab: DriverOrdersTabKey;
+  myCount: number;
+  onChange: (next: DriverOrdersTabKey) => void;
+}) {
+  const styles = useStyles();
+  return (
+    <View style={styles.tabsWrap}>
+      <View style={styles.tabRow}>
+        <Pressable
+          style={[styles.tabButton, activeTab === "market" ? styles.tabButtonActive : null]}
+          onPress={() => onChange("market")}
+        >
+          <AppText style={[styles.tabLabel, activeTab === "market" ? styles.tabLabelActive : null]}>오더</AppText>
+        </Pressable>
+
+        <Pressable
+          style={[styles.tabButton, activeTab === "my" ? styles.tabButtonActive : null]}
+          onPress={() => onChange("my")}
+        >
+          <AppText style={[styles.tabLabel, activeTab === "my" ? styles.tabLabelActive : null]}>운행</AppText>
+          {myCount > 0 ? (
+            <View style={styles.tabBadge}>
+              <AppText style={styles.tabBadgeText}>{myCount}</AppText>
+            </View>
+          ) : null}
+        </Pressable>
+      </View>
+    </View>
+  );
+}
 
 function DriverOrderFilters({
   filters,
@@ -578,65 +566,71 @@ function DriverOrderFilters({
 
 function DriverOrderCardView({
   item,
-  onPress,
-  activeTab,
-  onPrepareClick,
+  onPressDetail,
+  onPressPrimary,
+  onPressSecondary,
 }: {
   item: DriverOrderCard;
-  onPress: (card: DriverOrderCard) => void;
-  activeTab: DriverOrdersTabKey;
-  onPrepareClick: (card: DriverOrderCard) => void;
+  onPressDetail: (card: DriverOrderCard) => void;
+  onPressPrimary: (card: DriverOrderCard) => void;
+  onPressSecondary: (card: DriverOrderCard) => void;
 }) {
   const theme = useAppTheme();
   const styles = useStyles();
   const colors = theme.colors as Record<string, string>;
 
-  const statusStripPalette = resolveStatusStripPalette(item.statusTone, colors);
+  const rawStatus = getRawStatus(item);
+  const uiState = getDriverUiState(item);
+  const badge = getDriverBadge(uiState);
+
+  const palette = resolveStatusStripPalette(badge.tone, colors);
+  const stepIndex = getActiveStepIndex(rawStatus);
+  const stepLabel = DELIVERY_PROGRESS_STEPS[stepIndex]?.label ?? DELIVERY_PROGRESS_STEPS[0]?.label ?? "요청 접수";
+
+  const photoGatePassed = safeString((item as any)?.photoGatePassed, "") === "true" ? true : (item as any)?.photoGatePassed ?? true;
+  const backendStatus = normalizeStatus(rawStatus);
+  const primaryCta = getDriverCta(uiState, photoGatePassed, backendStatus);
+
+  const primaryDisabled = !primaryCta.enabled || primaryCta.variant === CTA_VARIANT.DISABLED;
+  const primaryVariant = toButtonVariant(primaryCta.variant);
+
+  const secondaryLabel = resolveSecondaryCtaLabel(uiState, rawStatus);
 
   return (
-    <Pressable
-      onPress={() => onPress(item)}
-      style={({ pressed }) => [styles.cardPressable, pressed ? styles.cardPressed : null]}
-    >
-      <View style={[styles.cardStrip, { backgroundColor: statusStripPalette.strip }]} />
+    <Pressable onPress={() => onPressDetail(item)} style={({ pressed }) => [styles.cardPressable, pressed ? styles.cardPressed : null]}>
+      <View style={[styles.cardStrip, { backgroundColor: palette.strip }]} />
       <AppCard outlined style={styles.card}>
         <View style={styles.topRow}>
-          <View style={styles.tagsRow}>
-            {item.tags.map((tag) => {
-              const palette = resolveTagPalette(tag.key, colors);
-              return (
-                <View
-                  key={`${item.cardKey}-${tag.key}`}
-                  style={[styles.tagChip, { borderColor: palette.border, backgroundColor: palette.bg }]}
-                >
-                  <AppText style={[styles.tagText, { color: palette.text }]}>{tag.label}</AppText>
-                </View>
-              );
-            })}
-          </View>
-          <View style={styles.topMeta}>
-            <AppText style={styles.topMetaText}>{item.requestedAtText || ""}</AppText>
-            {item.pickupTimeText ? <AppText style={styles.topMetaText}>{item.pickupTimeText}</AppText> : null}
+          <View style={styles.topLeft}>
             <View
               style={[
                 styles.statusChip,
                 {
-                  backgroundColor: statusStripPalette.chipBg,
-                  borderColor: statusStripPalette.chipBorder,
+                  backgroundColor: palette.chipBg,
+                  borderColor: palette.chipBorder,
                 },
               ]}
             >
-              <AppText style={[styles.statusChipText, { color: statusStripPalette.chipText }]}>
-                {item.statusLabel}
+              <AppText style={[styles.statusChipText, { color: palette.chipText }]}>{badge.label}</AppText>
+            </View>
+
+            <View style={styles.stepChip}>
+              <AppText style={styles.stepChipText}>
+                {stepIndex + 1}/{DELIVERY_PROGRESS_STEPS.length} · {stepLabel}
               </AppText>
             </View>
+          </View>
+
+          <View style={styles.topRight}>
+            <AppText style={styles.metaText}>{item.requestedAtText || ""}</AppText>
+            {item.pickupTimeText ? <AppText style={styles.metaText}>{item.pickupTimeText}</AppText> : null}
           </View>
         </View>
 
         <View style={styles.routeWrap}>
           <View style={styles.routeCol}>
             <AppText style={styles.routeLabel}>출발</AppText>
-            <AppText style={styles.routeAddress}>{item.originAddress || "-"}</AppText>
+            <AppText style={styles.routeAddress}>{item.originAddress || ""}</AppText>
           </View>
 
           <View style={styles.routeCenter}>
@@ -650,59 +644,62 @@ function DriverOrderCardView({
 
           <View style={styles.routeCol}>
             <AppText style={styles.routeLabel}>도착</AppText>
-            <AppText style={styles.routeAddress}>{item.destinationAddress || "-"}</AppText>
+            <AppText style={styles.routeAddress}>{item.destinationAddress || ""}</AppText>
           </View>
         </View>
 
         <View style={styles.specGrid}>
           <View style={styles.specCell}>
             <AppText style={styles.specLabel}>차종</AppText>
-            <AppText style={styles.specValue}>{item.vehicleText || "-"}</AppText>
+            <AppText style={styles.specValue}>{item.vehicleText || ""}</AppText>
           </View>
           <View style={styles.specCell}>
             <AppText style={styles.specLabel}>방법</AppText>
-            <AppText style={styles.specValue}>{item.methodText || "-"}</AppText>
+            <AppText style={styles.specValue}>{item.methodText || ""}</AppText>
           </View>
           <View style={[styles.specCell, styles.specCellLast]}>
             <AppText style={styles.specLabel}>화물</AppText>
-            <AppText style={styles.specValue}>{item.cargoText || "-"}</AppText>
+            <AppText style={styles.specValue}>{item.cargoText || ""}</AppText>
           </View>
         </View>
 
         <View style={styles.bottomRow}>
-          {item.emptyDistanceText ? (
-            <View style={styles.emptyDistanceChip}>
-              <AppText style={styles.emptyDistanceText}>{item.emptyDistanceText}</AppText>
-            </View>
-          ) : (
-            <View />
-          )}
-
+          <View />
           <View style={styles.priceBlock}>
             <AppText style={styles.priceLabel}>운임</AppText>
-            <AppText style={styles.priceText}>{item.priceText || "-"}</AppText>
+            <AppText style={styles.priceText}>{item.priceText || ""}</AppText>
           </View>
         </View>
 
-        {activeTab === "my" ? (
-          <AppButton onPress={() => onPrepareClick(item)}>
-            <AppText color="textOnBrand">운행 준비하기</AppText>
+        <View style={styles.ctaRow}>
+          <AppButton
+            variant={primaryVariant}
+            disabled={primaryDisabled}
+            style={styles.ctaBtn}
+            onPress={() => onPressPrimary(item)}
+          >
+            <AppText color={primaryVariant === "primary" ? "textOnBrand" : "textMain"}>{primaryCta.label}</AppText>
           </AppButton>
-        ) : null}
+
+          <AppButton variant="secondary" style={styles.ctaBtn} onPress={() => onPressSecondary(item)}>
+            <AppText>{secondaryLabel}</AppText>
+          </AppButton>
+        </View>
       </AppCard>
     </Pressable>
   );
 }
 
-export function DriverOrdersBoard({ activeTab, onChangeTab }: DriverOrdersBoardProps) {
+export default function DriverRoutePage() {
   const router = useRouter();
   const theme = useAppTheme();
   const insets = useSafeAreaInsets();
   const styles = useStyles();
-  const { setActiveOrder } = useActiveOrder();
 
   const [overview, setOverview] = useState<DriverOrdersOverview>(EMPTY_OVERVIEW);
+  const [activeTab, setActiveTab] = useState<DriverOrdersTabKey>("market");
   const [activeFilter, setActiveFilter] = useState<DriverOrderFilterKey>("ALL");
+
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isAiLoading, setIsAiLoading] = useState(false);
@@ -716,9 +713,7 @@ export function DriverOrdersBoard({ activeTab, onChangeTab }: DriverOrdersBoardP
   const focusRefetchMetaRef = useRef({ hasFocusedOnce: false, inFlight: false, lastRefetchAt: 0 });
 
   const showToast = useCallback((message: string) => {
-    if (toastTimerRef.current) {
-      clearTimeout(toastTimerRef.current);
-    }
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
 
     setToast({ visible: true, message });
     toastTimerRef.current = setTimeout(() => {
@@ -729,35 +724,27 @@ export function DriverOrdersBoard({ activeTab, onChangeTab }: DriverOrdersBoardP
 
   useEffect(() => {
     return () => {
-      if (toastTimerRef.current) {
-        clearTimeout(toastTimerRef.current);
-      }
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     };
   }, []);
 
-  const loadOrders = useCallback(
-    async (mode: "initial" | "refresh" = "initial") => {
-      if (mode === "refresh") {
-        setIsRefreshing(true);
-      } else {
-        setIsLoading(true);
-      }
+  const loadOrders = useCallback(async (mode: "initial" | "refresh" = "initial") => {
+    if (mode === "refresh") setIsRefreshing(true);
+    else setIsLoading(true);
 
-      try {
-        const nextOverview = await loadDriverOrdersOverview();
-        setOverview(nextOverview);
-        setActiveFilter((prev) => (nextOverview.availableFilters.includes(prev) ? prev : "ALL"));
-        setErrorMessage(null);
-      } catch {
-        setOverview(EMPTY_OVERVIEW);
-        setErrorMessage(NETWORK_ERROR_TEXT);
-      } finally {
-        setIsLoading(false);
-        setIsRefreshing(false);
-      }
-    },
-    []
-  );
+    try {
+      const nextOverview = await loadDriverOrdersOverview();
+      setOverview(nextOverview);
+      setActiveFilter((prev) => (nextOverview.availableFilters.includes(prev) ? prev : "ALL"));
+      setErrorMessage(null);
+    } catch {
+      setOverview(EMPTY_OVERVIEW);
+      setErrorMessage(NETWORK_ERROR_TEXT);
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  }, []);
 
   useEffect(() => {
     void loadOrders("initial");
@@ -788,13 +775,10 @@ export function DriverOrdersBoard({ activeTab, onChangeTab }: DriverOrdersBoardP
 
   useEffect(() => {
     let mounted = true;
-
     readDriverOrdersAiTooltipSeen()
       .then((seen) => {
         if (!mounted) return;
-        if (!seen) {
-          setShowAiTooltip(true);
-        }
+        if (!seen) setShowAiTooltip(true);
       })
       .catch(() => {
         if (!mounted) return;
@@ -812,24 +796,12 @@ export function DriverOrdersBoard({ activeTab, onChangeTab }: DriverOrdersBoardP
   }, []);
 
   const filteredMarketOrders = useMemo(() => {
-    // Market tab shows all OPEN orders, optionally filtered by selected criteria
-    // These orders appear in the home market regardless of the driver's accepted orders
     return overview.marketOrders.filter((card) => matchesDriverOrderFilter(card, activeFilter));
   }, [activeFilter, overview.marketOrders]);
 
-  // Data visibility is determined solely by the active tab
-  // Market tab: Shows filtered market orders (all OPEN orders available in the marketplace)
-  // My Orders tab: Shows all orders assigned to the current driver (MATCHED, PREPARING, etc.)
-  // This ensures that accepting an order doesn't hide other available orders in the market
-  const visibleOrders = useMemo(() => {
-    if (activeTab === "market") {
-      return filteredMarketOrders;
-    }
-    // For "my" tab, return all assigned orders without any additional filtering
-    // The overview.myOrders already contains only orders relevant to this driver
-    return overview.myOrders;
-  }, [activeTab, filteredMarketOrders, overview.myOrders]);
+  const visibleOrders = activeTab === "market" ? filteredMarketOrders : overview.myOrders;
   const showFilters = activeTab === "market" && overview.availableFilters.length > 1;
+
   const showAiFab = activeTab === "market" && overview.capability.supportsAiFab;
   const showAiTooltipBubble = showAiTooltip && showAiFab && !isAiLoading;
 
@@ -838,7 +810,7 @@ export function DriverOrdersBoard({ activeTab, onChangeTab }: DriverOrdersBoardP
     return insets.bottom + 36;
   }, [insets.bottom, showAiFab]);
 
-  const handlePressCard = useCallback(
+  const handlePressDetail = useCallback(
     async (card: DriverOrderCard) => {
       if (cardNavLockRef.current && lastCardNavIdRef.current === card.matchId) return;
       cardNavLockRef.current = true;
@@ -846,7 +818,7 @@ export function DriverOrdersBoard({ activeTab, onChangeTab }: DriverOrdersBoardP
 
       const access = await probeDriverOrderDetailAccess(card.matchId);
       if (access === "forbidden") {
-        showToast("상세 접근 불가(권한)");
+        showToast("해당 오더에 접근할 수 없습니다.");
         cardNavLockRef.current = false;
         return;
       }
@@ -868,32 +840,18 @@ export function DriverOrdersBoard({ activeTab, onChangeTab }: DriverOrdersBoardP
     [router, showToast]
   );
 
-  const handlePrepareForDrive = useCallback(
+  const handlePressPrimary = useCallback(
     async (card: DriverOrderCard) => {
-      if (!card.quoteId) {
-        showToast("오더 정보가 없습니다.");
-        return;
-      }
-
-      try {
-        const quoteDetail = await getDriverQuoteSummaryDetail(card.quoteId);
-        if (!quoteDetail) {
-          showToast("오더 상세 정보를 불러올 수 없습니다.");
-          return;
-        }
-
-        setActiveOrder(quoteDetail);
-        
-        // Trigger a refresh of the order lists to ensure data is in sync
-        // This will update both marketOrders and myOrders with the latest server state
-        void loadOrders("refresh").then(() => {
-          router.push("/(driver)/run");
-        });
-      } catch {
-        showToast(NETWORK_ERROR_TEXT);
-      }
+      await handlePressDetail(card);
     },
-    [router, setActiveOrder, showToast, loadOrders]
+    [handlePressDetail]
+  );
+
+  const handlePressSecondary = useCallback(
+    async (card: DriverOrderCard) => {
+      await handlePressDetail(card);
+    },
+    [handlePressDetail]
   );
 
   const handlePressAiFab = useCallback(async () => {
@@ -925,23 +883,19 @@ export function DriverOrdersBoard({ activeTab, onChangeTab }: DriverOrdersBoardP
     ({ item }: { item: DriverOrderCard }) => (
       <DriverOrderCardView
         item={item}
-        onPress={handlePressCard}
-        activeTab={activeTab}
-        onPrepareClick={handlePrepareForDrive}
+        onPressDetail={handlePressDetail}
+        onPressPrimary={handlePressPrimary}
+        onPressSecondary={handlePressSecondary}
       />
     ),
-    [activeTab, handlePressCard, handlePrepareForDrive]
+    [handlePressDetail, handlePressPrimary, handlePressSecondary]
   );
 
   const renderListHeader = useCallback(() => {
     if (!showFilters) return null;
     return (
       <View style={styles.stickyFilterWrap}>
-        <DriverOrderFilters
-          filters={overview.availableFilters}
-          activeFilter={activeFilter}
-          onChangeFilter={setActiveFilter}
-        />
+        <DriverOrderFilters filters={overview.availableFilters} activeFilter={activeFilter} onChangeFilter={setActiveFilter} />
       </View>
     );
   }, [activeFilter, overview.availableFilters, showFilters, styles.stickyFilterWrap]);
@@ -963,24 +917,23 @@ export function DriverOrdersBoard({ activeTab, onChangeTab }: DriverOrdersBoardP
       variant="secondary"
       style={styles.refreshButton}
       accessibilityLabel="목록 새로고침"
-      onPress={() => {
-        void loadOrders("refresh");
-      }}
+      onPress={() => void loadOrders("refresh")}
     >
       <Ionicons name="refresh" size={18} color={textMain} />
     </AppButton>
   );
 
   return (
-    <PageScaffold
-      title="Rodia Driver Pro"
-      backgroundColor={backgroundColor}
-      scroll={false}
-      padding={0}
-      headerLeft={headerLeft}
-      headerRight={headerRight}
-    >
+    <PageScaffold title="오더/운행" backgroundColor={backgroundColor} scroll={false} padding={0} headerLeft={headerLeft} headerRight={headerRight}>
       <View style={styles.root}>
+        <View style={styles.headerRow}>
+          <AppText style={styles.headerTitle}>기사 오더</AppText>
+          <View style={styles.countPill}>
+            <AppText style={styles.countText}>{visibleOrders.length}건</AppText>
+          </View>
+        </View>
+
+        <DriverTabs activeTab={activeTab} myCount={overview.myCount} onChange={setActiveTab} />
 
         {isLoading ? (
           <AppSpinner label="오더 목록을 불러오는 중입니다." />
@@ -990,9 +943,7 @@ export function DriverOrdersBoard({ activeTab, onChangeTab }: DriverOrdersBoardP
               title="오더 목록을 불러오지 못했어요"
               description={errorMessage}
               retryLabel="다시 시도"
-              onRetry={() => {
-                void loadOrders("initial");
-              }}
+              onRetry={() => void loadOrders("initial")}
               fullScreen={false}
             />
           </View>
@@ -1006,17 +957,10 @@ export function DriverOrdersBoard({ activeTab, onChangeTab }: DriverOrdersBoardP
             ItemSeparatorComponent={() => <View style={styles.separator} />}
             contentContainerStyle={[styles.listContent, { paddingBottom: listBottomPadding }]}
             showsVerticalScrollIndicator={false}
-            refreshControl={
-              <RefreshControl
-                refreshing={isRefreshing}
-                onRefresh={() => {
-                  void loadOrders("refresh");
-                }}
-              />
-            }
+            refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void loadOrders("refresh")} />}
             ListEmptyComponent={
               <AppEmptyState
-                title={activeTab === "market" ? "오더 마켓이 비어 있습니다." : "내 오더가 없습니다."}
+                title={activeTab === "market" ? "오더 마켓이 비어 있습니다." : "운행 내역이 없습니다."}
                 description={
                   activeTab === "market"
                     ? "새 오더가 등록되면 이곳에 표시됩니다."
@@ -1047,7 +991,7 @@ export function DriverOrdersBoard({ activeTab, onChangeTab }: DriverOrdersBoardP
         {isAiLoading ? (
           <View style={styles.aiOverlay}>
             <ActivityIndicator size="large" color={safeString(theme?.colors?.textOnBrand, "#FFFFFF")} />
-            <AppText style={styles.aiOverlayText}>AI 최적 경로 탐색 중...</AppText>
+            <AppText style={styles.aiOverlayText}>AI 최적 오더 탐색 중...</AppText>
           </View>
         ) : null}
 
@@ -1062,5 +1006,3 @@ export function DriverOrdersBoard({ activeTab, onChangeTab }: DriverOrdersBoardP
     </PageScaffold>
   );
 }
-
-export default DriverOrdersBoard;
