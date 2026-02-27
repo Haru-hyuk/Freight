@@ -2,8 +2,9 @@ import React, { useMemo } from "react";
 import { StyleSheet, View } from "react-native";
 import { useRouter } from "expo-router";
 
-import type { VerificationStatus } from "@/features/shipper-settings/api/shipper-settings-mock";
+import type { BusinessInfoMock, VerificationStatus } from "@/features/shipper-settings/api/shipper-settings-mock";
 import { shipperSettingsMock } from "@/features/shipper-settings/api/shipper-settings-mock";
+import { isMockMode } from "@/shared/lib/config/env";
 import type { AppTheme } from "@/shared/theme/types";
 import { useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppText } from "@/shared/ui/kit/AppText";
@@ -95,11 +96,19 @@ function createStyles(theme: AppTheme) {
   });
 }
 
+const EMPTY_BUSINESS_INFO: BusinessInfoMock = {
+  companyName: "", representativeName: "", businessNumber: "",
+  businessType: "", businessItem: "", officeAddress: "",
+  officeAddressDetail: "", managerName: "", managerPhone: "",
+  managerEmail: "", verificationStatus: "PENDING" as VerificationStatus,
+  documents: [],
+};
+
 export default function ShipperBusinessInfoPage() {
   const router = useRouter();
   const theme = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const data = shipperSettingsMock.businessInfo;
+  const data = isMockMode() ? shipperSettingsMock.businessInfo : EMPTY_BUSINESS_INFO;
   const statusLabel = toBadgeLabel(data.verificationStatus);
 
   return (

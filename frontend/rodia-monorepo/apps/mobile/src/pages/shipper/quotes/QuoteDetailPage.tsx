@@ -11,6 +11,7 @@ import {
   isCounterOfferPending,
   listShipperCounterOffers,
   rejectShipperCounterOffer,
+  type CounterOfferItem,
 } from "@/features/counter-offer/api";
 import { deleteShipperQuote } from "@/features/quote/api";
 import { getQuoteActionPolicy, resolveTonePalette, type DecisionActionId } from "@/features/quote/model/quoteActionMatrix";
@@ -116,6 +117,59 @@ const useStyles = createThemedStyles((theme) => {
       fontSize: safeNumber(theme.typography.scale.detail.size, 14),
       lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20),
       fontWeight: "700",
+    },
+
+    counterOfferSection: { marginBottom: s * 3 },
+    counterOfferCard: {
+      backgroundColor: c.bgSurface,
+      borderRadius: safeNumber(theme.layout.radii.card, 16),
+      borderWidth: 1,
+      borderColor: c.brandPrimary,
+      padding: s * 4,
+      gap: s * 2,
+    },
+    counterOfferHeader: { flexDirection: "row", alignItems: "center", gap: s * 2 },
+    counterOfferBadge: {
+      borderRadius: 999,
+      paddingHorizontal: s * 2,
+      paddingVertical: s,
+      backgroundColor: c.brandPrimary,
+    },
+    counterOfferBadgeText: {
+      color: c.textOnBrand,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
+      fontWeight: "900",
+    },
+    counterOfferTitle: {
+      flex: 1,
+      color: c.textMain,
+      fontSize: safeNumber(theme.typography.scale.detail.size, 14),
+      fontWeight: "900",
+    },
+    counterOfferPrice: {
+      color: c.brandPrimary,
+      fontSize: safeNumber(theme.typography.scale.display.size, 30),
+      lineHeight: safeNumber(theme.typography.scale.display.lineHeight, 38),
+      fontWeight: "900",
+      letterSpacing: -0.6,
+    },
+    counterOfferPriceLabel: {
+      color: c.textMuted,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
+      fontWeight: "700",
+      marginBottom: s / 2,
+    },
+    counterOfferDivider: { height: 1, backgroundColor: c.borderDefault },
+    counterOfferMessageLabel: {
+      color: c.textMuted,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
+      fontWeight: "700",
+    },
+    counterOfferMessage: {
+      color: c.textMain,
+      fontSize: safeNumber(theme.typography.scale.detail.size, 14),
+      fontWeight: "700",
+      lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20),
     },
 
     routeSection: { marginBottom: s * 3, gap: s * 2 },
@@ -433,6 +487,35 @@ function buildRouteNodes(core: QuoteDetailCoreSummary): RouteNode[] {
   return nodes;
 }
 
+function CounterOfferCard({ offer }: { offer: CounterOfferItem }) {
+  const styles = useStyles();
+  return (
+    <View style={styles.counterOfferSection}>
+      <AppCard elevated={false} style={styles.counterOfferCard}>
+        <View style={styles.counterOfferHeader}>
+          <View style={styles.counterOfferBadge}>
+            <AppText style={styles.counterOfferBadgeText}>기사 역제안</AppText>
+          </View>
+          <AppText style={styles.counterOfferTitle}>기사가 운임을 제안했습니다</AppText>
+        </View>
+        <View>
+          <AppText style={styles.counterOfferPriceLabel}>제안 금액</AppText>
+          <AppText style={styles.counterOfferPrice}>{formatKrw(offer.proposedPrice)}</AppText>
+        </View>
+        {offer.message ? (
+          <>
+            <View style={styles.counterOfferDivider} />
+            <View>
+              <AppText style={styles.counterOfferMessageLabel}>제안 사유</AppText>
+              <AppText style={styles.counterOfferMessage}>{offer.message}</AppText>
+            </View>
+          </>
+        ) : null}
+      </AppCard>
+    </View>
+  );
+}
+
 function RouteFlowCard({ coreSummary }: { coreSummary: QuoteDetailCoreSummary }) {
   const styles = useStyles();
   const nodes = React.useMemo(() => buildRouteNodes(coreSummary), [coreSummary]);
@@ -581,6 +664,7 @@ export default function QuoteDetailPage() {
   const [matchSnapshot, setMatchSnapshot] = React.useState<MatchSnapshot>(EMPTY_MATCH_SNAPSHOT);
   const [matchHydrated, setMatchHydrated] = React.useState(false);
   const [bottomBarHeight, setBottomBarHeight] = React.useState(0);
+  const [pendingCounterOffer, setPendingCounterOffer] = React.useState<CounterOfferItem | null>(null);
   const matchLoadTokenRef = React.useRef(0);
   const focusRefetchMetaRef = React.useRef({ hasFocusedOnce: false, lastRefetchAt: 0 });
   const refreshInFlightRef = React.useRef<Promise<void> | null>(null);
@@ -634,6 +718,21 @@ export default function QuoteDetailPage() {
     }
   }, []);
 
+  const loadPendingCounterOffer = React.useCallback(async (targetQuoteId: number) => {
+    const safeQuoteId = parsePositiveInt(targetQuoteId);
+    if (safeQuoteId <= 0) {
+      setPendingCounterOffer(null);
+      return;
+    }
+    try {
+      const offers = await listShipperCounterOffers(safeQuoteId);
+      const pending = offers.find((o) => isCounterOfferPending(o.status)) ?? null;
+      setPendingCounterOffer(pending);
+    } catch {
+      setPendingCounterOffer(null);
+    }
+  }, []);
+
   const refreshQuoteAndMatchData = React.useCallback(async () => {
     if (refreshInFlightRef.current) {
       await refreshInFlightRef.current;
@@ -642,7 +741,10 @@ export default function QuoteDetailPage() {
 
     const task = (async () => {
       const tasks: Array<Promise<unknown>> = [view.refetch()];
-      if (actionQuoteId > 0) tasks.push(loadMatchSnapshot(actionQuoteId));
+      if (actionQuoteId > 0) {
+        tasks.push(loadMatchSnapshot(actionQuoteId));
+        tasks.push(loadPendingCounterOffer(actionQuoteId));
+      }
       await Promise.all(tasks);
     })();
 
@@ -654,7 +756,15 @@ export default function QuoteDetailPage() {
         refreshInFlightRef.current = null;
       }
     }
-  }, [actionQuoteId, loadMatchSnapshot, view.refetch]);
+  }, [actionQuoteId, loadMatchSnapshot, loadPendingCounterOffer, view.refetch]);
+
+  React.useEffect(() => {
+    if (actionQuoteId > 0) {
+      void loadPendingCounterOffer(actionQuoteId);
+    } else {
+      setPendingCounterOffer(null);
+    }
+  }, [actionQuoteId, loadPendingCounterOffer]);
 
   React.useEffect(() => {
     const safeQuoteId = parsePositiveInt(actionQuoteId);
@@ -949,6 +1059,7 @@ export default function QuoteDetailPage() {
               </View>
             ) : null}
           </View>
+          {pendingCounterOffer ? <CounterOfferCard offer={pendingCounterOffer} /> : null}
           <RouteFlowCard coreSummary={view.coreSummary} />
           <SummaryCard view={view} />
           <SpecificationArchive view={view} />

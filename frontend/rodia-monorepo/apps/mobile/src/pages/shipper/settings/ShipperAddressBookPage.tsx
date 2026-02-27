@@ -5,6 +5,7 @@ import { useRouter } from "expo-router";
 
 import type { AddressItemMock } from "@/features/shipper-settings/api/shipper-settings-mock";
 import { shipperSettingsMock } from "@/features/shipper-settings/api/shipper-settings-mock";
+import { isMockMode } from "@/shared/lib/config/env";
 import type { AppTheme } from "@/shared/theme/types";
 import { useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppButton } from "@/shared/ui/kit/AppButton";
@@ -136,7 +137,8 @@ export default function ShipperAddressBookPage() {
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [showEmptyCase, setShowEmptyCase] = useState(false);
 
-  const addresses = showEmptyCase ? shipperSettingsMock.addresses.empty : shipperSettingsMock.addresses.primary;
+  const mockAddresses = isMockMode() ? shipperSettingsMock.addresses.primary : ([] as AddressItemMock[]);
+  const addresses = showEmptyCase ? ([] as AddressItemMock[]) : mockAddresses;
 
   return (
     <PageScaffold

@@ -1,9 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Image, Pressable, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
 import { useAuth } from "@/features/auth/model/useAuth";
+import { listMyShipperMatches } from "@/features/matching/api";
+import { listShipperQuotes } from "@/features/quote/api";
+import { listMyShipperSettlements } from "@/features/shipper-settings/api/shipper-settlement-api";
 import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppButton } from "@/shared/ui/kit/AppButton";
@@ -286,6 +289,27 @@ export function ShipperProfilePage() {
   const email = safeString(user?.email, "shipper@rodia.co.kr");
   const isVerified = auth.pendingVerificationRole !== "shipper";
 
+  const [inProgressCount, setInProgressCount] = useState<number | null>(null);
+  const [quotesCount, setQuotesCount] = useState<number | null>(null);
+  const [settlementPendingCount, setSettlementPendingCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    let canceled = false;
+    Promise.all([
+      listMyShipperMatches().catch(() => []),
+      listShipperQuotes().catch(() => []),
+      listMyShipperSettlements().catch(() => []),
+    ]).then(([matches, quotes, settlements]) => {
+      if (canceled) return;
+      setInProgressCount(matches.filter((m) => m.cancelable).length);
+      setQuotesCount(quotes.length);
+      setSettlementPendingCount(settlements.filter((s) => s.settlementStatus === "PENDING").length);
+    });
+    return () => {
+      canceled = true;
+    };
+  }, []);
+
   useEffect(() => {
     return () => {
       if (navUnlockTimerRef.current) {
@@ -322,24 +346,24 @@ export function ShipperProfilePage() {
       {
         id: "in-progress",
         label: "진행중",
-        value: "3",
+        value: inProgressCount !== null ? String(inProgressCount) : "-",
         accent: true,
         onPress: () => router.push("/(shipper)/matchings"),
       },
       {
         id: "request-history",
         label: "견적요청",
-        value: "15",
+        value: quotesCount !== null ? String(quotesCount) : "-",
         onPress: () => router.push("/(shipper)/quotes"),
       },
       {
         id: "settlement-wait",
         label: "정산대기",
-        value: "1",
-        onPress: () => Alert.alert("정산 내역", "정산 상세 화면을 준비 중입니다."),
+        value: settlementPendingCount !== null ? String(settlementPendingCount) : "-",
+        onPress: () => router.push("/(shipper)/settings/tax-invoices"),
       },
     ],
-    [router]
+    [inProgressCount, quotesCount, router, settlementPendingCount]
   );
 
   const businessMenus = useMemo<MenuAction[]>(

@@ -1,9 +1,8 @@
-import React, { useMemo, useState } from "react";
-import { Alert, Pressable, StyleSheet, View } from "react-native";
+import React, { useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, Alert, Pressable, StyleSheet, View } from "react-native";
 import { useRouter } from "expo-router";
 
-import type { TaxInvoiceItemMock, TaxInvoiceStatus } from "@/features/shipper-settings/api/shipper-settings-mock";
-import { shipperSettingsMock } from "@/features/shipper-settings/api/shipper-settings-mock";
+import { listMyShipperSettlements, type SettlementItem } from "@/features/shipper-settings/api/shipper-settlement-api";
 import { formatKrw } from "@/shared/lib/format/display";
 import type { AppTheme } from "@/shared/theme/types";
 import { useAppTheme } from "@/shared/theme/useAppTheme";
@@ -18,7 +17,8 @@ import SettingSection from "./ui/SettingSection";
 
 type RangeKey = "ALL" | "3M" | "6M" | "12M";
 
-function toDisplayDate(input: string): string {
+function toDisplayDate(input: string | undefined): string {
+  if (!input) return "-";
   const ts = Date.parse(input);
   if (!Number.isFinite(ts)) return "-";
   const d = new Date(ts);
@@ -28,13 +28,21 @@ function toDisplayDate(input: string): string {
   return `${yyyy}.${mm}.${dd}`;
 }
 
-function toStatusLabel(status: TaxInvoiceStatus): string {
-  if (status === "ISSUED") return "발행완료";
-  if (status === "PENDING") return "대기";
-  return "실패";
+function toSettlementStatusLabel(status: string): string {
+  if (status === "COMPLETED") return "정산완료";
+  if (status === "PENDING") return "정산대기";
+  if (status === "FAILED") return "실패";
+  return status || "-";
 }
 
-function filterByRange(items: TaxInvoiceItemMock[], range: RangeKey): TaxInvoiceItemMock[] {
+function toPaymentStatusLabel(status: string): string {
+  if (status === "PAID") return "결제완료";
+  if (status === "PENDING") return "결제대기";
+  if (status === "FAILED") return "결제실패";
+  return status || "-";
+}
+
+function filterByRange(items: SettlementItem[], range: RangeKey): SettlementItem[] {
   if (range === "ALL") return items;
   const now = new Date();
   const from = new Date(now.getTime());
@@ -47,7 +55,7 @@ function filterByRange(items: TaxInvoiceItemMock[], range: RangeKey): TaxInvoice
   }
   const fromTs = from.getTime();
   return items.filter((item) => {
-    const ts = Date.parse(item.issuedAt);
+    const ts = Date.parse(item.createdAt ?? "");
     return Number.isFinite(ts) && ts >= fromTs;
   });
 }
@@ -60,10 +68,9 @@ function createStyles(theme: AppTheme) {
       paddingBottom: 32,
       backgroundColor: theme.colors.bgMain,
     },
-    helperText: {
-      color: theme.colors.textMuted,
-      marginBottom: 14,
-      paddingHorizontal: 4,
+    loadingWrap: {
+      alignItems: "center",
+      paddingVertical: 32,
     },
     rangeRow: {
       flexDirection: "row",
@@ -93,7 +100,7 @@ function createStyles(theme: AppTheme) {
     cardWrap: {
       gap: 10,
     },
-    invoiceCard: {
+    settlementCard: {
       borderRadius: 14,
       padding: 14,
       gap: 10,
@@ -104,11 +111,11 @@ function createStyles(theme: AppTheme) {
       justifyContent: "space-between",
       gap: 10,
     },
-    invoiceNo: {
+    settlementTitle: {
       color: theme.colors.textMain,
       flex: 1,
     },
-    status: {
+    statusBadge: {
       color: theme.colors.textSub,
       minWidth: 70,
       textAlign: "right",
@@ -121,33 +128,35 @@ function createStyles(theme: AppTheme) {
   });
 }
 
-function TaxInvoiceCard({ item }: { item: TaxInvoiceItemMock }) {
+function SettlementCard({ item }: { item: SettlementItem }) {
   const theme = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   return (
-    <AppCard outlined elevated={false} style={styles.invoiceCard}>
+    <AppCard outlined elevated={false} style={styles.settlementCard}>
       <View style={styles.topRow}>
-        <AppText variant="detail" weight="800" style={styles.invoiceNo}>
-          {item.invoiceNumber}
+        <AppText variant="detail" weight="800" style={styles.settlementTitle}>
+          정산 #{item.settlementId}
         </AppText>
-        <AppText variant="caption" weight="800" style={styles.status}>
-          {toStatusLabel(item.status)}
+        <AppText variant="caption" weight="800" style={styles.statusBadge}>
+          {toSettlementStatusLabel(item.settlementStatus)}
         </AppText>
       </View>
 
-      <KeyValueRow label="발행일" value={toDisplayDate(item.issuedAt)} />
-      <KeyValueRow label="공급가" value={formatKrw(item.supplyAmount, "0원")} />
-      <KeyValueRow label="부가세" value={formatKrw(item.vatAmount, "0원")} />
-      <KeyValueRow label="합계" value={formatKrw(item.totalAmount, "0원")} />
+      <KeyValueRow label="정산일" value={toDisplayDate(item.createdAt)} />
+      <KeyValueRow label="총 운임" value={formatKrw(item.totalFare, "0원")} />
+      <KeyValueRow label="플랫폼 수수료" value={formatKrw(item.platformFee, "0원")} />
+      <KeyValueRow label="기사 지급액" value={formatKrw(item.driverPayout, "0원")} />
+      <KeyValueRow label="결제 상태" value={toPaymentStatusLabel(item.shipperPaymentStatus)} />
+      {item.dueDate ? <KeyValueRow label="결제 기한" value={toDisplayDate(item.dueDate)} /> : null}
 
       <Divider />
 
       <AppButton
-        title="다운로드"
+        title="영수증 보기"
         size="sm"
         variant="secondary"
-        onPress={() => Alert.alert("세금계산서 다운로드", `${item.invoiceNumber} 다운로드는 목업 동작입니다.`)}
+        onPress={() => Alert.alert("영수증", `정산 #${item.settlementId} 영수증 기능은 준비 중입니다.`)}
       />
     </AppCard>
   );
@@ -158,6 +167,26 @@ export default function ShipperTaxInvoiceHistoryPage() {
   const theme = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [activeRange, setActiveRange] = useState<RangeKey>("ALL");
+  const [settlements, setSettlements] = useState<SettlementItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let canceled = false;
+    setIsLoading(true);
+    listMyShipperSettlements()
+      .then((data) => {
+        if (!canceled) setSettlements(data);
+      })
+      .catch(() => {
+        if (!canceled) setSettlements([]);
+      })
+      .finally(() => {
+        if (!canceled) setIsLoading(false);
+      });
+    return () => {
+      canceled = true;
+    };
+  }, []);
 
   const rangeItems = useMemo(
     () => [
@@ -169,57 +198,59 @@ export default function ShipperTaxInvoiceHistoryPage() {
     []
   );
 
-  const filteredInvoices = useMemo(
-    () => filterByRange(shipperSettingsMock.taxInvoices, activeRange),
-    [activeRange]
+  const filteredSettlements = useMemo(
+    () => filterByRange(settlements, activeRange),
+    [settlements, activeRange]
   );
 
   return (
     <PageScaffold
-      title="세금계산서 발행내역"
+      title="정산 내역"
       backgroundColor={theme.colors.bgMain}
       contentStyle={styles.content}
       onPressBack={() => router.back()}
       backLabel="설정"
     >
-      <AppText variant="detail" style={styles.helperText}>
-        기간 필터는 로컬 목업 데이터 기준으로만 동작합니다.
-      </AppText>
-
-      <SettingSection title="발행 이력" description="필터/조회/다운로드는 데모 동작입니다.">
-        <View style={styles.rangeRow}>
-          {rangeItems.map((range) => {
-            const active = range.key === activeRange;
-            return (
-              <Pressable
-                key={range.key}
-                onPress={() => setActiveRange(range.key)}
-                style={[styles.rangeChip, active && styles.rangeChipActive]}
-              >
-                <AppText
-                  variant="caption"
-                  weight="800"
-                  style={[styles.rangeChipText, active && styles.rangeChipTextActive]}
-                >
-                  {range.label}
-                </AppText>
-              </Pressable>
-            );
-          })}
+      {isLoading ? (
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator color={theme.colors.brandPrimary} />
         </View>
-
-        {filteredInvoices.length > 0 ? (
-          <View style={styles.cardWrap}>
-            {filteredInvoices.map((item) => (
-              <TaxInvoiceCard key={item.id} item={item} />
-            ))}
+      ) : (
+        <SettingSection title="정산 이력">
+          <View style={styles.rangeRow}>
+            {rangeItems.map((range) => {
+              const active = range.key === activeRange;
+              return (
+                <Pressable
+                  key={range.key}
+                  onPress={() => setActiveRange(range.key)}
+                  style={[styles.rangeChip, active && styles.rangeChipActive]}
+                >
+                  <AppText
+                    variant="caption"
+                    weight="800"
+                    style={[styles.rangeChipText, active && styles.rangeChipTextActive]}
+                  >
+                    {range.label}
+                  </AppText>
+                </Pressable>
+              );
+            })}
           </View>
-        ) : (
-          <AppText variant="detail" style={styles.emptyText}>
-            선택한 기간의 발행내역이 없습니다.
-          </AppText>
-        )}
-      </SettingSection>
+
+          {filteredSettlements.length > 0 ? (
+            <View style={styles.cardWrap}>
+              {filteredSettlements.map((item) => (
+                <SettlementCard key={item.settlementId} item={item} />
+              ))}
+            </View>
+          ) : (
+            <AppText variant="detail" style={styles.emptyText}>
+              {settlements.length === 0 ? "정산 내역이 없습니다." : "선택한 기간의 정산 내역이 없습니다."}
+            </AppText>
+          )}
+        </SettingSection>
+      )}
     </PageScaffold>
   );
 }
