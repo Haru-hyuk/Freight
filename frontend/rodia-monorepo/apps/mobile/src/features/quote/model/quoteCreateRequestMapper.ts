@@ -9,7 +9,22 @@ import type {
 import { EXTRA_OPTIONS, type QuoteCreateDraft } from "@/features/quote/model/quoteCreateDraft";
 import { DEFAULT_LOAD_METHOD, DEFAULT_UNLOAD_METHOD, toActorOnlyWorkMethod } from "@/features/quote/model/workMethod";
 
-const VEHICLE_TYPE_BY_TON_INDEX: QuoteVehicleType[] = ["TON_1", "TON_2_5", "TON_5"];
+const VEHICLE_TYPE_BY_TON_INDEX: QuoteVehicleType[] = [
+  "DAMAS",
+  "LABO",
+  "TON_1",
+  "TON_1_4",
+  "TON_2_5",
+  "TON_3_5",
+  "TON_5",
+  "TON_5_AXLE",
+  "TON_8",
+  "TON_11",
+  "TON_14",
+  "TON_15",
+  "TON_18",
+  "TON_25",
+];
 const VEHICLE_BODY_BY_TYPE_INDEX: QuoteVehicleBodyType[] = ["CARGO", "WING_BODY", "TOP_CAR"];
 type QuoteCreateRequestPayload = Omit<QuoteCreateRequestDto, "basePrice"> & { basePrice?: number };
 const CARGO_CATEGORY_LABELS: Readonly<Record<string, string>> = {

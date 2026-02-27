@@ -68,9 +68,23 @@ function readDetailValue(source: QuoteDetailResponse, keys: string[]): string {
 
 function resolveTonIndex(vehicleType: unknown): number {
   const normalized = String(vehicleType ?? "").trim().toUpperCase();
-  if (normalized === "TON_2_5") return 1;
-  if (normalized === "TON_5") return 2;
-  return 0;
+  const map: Record<string, number> = {
+    DAMAS: 0,
+    LABO: 1,
+    TON_1: 2,
+    TON_1_4: 3,
+    TON_2_5: 4,
+    TON_3_5: 5,
+    TON_5: 6,
+    TON_5_AXLE: 7,
+    TON_8: 8,
+    TON_11: 9,
+    TON_14: 10,
+    TON_15: 11,
+    TON_18: 12,
+    TON_25: 13,
+  };
+  return map[normalized] ?? 2;
 }
 
 function resolveBodyIndex(vehicleBodyType: unknown): number {
