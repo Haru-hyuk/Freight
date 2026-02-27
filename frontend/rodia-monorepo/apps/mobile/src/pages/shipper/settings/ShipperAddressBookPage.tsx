@@ -46,6 +46,7 @@ const EMPTY_FORM: AddressBookFormState = {
 };
 
 function createStyles(theme: AppTheme) {
+
   return StyleSheet.create({
     content: {
       paddingHorizontal: 16,

@@ -498,7 +498,7 @@ export function ShipperProfilePage() {
           <AppButton
             size="icon"
             variant="secondary"
-            onPress={() => Alert.alert("프로필 관리", "프로필 수정 화면을 준비 중입니다.")}
+            onPress={() => pushRouteOnce("/(shipper)/settings/account")}
           >
             <Ionicons name="chevron-forward" size={18} color={cText} />
           </AppButton>

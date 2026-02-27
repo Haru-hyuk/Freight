@@ -86,6 +86,7 @@ export default function ShipperAccountEditPage() {
         if (cancelled) return;
         if (profile?.name) setName(profile.name);
         if (profile?.email) setEmail(profile.email);
+        if (profile?.phone) setPhone(profile.phone);
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -105,6 +106,9 @@ export default function ShipperAccountEditPage() {
         phone: phone.trim() || undefined,
       });
       if (result.ok) {
+        if (result.profile?.name != null) setName(result.profile.name);
+        if (result.profile?.email != null) setEmail(result.profile.email);
+        if (result.profile?.phone != null) setPhone(result.profile.phone);
         Alert.alert("저장 완료", "회원정보가 수정되었습니다.");
       } else {
         Alert.alert("저장 실패", result.message ?? "저장에 실패했습니다. 다시 시도해 주세요.");
