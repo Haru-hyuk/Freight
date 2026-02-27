@@ -14,7 +14,6 @@ import com.freight.backend.gpsload.routeassembly.service.QuoteCandidateService;
 import com.freight.backend.gpsload.routeassembly.service.RouteAssemblyService;
 import com.freight.backend.gpsload.routeassembly.service.RouteScoringCalibrationService;
 import org.springframework.http.MediaType;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -30,7 +29,6 @@ import java.util.Set;
  */
 @RestController
 @RequestMapping("/api/route-assembly")
-@CrossOrigin(origins = "*")
 public class RouteAssemblyController {
 
     private final RouteAssemblyService routeAssemblyService;

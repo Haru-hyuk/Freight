@@ -19,7 +19,6 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/route")
-@CrossOrigin(origins = "*")
 public class KakaoDirectionsController {
 
     @Value("${kakao.rest-api-key:}")
