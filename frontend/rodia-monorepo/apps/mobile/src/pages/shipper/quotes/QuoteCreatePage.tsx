@@ -1,4 +1,4 @@
-﻿import React, { useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import { Alert, Modal, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, type NavigationProp, type ParamListBase } from "@react-navigation/native";
@@ -20,7 +20,7 @@ import {
   useQuoteCreateDraft,
 } from "@/features/quote/model/quoteCreateDraft";
 import { createShipperMatch } from "@/features/matching/api";
-import { createShipperQuote } from "@/features/quote/api/quote-api";
+import { createShipperQuote, previewShipperQuote } from "@/features/quote/api/quote-api";
 import { buildQuoteCreateRequest } from "@/features/quote/model/quoteCreateRequestMapper";
 import { isActorOnlyWorkMethod } from "@/features/quote/model/workMethod";
 import { getQuoteFlatCardStyle, QUOTE_PROGRESS_TOKENS } from "@/features/quote/ui/QuoteCreateUiPrimitives";
@@ -177,6 +177,7 @@ function QuoteCreatePageInner() {
   const [bottomBarHeight, setBottomBarHeight] = useState(100);
   const [isSubmitDoneOpen, setIsSubmitDoneOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [previewPrice, setPreviewPrice] = useState<number | null>(null);
   const [createdQuoteIdentifier, setCreatedQuoteIdentifier] = useState("");
 
   const pricing = useMemo(() => computeQuotePricing(draft), [draft]);
@@ -197,6 +198,41 @@ function QuoteCreatePageInner() {
     }).length;
   }, [cargoList]);
   const isStep2Ready = cargoList.length > 0 && validCargoCount === cargoList.length;
+  useEffect(() => {
+    const submitBasePrice = Math.max(0, Math.trunc(Number(pricing?.basePrice ?? 0)));
+    const draftForPreview: typeof draft & { basePrice?: number } = {
+      ...draft,
+      basePrice: submitBasePrice,
+    };
+    const payload = buildQuoteCreateRequest(draftForPreview);
+    const { truckId: _ignoredTruckId, ...previewPayload } = payload;
+
+    if (!String(previewPayload?.originAddress ?? "").trim() || !String(previewPayload?.destinationAddress ?? "").trim()) {
+      setPreviewPrice(null);
+      return;
+    }
+
+    let canceled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const preview = await previewShipperQuote(previewPayload);
+        if (canceled) return;
+
+        const candidate = Number(
+          preview?.estimatedWeightedPrice ?? preview?.estimatedMaxPrice ?? preview?.estimatedMinPrice ?? NaN
+        );
+        setPreviewPrice(Number.isFinite(candidate) && candidate > 0 ? Math.trunc(candidate) : null);
+      } catch {
+        if (canceled) return;
+        setPreviewPrice(null);
+      }
+    }, 350);
+
+    return () => {
+      canceled = true;
+      clearTimeout(timer);
+    };
+  }, [draft, pricing?.basePrice]);
 
   const goBack = () => {
     if (step > 1) {
@@ -248,12 +284,7 @@ function QuoteCreatePageInner() {
     };
     
     const payload = buildQuoteCreateRequest(draftForSubmit);
-
-    // 안전장치: 생성 시점에는 truckId가 1 등 임의의 값으로 포함되면 FK 에러가 발생함
-    // 전송 직전에 payload에서 truckId 필드를 제거하여 선검증 완화 정책 준수
-    if (payload && typeof payload === 'object') {
-      delete (payload as any).truckId;
-    }
+    const { truckId: _ignoredTruckId, ...createPayload } = payload;
 
     const stops = Array.isArray(payload?.stops) ? payload.stops : [];
     const addressCandidates = [
@@ -285,7 +316,7 @@ function QuoteCreatePageInner() {
     try {
       setIsSubmitting(true);
       setCreatedQuoteIdentifier("");
-      const response = await createShipperQuote(payload);
+      const response = await createShipperQuote(createPayload);
       const nextQuoteIdentifier = resolveCreatedQuoteIdentifier(response);
       const nextQuoteId =
         resolveCreatedQuoteId(response) ||
@@ -348,7 +379,11 @@ function QuoteCreatePageInner() {
   };
 
   const getBottomPrice = () => {
-      return formatKrw(pricing.finalPrice || pricing.basePrice);
+      const resolvedPrice =
+        Number.isFinite(previewPrice) && Number(previewPrice) > 0
+          ? Number(previewPrice)
+          : (pricing.finalPrice || pricing.basePrice);
+      return formatKrw(resolvedPrice);
   };
 
   const startAddrLabel = String(draft?.startAddr ?? "").trim().split(/\s+/).filter(Boolean)[0] ?? "-";
@@ -479,3 +514,7 @@ export function QuoteCreatePage() {
 }
 
 export default QuoteCreatePage;
+
+
+
+
