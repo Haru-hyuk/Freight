@@ -1,5 +1,19 @@
 // rodia-monorepo/apps/mobile/src/entities/quote/dto.ts
-export type QuoteVehicleType = "TON_1" | "TON_2_5" | "TON_5";
+export type QuoteVehicleType =
+  | "DAMAS"
+  | "LABO"
+  | "TON_1"
+  | "TON_1_4"
+  | "TON_2_5"
+  | "TON_3_5"
+  | "TON_5"
+  | "TON_5_AXLE"
+  | "TON_8"
+  | "TON_11"
+  | "TON_14"
+  | "TON_15"
+  | "TON_18"
+  | "TON_25";
 export type QuoteVehicleBodyType = "CARGO" | "WING_BODY" | "TOP_CAR";
 export type QuoteCargoType = "GENERAL" | "FROZEN";
 export type QuoteWorkMethod =
