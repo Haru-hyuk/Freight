@@ -14,6 +14,7 @@ import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
+  buildDriverOrderDetailParams,
   getDriverOrderFilterLabel,
   getDriverQuoteSummaryDetail,
   loadDriverOrdersOverview,
@@ -30,7 +31,13 @@ import {
   readDriverOrdersAiTooltipSeen,
   writeDriverOrdersAiTooltipSeen,
 } from "@/shared/lib/storage/driverOrdersStorage";
-import { BADGE_TONE, type BadgeTone } from "@/shared/lib/policy";
+import {
+  BADGE_TONE,
+  DRIVER_UI_STATE,
+  getDriverUiStateFromBackendStatus,
+  normalizeStatus,
+  type BadgeTone,
+} from "@/shared/lib/policy";
 import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppButton } from "@/shared/ui/kit/AppButton";
@@ -44,6 +51,7 @@ import { PageScaffold } from "@/widgets/layout/PageScaffold";
 type DriverOrdersBoardProps = {
   activeTab: DriverOrdersTabKey;
   onChangeTab: (nextTab: DriverOrdersTabKey) => void;
+  assignedOnly?: boolean;
 };
 
 type ToastState = {
@@ -678,7 +686,7 @@ function DriverOrderCardView({
   );
 }
 
-export function DriverOrdersBoard({ activeTab }: DriverOrdersBoardProps) {
+export function DriverOrdersBoard({ activeTab, assignedOnly }: DriverOrdersBoardProps) {
   const router = useRouter();
   const theme = useAppTheme();
   const insets = useSafeAreaInsets();
@@ -809,10 +817,14 @@ export function DriverOrdersBoard({ activeTab }: DriverOrdersBoardProps) {
     if (activeTab === "market") {
       return filteredMarketOrders;
     }
-    // For "my" tab, return all assigned orders without any additional filtering
-    // The overview.myOrders already contains only orders relevant to this driver
-    return overview.myOrders;
-  }, [activeTab, filteredMarketOrders, overview.myOrders]);
+    const myOrders = overview.myOrders;
+    if (assignedOnly) {
+      return myOrders.filter(
+        (card) => getDriverUiStateFromBackendStatus(normalizeStatus(card.status)) === DRIVER_UI_STATE.ASSIGNED
+      );
+    }
+    return myOrders;
+  }, [activeTab, assignedOnly, filteredMarketOrders, overview.myOrders]);
   const showFilters = activeTab === "market" && overview.availableFilters.length > 1;
   const showAiFab = activeTab === "market" && overview.capability.supportsAiFab;
   const showAiTooltipBubble = showAiTooltip && showAiFab && !isAiLoading;
@@ -841,8 +853,8 @@ export function DriverOrdersBoard({ activeTab }: DriverOrdersBoardProps) {
       }
 
       router.push({
-        pathname: "/(driver)/matches/[id]",
-       params: { id: card.matchId },
+        pathname: "/(driver)/run/[id]",
+       params: buildDriverOrderDetailParams(card),
       });
 
       setTimeout(() => {
@@ -1000,10 +1012,18 @@ export function DriverOrdersBoard({ activeTab }: DriverOrdersBoardProps) {
             }
             ListEmptyComponent={
               <AppEmptyState
-                title={activeTab === "market" ? "오더 마켓이 비어 있습니다." : "내 오더가 없습니다."}
+                title={
+                  activeTab === "market"
+                    ? "오더 마켓이 비어 있습니다."
+                    : assignedOnly
+                    ? "운행 가능한 오더가 없습니다."
+                    : "내 오더가 없습니다."
+                }
                 description={
                   activeTab === "market"
                     ? "새 오더가 등록되면 이곳에 표시됩니다."
+                    : assignedOnly
+                    ? "화주 승인이 완료된 오더가 생기면 이곳에 표시됩니다."
                     : "수락한 오더가 있으면 이곳에 표시됩니다."
                 }
                 fullScreen={false}

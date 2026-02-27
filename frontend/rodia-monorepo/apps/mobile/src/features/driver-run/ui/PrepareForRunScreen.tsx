@@ -20,7 +20,7 @@ const CHECKLIST_ITEMS = [
 
 export function PrepareForRunScreen({ order }: Props) {
   const theme = useAppTheme();
-  const { setActiveOrder } = useActiveOrder();
+  const { setActiveOrder, clearActiveOrder } = useActiveOrder();
   const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
 
   const toggleCheck = (item: string) => {
@@ -42,6 +42,10 @@ export function PrepareForRunScreen({ order }: Props) {
     // In a real app, this would also call an API to update the status.
     const drivingOrder = { ...order, status: "DRIVING" as const };
     setActiveOrder(drivingOrder);
+  };
+
+  const handleViewRunList = () => {
+    clearActiveOrder();
   };
 
   return (
@@ -77,6 +81,12 @@ export function PrepareForRunScreen({ order }: Props) {
           title="운행 시작"
           onPress={handleStartDriving}
           disabled={!allChecked}
+        />
+        <AppButton
+          title="운행 목록 보기"
+          onPress={handleViewRunList}
+          variant="secondary"
+          style={{ marginTop: 8 }}
         />
       </View>
     </PageScaffold>
