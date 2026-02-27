@@ -41,6 +41,17 @@
 - Path: `/api/auth/logout`
 - Response: `204 No Content`
 
+### My Profile
+- Method: `GET`
+- Path: `/api/auth/me`
+- Response DTO: `MeResponse`
+
+### My Profile Update
+- Method: `PATCH`
+- Path: `/api/auth/me`
+- Request DTO: `MeUpdateRequest`
+- Response DTO: `MeResponse`
+
 ## Driver Trucks
 
 ### Truck Create
