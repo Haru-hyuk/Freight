@@ -17,6 +17,9 @@ import type {
 } from "@/entities/quote/model/quote.types";
 import { apiClient } from "@/shared/lib/api/apiClient";
 import {
+  listChecklistItems as listChecklistItemsGenerated,
+} from "@/shared/api/generated/checklist-item-controller/checklist-item-controller";
+import {
   createQuote as createQuoteGenerated,
   deleteQuote as deleteQuoteGenerated,
   getQuote as getQuoteGenerated,
@@ -24,6 +27,7 @@ import {
   updateQuote as updateQuoteGenerated,
   validateQuote as validateQuoteGenerated,
 } from "@/shared/api/generated/quote-controller/quote-controller";
+import type { ChecklistItemResponse } from "@/shared/api/generated/schemas/checklistItemResponse";
 import { getShipperQuoteCreatePath, isMockMode as isApiMockMode } from "@/shared/lib/config/env";
 import {
   DEFAULT_LOAD_METHOD,
@@ -90,6 +94,10 @@ function resolveQuoteApi(): QuoteApi {
 
 type AnyObj = Record<string, unknown>;
 type QuoteCreateTransportPayload = QuoteCreateRequestDto & { basePrice?: number };
+type ChecklistMasterItem = { checklistItemId: number; name: string };
+
+let checklistMasterCache: ChecklistMasterItem[] | null = null;
+let checklistMasterPromise: Promise<ChecklistMasterItem[]> | null = null;
 
 const QUOTE_STATUS: QuoteStatusApi[] = [
   "OPEN",
@@ -173,6 +181,69 @@ function pickListPayload(input: unknown): unknown[] {
   return [];
 }
 
+function normalizeText(input: unknown): string {
+  return safeString(input, "").replace(/\s+/g, "").toLowerCase();
+}
+
+function normalizeChecklistMasterItems(input: unknown): ChecklistMasterItem[] {
+  const list = pickListPayload(input);
+  const normalized = list
+    .map((item) => {
+      const source = asObject(item as ChecklistItemResponse);
+      const checklistItemId = safeInt(source.checklistItemId, 0);
+      const name = safeString(source.name, "");
+      if (checklistItemId <= 0 || !name) return null;
+      return { checklistItemId, name };
+    })
+    .filter((item): item is ChecklistMasterItem => Boolean(item));
+
+  if (!normalized.length) return [];
+  return normalized;
+}
+
+async function parseChecklistMasterResponse(raw: unknown): Promise<ChecklistMasterItem[]> {
+  if (raw instanceof Blob) {
+    const text = await raw.text();
+    if (!text.trim()) return [];
+    try {
+      return normalizeChecklistMasterItems(JSON.parse(text));
+    } catch {
+      return [];
+    }
+  }
+
+  if (typeof raw === "string") {
+    try {
+      return normalizeChecklistMasterItems(JSON.parse(raw));
+    } catch {
+      return [];
+    }
+  }
+
+  return normalizeChecklistMasterItems(raw);
+}
+
+async function fetchChecklistMaster(): Promise<ChecklistMasterItem[]> {
+  if (checklistMasterCache) return checklistMasterCache;
+  if (checklistMasterPromise) return checklistMasterPromise;
+
+  checklistMasterPromise = (async () => {
+    try {
+      const raw = await listChecklistItemsGenerated();
+      const items = await parseChecklistMasterResponse(raw);
+      checklistMasterCache = items;
+      return items;
+    } catch {
+      checklistMasterCache = [];
+      return [];
+    } finally {
+      checklistMasterPromise = null;
+    }
+  })();
+
+  return checklistMasterPromise;
+}
+
 function pickDetailPayload(input: unknown): AnyObj {
   const payload = pickPayload(input);
   if (Array.isArray(payload)) {
@@ -201,14 +272,20 @@ function pickQuoteId(input: AnyObj, fallback = 0): number {
 function mapChecklistItems(input: unknown): QuoteDetailResponse["checklistItems"] {
   if (!Array.isArray(input)) return [];
 
-  return input.slice(0, 100).map((item, index) => {
-    const source = asObject(item as QuoteChecklistItemDto);
-    return {
-      checklistItemId: Math.max(0, safeInt(source.checklistItemId, index + 1)),
-      extraInput: safeString(source.extraInput, ""),
-      extraFee: Math.max(0, safeInt(source.extraFee, 0)),
-    };
-  });
+  const mapped: Array<QuoteDetailResponse["checklistItems"][number] | null> = input
+    .slice(0, 100)
+    .map((item) => {
+      const source = asObject(item as QuoteChecklistItemDto);
+      const checklistItemId = safeInt(source.checklistItemId, 0);
+      if (checklistItemId <= 0) return null;
+      return {
+        checklistItemId,
+        extraInput: safeString(source.extraInput, ""),
+        extraFee: Math.max(0, safeInt(source.extraFee, 0)),
+      };
+    });
+
+  return mapped.filter((item): item is QuoteDetailResponse["checklistItems"][number] => item !== null);
 }
 
 function mapStops(input: unknown): QuoteDetailResponse["stops"] {
@@ -244,14 +321,20 @@ function mapStops(input: unknown): QuoteDetailResponse["stops"] {
 function sanitizeChecklistItems(input: unknown): QuoteChecklistItemDto[] {
   if (!Array.isArray(input)) return [];
 
-  return input.slice(0, 100).map((item, index) => {
-    const source = asObject(item as QuoteChecklistItemDto);
-    return {
-      checklistItemId: Math.max(0, safeInt(source.checklistItemId, index + 1)),
-      extraInput: safeString(source.extraInput, ""),
-      extraFee: Math.max(0, safeInt(source.extraFee, 0)),
-    };
-  });
+  const mapped: Array<QuoteChecklistItemDto | null> = input
+    .slice(0, 100)
+    .map((item) => {
+      const source = asObject(item as QuoteChecklistItemDto);
+      const checklistItemId = safeInt(source.checklistItemId, 0);
+      if (checklistItemId <= 0) return null;
+      return {
+        checklistItemId,
+        extraInput: safeString(source.extraInput, ""),
+        extraFee: Math.max(0, safeInt(source.extraFee, 0)),
+      };
+    });
+
+  return mapped.filter((item): item is QuoteChecklistItemDto => item !== null);
 }
 
 function sanitizeStopsForRequest(input: unknown): QuoteStopRequestDto[] {
@@ -278,6 +361,39 @@ function sanitizeStopsForRequest(input: unknown): QuoteStopRequestDto[] {
       ...stop,
       seq: index + 1,
     }));
+}
+
+async function resolveChecklistItemsForRequest(input: unknown): Promise<QuoteChecklistItemDto[]> {
+  if (!Array.isArray(input) || input.length === 0) return [];
+  const masterItems = await fetchChecklistMaster();
+  if (!masterItems.length) return [];
+
+  const byName = new Map<string, number>();
+  for (const item of masterItems) {
+    byName.set(normalizeText(item.name), item.checklistItemId);
+  }
+
+  const mapped: Array<QuoteChecklistItemDto | null> = input
+    .slice(0, 100)
+    .map((item) => {
+      const source = asObject(item as QuoteChecklistItemDto);
+      const directId = safeInt(source.checklistItemId, 0);
+      let checklistItemId = directId > 0 ? directId : 0;
+
+      if (checklistItemId <= 0) {
+        const key = normalizeText(source.extraInput);
+        checklistItemId = key ? safeInt(byName.get(key), 0) : 0;
+      }
+
+      if (checklistItemId <= 0) return null;
+      return {
+        checklistItemId,
+        extraInput: safeString(source.extraInput, ""),
+        extraFee: Math.max(0, safeInt(source.extraFee, 0)),
+      };
+    });
+
+  return mapped.filter((item): item is QuoteChecklistItemDto => item !== null);
 }
 
 function sanitizeQuotePayload(payload: QuoteCreateTransportPayload): QuoteCreateTransportPayload {
@@ -315,6 +431,15 @@ function sanitizeQuotePayload(payload: QuoteCreateTransportPayload): QuoteCreate
   }
 
   return sanitized as QuoteCreateTransportPayload;
+}
+
+async function prepareQuotePayload(payload: QuoteCreateTransportPayload): Promise<QuoteCreateTransportPayload> {
+  const source = asObject(payload as unknown as AnyObj) as Partial<QuoteCreateTransportPayload>;
+  const resolvedChecklistItems = await resolveChecklistItemsForRequest(source.checklistItems);
+  return sanitizeQuotePayload({
+    ...(payload as QuoteCreateTransportPayload),
+    checklistItems: resolvedChecklistItems,
+  });
 }
 
 function needsLegacyWorkMethodFallback(payload: QuoteCreateTransportPayload): boolean {
@@ -569,7 +694,7 @@ function createRealQuoteApi(): QuoteApi {
     },
 
     async previewShipperQuote(payload: QuoteCreateRequestDto): Promise<QuotePricePreview | null> {
-      const safePayload = sanitizeQuotePayload((payload ?? {}) as QuoteCreateTransportPayload);
+      const safePayload = await prepareQuotePayload((payload ?? {}) as QuoteCreateTransportPayload);
       try {
         const data = await validateQuoteGenerated(
           safePayload as unknown as Parameters<typeof validateQuoteGenerated>[0]
@@ -584,7 +709,7 @@ function createRealQuoteApi(): QuoteApi {
     },
 
     async createShipperQuote(payload: QuoteCreateRequestDto): Promise<QuoteCreateResponseDto> {
-      const safePayload = sanitizeQuotePayload((payload ?? {}) as QuoteCreateTransportPayload);
+      const safePayload = await prepareQuotePayload((payload ?? {}) as QuoteCreateTransportPayload);
       quoteDebugLog("create.payload", {
         keys: Object.keys((safePayload ?? {}) as Record<string, unknown>),
         stopsLength: Array.isArray(safePayload?.stops) ? safePayload.stops.length : 0,
@@ -608,7 +733,7 @@ function createRealQuoteApi(): QuoteApi {
       const safeQuoteId = normalizeQuoteId(quoteId);
       if (safeQuoteId <= 0) return toQuoteDetail({}, 0);
 
-      const safePayload = sanitizeQuotePayload((payload ?? {}) as QuoteCreateTransportPayload);
+      const safePayload = await prepareQuotePayload((payload ?? {}) as QuoteCreateTransportPayload);
       try {
         const data = await updateQuoteGenerated(
           String(safeQuoteId),
