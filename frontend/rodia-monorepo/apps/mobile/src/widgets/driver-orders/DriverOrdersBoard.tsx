@@ -14,7 +14,6 @@ import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
-  buildDriverOrderDetailParams,
   getDriverOrderFilterLabel,
   getDriverQuoteSummaryDetail,
   loadDriverOrdersOverview,
@@ -679,7 +678,7 @@ function DriverOrderCardView({
   );
 }
 
-export function DriverOrdersBoard({ activeTab, onChangeTab }: DriverOrdersBoardProps) {
+export function DriverOrdersBoard({ activeTab }: DriverOrdersBoardProps) {
   const router = useRouter();
   const theme = useAppTheme();
   const insets = useSafeAreaInsets();
@@ -842,8 +841,8 @@ export function DriverOrdersBoard({ activeTab, onChangeTab }: DriverOrdersBoardP
       }
 
       router.push({
-        pathname: "/(driver)/run/[id]",
-        params: buildDriverOrderDetailParams(card),
+        pathname: "/(driver)/matches/[id]",
+       params: { id: card.matchId },
       });
 
       setTimeout(() => {

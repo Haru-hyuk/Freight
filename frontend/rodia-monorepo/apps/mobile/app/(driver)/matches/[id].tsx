@@ -1,6 +1,8 @@
 import React, { useMemo } from "react";
 import { Redirect, useLocalSearchParams } from "expo-router";
 
+import DriverMatchDetailPage from "@/pages/driver/matches/DriverMatchDetailPage";
+
 type LegacyParams = {
   id?: string | string[];
   matchId?: string | string[];
@@ -17,7 +19,7 @@ function readFirst(value: string | string[] | undefined): string {
   return typeof raw === "string" ? raw.trim() : "";
 }
 
-export default function DriverMatchesLegacyDetailRoute() {
+export default function DriverMatchesDetailRoute() {
   const params = useLocalSearchParams<LegacyParams>();
 
   const nextId = useMemo(() => {
@@ -32,21 +34,28 @@ export default function DriverMatchesLegacyDetailRoute() {
   const accepted = readFirst(params?.accepted);
   const acceptedAt = readFirst(params?.acceptedAt);
 
-  // Legacy alias: canonical driver run detail route is `/(driver)/run/[id]`.
-  return (
-    <Redirect
-      href={{
-        pathname: "/(driver)/run/[id]",
-        params: {
-          id: nextId,
-          ...(quoteId ? { quoteId } : {}),
-          ...(status ? { status } : {}),
-          ...(createdAt ? { createdAt } : {}),
-          ...(updatedAt ? { updatedAt } : {}),
-          ...(accepted ? { accepted } : {}),
-          ...(acceptedAt ? { acceptedAt } : {}),
-        },
-      }}
-    />
-  );
+  const isLegacyRunAlias = Boolean(quoteId || status || createdAt || updatedAt || accepted || acceptedAt);
+
+  // Legacy alias: keep backward compatibility for deep-links that used to land on run detail.
+  if (nextId === "current" || isLegacyRunAlias) {
+    return (
+      <Redirect
+        href={{
+          pathname: "/(driver)/run/[id]",
+          params: {
+            id: nextId,
+            ...(quoteId ? { quoteId } : {}),
+            ...(status ? { status } : {}),
+            ...(createdAt ? { createdAt } : {}),
+            ...(updatedAt ? { updatedAt } : {}),
+            ...(accepted ? { accepted } : {}),
+            ...(acceptedAt ? { acceptedAt } : {}),
+          },
+        }}
+      />
+    );
+  }
+
+  const matchId = Number(nextId);
+  return <DriverMatchDetailPage matchId={matchId} />;
 }
