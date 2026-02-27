@@ -151,28 +151,28 @@ const useStyles = createThemedStyles((theme) => {
       backgroundColor: cSurfaceAlt,
     },
     tabsWrap: {
-      paddingHorizontal: spacing * 5,
-      paddingTop: spacing * 3,
-      paddingBottom: spacing * 2,
+      paddingHorizontal: spacing * 4,
+      paddingTop: spacing * 2,
+      paddingBottom: spacing,
       backgroundColor: cSurfaceAlt,
     },
     tabRow: {
       flexDirection: "row",
       alignItems: "center",
-      gap: spacing * 2,
+      gap: spacing,
     },
     tabButton: {
       flex: 1,
       borderWidth: 1,
       borderColor: cLine,
       backgroundColor: cSurface,
-      borderRadius: 14,
-      minHeight: 48,
-      paddingHorizontal: spacing * 3,
+      borderRadius: 12,
+      minHeight: 40,
+      paddingHorizontal: spacing * 2,
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
-      gap: spacing + 2,
+      gap: spacing,
     },
     tabButtonActive: {
       borderColor: tint(cPrimary, 0.45, cPrimary),
@@ -180,18 +180,18 @@ const useStyles = createThemedStyles((theme) => {
     },
     tabLabel: {
       color: cTextMuted,
-      fontSize: safeNumber(theme?.typography?.scale?.detail?.size, 14) + 1,
-      lineHeight: safeNumber(theme?.typography?.scale?.detail?.lineHeight, 20) + 2,
+      fontSize: safeNumber(theme?.typography?.scale?.detail?.size, 14),
+      lineHeight: safeNumber(theme?.typography?.scale?.detail?.lineHeight, 20),
       fontWeight: "800",
     },
     tabLabelActive: {
       color: cPrimary,
     },
     tabBadge: {
-      minWidth: 22,
-      height: 22,
-      borderRadius: 11,
-      paddingHorizontal: 6,
+      minWidth: 20,
+      height: 20,
+      borderRadius: 10,
+      paddingHorizontal: 5,
       alignItems: "center",
       justifyContent: "center",
       borderWidth: 1,
@@ -205,8 +205,8 @@ const useStyles = createThemedStyles((theme) => {
       fontWeight: "900",
     },
     stickyFilterWrap: {
-      paddingHorizontal: spacing * 5,
-      paddingVertical: spacing * 2,
+      paddingHorizontal: spacing * 4,
+      paddingVertical: spacing,
       backgroundColor: cSurfaceAlt,
       borderBottomWidth: 1,
       borderBottomColor: tint(cLine, 0.85, cLine),
@@ -214,15 +214,15 @@ const useStyles = createThemedStyles((theme) => {
     filterScroll: {
       flexDirection: "row",
       alignItems: "center",
-      gap: spacing * 2,
+      gap: spacing,
     },
     filterChip: {
-      minHeight: 36,
+      minHeight: 30,
       borderRadius: 999,
       borderWidth: 1,
       borderColor: cLine,
       backgroundColor: cSurface,
-      paddingHorizontal: spacing * 3,
+      paddingHorizontal: spacing * 2,
       alignItems: "center",
       justifyContent: "center",
     },
@@ -232,8 +232,8 @@ const useStyles = createThemedStyles((theme) => {
     },
     filterChipText: {
       color: cTextMuted,
-      fontSize: safeNumber(theme?.typography?.scale?.detail?.size, 14),
-      lineHeight: safeNumber(theme?.typography?.scale?.detail?.lineHeight, 20),
+      fontSize: safeNumber(theme?.typography?.scale?.caption?.size, 12) + 1,
+      lineHeight: safeNumber(theme?.typography?.scale?.caption?.lineHeight, 16) + 2,
       fontWeight: "800",
     },
     filterChipTextActive: {
@@ -241,8 +241,8 @@ const useStyles = createThemedStyles((theme) => {
       fontWeight: "900",
     },
     listContent: {
-      paddingHorizontal: spacing * 5,
-      paddingTop: spacing * 3,
+      paddingHorizontal: spacing * 4,
+      paddingTop: spacing * 2,
       paddingBottom: spacing * 24,
     },
     cardPressable: {
@@ -260,16 +260,16 @@ const useStyles = createThemedStyles((theme) => {
     },
     card: {
       borderRadius: safeNumber(theme?.components?.card?.radius, 16),
-      paddingHorizontal: spacing * 4,
-      paddingTop: spacing * 4,
-      paddingBottom: spacing * 4,
-      gap: spacing * 3,
+      paddingHorizontal: spacing * 3,
+      paddingTop: spacing * 3,
+      paddingBottom: spacing * 3,
+      gap: spacing * 2,
     },
     topRow: {
       flexDirection: "row",
       alignItems: "flex-start",
       justifyContent: "space-between",
-      gap: spacing * 2,
+      gap: spacing,
     },
     tagsRow: {
       flexDirection: "row",
@@ -319,12 +319,12 @@ const useStyles = createThemedStyles((theme) => {
       borderWidth: 1,
       borderColor: tint(cLine, 0.9, cLine),
       backgroundColor: tint(cTextMain, 0.02, cSurface),
-      borderRadius: 14,
-      paddingHorizontal: spacing * 3,
-      paddingVertical: spacing * 3,
+      borderRadius: 12,
+      paddingHorizontal: spacing * 2,
+      paddingVertical: spacing * 2,
       flexDirection: "row",
       alignItems: "center",
-      gap: spacing * 2,
+      gap: spacing,
     },
     routeCol: {
       flex: 1,
@@ -378,11 +378,11 @@ const useStyles = createThemedStyles((theme) => {
     },
     specCell: {
       flex: 1,
-      minHeight: 62,
+      minHeight: 52,
       paddingHorizontal: spacing * 2,
-      paddingVertical: spacing * 2,
+      paddingVertical: spacing,
       justifyContent: "center",
-      gap: 3,
+      gap: 2,
       borderRightWidth: 1,
       borderRightColor: tint(cLine, 0.9, cLine),
       backgroundColor: cSurface,
@@ -406,7 +406,7 @@ const useStyles = createThemedStyles((theme) => {
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
-      gap: spacing * 2,
+      gap: spacing,
     },
     emptyDistanceChip: {
       borderRadius: 999,
@@ -449,13 +449,13 @@ const useStyles = createThemedStyles((theme) => {
       gap: spacing * 2,
     },
     tooltip: {
-      maxWidth: 220,
-      borderRadius: 12,
+      maxWidth: 190,
+      borderRadius: 10,
       borderWidth: 1,
       borderColor: tint(cPrimary, 0.3, cLine),
       backgroundColor: cSurface,
-      paddingHorizontal: spacing * 3,
-      paddingVertical: spacing * 2,
+      paddingHorizontal: spacing * 2,
+      paddingVertical: spacing,
     },
     tooltipText: {
       color: cTextMain,
@@ -501,8 +501,8 @@ const useStyles = createThemedStyles((theme) => {
     },
     toastCard: {
       borderRadius: 999,
-      minHeight: 36,
-      paddingHorizontal: spacing * 4,
+      minHeight: 32,
+      paddingHorizontal: spacing * 3,
       alignItems: "center",
       justifyContent: "center",
       borderWidth: 1,
@@ -537,7 +537,7 @@ const useStyles = createThemedStyles((theme) => {
       opacity: 0.86,
     },
     separator: {
-      height: spacing * 3,
+      height: spacing * 2,
     },
     errorWrap: {
       paddingHorizontal: spacing * 5,
@@ -651,21 +651,6 @@ function DriverOrderCardView({
           <View style={styles.routeCol}>
             <AppText style={styles.routeLabel}>도착</AppText>
             <AppText style={styles.routeAddress}>{item.destinationAddress || "-"}</AppText>
-          </View>
-        </View>
-
-        <View style={styles.specGrid}>
-          <View style={styles.specCell}>
-            <AppText style={styles.specLabel}>차종</AppText>
-            <AppText style={styles.specValue}>{item.vehicleText || "-"}</AppText>
-          </View>
-          <View style={styles.specCell}>
-            <AppText style={styles.specLabel}>방법</AppText>
-            <AppText style={styles.specValue}>{item.methodText || "-"}</AppText>
-          </View>
-          <View style={[styles.specCell, styles.specCellLast]}>
-            <AppText style={styles.specLabel}>화물</AppText>
-            <AppText style={styles.specValue}>{item.cargoText || "-"}</AppText>
           </View>
         </View>
 

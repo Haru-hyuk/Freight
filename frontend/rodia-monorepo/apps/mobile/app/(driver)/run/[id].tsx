@@ -1,8 +1,6 @@
 import React from "react";
 import { Redirect, useLocalSearchParams } from "expo-router";
 
-import DriverMatchDetailPage from "@/pages/driver/matches/DriverMatchDetailPage";
-import DriverMyMatchesPage from "@/pages/driver/matches/DriverMyMatchesPage";
 import {
   parseMatchDetailRouteParams,
   type MatchDetailRouteParams,
@@ -10,15 +8,11 @@ import {
 
 export default function DriverRunRoute() {
   const params = useLocalSearchParams<MatchDetailRouteParams>();
-  const { idText, matchId, snapshot } = parseMatchDetailRouteParams(params);
+  const { idText, matchId } = parseMatchDetailRouteParams(params);
 
-  if (!idText || idText === "current") {
-    return <DriverMyMatchesPage />;
+  if (!idText || idText === "current" || matchId <= 0) {
+    return <Redirect href="/(driver)/run" />;
   }
 
-  if (matchId <= 0) {
-    return <Redirect href="/(driver)/run/current" />;
-  }
-
-  return <DriverMatchDetailPage matchId={matchId} routeSnapshot={snapshot} />;
+  return <Redirect href="/(driver)/run" />;
 }
