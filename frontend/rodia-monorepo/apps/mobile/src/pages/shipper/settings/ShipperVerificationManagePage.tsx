@@ -2,12 +2,14 @@ import React, { useMemo } from "react";
 import { Alert, StyleSheet, View } from "react-native";
 import { useRouter } from "expo-router";
 
+import type { VerificationManageMock } from "@/features/shipper-settings/api/shipper-settings-mock";
+import { shipperSettingsMock } from "@/features/shipper-settings/api/shipper-settings-mock";
+import { isMockMode } from "@/shared/lib/config/env";
 import type { AppTheme } from "@/shared/theme/types";
 import { useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppButton } from "@/shared/ui/kit/AppButton";
 import { AppText } from "@/shared/ui/kit/AppText";
 import { PageScaffold } from "@/widgets/layout/PageScaffold";
-import { shipperSettingsMock } from "@/features/shipper-settings/api/shipper-settings-mock";
 
 import KeyValueRow from "./ui/KeyValueRow";
 import SettingSection from "./ui/SettingSection";
@@ -47,11 +49,17 @@ function createStyles(theme: AppTheme) {
   });
 }
 
+const EMPTY_VERIFICATION: VerificationManageMock = {
+  phoneVerified: false, phoneVerifiedAt: "",
+  businessVerified: false, businessReviewedAt: "",
+  paymentMethodRegistered: false, recentRequestAt: "",
+};
+
 export default function ShipperVerificationManagePage() {
   const router = useRouter();
   const theme = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const data = shipperSettingsMock.verification;
+  const data = isMockMode() ? shipperSettingsMock.verification : EMPTY_VERIFICATION;
 
   return (
     <PageScaffold

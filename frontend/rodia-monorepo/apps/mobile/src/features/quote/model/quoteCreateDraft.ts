@@ -193,12 +193,12 @@ export function createInitialQuoteCreateDraft(): QuoteCreateDraft {
 
     date: new Date(),
     time: createDefaultTime(),
-    truckId: 1,
+    truckId: undefined,
     originLat: 0,
     originLng: 0,
     destinationLat: 0,
     destinationLng: 0,
-    distanceKm: 0,
+    distanceKm: undefined,
 
     cargoList: [createEmptyCargoItem(1)],
 
