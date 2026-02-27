@@ -4,6 +4,8 @@ import { ThemeProvider } from "@/shared/theme/ThemeProvider";
 import { useAuth } from "@/features/auth/model/useAuth";
 import { initLayoutAnimationForAndroid } from "@/shared/lib/ui/layoutAnimationInit";
 
+import { ActiveOrderProvider } from "@/entities/order/model/active-order.store";
+
 initLayoutAnimationForAndroid();
 
 export default function RootLayout() {
@@ -15,7 +17,9 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider>
-      <Stack screenOptions={{ headerShown: false }} />
+      <ActiveOrderProvider>
+        <Stack screenOptions={{ headerShown: false }} />
+      </ActiveOrderProvider>
     </ThemeProvider>
   );
 }
