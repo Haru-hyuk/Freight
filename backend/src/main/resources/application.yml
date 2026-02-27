@@ -8,6 +8,11 @@ server:
 spring:
   application:
     name: backend
+  devtools:
+    restart:
+      enabled: false
+    livereload:
+      enabled: false
   servlet:
     encoding:
       enabled: true

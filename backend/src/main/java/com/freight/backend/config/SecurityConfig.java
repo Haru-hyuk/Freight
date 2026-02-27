@@ -66,14 +66,17 @@ public class SecurityConfig {
                                 "/swagger-ui.html",
                                 "/api-docs/**",
                                 "/v3/api-docs/**",
-                                "/actuator/health",
-                                "/actuator/info",
+                                "/api/health",
                                 "/api/config/public",
                                 "/api/route/**",
                                 "/api/route-assembly/**",
                                 "/api/route/place-search",
                                 "/api/load/**",
-                                "/api/reference/**"
+                                "/api/reference/**",
+                                "/api/checklist-items",
+                                "/api/checklist-items/**",
+                                "/api/announcements",
+                                "/api/announcements/**"
                         ).permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/driver/**").hasAnyRole("DRIVER", "ADMIN")
