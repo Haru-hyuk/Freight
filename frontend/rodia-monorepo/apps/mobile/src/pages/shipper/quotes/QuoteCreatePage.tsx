@@ -1,8 +1,8 @@
-﻿import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Modal, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, type NavigationProp, type ParamListBase } from "@react-navigation/native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
@@ -168,10 +168,12 @@ function QuoteCreatePageInner() {
   const theme = useAppTheme();
   const styles = useStyles();
   const router = useRouter();
+  const params = useLocalSearchParams<{ prefillStartAddr?: string; prefillEndAddr?: string }>();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const insets = useSafeAreaInsets();
 
-  const { draft } = useQuoteCreateDraft();
+  const { draft, patchDraft } = useQuoteCreateDraft();
+  const appliedPrefillKeyRef = useRef("");
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [bottomBarHeight, setBottomBarHeight] = useState(100);
@@ -198,6 +200,30 @@ function QuoteCreatePageInner() {
     }).length;
   }, [cargoList]);
   const isStep2Ready = cargoList.length > 0 && validCargoCount === cargoList.length;
+
+  useEffect(() => {
+    const startAddr = String(params?.prefillStartAddr ?? "").trim();
+    const endAddr = String(params?.prefillEndAddr ?? "").trim();
+    if (!startAddr && !endAddr) return;
+
+    const key = `${startAddr}__${endAddr}`;
+    if (appliedPrefillKeyRef.current === key) return;
+    appliedPrefillKeyRef.current = key;
+
+    patchDraft({
+      startAddr: startAddr || draft?.startAddr || "",
+      endAddr: endAddr || draft?.endAddr || "",
+      startAddrDetail: "",
+      endAddrDetail: "",
+      waypoints: [],
+      originLat: undefined,
+      originLng: undefined,
+      destinationLat: undefined,
+      destinationLng: undefined,
+      distanceKm: undefined,
+    });
+  }, [draft?.endAddr, draft?.startAddr, params?.prefillEndAddr, params?.prefillStartAddr, patchDraft]);
+
   useEffect(() => {
     const submitBasePrice = Math.max(0, Math.trunc(Number(pricing?.basePrice ?? 0)));
     const draftForPreview: typeof draft & { basePrice?: number } = {
@@ -514,4 +540,5 @@ export function QuoteCreatePage() {
 }
 
 export default QuoteCreatePage;
+
 
