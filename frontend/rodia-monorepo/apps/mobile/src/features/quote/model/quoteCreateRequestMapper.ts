@@ -1,11 +1,12 @@
 import type {
   QuoteCargoType,
+  QuoteChecklistItemDto,
   QuoteCreateRequestDto,
   QuoteStopRequestDto,
   QuoteVehicleBodyType,
   QuoteVehicleType,
 } from "@/entities/quote/dto";
-import type { QuoteCreateDraft } from "@/features/quote/model/quoteCreateDraft";
+import { EXTRA_OPTIONS, type QuoteCreateDraft } from "@/features/quote/model/quoteCreateDraft";
 import { DEFAULT_LOAD_METHOD, DEFAULT_UNLOAD_METHOD, toActorOnlyWorkMethod } from "@/features/quote/model/workMethod";
 
 const VEHICLE_TYPE_BY_TON_INDEX: QuoteVehicleType[] = ["TON_1", "TON_2_5", "TON_5"];
@@ -151,8 +152,21 @@ function resolveBasePrice(draft: QuoteCreateDraft) {
   return Math.max(0, toInt(safeRaw, 0));
 }
 
-function buildChecklistItems(): QuoteCreateRequestDto["checklistItems"] {
-  return []; // 체크리스트 임의 전송 방지
+function buildChecklistItems(draft: QuoteCreateDraft): QuoteChecklistItemDto[] {
+  const selected = Array.isArray(draft?.selectedOpts) ? draft.selectedOpts : [];
+  if (!selected.length) return [];
+
+  return selected
+    .map((optionId) => {
+      const option = EXTRA_OPTIONS.find((item) => item.id === optionId);
+      if (!option) return null;
+      return {
+        checklistItemId: 0,
+        extraInput: option.title,
+        extraFee: Math.max(0, Math.trunc(option.price)),
+      } as QuoteChecklistItemDto;
+    })
+    .filter((item): item is QuoteChecklistItemDto => Boolean(item));
 }
 
 export function buildQuoteCreateRequest(draft: QuoteCreateDraft): QuoteCreateRequestPayload {
@@ -186,7 +200,7 @@ export function buildQuoteCreateRequest(draft: QuoteCreateDraft): QuoteCreateReq
     allowCombine: !!draft.isPool,
     loadMethod: toActorOnlyWorkMethod(draft.loadMethod, DEFAULT_LOAD_METHOD),
     unloadMethod: toActorOnlyWorkMethod(draft.unloadMethod, DEFAULT_UNLOAD_METHOD),
-    checklistItems: buildChecklistItems(),
+    checklistItems: buildChecklistItems(draft),
     stops: buildStops(draft),
   };
 
