@@ -8,7 +8,7 @@ export default function DriverRunIndexRoute() {
   const { activeOrder } = useActiveOrder();
 
   if (!activeOrder) {
-    return <DriverOrdersBoard activeTab="my" onChangeTab={() => {}} assignedOnly />;
+    return <DriverOrdersBoard assignedOnly />;
   }
 
   if (activeOrder.status === "PREPARING") {
