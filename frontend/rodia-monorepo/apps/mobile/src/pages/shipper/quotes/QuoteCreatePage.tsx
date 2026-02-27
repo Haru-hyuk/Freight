@@ -218,10 +218,14 @@ function QuoteCreatePageInner() {
         const preview = await previewShipperQuote(previewPayload);
         if (canceled) return;
 
-        const candidate = Number(
-          preview?.estimatedWeightedPrice ?? preview?.estimatedMaxPrice ?? preview?.estimatedMinPrice ?? NaN
-        );
-        setPreviewPrice(Number.isFinite(candidate) && candidate > 0 ? Math.trunc(candidate) : null);
+        const weighted = Number(preview?.estimatedWeightedPrice ?? NaN);
+        const min = Number(preview?.estimatedMinPrice ?? NaN);
+        const max = Number(preview?.estimatedMaxPrice ?? NaN);
+        const candidate = Number.isFinite(weighted) && weighted > 0
+          ? weighted
+          : Number(preview?.estimatedMaxPrice ?? preview?.estimatedMinPrice ?? NaN);
+        const nextPreviewPrice = Number.isFinite(candidate) && candidate > 0 ? Math.trunc(candidate) : null;
+        setPreviewPrice(nextPreviewPrice);
       } catch {
         if (canceled) return;
         setPreviewPrice(null);
@@ -379,11 +383,7 @@ function QuoteCreatePageInner() {
   };
 
   const getBottomPrice = () => {
-      const resolvedPrice =
-        Number.isFinite(previewPrice) && Number(previewPrice) > 0
-          ? Number(previewPrice)
-          : (pricing.finalPrice || pricing.basePrice);
-      return formatKrw(resolvedPrice);
+      return formatKrw(pricing.finalPrice || pricing.basePrice);
   };
 
   const startAddrLabel = String(draft?.startAddr ?? "").trim().split(/\s+/).filter(Boolean)[0] ?? "-";
@@ -514,7 +514,4 @@ export function QuoteCreatePage() {
 }
 
 export default QuoteCreatePage;
-
-
-
 
