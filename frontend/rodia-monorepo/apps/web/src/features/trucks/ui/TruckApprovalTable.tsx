@@ -1,17 +1,9 @@
-import * as React from "react";
-
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/shared/ui/shadcn/table";
-import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/shadcn/card";
-import { Button } from "@/shared/ui/shadcn/button";
 import { Badge } from "@/shared/ui/shadcn/badge";
+import { Button } from "@/shared/ui/shadcn/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/shadcn/card";
 import { Skeleton } from "@/shared/ui/shadcn/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/shared/ui/shadcn/table";
+
 import type { TruckApprovalRow } from "@/features/trucks/model/types";
 
 type Props = {
@@ -23,21 +15,21 @@ type Props = {
 export function TruckApprovalTable({ rows, loading, onOpenReview }: Props) {
   return (
     <Card className="rounded-lg border border-border bg-background">
-      <CardHeader>
-        <CardTitle className="text-lg">차량 승인 목록</CardTitle>
+      <CardHeader className="space-y-1">
+        <CardTitle className="text-xl font-semibold">차량 승인 목록</CardTitle>
       </CardHeader>
-      <CardContent>
-        <div className="rounded-lg border border-border bg-background">
+      <CardContent className="p-0">
+        <div className="rounded-b-lg border-t border-border bg-muted/40">
           <Table>
             <TableHeader>
-              <TableRow className="bg-muted">
-                <TableHead>신청일시</TableHead>
-                <TableHead>기사</TableHead>
-                <TableHead>차량번호</TableHead>
-                <TableHead>차종 / 용량</TableHead>
-                <TableHead>보험상태</TableHead>
-                <TableHead>승인상태</TableHead>
-                <TableHead className="text-right">관리</TableHead>
+              <TableRow className="bg-muted hover:bg-muted">
+                <TableHead className="text-base font-semibold text-foreground">요청 일시</TableHead>
+                <TableHead className="text-base font-semibold text-foreground">기사</TableHead>
+                <TableHead className="text-base font-semibold text-foreground">차량번호</TableHead>
+                <TableHead className="text-base font-semibold text-foreground">차종 / 용량</TableHead>
+                <TableHead className="text-base font-semibold text-foreground">보험 상태</TableHead>
+                <TableHead className="text-base font-semibold text-foreground">승인 상태</TableHead>
+                <TableHead className="text-right text-base font-semibold text-foreground">승인 처리</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -52,46 +44,58 @@ export function TruckApprovalTable({ rows, loading, onOpenReview }: Props) {
                 </TableRow>
               ) : rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-10 text-center text-sm text-foreground">
+                  <TableCell colSpan={7} className="py-10 text-center text-base text-foreground/70">
                     차량 승인 요청이 없습니다.
                   </TableCell>
                 </TableRow>
               ) : (
                 rows.map((row) => (
-                  <TableRow key={row.truckId}>
-                    <TableCell>{row.requestedAt}</TableCell>
-                    <TableCell className="font-medium">{row.driverName}</TableCell>
-                    <TableCell>{row.plateNumber}</TableCell>
-                    <TableCell>
-                      <div className="text-sm">
-                        <div className="font-medium">{row.vehicleType}</div>
-                        <div className="text-xs text-muted-foreground">{row.capacity}kg</div>
-                      </div>
+                  <TableRow key={row.truckId} className="cursor-pointer hover:bg-muted" onClick={() => onOpenReview(row)}>
+                    <TableCell className="py-3 text-base">{row.requestedAt}</TableCell>
+                    <TableCell className="py-3 text-base font-semibold">{row.driverName}</TableCell>
+                    <TableCell className="py-3 text-base font-semibold">{row.plateNumber}</TableCell>
+                    <TableCell className="py-3 text-base">
+                      <div>{row.vehicleType}</div>
+                      <div className="text-sm text-foreground/70">{row.capacity.toLocaleString()}kg</div>
                     </TableCell>
-                    <TableCell>
-                      {row.insuranceStatus === "VERIFIED" ? (
-                        <Badge variant="secondary">인증완료</Badge>
-                      ) : (
-                        <Badge variant="destructive">미인증</Badge>
-                      )}
+                    <TableCell className="py-3">
+                      {row.insuranceStatus === "VERIFIED" ? <Badge variant="secondary">인증 완료</Badge> : <Badge variant="destructive">미인증</Badge>}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="py-3">
                       {row.approvalStatus === "PENDING" ? (
                         <Badge variant="outline">대기</Badge>
                       ) : row.approvalStatus === "APPROVED" ? (
                         <Badge variant="secondary">승인</Badge>
                       ) : (
-                        <Badge variant="destructive">거부</Badge>
+                        <Badge variant="destructive">거절</Badge>
                       )}
                     </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => onOpenReview(row)}
-                      >
-                        상세보기
-                      </Button>
+                    <TableCell className="py-3 text-right">
+                      <div className="inline-flex gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onOpenReview(row);
+                          }}
+                          disabled={row.approvalStatus !== "PENDING"}
+                        >
+                          승인
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="destructive"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onOpenReview(row);
+                          }}
+                          disabled={row.approvalStatus !== "PENDING"}
+                        >
+                          거절
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))

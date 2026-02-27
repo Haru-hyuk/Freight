@@ -23,21 +23,21 @@ export function LiveMonitoringTable({ rows, loading, onOpenDetail, onOpenView, o
   return (
     <Card className="rounded-lg border border-border bg-background">
       <CardHeader className="space-y-1">
-        <CardTitle className="text-lg">실시간 배송 모니터링</CardTitle>
-        <p className="text-sm text-foreground">matches, gps_logs, driver_routes 기반 실시간 상태</p>
+        <CardTitle className="text-xl font-semibold">실시간 배송 목록</CardTitle>
+        <p className="text-base text-foreground/70">matches, gps_logs, driver_routes 기준 조회</p>
       </CardHeader>
       <CardContent>
-        <div className="rounded-lg border border-border bg-background">
+        <div className="rounded-lg border border-border bg-muted/40">
           <Table>
             <TableHeader>
-              <TableRow className="bg-muted">
-                <TableHead>매칭</TableHead>
-                <TableHead>화주/차주</TableHead>
-                <TableHead>현재 위치</TableHead>
-                <TableHead>진행률</TableHead>
-                <TableHead>편차</TableHead>
-                <TableHead>상태</TableHead>
-                <TableHead className="text-right">관리</TableHead>
+              <TableRow className="bg-muted hover:bg-muted">
+                <TableHead className="text-base font-semibold text-foreground">매칭</TableHead>
+                <TableHead className="text-base font-semibold text-foreground">화주 / 기사</TableHead>
+                <TableHead className="text-base font-semibold text-foreground">현재 위치</TableHead>
+                <TableHead className="text-base font-semibold text-foreground">진행률</TableHead>
+                <TableHead className="text-base font-semibold text-foreground">이탈 거리</TableHead>
+                <TableHead className="text-base font-semibold text-foreground">상태</TableHead>
+                <TableHead className="text-right text-base font-semibold text-foreground">동작</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -52,53 +52,62 @@ export function LiveMonitoringTable({ rows, loading, onOpenDetail, onOpenView, o
                 </TableRow>
               ) : rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-10 text-center text-sm text-foreground">
-                    실시간 모니터링 데이터가 없습니다.
+                  <TableCell colSpan={7} className="py-10 text-center text-base text-foreground/70">
+                    실시간 배송 데이터가 없습니다.
                   </TableCell>
                 </TableRow>
               ) : (
                 rows.map((row) => (
-                  <TableRow key={row.matchId}>
-                    <TableCell>
+                  <TableRow key={row.matchId} className="cursor-pointer hover:bg-muted" onClick={() => onOpenDetail(row)}>
+                    <TableCell className="text-base">
                       <div className="space-y-1">
-                        <div className="font-medium">{row.matchId}</div>
-                        <div className="text-xs text-foreground">{row.quoteId}</div>
+                        <div className="font-semibold">{row.matchId}</div>
+                        <div className="text-sm text-foreground/70">{row.quoteId}</div>
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="text-base">
                       <div className="space-y-1">
-                        <div className="text-sm">{row.shipperName}</div>
-                        <div className="text-sm text-foreground">{row.driverName}</div>
+                        <div className="font-medium">{row.shipperName}</div>
+                        <div className="text-foreground/70">{row.driverName}</div>
                       </div>
                     </TableCell>
-                    <TableCell>
-                      <div className="space-y-1 text-sm">
+                    <TableCell className="text-base">
+                      <div className="space-y-1">
                         <div>
                           {row.currentLat}, {row.currentLng}
                         </div>
-                        <div className="text-foreground">{row.speedKmh} km/h</div>
+                        <div className="text-sm text-foreground/70">{row.speedKmh} km/h</div>
                       </div>
                     </TableCell>
-                    <TableCell>{row.progressPercent}%</TableCell>
-                    <TableCell>{row.deviationDistanceKm} km</TableCell>
+                    <TableCell className="text-base">{row.progressPercent}%</TableCell>
+                    <TableCell className="text-base">{row.deviationDistanceKm} km</TableCell>
                     <TableCell>
                       <StatusBadge status={row.liveStatus} />
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="inline-flex gap-2">
-                        <Button type="button" variant="secondary" onClick={() => onOpenDetail(row)}>
-                          상세
-                        </Button>
-                        <Button type="button" variant="secondary" onClick={() => onOpenView(row)}>
-                          보기
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onOpenView(row);
+                          }}
+                          className="text-base"
+                        >
+                          경로 보기
                         </Button>
                         <Button
                           type="button"
                           variant="secondary"
-                          onClick={() => onSendKakaoAlert(row)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onSendKakaoAlert(row);
+                          }}
                           disabled={row.liveStatus === "NORMAL"}
+                          className="text-base"
                         >
-                          카카오 알림
+                          알림 발송
                         </Button>
                       </div>
                     </TableCell>

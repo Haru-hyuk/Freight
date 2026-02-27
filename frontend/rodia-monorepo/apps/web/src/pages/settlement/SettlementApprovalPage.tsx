@@ -1,5 +1,5 @@
-import { SettlementApprovalsView } from "@/features/settlements/ui/SettlementApprovalsView";
+﻿import { SettlementManagementView } from "@/features/settlements/ui/SettlementManagementView";
 
 export default function SettlementApprovalPage() {
-  return <SettlementApprovalsView />; // MODIFIED: pages는 조립만 담당
+  return <SettlementManagementView initialTab="approvals" />;
 }

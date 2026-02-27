@@ -1,4 +1,4 @@
-﻿import * as React from "react";
+import * as React from "react";
 
 import { fetchQuoteRows, sendAdminQuoteUpdatedPush, updateQuoteByAdmin } from "@/features/quotes/api/quotesApi";
 import { toQuoteQuery, type QuoteFilterValue } from "@/features/quotes/model/query";
@@ -46,7 +46,7 @@ export function QuoteManagementView() {
     try {
       await updateQuoteByAdmin(payload);
       await sendAdminQuoteUpdatedPush(payload.quoteId);
-      setNotice("견적 정보가 수정되었습니다. 앱 사용자에게 '관리자가 견적 정보를 수정했습니다' 알림이 발송됩니다.");
+      setNotice("견적 정보가 수정되었습니다. 앱 사용자에게 수정 알림이 발송됩니다.");
       await load();
     } finally {
       setUpdating(false);
@@ -54,35 +54,32 @@ export function QuoteManagementView() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="space-y-7 rounded-xl bg-muted/40 p-4 sm:p-6">
       {notice ? (
-        <div className="fixed left-1/2 top-4 z-50 w-full max-w-xl -translate-x-1/2 px-4">
-          <Card className="rounded-lg border border-border bg-background">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0">
-              <CardTitle className="text-sm font-semibold text-foreground">처리 완료</CardTitle>
-              <Button type="button" variant="secondary" size="sm" onClick={() => setNotice(null)}>
-                x
-              </Button>
-            </CardHeader>
-            <CardContent className="pt-0 text-sm text-foreground">{notice}</CardContent>
-          </Card>
-        </div>
+        <Card className="rounded-lg border border-border bg-background">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-base font-semibold">처리 완료</CardTitle>
+            <Button type="button" variant="secondary" size="sm" onClick={() => setNotice(null)}>
+              닫기
+            </Button>
+          </CardHeader>
+          <CardContent className="pt-0 text-base text-foreground/80">{notice}</CardContent>
+        </Card>
       ) : null}
 
-      <div className="space-y-6">
-        <div>
-          <h2 className="text-2xl font-semibold text-foreground">견적 관리</h2>
-          <p className="mt-1 text-sm text-foreground">ERD 기준 quotes, quote_checklist_items, checklist_items, matches 데이터 관점으로 운영합니다.</p>
-        </div>
-
-        <QuoteKpiCards rows={rows} loading={loading} />
-
-        <QuoteFilters value={filters} onChange={setFilters} onSubmit={load} loading={loading} />
-
-        <Separator />
-
-        <QuoteTable rows={rows} total={total} loading={loading} onUpdate={updateQuote} updating={updating} />
+      <div>
+        <h2 className="text-3xl font-semibold tracking-tight">견적 관리</h2>
+        <p className="mt-2 text-base text-foreground/70">
+          quotes, quote_checklist_items, checklist_items, matches 데이터를 기준으로 운영합니다.
+        </p>
       </div>
+
+      <QuoteKpiCards rows={rows} loading={loading} />
+      <QuoteFilters value={filters} onChange={setFilters} onSubmit={load} loading={loading} />
+
+      <Separator />
+
+      <QuoteTable rows={rows} total={total} loading={loading} onUpdate={updateQuote} updating={updating} />
     </div>
   );
 }

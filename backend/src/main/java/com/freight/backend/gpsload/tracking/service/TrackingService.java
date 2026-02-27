@@ -1,15 +1,15 @@
-package com.freight.backend.service;
+package com.freight.backend.gpsload.tracking.service;
 
-import com.freight.backend.dto.tracking.GpsLogUpsertRequest;
-import com.freight.backend.dto.tracking.GpsLogUpsertResponse;
-import com.freight.backend.dto.tracking.TrackingResponse;
-import com.freight.backend.dto.tracking.TrackingShareStateResponse;
-import com.freight.backend.entity.GpsLog;
 import com.freight.backend.entity.Match;
 import com.freight.backend.exception.CustomException;
 import com.freight.backend.exception.ErrorCode;
+import com.freight.backend.gpsload.tracking.dto.GpsLogUpsertRequest;
+import com.freight.backend.gpsload.tracking.dto.GpsLogUpsertResponse;
+import com.freight.backend.gpsload.tracking.dto.TrackingResponse;
+import com.freight.backend.gpsload.tracking.dto.TrackingShareStateResponse;
+import com.freight.backend.gpsload.tracking.entity.GpsLog;
+import com.freight.backend.gpsload.tracking.repository.GpsLogRepository;
 import com.freight.backend.gpsload.util.HaversineUtil;
-import com.freight.backend.repository.GpsLogRepository;
 import com.freight.backend.repository.MatchRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -164,6 +164,37 @@ public class TrackingService {
                 .enabled(saved.getLocationSharingEnabled())
                 .updatedAt(saved.getLocationSharingUpdatedAt())
                 .build();
+    }
+
+    /**
+     * 레거시 GPS 이력 조회 (기사 소유 match 한정).
+     */
+    @Transactional(readOnly = true)
+    public List<GpsLog> getGpsHistoryForDriver(Long driverId, Long matchId, int limit, LocalDateTime since) {
+        matchRepository.findByMatchIdAndDriverId(matchId, driverId)
+                .orElseThrow(() -> new CustomException(ErrorCode.AUTH_FORBIDDEN));
+        return getHistory(matchId, limit, since);
+    }
+
+    /**
+     * 레거시 GPS 이력 조회 (화주 소유 match 한정).
+     */
+    @Transactional(readOnly = true)
+    public List<GpsLog> getGpsHistoryForShipper(Long shipperId, Long matchId, LocalDateTime since, int limit) {
+        matchRepository.findByMatchIdAndShipperId(matchId, shipperId)
+                .orElseThrow(() -> new CustomException(ErrorCode.AUTH_FORBIDDEN));
+        return getHistory(matchId, limit, since);
+    }
+
+    private List<GpsLog> getHistory(Long matchId, int limit, LocalDateTime since) {
+        int boundedLimit = Math.max(1, Math.min(limit, 500));
+        if (since != null) {
+            return gpsLogRepository.findByMatchIdAndLoggedAtAfterOrderByLoggedAtDesc(matchId, since)
+                    .stream()
+                    .limit(boundedLimit)
+                    .toList();
+        }
+        return gpsLogRepository.findByMatchIdOrderByLoggedAtDesc(matchId, PageRequest.of(0, boundedLimit));
     }
 
     private BigDecimal toDecimal(Double value, int scale) {

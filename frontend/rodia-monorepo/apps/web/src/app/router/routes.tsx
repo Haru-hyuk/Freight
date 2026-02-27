@@ -12,9 +12,10 @@ import DeliveryHistoryPage from "@/pages/delivery/DeliveryHistoryPage";
 import DispatchManagementPage from "@/pages/dispatch/DispatchManagementPage";
 import DriverApprovalPage from "@/pages/drivers/DriverApprovalPage";
 import TruckApprovalPage from "@/pages/drivers/TruckApprovalPage";
+import SettlementPage from "@/pages/settlement/SettlementPage";
 import SettlementApprovalPage from "@/pages/settlement/SettlementApprovalPage";
-import SettlementHistoryPage from "@/pages/settlement/SettlementHistoryPage";
 import SettlementDetailsPage from "@/pages/settlement/SettlementDetailsPage";
+import SettlementHistoryPage from "@/pages/settlement/SettlementHistoryPage";
 import WithdrawalManagementPage from "@/pages/settlement/WithdrawalManagementPage";
 import QuoteListPage from "@/pages/quotes/QuoteListPage";
 import QuoteDetailPage from "@/pages/quotes/QuoteDetailPage";
@@ -31,6 +32,7 @@ import SanctionsLogPage from "@/pages/sanctions/SanctionsLogPage";
 import PricingManagementPage from "@/pages/ops/PricingManagementPage";
 import DeviationManagementPage from "@/pages/ops/DeviationManagementPage";
 import ActivityLogPage from "@/pages/ops/ActivityLogPage";
+import SettingsPage from "@/pages/ops/SettingsPage";
 import NotFoundPage from "@/pages/not-found/NotFoundPage";
 
 export const router = createBrowserRouter([
@@ -59,11 +61,13 @@ export const router = createBrowserRouter([
 
               { path: "/drivers/approvals", element: <DriverApprovalPage /> },
               { path: "/trucks/approvals", element: <TruckApprovalPage /> },
+
+              { path: "/settlement", element: <SettlementPage /> },
               { path: "/settlement/approvals", element: <SettlementApprovalPage /> },
               { path: "/settlement/history", element: <SettlementHistoryPage /> },
-              { path: "/settlement/details", element: <SettlementDetailsPage /> },
               { path: "/withdrawals", element: <WithdrawalManagementPage /> },
-              { path: "/settlement", element: <Navigate to="/settlement/history" replace /> },
+              { path: "/settlement/:settlementId", element: <SettlementDetailsPage /> },
+              { path: "/settlement/details", element: <Navigate to="/settlement" replace /> },
 
               { path: "/quotes", element: <QuoteListPage /> },
               { path: "/quotes/:quoteId", element: <QuoteDetailPage /> },
@@ -79,6 +83,7 @@ export const router = createBrowserRouter([
               { path: "/ops/deviations", element: <DeviationManagementPage /> },
               { path: "/ops/sanctions/logs", element: <SanctionsLogPage /> },
               { path: "/ops/activity-logs", element: <ActivityLogPage /> },
+              { path: "/settings", element: <SettingsPage /> },
             ],
           },
         ],

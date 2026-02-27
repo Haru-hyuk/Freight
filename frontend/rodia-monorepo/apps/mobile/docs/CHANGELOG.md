@@ -1,6 +1,78 @@
 ﻿# Mobile Changelog
 
 ## 2026-02-26
+- PR/브랜치: `work/mobile-driver-api-align`
+- 범주 태그: `[policy] [api] [ui]`
+- 변경 요약:
+  - `src/entities/quote/model/quote.types.ts`에서 `QuoteStatusApi`를 확장해 `ACCEPTED` 및 미인식 상태 문자열을 보존할 수 있도록 정리함.
+  - `src/features/quote/api/quote-api.ts`와 `src/features/quote/model/useQuoteDetail.ts`에서 미인식 status를 `OPEN`으로 강등하던 fallback을 제거하고 원본 status를 유지하도록 변경함.
+  - `src/pages/shipper/quotes/QuoteDetailPage.tsx`에서 `quote.status`가 `OPEN/READY/UNKNOWN`인데 `match.status`가 더 진척된 경우 `effectiveStatus`로 승격해 정책 CTA/배지 계산에 반영함.
+- 영향 범위:
+  - 사용자 관점: Driver 수락/제안 이후 화주 상세에서 상태가 `OPEN`으로 회귀해 보이는 문제가 줄고, 정책 CTA가 실제 진행 상태에 맞게 표시됨.
+  - 개발자 관점: 상태 정규화 경로가 “강등” 중심에서 “보존 + 최소 승격”으로 바뀌어 상태 정책 디버깅이 쉬워짐.
+- 파일 변경 목록:
+  - 수정:
+    - `src/entities/quote/model/quote.types.ts`
+    - `src/features/quote/api/quote-api.ts`
+    - `src/features/quote/model/quoteActionMatrix.ts`
+    - `src/features/quote/model/useQuoteDetail.ts`
+    - `src/pages/shipper/quotes/QuoteDetailPage.tsx`
+    - `docs/CHANGELOG.md`
+  - 추가:
+    - 없음
+  - 삭제:
+    - 없음
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과
+- 미해결 항목 (이번 PR에서 실패/포기한 작업):
+  - 없음
+- 후속 작업 (다음 PR 후보):
+  - [ ] 실서버 status 토큰(`ASSIGNED_CONFIRMED` 등) 목록을 백엔드 계약과 맞춰 alias 확장 필요 여부 확인
+
+- PR/브랜치: `work/mobile-driver-api-align`
+- 범주 태그: `[api] [policy] [ui]`
+- 변경 요약:
+  - `src/features/matching/model/useMatchDetail.ts`에서 Driver 상세 quote 조회를 `getShipperQuoteDetailByIdentifier` 대신 Driver 전용 summary 로더로 교체함.
+  - `src/features/matching/api/driver-orders-api.ts`에서 Driver summary 응답의 래퍼(`data/result/payload/quote/summary`)와 Blob/JSON 파싱을 정규화해 카드/상세용 필드 누락을 줄임.
+  - `src/features/matching/api/driver-orders-parser.ts`와 `driver-orders-mapper.ts`에서 화물/운임 파생값 fallback(`cargoName -> cargoDesc -> cargoType`, `final -> desired -> base`)을 추가해 오더마켓 카드 공란 노출을 완화함.
+  - `src/features/quote/api/quote-api.ts`의 상태 파서에 `ACCEPTED -> ASSIGNED`, `READY/REQUESTED -> OPEN` 매핑을 추가해 화주 상태가 `OPEN`으로 잘못 회귀되는 케이스를 보정함.
+  - `src/pages/shipper/matchings/MatchingListPage.tsx`에서 `ACCEPTED` 상태를 진행 흐름으로 반영하고, focus 시점 자동 재조회로 Driver 수락/제안 이후 화주 화면 상태 반영을 보강함.
+  - `src/pages/shipper/quotes/QuoteListPage.tsx`, `src/pages/shipper/quotes/QuoteDetailPage.tsx`에 focus 재조회 경로를 추가해 화면 복귀 시 최신 상태를 즉시 반영함.
+  - `QuoteDetail/QuoteList/MatchingList/DriverOrdersBoard`의 focus 재조회는 “첫 focus 스킵 + in-flight 방지 + 1.5초 throttle”로 통일해 과도 새로고침(중복 refetch)과 리스너성 중복 호출을 완화함.
+  - `src/features/quote/model/quoteCreateDraft.ts`, `useQuoteCreateDraft.ts`, `quoteCreateRequestMapper.ts`, `QuoteCreatePage.tsx`에서 기본 품목값(박스) 및 품목 설명 직렬화를 보강하고, 부피 가드를 `0 이상` 기준으로 완화함.
+- 영향 범위:
+  - 사용자 관점: Driver 오더마켓/상세의 공란 노출이 줄고, Driver 제안/수락 후 화주 목록·상세 상태 반영이 화면 복귀 시 더 안정적으로 갱신됨.
+  - 개발자 관점: Driver quote summary 파싱 경계와 화주 상태 반영 경로(focus refetch + 상태 정규화)가 명확해져 API 정합성 디버깅이 쉬워짐.
+- 파일 변경 목록:
+  - 수정:
+    - `src/features/matching/api/driver-orders-api.ts`
+    - `src/features/matching/api/driver-orders-parser.ts`
+    - `src/features/matching/api/driver-orders-mapper.ts`
+    - `src/features/matching/model/useMatchDetail.ts`
+    - `src/features/quote/api/quote-api.ts`
+    - `src/pages/shipper/matchings/MatchingListPage.tsx`
+    - `src/pages/shipper/quotes/QuoteListPage.tsx`
+    - `src/pages/shipper/quotes/QuoteDetailPage.tsx`
+    - `src/widgets/driver-orders/DriverOrdersBoard.tsx`
+    - `src/features/quote/model/quoteCreateDraft.ts`
+    - `src/features/quote/model/useQuoteCreateDraft.ts`
+    - `src/features/quote/model/quoteCreateRequestMapper.ts`
+    - `src/pages/shipper/quotes/QuoteCreatePage.tsx`
+    - `docs/CHANGELOG.md`
+  - 추가:
+    - 없음
+  - 삭제:
+    - 없음
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과
+- 미해결 항목 (이번 PR에서 실패/포기한 작업):
+  - Driver/화주 수동 네트워크 검증 4건 수행 — 원인: CLI 환경에서 앱 실행/네트워크 패널 검증 불가 / PR QA에서 확인 필요
+- 후속 작업 (다음 PR 후보):
+  - [ ] Driver 오더마켓/상세에서 quote summary 응답 필드(출/도착/거리/운임)가 카드와 상세에 채워지는지 실서버로 확인
+  - [ ] Driver 수락/제안 후 화주 `QuoteListPage`/`MatchingListPage`/`QuoteDetailPage` 복귀 시 상태 반영(요청접수→배차완료/협의중) 확인
+
 - PR/브랜치: `work/mobile-auth-signup-strict-id`
 - 범주 태그: `[api] [policy]`
 - 변경 요약:
@@ -85,6 +157,38 @@
   - 없음
 - 후속 작업 (다음 PR 후보):
   - [ ] auth 서버 스펙 문서에 driver/shipper signup 필수 필드 및 응답 ID 필드 계약을 명시하고 클라이언트 계약 테스트 추가 검토
+
+- PR/브랜치: `work/mobile-quote-create-payload-guardrail`
+- 범주 태그: `[api] [policy] [ui]`
+- 변경 요약:
+  - `src/features/quote/model/quoteCreateRequestMapper.ts`에서 quote create payload 생성 규칙을 유지하면서 `basePrice`를 포함하고 거리값 강제 보정을 제거함.
+  - `src/pages/shipper/quotes/QuoteCreatePage.tsx` submit SSOT에 `basePrice > 0` 및 `loadMethod/unloadMethod` actor-only 최종 가드를 추가해 미충족 시 요청을 차단함.
+  - 주소 확정 후 좌표 준비 판단이 실제 플로우와 맞도록 좌표 필드 해석을 보강하고, 좌표 미준비 안내 문구를 “주소 검색 결과 선택으로 위치 확정” 중심으로 정리함.
+  - 좌표 검증은 단일 값 체크에서 위도/경도 쌍 검증(`lat<=90`, `lng<=180`)으로 변경해 정상 경도 값(예: 126.x)이 차단되지 않도록 보정함.
+  - `src/features/quote/ui/QuoteCreateStep1.tsx`에서 출발/도착 좌표가 준비되면 하버사인 기반 추정 거리(`distanceKm`)를 자동 반영해 submit distance 가드와 플로우를 일치시킴.
+  - `src/features/quote/api/quote-api.ts` sanitize 경로를 정규화 중심으로 정리하고, `basePrice` 보존 및 상하차 actor-only 마지막 방어를 고정함.
+  - `src/features/quote/model/workMethod.ts`에 actor-only 판별 함수(`isActorOnlyWorkMethod`)를 추가해 page/api가 동일 기준을 사용하도록 맞춤.
+- 영향 범위:
+  - 사용자 관점: 기본 운임/상하차 방식이 확정되지 않은 경우 견적 요청이 차단되어 잘못된 전송이 줄어듦.
+  - 개발자 관점: mapper(page 전) / page(요청 차단) / api(최종 sanitize) 책임이 분리되어 quote create 디버깅 경계가 명확해짐.
+- 파일 변경 목록:
+  - 수정:
+    - `src/features/quote/model/quoteCreateRequestMapper.ts`
+    - `src/pages/shipper/quotes/QuoteCreatePage.tsx`
+    - `src/features/quote/api/quote-api.ts`
+    - `src/features/quote/model/workMethod.ts`
+    - `docs/CHANGELOG.md`
+  - 추가:
+    - 없음
+  - 삭제:
+    - 없음
+- 검증 결과:
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec tsc --noEmit --incremental false`: 통과
+  - `pnpm -C frontend/rodia-monorepo/apps/mobile exec eslint .`: 통과
+- 미해결 항목 (이번 PR에서 실패/포기한 작업):
+  - 수동 테스트 2건 수행 — 원인: CLI 환경에서 앱 실행/네트워크 패널 검증 불가 / PR QA에서 확인 필요
+- 후속 작업 (다음 PR 후보):
+  - [ ] quote create 수동 QA 시나리오(정상 요청/`basePrice=0` 차단) 결과를 캡처해 회귀 기준으로 문서화
 
 - PR/브랜치: `work/mobile-quote-baseprice-guard`
 - 범주 태그: `[api] [policy] [ui]`
@@ -572,4 +676,3 @@
   - `features/matching/api/shipper-match-api.ts`, `features/counter-offer/api/counter-offer-api.ts`, `features/matching/api/driver-orders-api.ts`의 상태 normalize 중복 정리
   - `features/quote/model/quoteActionMatrix.ts`와 `pages/shipper/quotes/QuoteDetailPage.tsx`의 CTA 정책 소스 일치화
   - Driver/Shipper 상세/목록 흐름에서 정책 모듈 적용 범위를 단계적으로 확대
-

@@ -61,16 +61,6 @@ export type QuoteDetailViewModel = {
   actionsContext: QuoteActionsContext;
 };
 
-const QUOTE_STATUS_GUARD: Record<QuoteDetailResponse["status"], true> = {
-  OPEN: true,
-  NEGOTIATING: true,
-  ASSIGNED: true,
-  PICKUP: true,
-  TRANSIT: true,
-  DROPOFF: true,
-  CANCELED: true,
-};
-
 function toSafeNumber(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
@@ -81,8 +71,8 @@ function toSafeInteger(value: unknown, fallback = 0): number {
 }
 
 function toSafeStatus(value: unknown): QuoteDetailResponse["status"] {
-  const candidate = String(value ?? "OPEN") as QuoteDetailResponse["status"];
-  return QUOTE_STATUS_GUARD[candidate] ? candidate : "OPEN";
+  const candidate = String(value ?? "").trim().toUpperCase();
+  return (candidate || "UNKNOWN") as QuoteDetailResponse["status"];
 }
 
 function mapEnumLabel(value: unknown, mapping: Record<string, string>, fallback = "-"): string {

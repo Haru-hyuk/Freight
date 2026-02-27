@@ -1,35 +1,38 @@
-﻿import * as React from "react";
+import * as React from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 
-import { Button } from "@/shared/ui/shadcn/button";
-import { Switch } from "@/shared/ui/shadcn/switch";
-import { Separator } from "@/shared/ui/shadcn/separator";
-import { Badge } from "@/shared/ui/shadcn/badge";
-import { useMockMode } from "@/shared/lib/hooks/useMockMode";
 import { ADMIN_NAV_GROUPS, getPageName, type NavItem } from "@/app/layouts/AdminSidebarConfig";
+import { apiPaths } from "@/shared/lib/api/endpoints";
+import { apiClient } from "@/shared/lib/api/client";
+import { clearSession } from "@/shared/lib/auth/session";
+import { useMockMode } from "@/shared/lib/hooks/useMockMode";
+import { Badge } from "@/shared/ui/shadcn/badge";
+import { Button } from "@/shared/ui/shadcn/button";
+import { Separator } from "@/shared/ui/shadcn/separator";
+import { Switch } from "@/shared/ui/shadcn/switch";
 import {
-  MapPin,
-  History,
-  FileText,
-  Truck,
-  Link2,
-  Users,
-  Briefcase,
-  UserCheck,
-  CheckCircle,
-  TruckIcon,
-  CreditCard,
-  Receipt,
-  BarChart3,
-  Wallet,
-  Tag,
   AlertCircle,
   Ban,
-  Logs,
-  Settings,
-  LayoutDashboard,
+  BarChart3,
+  Briefcase,
+  CheckCircle,
   ChevronDown,
   ChevronRight,
+  CreditCard,
+  FileText,
+  History,
+  LayoutDashboard,
+  Link2,
+  Logs,
+  MapPin,
+  Receipt,
+  Settings,
+  Tag,
+  Truck,
+  TruckIcon,
+  UserCheck,
+  Users,
+  Wallet,
 } from "lucide-react";
 
 const iconMap: Record<string, React.ReactNode> = {
@@ -55,18 +58,17 @@ const iconMap: Record<string, React.ReactNode> = {
   settings: <Settings className="h-4 w-4" />,
 };
 
-type NavItemLinkProps = { item: NavItem; isChild?: boolean };
+type NavItemLinkProps = {
+  item: NavItem;
+  isChild?: boolean;
+};
 
-function NavItemLink({ item, isChild }: NavItemLinkProps) {
+function NavItemLink({ item, isChild = false }: NavItemLinkProps) {
   if (item.disabled) {
     return (
-      <div
-        className={`flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium border border-transparent opacity-50 cursor-not-allowed ${
-          isChild ? "ml-4" : ""
-        }`}
-      >
+      <div className={`flex cursor-not-allowed items-center justify-between rounded-lg border border-transparent px-3 py-2 text-sm font-medium opacity-50 ${isChild ? "ml-4" : ""}`}>
         <div className="flex items-center gap-2">
-          {item.icon && iconMap[item.icon]}
+          {item.icon ? iconMap[item.icon] : null}
           <span>{item.label}</span>
         </div>
       </div>
@@ -74,33 +76,29 @@ function NavItemLink({ item, isChild }: NavItemLinkProps) {
   }
 
   const badgeVariant = item.badge
-    ? item.badge.variant === "warning"
+    ? item.badge.variant === "warning" || item.badge.variant === "danger"
       ? "destructive"
-      : item.badge.variant === "danger"
-        ? "destructive"
-        : ("secondary" as const)
+      : ("secondary" as const)
     : undefined;
 
   return (
     <NavLink
       to={item.to}
       className={({ isActive }) =>
-        `flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium border border-transparent transition-colors ${
-          isActive
-            ? "bg-primary text-primary-foreground"
-            : "text-foreground hover:bg-muted"
+        `flex items-center justify-between rounded-lg border border-transparent px-3 py-2 text-sm font-semibold transition-colors ${
+          isActive ? "bg-primary text-primary-foreground shadow-sm" : "text-background/75 hover:bg-background/10 hover:text-background"
         } ${isChild ? "ml-4" : ""}`
       }
     >
       <div className="flex items-center gap-2">
-        {item.icon && iconMap[item.icon]}
+        {item.icon ? iconMap[item.icon] : null}
         <span>{item.label}</span>
       </div>
-      {item.badge && (
+      {item.badge ? (
         <Badge variant={badgeVariant} className="ml-2 text-xs">
           {item.badge.count}
         </Badge>
-      )}
+      ) : null}
     </NavLink>
   );
 }
@@ -109,10 +107,11 @@ export default function AdminLayout() {
   const location = useLocation();
   const pageName = React.useMemo(() => getPageName(location.pathname), [location.pathname]);
   const { enabled: mockModeEnabled, setEnabled: setMockModeEnabled } = useMockMode();
+
   const [expandedGroups, setExpandedGroups] = React.useState<Record<string, boolean>>({
-    "배송 관리": true,
+    "운송 관리": true,
     "회원 관리": true,
-    "정산 & 결제": false,
+    "정산 관리": true,
     "운영 관리": false,
   });
 
@@ -124,31 +123,36 @@ export default function AdminLayout() {
   };
 
   const handleLogout = () => {
+    void apiClient.post(apiPaths.authLogout).catch(() => undefined);
+    clearSession();
     localStorage.removeItem("rodia_admin_token");
     localStorage.removeItem("rodia_admin_role");
     window.location.href = "/login";
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <div className="flex min-h-screen">
-        <aside className="w-72 shrink-0 border-r border-border bg-background flex flex-col">
-          {/* Logo */}
+    <div className="relative min-h-screen overflow-hidden bg-background text-foreground">
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute inset-x-0 -top-44 h-[26rem] bg-gradient-to-br from-primary/70 via-accent/60 to-background/50" />
+        <div className="absolute -right-44 top-20 h-[32rem] w-[52rem] rotate-[-8deg] rounded-[3rem] border border-border/50 bg-background/70 backdrop-blur-sm" />
+        <div className="absolute -left-28 top-[22rem] h-[24rem] w-[44rem] rotate-[7deg] rounded-[2.5rem] border border-border/50 bg-secondary/60" />
+      </div>
+
+      <div className="relative flex min-h-screen">
+        <aside className="z-20 flex w-72 shrink-0 flex-col border-r border-border/50 bg-foreground/95 text-background backdrop-blur">
           <div className="flex h-16 items-center px-4">
             <div className="flex items-center gap-2">
               <span className="inline-flex h-3 w-3 rounded-full bg-primary" />
-              <span className="text-base font-bold text-foreground">Rodia Admin</span>
+              <span className="text-base font-bold">Rodia Admin</span>
             </div>
           </div>
 
-          <Separator />
+          <Separator className="bg-background/15" />
 
-          {/* Navigation */}
           <nav className="flex-1 overflow-y-auto px-3 py-4">
             <div className="space-y-1">
               {ADMIN_NAV_GROUPS.map((group, idx) => {
-                // 메인 그룹은 별도 처리 (콜랩스 없음)
-                if (group.title === "메인") {
+                if (idx === 0) {
                   return (
                     <div key={group.title} className="mb-2">
                       {group.items.map((item) => (
@@ -162,83 +166,60 @@ export default function AdminLayout() {
 
                 return (
                   <div key={group.title} className="space-y-1">
-                    {/* Group Header - Collapsible */}
                     <button
                       onClick={() => toggleGroup(group.title)}
-                      className="flex items-center justify-between w-full px-3 py-2 rounded-md text-sm font-semibold text-foreground hover:bg-muted transition-colors"
+                      className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-xs font-semibold uppercase tracking-wide text-background/70 transition-colors hover:bg-background/10 hover:text-background"
                     >
-                      <span className="uppercase tracking-wide text-xs">{group.title}</span>
-                      {isExpanded ? (
-                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                      ) : (
-                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                      )}
+                      <span>{group.title}</span>
+                      {isExpanded ? <ChevronDown className="h-4 w-4 text-background/55" /> : <ChevronRight className="h-4 w-4 text-background/55" />}
                     </button>
 
-                    {/* Group Items */}
-                    {isExpanded && (
-                      <div className="ml-0 space-y-1 pl-2 border-l border-border">
+                    {isExpanded ? (
+                      <div className="space-y-1 border-l border-background/15 pl-2">
                         {group.items.map((item) => (
                           <NavItemLink key={item.to} item={item} isChild={true} />
                         ))}
                       </div>
-                    )}
+                    ) : null}
 
-                    {/* Separator between groups (except last) */}
-                    {idx < ADMIN_NAV_GROUPS.length - 1 && (
-                      <Separator className="my-2" />
-                    )}
+                    {idx < ADMIN_NAV_GROUPS.length - 1 ? <Separator className="my-2 bg-background/10" /> : null}
                   </div>
                 );
               })}
             </div>
           </nav>
 
-          <Separator />
+          <Separator className="bg-background/15" />
 
-          {/* Logout */}
           <div className="px-3 pb-4 pt-2">
-            <Button
-              type="button"
-              variant="secondary"
-              className="w-full"
-              onClick={handleLogout}
-            >
+            <Button type="button" className="w-full text-base" onClick={handleLogout}>
               로그아웃
             </Button>
           </div>
         </aside>
 
-        {/* Main Content */}
-
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="flex h-16 items-center justify-between border-b border-border bg-background px-8">
-            <h1 className="text-lg font-bold text-foreground">{pageName}</h1>
+          <header className="mx-6 mt-5 flex h-16 items-center justify-between rounded-2xl border border-border/60 bg-background/85 px-6 backdrop-blur">
+            <h1 className="text-lg font-semibold tracking-tight">{pageName}</h1>
 
             <div className="flex items-center gap-4">
-              <div className="rounded-md border border-border bg-muted px-3 py-2">
+              <div className="rounded-lg border border-border bg-muted/70 px-3 py-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-medium text-muted-foreground">Mock</span>
-                  <Switch
-                    checked={mockModeEnabled}
-                    onCheckedChange={setMockModeEnabled}
-                    aria-label="목업 데이터 모드 전환"
-                  />
+                  <span className="text-xs font-medium text-foreground/70">Mock</span>
+                  <Switch checked={mockModeEnabled} onCheckedChange={setMockModeEnabled} aria-label="Mock mode switch" />
                 </div>
               </div>
-              <div className="w-px h-6 bg-border" />
-              <div className="text-right pr-3">
-                <div className="text-sm font-semibold text-foreground">Admin</div>
-                <div className="text-xs text-muted-foreground">
-                  {mockModeEnabled ? "Mock" : "Live"}
-                </div>
+              <div className="h-6 w-px bg-border" />
+              <div className="pr-2 text-right">
+                <div className="text-sm font-semibold">Admin</div>
+                <div className="text-xs text-foreground/70">{mockModeEnabled ? "Mock" : "Live"}</div>
               </div>
-              <div className="h-10 w-10 rounded-full border border-border bg-muted" />
+              <div className="h-10 w-10 rounded-full border border-border bg-secondary" />
             </div>
           </header>
 
-          <main className="flex-1 overflow-y-auto bg-background">
-            <div className="mx-auto w-full max-w-7xl p-8">
+          <main className="flex-1 overflow-y-auto px-6 pb-8 pt-5">
+            <div className="mx-auto w-full max-w-[1440px]">
               <Outlet />
             </div>
           </main>

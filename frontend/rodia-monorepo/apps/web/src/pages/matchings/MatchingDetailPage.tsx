@@ -8,11 +8,11 @@ export default function MatchingDetailPage() {
   const { matchingId } = useParams<{ matchingId: string }>();
 
   return (
-    <div className="space-y-6">
+    <div className="min-h-screen space-y-6 bg-background text-foreground">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-semibold">매칭 상세</h2>
-          <p className="mt-1 text-sm opacity-70">매칭 ID: {matchingId ?? "-"}</p>
+          <h2 className="text-3xl font-semibold">매칭 상세</h2>
+          <p className="mt-1 text-base text-foreground/70">매칭 ID: {matchingId ?? "-"}</p>
         </div>
         <Button asChild variant="secondary">
           <Link to="/matchings">목록으로</Link>
@@ -22,10 +22,10 @@ export default function MatchingDetailPage() {
       <Card className="rounded-lg border border-border bg-background">
         <CardHeader className="space-y-1">
           <CardTitle className="text-lg">상태 타임라인(목업)</CardTitle>
-          <p className="text-sm opacity-70">대기 → 배차 → 픽업 → 운송중 → 완료</p>
+          <p className="text-base text-foreground/70">대기 → 배차 → 픽업 → 운송중 → 완료</p>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="rounded-lg border border-border bg-muted p-4 text-sm">
+          <div className="rounded-lg border border-border bg-muted p-4 text-base text-foreground/70">
             타임라인 UI는 추후 컴포넌트로 분리 예정
           </div>
         </CardContent>

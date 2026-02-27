@@ -1,4 +1,4 @@
-﻿import type { QuoteRow } from "@/features/quotes/model/types";
+import type { QuoteRow } from "@/features/quotes/model/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/shadcn/card";
 import { Skeleton } from "@/shared/ui/shadcn/skeleton";
 
@@ -31,10 +31,10 @@ export function QuoteKpiCards({ rows, loading }: Props) {
       {items.map((item) => (
         <Card key={item.label} className="rounded-lg border border-border bg-background">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-foreground">{item.label}</CardTitle>
+            <CardTitle className="text-base font-semibold">{item.label}</CardTitle>
           </CardHeader>
           <CardContent>
-            {loading ? <Skeleton className="h-7 w-24" /> : <p className="text-xl font-semibold text-foreground">{item.value}</p>}
+            {loading ? <Skeleton className="h-8 w-24" /> : <p className="text-2xl font-semibold">{item.value}</p>}
           </CardContent>
         </Card>
       ))}

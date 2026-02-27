@@ -37,6 +37,11 @@ function parseActorToken(value: string): WorkActor | null {
   return null;
 }
 
+export function isActorOnlyWorkMethod(value: unknown): value is WorkActor {
+  const raw = toText(value);
+  return parseActorToken(raw) !== null && !raw.includes(":");
+}
+
 function parseActor(value: string): WorkActor | null {
   const normalized = value.toUpperCase();
   if (normalized.startsWith("SHIPPER")) return "SHIPPER";

@@ -21,6 +21,9 @@ export type ParsedDriverOrderQuote = {
   loadMethod?: string;
   unloadMethod?: string;
   cargoName?: string;
+  cargoType?: string;
+  cargoDesc?: string;
+  basePrice?: number;
   desiredPrice?: number;
   finalPrice?: number;
 };
@@ -75,6 +78,9 @@ function parseDriverOrderQuote(quote: QuoteDetailResponse | null): ParsedDriverO
     loadMethod: toOptionalText(quote.loadMethod),
     unloadMethod: toOptionalText(quote.unloadMethod),
     cargoName: toOptionalText(quote.cargoName),
+    cargoType: toOptionalText(quote.cargoType),
+    cargoDesc: toOptionalText(quote.cargoDesc),
+    basePrice: toOptionalNumber(quote.basePrice),
     desiredPrice: toOptionalNumber(quote.desiredPrice),
     finalPrice: toOptionalNumber(quote.finalPrice),
   };

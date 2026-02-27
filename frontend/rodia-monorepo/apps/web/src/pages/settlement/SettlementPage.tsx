@@ -1,5 +1,5 @@
-import { SettlementHistoryView } from "@/features/settlements/ui/SettlementHistoryView";
+﻿import { SettlementManagementView } from "@/features/settlements/ui/SettlementManagementView";
 
 export default function SettlementPage() {
-  return <SettlementHistoryView />; // MODIFIED: 기존 경로 호환용
+  return <SettlementManagementView />;
 }

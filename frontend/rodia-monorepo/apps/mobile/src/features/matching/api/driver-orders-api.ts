@@ -1,5 +1,5 @@
 import type { QuoteDetailResponse } from "@/entities/quote/model/quote.types";
-import { getShipperQuoteDetailByIdentifier } from "@/features/quote/api";
+import { getQuoteSummary } from "@/shared/api/generated";
 import { getDriverMatchMode } from "@/shared/lib/config/env";
 import type { BadgeTone } from "@/shared/lib/policy";
 import {
@@ -80,6 +80,244 @@ const FILTER_LABELS: Record<DriverOrderFilterKey, string> = {
   URGENT: "긴급",
 };
 
+type AnyObject = Record<string, unknown>;
+
+function asObject(value: unknown): AnyObject {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as AnyObject;
+  }
+  return {};
+}
+
+function toOptionalText(value: unknown): string | undefined {
+  return typeof value === "string" ? value.trim() || undefined : undefined;
+}
+
+function toOptionalNumber(value: unknown): number | undefined {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function toOptionalBoolean(value: unknown): boolean | undefined {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value === 1 ? true : value === 0 ? false : undefined;
+  if (typeof value !== "string") return undefined;
+
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return undefined;
+  if (normalized === "true" || normalized === "yes" || normalized === "y" || normalized === "1") return true;
+  if (normalized === "false" || normalized === "no" || normalized === "n" || normalized === "0") return false;
+  return undefined;
+}
+
+function collectCandidateObjects(input: unknown): AnyObject[] {
+  const queue: unknown[] = [input];
+  const out: AnyObject[] = [];
+  const seen = new Set<AnyObject>();
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    const source = asObject(current);
+    if (!source || Object.keys(source).length <= 0) continue;
+    if (!seen.has(source)) {
+      seen.add(source);
+      out.push(source);
+    }
+
+    const nestedKeys = ["data", "result", "payload", "quote", "summary", "item"];
+    nestedKeys.forEach((key) => {
+      const nested = source[key];
+      if (Array.isArray(nested)) {
+        if (nested.length > 0) {
+          queue.push(nested[0]);
+        }
+        return;
+      }
+      if (nested && typeof nested === "object") {
+        queue.push(nested);
+      }
+    });
+  }
+
+  return out;
+}
+
+function hasAnySummaryField(source: AnyObject): boolean {
+  const fieldKeys = [
+    "quoteId",
+    "quote_id",
+    "originAddress",
+    "destinationAddress",
+    "distanceKm",
+    "cargoName",
+    "finalPrice",
+    "basePrice",
+    "desiredPrice",
+    "loadMethod",
+    "unloadMethod",
+  ];
+  return fieldKeys.some((key) => typeof source[key] !== "undefined");
+}
+
+function pickFirstText(candidates: AnyObject[], keys: string[]): string | undefined {
+  for (const candidate of candidates) {
+    for (const key of keys) {
+      const value = toOptionalText(candidate[key]);
+      if (value) return value;
+    }
+  }
+  return undefined;
+}
+
+function pickFirstNumber(candidates: AnyObject[], keys: string[]): number | undefined {
+  for (const candidate of candidates) {
+    for (const key of keys) {
+      const value = toOptionalNumber(candidate[key]);
+      if (typeof value === "number") return value;
+    }
+  }
+  return undefined;
+}
+
+function pickFirstBoolean(candidates: AnyObject[], keys: string[]): boolean | undefined {
+  for (const candidate of candidates) {
+    for (const key of keys) {
+      const value = toOptionalBoolean(candidate[key]);
+      if (typeof value === "boolean") return value;
+    }
+  }
+  return undefined;
+}
+
+function normalizeSummaryPayload(input: unknown): AnyObject | null {
+  const candidates = collectCandidateObjects(input);
+  if (candidates.length <= 0) return null;
+
+  const withSummaryField = candidates.find((candidate) => hasAnySummaryField(candidate));
+  return withSummaryField ?? candidates[0] ?? null;
+}
+
+async function parseDriverQuoteSummaryPayload(payload: unknown): Promise<AnyObject | null> {
+  if (!payload) return null;
+
+  if (typeof payload === "object") {
+    if (typeof Blob !== "undefined" && payload instanceof Blob) {
+      try {
+        const text = (await payload.text()).trim();
+        if (!text) return null;
+        const parsed = JSON.parse(text);
+        return normalizeSummaryPayload(parsed);
+      } catch {
+        return null;
+      }
+    }
+
+    return normalizeSummaryPayload(payload);
+  }
+
+  if (typeof payload === "string") {
+    const text = payload.trim();
+    if (!text) return null;
+
+    try {
+      const parsed = JSON.parse(text);
+      return normalizeSummaryPayload(parsed);
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}
+
+function toQuoteDetailFromDriverSummary(
+  summary: AnyObject,
+  fallbackQuoteId: number
+): QuoteDetailResponse | null {
+  const candidates = collectCandidateObjects(summary);
+  const resolvedQuoteId =
+    parseDriverOrderPositiveInt(pickFirstNumber(candidates, ["quoteId", "quote_id", "id"])) || fallbackQuoteId;
+  if (resolvedQuoteId <= 0) return null;
+
+  const finalPrice = Math.max(
+    0,
+    pickFirstNumber(candidates, ["finalPrice", "final_price", "price", "amount"]) ?? 0
+  );
+  const desiredPrice = Math.max(
+    0,
+    pickFirstNumber(candidates, ["desiredPrice", "desired_price", "basePrice", "base_price"]) ?? 0
+  );
+  const basePrice = Math.max(
+    0,
+    pickFirstNumber(candidates, ["basePrice", "base_price", "desiredPrice", "desired_price", "finalPrice"]) ??
+      desiredPrice ??
+      finalPrice
+  );
+  const cargoName =
+    pickFirstText(candidates, ["cargoName", "cargo_name", "itemName", "item_name", "cargo"]) ??
+    pickFirstText(candidates, ["cargoDesc", "cargo_desc", "cargoDescription", "description"]) ??
+    pickFirstText(candidates, ["cargoType", "cargo_type"]) ??
+    "";
+  const cargoDesc =
+    pickFirstText(candidates, ["cargoDesc", "cargo_desc", "cargoDescription", "description"]) ?? cargoName;
+
+  return {
+    quoteId: resolvedQuoteId,
+    quotePublicId: pickFirstText(candidates, ["quotePublicId", "quoteIdentifier", "quote_identifier"]),
+    shipperId: 0,
+    truckId: 0,
+    originAddress: pickFirstText(candidates, ["originAddress", "origin_address", "startAddress"]) ?? "",
+    originAddressDetail: undefined,
+    destinationAddress:
+      pickFirstText(candidates, ["destinationAddress", "destination_address", "endAddress", "dropoffAddress"]) ?? "",
+    destinationAddressDetail: undefined,
+    originLat: pickFirstNumber(candidates, ["originLat", "origin_lat", "startLat"]) ?? 0,
+    originLng: pickFirstNumber(candidates, ["originLng", "origin_lng", "startLng"]) ?? 0,
+    destinationLat: pickFirstNumber(candidates, ["destinationLat", "destination_lat", "endLat"]) ?? 0,
+    destinationLng: pickFirstNumber(candidates, ["destinationLng", "destination_lng", "endLng"]) ?? 0,
+    distanceKm: Math.max(0, pickFirstNumber(candidates, ["distanceKm", "distance_km", "distance"]) ?? 0),
+    weightKg: Math.max(0, pickFirstNumber(candidates, ["weightKg", "weight_kg", "weight"]) ?? 0),
+    volumeCbm: Math.max(0, pickFirstNumber(candidates, ["volumeCbm", "volume_cbm", "volume"]) ?? 0),
+    vehicleType: pickFirstText(candidates, ["vehicleType", "vehicle_type", "tonType", "ton_type"]) ?? "",
+    vehicleBodyType:
+      pickFirstText(candidates, ["vehicleBodyType", "vehicle_body_type", "bodyType", "body_type"]) ?? "",
+    cargoName,
+    cargoType: pickFirstText(candidates, ["cargoType", "cargo_type"]) ?? "",
+    cargoDesc,
+    basePrice,
+    distancePrice: Math.max(0, pickFirstNumber(candidates, ["distancePrice", "distance_price"]) ?? 0),
+    extraPrice: Math.max(0, pickFirstNumber(candidates, ["extraPrice", "extra_price"]) ?? 0),
+    desiredPrice,
+    finalPrice,
+    allowCombine: pickFirstBoolean(candidates, ["allowCombine", "allow_combine"]) ?? false,
+    loadMethod: pickFirstText(candidates, ["loadMethod", "load_method"]) ?? "",
+    unloadMethod: pickFirstText(candidates, ["unloadMethod", "unload_method"]) ?? "",
+    status: "OPEN",
+    createdAt: "",
+    updatedAt: "",
+    senderName: undefined,
+    senderPhone: undefined,
+    receiverName: undefined,
+    receiverPhone: undefined,
+    checklistItems: [],
+    stops: [],
+  };
+}
+
+export async function getDriverQuoteSummaryDetail(quoteId: number): Promise<QuoteDetailResponse | null> {
+  const safeQuoteId = parseDriverOrderPositiveInt(quoteId);
+  if (safeQuoteId <= 0) return null;
+
+  try {
+    const raw = (await getQuoteSummary(safeQuoteId)) as unknown;
+    const summary = await parseDriverQuoteSummaryPayload(raw);
+    if (!summary) return null;
+    return toQuoteDetailFromDriverSummary(summary, safeQuoteId);
+  } catch {
+    return null;
+  }
+}
+
 async function loadQuoteDetailsByIds(quoteIds: number[]): Promise<Map<number, QuoteDetailResponse>> {
   const map = new Map<number, QuoteDetailResponse>();
   const safeQuoteIds = Array.from(
@@ -90,7 +328,7 @@ async function loadQuoteDetailsByIds(quoteIds: number[]): Promise<Map<number, Qu
   const entries = await Promise.all(
     safeQuoteIds.map(async (quoteId) => {
       try {
-        const quote = await getShipperQuoteDetailByIdentifier(String(quoteId));
+        const quote = await getDriverQuoteSummaryDetail(quoteId);
         if (!quote) return null;
         return [quoteId, quote] as const;
       } catch {

@@ -22,6 +22,7 @@ import {
 import { createShipperMatch } from "@/features/matching/api";
 import { createShipperQuote } from "@/features/quote/api/quote-api";
 import { buildQuoteCreateRequest } from "@/features/quote/model/quoteCreateRequestMapper";
+import { isActorOnlyWorkMethod } from "@/features/quote/model/workMethod";
 import { getQuoteFlatCardStyle, QUOTE_PROGRESS_TOKENS } from "@/features/quote/ui/QuoteCreateUiPrimitives";
 import QuoteCreateStep1 from "@/features/quote/ui/QuoteCreateStep1";
 import QuoteCreateStep2 from "@/features/quote/ui/QuoteCreateStep2";
@@ -156,16 +157,26 @@ function toFiniteNumber(value: unknown): number | null {
   return parsed;
 }
 
-function isResolvedCoordinate(value: unknown): boolean {
-  const parsed = toFiniteNumber(value);
-  if (parsed === null) return false;
-  return Math.abs(parsed) > 0;
+function isResolvedLatLng(lat: unknown, lng: unknown): boolean {
+  const safeLat = toFiniteNumber(lat);
+  const safeLng = toFiniteNumber(lng);
+  if (safeLat === null || safeLng === null) return false;
+  if (Math.abs(safeLat) <= 0.001 || Math.abs(safeLng) <= 0.001) return false;
+  if (Math.abs(safeLat) > 90) return false;
+  if (Math.abs(safeLng) > 180) return false;
+  return true;
 }
 
 function isStrictPositiveNumber(value: unknown): boolean {
   const parsed = toFiniteNumber(value);
   if (parsed === null) return false;
   return parsed > 0;
+}
+
+function isNonNegativeNumber(value: unknown): boolean {
+  const parsed = toFiniteNumber(value);
+  if (parsed === null) return false;
+  return parsed >= 0;
 }
 
 function QuoteCreatePageInner() {
@@ -266,13 +277,13 @@ function QuoteCreatePageInner() {
       ...stops.map((stop) => (stop as { address?: unknown })?.address),
     ];
 
-    if (!isResolvedCoordinate(payload?.originLat) || !isResolvedCoordinate(payload?.originLng)) {
-      Alert.alert("견적 요청 실패", "출발지 좌표가 확정되지 않았어요. 출발지를 다시 선택해주세요.");
+    if (!isResolvedLatLng(payload?.originLat, payload?.originLng)) {
+      Alert.alert("견적 요청 실패", "출발지 위치가 확정되지 않았어요. 주소 검색 결과에서 선택해 위치를 확정해 주세요.");
       return;
     }
 
-    if (!isResolvedCoordinate(payload?.destinationLat) || !isResolvedCoordinate(payload?.destinationLng)) {
-      Alert.alert("견적 요청 실패", "도착지 좌표가 확정되지 않았어요. 도착지를 다시 선택해주세요.");
+    if (!isResolvedLatLng(payload?.destinationLat, payload?.destinationLng)) {
+      Alert.alert("견적 요청 실패", "도착지 위치가 확정되지 않았어요. 주소 검색 결과에서 선택해 위치를 확정해 주세요.");
       return;
     }
 
@@ -286,13 +297,18 @@ function QuoteCreatePageInner() {
       return;
     }
 
+    if (!isActorOnlyWorkMethod(payload?.loadMethod) || !isActorOnlyWorkMethod(payload?.unloadMethod)) {
+      Alert.alert("견적 요청 실패", "상하차 방식이 확정되지 않았어요. 상하차 방식을 다시 선택해주세요.");
+      return;
+    }
+
     if (!isStrictPositiveNumber(payload?.weightKg)) {
       Alert.alert("견적 요청 실패", "화물 중량이 확정되지 않았어요. 화물 정보를 확인해주세요.");
       return;
     }
 
-    if (!isStrictPositiveNumber(payload?.volumeCbm)) {
-      Alert.alert("견적 요청 실패", "화물 부피가 확정되지 않았어요. 화물 정보를 확인해주세요.");
+    if (!isNonNegativeNumber(payload?.volumeCbm)) {
+      Alert.alert("견적 요청 실패", "화물 부피 값이 유효하지 않아요. 화물 정보를 확인해주세요.");
       return;
     }
 

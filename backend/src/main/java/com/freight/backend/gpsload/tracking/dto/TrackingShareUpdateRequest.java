@@ -1,4 +1,4 @@
-package com.freight.backend.dto.tracking;
+package com.freight.backend.gpsload.tracking.dto;
 
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;

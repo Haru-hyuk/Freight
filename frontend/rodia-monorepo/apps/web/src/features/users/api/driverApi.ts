@@ -1,7 +1,6 @@
-/**
- * 차주 관리 API
- * 배송을 수행하는 운전자 (Driver) 관리
- */
+import { apiClient } from "@/shared/lib/api/client";
+import { apiPaths } from "@/shared/lib/api/endpoints";
+import { isMockModeEnabled } from "@/shared/lib/mock-mode";
 
 export enum DriverStatus {
   ACTIVE = "ACTIVE",
@@ -11,16 +10,16 @@ export enum DriverStatus {
 }
 
 export enum DriverRating {
-  EXCELLENT = "EXCELLENT", // 4.8+
-  GOOD = "GOOD", // 4.5+
-  FAIR = "FAIR", // 4.0+
-  POOR = "POOR", // < 4.0
+  EXCELLENT = "EXCELLENT",
+  GOOD = "GOOD",
+  FAIR = "FAIR",
+  POOR = "POOR",
 }
 
 export type VehicleInfo = {
   plateNumber: string;
   type: "TRUCK" | "VAN" | "SEDAN";
-  capacity: number; // kg
+  capacity: number;
   insuranceExpiredAt: string;
   registeredAt: string;
 };
@@ -31,9 +30,9 @@ export type DriverStats = {
   averageRating: number;
   totalEarnings: number;
   monthlyEarnings: number;
-  acceptanceRate: number; // %
-  completionRate: number; // %
-  onTimeRate: number; // %
+  acceptanceRate: number;
+  completionRate: number;
+  onTimeRate: number;
 };
 
 export type Driver = {
@@ -50,10 +49,10 @@ export type Driver = {
   stats: DriverStats;
   violations: Array<{
     date: string;
-    type: "배송지연" | "경로이탈" | "사고" | "고객민원";
-    severity: "심각" | "중대" | "경미";
+    type: string;
+    severity: string;
   }>;
-  certifications: string[]; // 위험물 운전, 특수화물 등
+  certifications: string[];
   bankAccount?: {
     bank: string;
     accountNo: string;
@@ -83,288 +82,689 @@ export type DeliveryLog = {
   destination: string;
   weightKg: number;
   price: number;
-  earnedAmount: number; // 기사가 받은 금액
-  status: "대기" | "진행중" | "완료" | "취소";
+  earnedAmount: number;
+  status: "READY" | "IN_TRANSIT" | "COMPLETED" | "CANCELLED" | string;
   scheduledAt: string;
   completedAt?: string;
   distance: number;
-  duration: number; // 예상 소요 시간 (분)
-  actualDuration?: number; // 실제 소요 시간 (분)
-  rating?: number; // 화주 평점 (1-5)
+  duration: number;
+  actualDuration?: number;
+  rating?: number;
   review?: string;
 };
 
-// Mock 차주 데이터 생성
-function generateMockDrivers(count: number): Driver[] {
-  const bankNames = ["국민은행", "우리은행", "하나은행", "신한은행", "농협", "기업은행"];
-  const vehicleTypes: ("TRUCK" | "VAN" | "SEDAN")[] = ["TRUCK", "VAN", "SEDAN"];
+type BackendMatch = {
+  matchId: number | null;
+  quoteId: number | null;
+  driverId: number | null;
+  accepted: boolean;
+  status: string;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
 
-  const getRatingFromAverage = (avg: number): DriverRating => {
-    if (avg >= 4.8) return DriverRating.EXCELLENT;
-    if (avg >= 4.5) return DriverRating.GOOD;
-    if (avg >= 4.0) return DriverRating.FAIR;
-    return DriverRating.POOR;
+type BackendQuote = {
+  quoteId: number | null;
+  shipperId: number | null;
+  originAddress: string;
+  destinationAddress: string;
+  distanceKm: number | null;
+  weightKg: number | null;
+  desiredPrice: number | null;
+  finalPrice: number | null;
+  createdAt: string | null;
+};
+
+type BackendSettlement = {
+  settlementId: number | null;
+  matchId: number | null;
+  driverId: number | null;
+  totalFare: number | null;
+  driverPayout: number | null;
+  settlementStatus: string | null;
+  completedAt: string | null;
+  createdAt: string | null;
+};
+
+type BackendTruck = {
+  truckId: number | null;
+  driverId: number | null;
+  vehicleType: string | null;
+  vehicleBodyType: string | null;
+  tonnage: number | null;
+  maxWeight: number | null;
+  maxVolume: number | null;
+  name: string | null;
+  approved: boolean | null;
+  insurance: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+
+type BackendNotification = {
+  notificationId: number;
+  matchId: number | null;
+  type: string | null;
+  message: string;
+  isRead: boolean;
+  createdAt: string | null;
+};
+
+const MOCK_DELIVERY_STATUSES: ReadonlyArray<DeliveryLog["status"]> = [
+  "COMPLETED",
+  "COMPLETED",
+  "IN_TRANSIT",
+  "READY",
+  "CANCELLED",
+];
+
+const liveStatusOverrides = new Map<string, DriverStatus>();
+
+const ALL_DRIVERS: Driver[] = Array.from({ length: 80 }, (_, index) => {
+  const totalMatches = 20 + (index % 30) * 3;
+  const completedMatches = Math.max(0, totalMatches - (index % 5));
+  const averageRating = Number((3.7 + (index % 12) * 0.1).toFixed(1));
+  const acceptanceRate = 70 + (index % 25);
+  const completionRate = totalMatches > 0 ? (completedMatches / totalMatches) * 100 : 0;
+  const onTimeRate = 72 + (index % 24);
+
+  return {
+    id: `D-${index + 1001}`,
+    name: `Driver-${index + 1}`,
+    licenseNo: `LIC-${String(index + 1).padStart(8, "0")}`,
+    phone: `010-${String(1000 + (index % 9000)).padStart(4, "0")}-${String(2000 + (index % 7000)).padStart(4, "0")}`,
+    birthDate: `198${index % 10}-${String((index % 12) + 1).padStart(2, "0")}-${String((index % 28) + 1).padStart(2, "0")}`,
+    address: `Address-${index + 1}`,
+    registeredAt: new Date(Date.now() - (index + 3) * 86400000 * 7).toISOString(),
+    status: index % 18 === 0 ? DriverStatus.PENDING_APPROVAL : DriverStatus.ACTIVE,
+    rating: averageRating >= 4.8 ? DriverRating.EXCELLENT : averageRating >= 4.4 ? DriverRating.GOOD : averageRating >= 4 ? DriverRating.FAIR : DriverRating.POOR,
+    vehicle: {
+      plateNumber: `PLATE-${1000 + index}`,
+      type: index % 3 === 0 ? "TRUCK" : index % 3 === 1 ? "VAN" : "SEDAN",
+      capacity: 1500 + (index % 12) * 300,
+      insuranceExpiredAt: new Date(Date.now() + (index % 300) * 86400000).toISOString(),
+      registeredAt: new Date(Date.now() - (index + 10) * 86400000 * 30).toISOString(),
+    },
+    stats: {
+      totalMatches,
+      completedMatches,
+      averageRating,
+      totalEarnings: 4000000 + index * 180000,
+      monthlyEarnings: 1000000 + (index % 20) * 90000,
+      acceptanceRate,
+      completionRate,
+      onTimeRate,
+    },
+    violations: Array.from({ length: index % 3 }, (_, violationIndex) => ({
+      date: new Date(Date.now() - (violationIndex + 1) * 86400000 * 14).toISOString(),
+      type: violationIndex % 2 === 0 ? "ROUTE_DEVIATION" : "LATE_DELIVERY",
+      severity: violationIndex === 0 ? "HIGH" : "MEDIUM",
+    })),
+    certifications: index % 2 === 0 ? ["INSURANCE_VERIFIED"] : ["INSURANCE_PENDING"],
+    notes: index % 11 === 0 ? "Requires periodic check." : undefined,
   };
+});
 
-  return Array.from({ length: count }, (_, i) => {
-    const totalMatches = 30 + Math.floor(Math.random() * 300);
-    const completedMatches = Math.floor(totalMatches * (0.85 + Math.random() * 0.15));
-    const avgRating = 3.5 + Math.random() * 1.5;
-    const monthlyEarnings = 2000000 + Math.random() * 8000000;
+function toRecord(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+}
+
+function toStringValue(value: unknown, fallback = ""): string {
+  if (typeof value === "string") return value;
+  if (typeof value === "number") return String(value);
+  return fallback;
+}
+
+function toNumberValue(value: unknown, fallback = 0): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return fallback;
+}
+
+function toOptionalNumberValue(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+function pickListPayload(payload: unknown): unknown[] {
+  if (Array.isArray(payload)) return payload;
+  const row = toRecord(payload);
+  const candidates = [row.items, row.data, row.content, row.list, row.result];
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) return candidate;
+  }
+  return [];
+}
+
+function normalizeMatchStatus(value: string): "READY" | "IN_TRANSIT" | "COMPLETED" | "CANCELLED" {
+  const status = value.trim().toUpperCase();
+  if (status === "IN_TRANSIT" || status === "TRANSIT" || status === "MOVING") return "IN_TRANSIT";
+  if (status === "COMPLETED" || status === "DONE" || status === "DELIVERED") return "COMPLETED";
+  if (status === "CANCELLED" || status === "CANCELED" || status === "CANCEL") return "CANCELLED";
+  return "READY";
+}
+
+function normalizeVehicleType(value: string | null): VehicleInfo["type"] {
+  const text = (value ?? "").toUpperCase();
+  if (text.includes("VAN")) return "VAN";
+  if (text.includes("SEDAN") || text.includes("CAR")) return "SEDAN";
+  return "TRUCK";
+}
+
+function normalizeRating(average: number): DriverRating {
+  if (average >= 4.8) return DriverRating.EXCELLENT;
+  if (average >= 4.4) return DriverRating.GOOD;
+  if (average >= 4.0) return DriverRating.FAIR;
+  return DriverRating.POOR;
+}
+
+function resolveSettlementMePath(basePath: string): string {
+  const base = basePath.replace(/\/$/, "");
+  return base.endsWith("/me") ? base : `${base}/me`;
+}
+
+function normalizeDriverToken(id: string): string {
+  return id.trim().toUpperCase().replace(/^D-/, "");
+}
+
+function matchesDriverId(rowId: string, targetId: string): boolean {
+  const left = normalizeDriverToken(rowId);
+  const right = normalizeDriverToken(targetId);
+  return left === right;
+}
+
+function parseDriverNumber(id: string): number | null {
+  const normalized = normalizeDriverToken(id);
+  if (!/^\d+$/.test(normalized)) return null;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function mapBackendMatch(raw: unknown): BackendMatch {
+  const row = toRecord(raw);
+  return {
+    matchId: toOptionalNumberValue(row.matchId ?? row.id),
+    quoteId: toOptionalNumberValue(row.quoteId),
+    driverId: toOptionalNumberValue(row.driverId),
+    accepted: Boolean(row.accepted),
+    status: toStringValue(row.status, "READY"),
+    createdAt: toStringValue(row.createdAt, "") || null,
+    updatedAt: toStringValue(row.updatedAt, "") || null,
+  };
+}
+
+function mapBackendQuote(raw: unknown): BackendQuote {
+  const row = toRecord(raw);
+  return {
+    quoteId: toOptionalNumberValue(row.quoteId ?? row.id),
+    shipperId: toOptionalNumberValue(row.shipperId),
+    originAddress: toStringValue(row.originAddress, "-"),
+    destinationAddress: toStringValue(row.destinationAddress, "-"),
+    distanceKm: toOptionalNumberValue(row.distanceKm),
+    weightKg: toOptionalNumberValue(row.weightKg),
+    desiredPrice: toOptionalNumberValue(row.desiredPrice),
+    finalPrice: toOptionalNumberValue(row.finalPrice),
+    createdAt: toStringValue(row.createdAt, "") || null,
+  };
+}
+
+function mapBackendSettlement(raw: unknown): BackendSettlement {
+  const row = toRecord(raw);
+  return {
+    settlementId: toOptionalNumberValue(row.settlementId ?? row.id),
+    matchId: toOptionalNumberValue(row.matchId),
+    driverId: toOptionalNumberValue(row.driverId),
+    totalFare: toOptionalNumberValue(row.totalFare),
+    driverPayout: toOptionalNumberValue(row.driverPayout),
+    settlementStatus: toStringValue(row.settlementStatus, "") || null,
+    completedAt: toStringValue(row.completedAt, "") || null,
+    createdAt: toStringValue(row.createdAt, "") || null,
+  };
+}
+
+function mapBackendTruck(raw: unknown): BackendTruck {
+  const row = toRecord(raw);
+  return {
+    truckId: toOptionalNumberValue(row.truckId ?? row.id),
+    driverId: toOptionalNumberValue(row.driverId),
+    vehicleType: toStringValue(row.vehicleType, "") || null,
+    vehicleBodyType: toStringValue(row.vehicleBodyType, "") || null,
+    maxWeight: toOptionalNumberValue(row.maxWeight),
+    maxVolume: toOptionalNumberValue(row.maxVolume),
+    name: toStringValue(row.name, "") || null,
+    approved: typeof row.approved === "boolean" ? row.approved : null,
+    insurance: toStringValue(row.insurance, "") || null,
+    tonnage: toOptionalNumberValue(row.tonnage),
+    createdAt: toStringValue(row.createdAt, "") || null,
+    updatedAt: toStringValue(row.updatedAt, "") || null,
+  };
+}
+
+function mapBackendNotification(raw: unknown): BackendNotification | null {
+  const row = toRecord(raw);
+  const notificationId = toOptionalNumberValue(row.notificationId ?? row.id);
+  if (notificationId === null) return null;
+  return {
+    notificationId,
+    matchId: toOptionalNumberValue(row.matchId),
+    type: toStringValue(row.type, "") || null,
+    message: toStringValue(row.message, ""),
+    isRead: Boolean(row.isRead),
+    createdAt: toStringValue(row.createdAt, "") || null,
+  };
+}
+
+async function fetchMatches(): Promise<BackendMatch[]> {
+  const driverMyPath = `${apiPaths.driverMatches.replace(/\/$/, "")}/me`;
+
+  const [shipperRows, driverOpenRows, driverRows] = await Promise.all([
+    apiClient.get<unknown>(apiPaths.shipperMatchesMe).then((res) => pickListPayload(res.data).map(mapBackendMatch)).catch(() => []),
+    apiClient.get<unknown>(apiPaths.driverMatches).then((res) => pickListPayload(res.data).map(mapBackendMatch)).catch(() => []),
+    apiClient.get<unknown>(driverMyPath).then((res) => pickListPayload(res.data).map(mapBackendMatch)).catch(() => []),
+  ]);
+
+  const merged = new Map<number, BackendMatch>();
+  for (const row of [...shipperRows, ...driverOpenRows, ...driverRows]) {
+    if (typeof row.matchId !== "number") continue;
+    const current = merged.get(row.matchId);
+    if (!current) {
+      merged.set(row.matchId, row);
+      continue;
+    }
+    const currentTime = Date.parse(current.updatedAt ?? current.createdAt ?? "");
+    const nextTime = Date.parse(row.updatedAt ?? row.createdAt ?? "");
+    merged.set(row.matchId, Number.isFinite(nextTime) && nextTime >= currentTime ? row : current);
+  }
+
+  return Array.from(merged.values());
+}
+
+async function fetchQuotes(): Promise<BackendQuote[]> {
+  try {
+    const response = await apiClient.get<unknown>(apiPaths.shipperQuotes);
+    return pickListPayload(response.data).map(mapBackendQuote);
+  } catch {
+    return [];
+  }
+}
+
+async function fetchSettlements(): Promise<BackendSettlement[]> {
+  const [shipperRows, driverRows] = await Promise.all([
+    apiClient
+      .get<unknown>(resolveSettlementMePath(apiPaths.shipperSettlements))
+      .then((res) => pickListPayload(res.data).map(mapBackendSettlement))
+      .catch(() => []),
+    apiClient
+      .get<unknown>(resolveSettlementMePath(apiPaths.driverSettlements))
+      .then((res) => pickListPayload(res.data).map(mapBackendSettlement))
+      .catch(() => []),
+  ]);
+
+  const merged = new Map<number, BackendSettlement>();
+  for (const row of [...shipperRows, ...driverRows]) {
+    if (typeof row.settlementId === "number") merged.set(row.settlementId, row);
+  }
+  return Array.from(merged.values());
+}
+
+async function fetchTrucks(): Promise<BackendTruck[]> {
+  try {
+    const response = await apiClient.get<unknown>(apiPaths.driverTrucks);
+    return pickListPayload(response.data).map(mapBackendTruck);
+  } catch {
+    return [];
+  }
+}
+
+async function fetchNotifications(): Promise<BackendNotification[]> {
+  try {
+    const response = await apiClient.get<unknown>(apiPaths.notificationsMe);
+    return pickListPayload(response.data)
+      .map(mapBackendNotification)
+      .filter((item): item is BackendNotification => item !== null);
+  } catch {
+    return [];
+  }
+}
+
+function deriveLiveDrivers(
+  matches: BackendMatch[],
+  quotes: BackendQuote[],
+  settlements: BackendSettlement[],
+  trucks: BackendTruck[],
+  notifications: BackendNotification[],
+): Driver[] {
+  const driverIds = new Set<string>();
+
+  for (const truck of trucks) {
+    if (typeof truck.driverId === "number") driverIds.add(`D-${truck.driverId}`);
+  }
+  for (const match of matches) {
+    if (typeof match.driverId === "number") driverIds.add(`D-${match.driverId}`);
+  }
+  if (driverIds.size === 0) driverIds.add("D-ME");
+
+  const quoteById = new Map<number, BackendQuote>();
+  for (const quote of quotes) {
+    if (typeof quote.quoteId === "number") quoteById.set(quote.quoteId, quote);
+  }
+
+  const settlementsByMatchId = new Map<number, BackendSettlement>();
+  for (const settlement of settlements) {
+    if (typeof settlement.matchId === "number") settlementsByMatchId.set(settlement.matchId, settlement);
+  }
+
+  return Array.from(driverIds)
+    .map((driverId) => {
+      const driverNumber = parseDriverNumber(driverId);
+
+      const relevantMatches = matches.filter((match) => {
+        if (driverNumber === null) return true;
+        return match.driverId === driverNumber;
+      });
+
+      const completedMatches = relevantMatches.filter((match) => normalizeMatchStatus(match.status) === "COMPLETED").length;
+      const acceptedMatches = relevantMatches.filter((match) => Boolean(match.accepted) || typeof match.driverId === "number").length;
+      const totalMatches = relevantMatches.length;
+      const completionRate = totalMatches > 0 ? (completedMatches / totalMatches) * 100 : 0;
+      const acceptanceRate = totalMatches > 0 ? (acceptedMatches / totalMatches) * 100 : 0;
+
+      const relevantSettlements = settlements.filter((settlement) => {
+        if (driverNumber !== null && settlement.driverId !== null) return settlement.driverId === driverNumber;
+        if (driverNumber !== null && settlement.driverId === null && settlement.matchId !== null) {
+          const linkedMatch = relevantMatches.find((match) => match.matchId === settlement.matchId);
+          return Boolean(linkedMatch);
+        }
+        return driverNumber === null;
+      });
+
+      const settlementEarnings = relevantSettlements.reduce(
+        (sum, settlement) => sum + (settlement.driverPayout ?? Math.round((settlement.totalFare ?? 0) * 0.8)),
+        0,
+      );
+
+      const quoteEstimatedEarnings = relevantMatches.reduce((sum, match) => {
+        if (typeof match.quoteId !== "number") return sum;
+        const quote = quoteById.get(match.quoteId);
+        const price = quote?.finalPrice ?? quote?.desiredPrice ?? 0;
+        return sum + Math.round(price * 0.8);
+      }, 0);
+
+      const totalEarnings = settlementEarnings > 0 ? settlementEarnings : quoteEstimatedEarnings;
+      const monthlyEarnings = Math.round(totalEarnings / 3);
+
+      const relevantMatchIds = new Set(
+        relevantMatches.map((match) => match.matchId).filter((value): value is number => typeof value === "number"),
+      );
+      const delaySignals = notifications.filter((notification) => {
+        if (notification.matchId !== null && relevantMatchIds.size > 0 && !relevantMatchIds.has(notification.matchId)) {
+          return false;
+        }
+        const text = `${notification.type ?? ""} ${notification.message}`.toLowerCase();
+        return /(delay|late|deviation|warning|violation|cancel)/.test(text);
+      });
+
+      const delayRate = totalMatches > 0 ? delaySignals.length / totalMatches : 0;
+      const onTimeRate = Math.max(0, Math.min(100, 100 - delayRate * 100));
+      const averageRating = Number(Math.max(0, Math.min(5, 4.1 + completionRate / 200 - delayRate)).toFixed(1));
+
+      const driverTrucks = trucks.filter((truck) => (driverNumber === null ? true : truck.driverId === driverNumber));
+      const latestTruck = [...driverTrucks].sort((a, b) => {
+        const aTime = Date.parse(a.updatedAt ?? a.createdAt ?? "");
+        const bTime = Date.parse(b.updatedAt ?? b.createdAt ?? "");
+        const safeA = Number.isFinite(aTime) ? aTime : 0;
+        const safeB = Number.isFinite(bTime) ? bTime : 0;
+        return safeB - safeA;
+      })[0];
+
+      const inferredStatus: DriverStatus =
+        latestTruck?.approved === false
+          ? DriverStatus.SUSPENDED
+          : latestTruck?.approved === null || typeof latestTruck === "undefined"
+            ? DriverStatus.PENDING_APPROVAL
+            : DriverStatus.ACTIVE;
+
+      const status = liveStatusOverrides.get(driverId) ?? inferredStatus;
+      const licenseNo = driverNumber !== null ? `LIC-${String(driverNumber).padStart(8, "0")}` : "LIC-ME";
+
+      const violations = delaySignals.slice(0, 5).map((signal) => {
+        const text = `${signal.type ?? ""} ${signal.message}`.toLowerCase();
+        const severity = /(critical|severe|fatal|suspend)/.test(text) ? "HIGH" : /(warning|delay|late)/.test(text) ? "MEDIUM" : "LOW";
+        return {
+          date: signal.createdAt ?? new Date().toISOString(),
+          type: signal.type ?? "SIGNAL",
+          severity,
+        };
+      });
+
+      return {
+        id: driverId,
+        name: driverNumber !== null ? `Driver-${driverNumber}` : "Driver-ME",
+        licenseNo,
+        phone: "-",
+        birthDate: "-",
+        address: "-",
+        registeredAt: latestTruck?.createdAt ?? settlements[0]?.createdAt ?? quotes[0]?.createdAt ?? new Date().toISOString(),
+        status,
+        rating: normalizeRating(averageRating),
+        vehicle: {
+          plateNumber: latestTruck?.name ?? (driverNumber !== null ? `TRUCK-${driverNumber}` : "TRUCK-ME"),
+          type: normalizeVehicleType(latestTruck?.vehicleType ?? null),
+          capacity: latestTruck?.maxVolume ?? latestTruck?.maxWeight ?? 0,
+          insuranceExpiredAt: latestTruck?.updatedAt ?? new Date().toISOString(),
+          registeredAt: latestTruck?.createdAt ?? new Date().toISOString(),
+        },
+        stats: {
+          totalMatches,
+          completedMatches,
+          averageRating,
+          totalEarnings,
+          monthlyEarnings,
+          acceptanceRate,
+          completionRate,
+          onTimeRate,
+        },
+        violations,
+        certifications: latestTruck?.insurance ? ["INSURANCE_VERIFIED"] : ["INSURANCE_PENDING"],
+        notes: latestTruck?.approved === false ? "Vehicle approval is rejected." : undefined,
+      } satisfies Driver;
+    })
+    .sort((a, b) => b.stats.averageRating - a.stats.averageRating);
+}
+
+function applyDriverFilters(items: Driver[], filter: DriverFilter): Driver[] {
+  const keyword = filter.search?.trim().toLowerCase() ?? "";
+
+  return items.filter((driver) => {
+    if (keyword) {
+      const text = `${driver.id} ${driver.name} ${driver.phone} ${driver.vehicle.plateNumber}`.toLowerCase();
+      if (!text.includes(keyword)) return false;
+    }
+    if (filter.status && driver.status !== filter.status) return false;
+    if (filter.rating && driver.rating !== filter.rating) return false;
+    return true;
+  });
+}
+
+function paginate<T>(items: T[], page: number, size: number): T[] {
+  const start = (page - 1) * size;
+  return items.slice(start, start + size);
+}
+
+async function fetchLiveDrivers(filter: DriverFilter): Promise<DriverResponse> {
+  const [matches, quotes, settlements, trucks, notifications] = await Promise.all([
+    fetchMatches(),
+    fetchQuotes(),
+    fetchSettlements(),
+    fetchTrucks(),
+    fetchNotifications(),
+  ]);
+
+  const rows = deriveLiveDrivers(matches, quotes, settlements, trucks, notifications);
+  const filtered = applyDriverFilters(rows, filter);
+  const page = filter.page ?? 1;
+  const size = filter.size ?? 20;
+
+  return {
+    items: paginate(filtered, page, size),
+    total: filtered.length,
+  };
+}
+
+async function fetchLiveDriver(driverId: string): Promise<Driver | null> {
+  const response = await fetchLiveDrivers({ page: 1, size: 500 });
+  return response.items.find((row) => matchesDriverId(row.id, driverId)) ?? null;
+}
+
+function buildMockDeliveries(driverId: string, totalMatches: number): DeliveryLog[] {
+  const count = Math.min(totalMatches, 40);
+
+  return Array.from({ length: count }, (_, index) => {
+    const status = MOCK_DELIVERY_STATUSES[index % MOCK_DELIVERY_STATUSES.length];
+    const scheduledAt = new Date(Date.now() - (index + 1) * 86400000).toISOString();
+    const completedAt = status === "COMPLETED" ? new Date(Date.parse(scheduledAt) + 2 * 3600000).toISOString() : undefined;
+    const price = 120000 + index * 5500;
 
     return {
-      id: `driver_${i}`,
-      name: `기사_${i}`,
-      licenseNo: `20${String(i).padStart(7, "0")}`,
-      phone: `010-${String(Math.floor(Math.random() * 10000)).padStart(4, "0")}-${String(Math.floor(Math.random() * 10000)).padStart(4, "0")}`,
-      birthDate: `198${Math.floor(Math.random() * 10)}-${String(Math.floor(Math.random() * 12) + 1).padStart(2, "0")}-${String(Math.floor(Math.random() * 28) + 1).padStart(2, "0")}`,
-      address: `경기도 시흥시 공단로 ${i}`,
-      registeredAt: new Date(Date.now() - (i + 1) * 86400000 * Math.floor(Math.random() * 365)).toISOString(),
-      status: i % 25 === 0 ? DriverStatus.PENDING_APPROVAL : DriverStatus.ACTIVE,
-      rating: getRatingFromAverage(avgRating),
-      vehicle: {
-        plateNumber: `서울 ${String(Math.floor(Math.random() * 20)).padStart(2, "0")}가 ${String(1000 + Math.floor(Math.random() * 9000)).padStart(4, "0")}`,
-        type: vehicleTypes[Math.floor(Math.random() * 3)],
-        capacity: 2000 + Math.floor(Math.random() * 3000),
-        insuranceExpiredAt: new Date(Date.now() + Math.random() * 365 * 86400000).toISOString(),
-        registeredAt: new Date(
-          Date.now() - (i + 1) * 86400000 * Math.floor(Math.random() * 1825)
-        ).toISOString(),
-      },
-      stats: {
-        totalMatches,
-        completedMatches,
-        averageRating: avgRating,
-        totalEarnings: monthlyEarnings * (3 + Math.floor(Math.random() * 9)),
-        monthlyEarnings,
-        acceptanceRate: 70 + Math.random() * 30,
-        completionRate: (completedMatches / totalMatches) * 100,
-        onTimeRate: 80 + Math.random() * 20,
-      },
-      violations: Array.from(
-        { length: Math.floor(Math.random() * 3) },
-        () => ({
-          date: new Date(Date.now() - Math.random() * 86400000 * 30).toISOString(),
-          type: ["배송지연", "경로이탈", "사고", "고객민원"][
-            Math.floor(Math.random() * 4)
-          ] as any,
-          severity: ["심각", "중대", "경미"][Math.floor(Math.random() * 3)] as any,
-        })
-      ),
-      certifications: Math.random() > 0.5 ? ["위험물 운전", "특수화물"] : ["일반"],
-      bankAccount: {
-        bank: bankNames[Math.floor(Math.random() * bankNames.length)],
-        accountNo: `${String(Math.floor(Math.random() * 1000000)).padStart(7, "0")}-${String(Math.floor(Math.random() * 100)).padStart(2, "0")}`,
-      },
-      notes: Math.random() > 0.9 ? "안전 교육 이수" : undefined,
+      id: `${driverId}-delivery-${index + 1}`,
+      quoteId: `Q-${1000 + index}`,
+      shipperId: `S-${200 + (index % 50)}`,
+      shipperName: `Shipper-${(index % 50) + 1}`,
+      origin: `Origin-${index + 1}`,
+      destination: `Destination-${index + 1}`,
+      weightKg: 200 + index * 10,
+      price,
+      earnedAmount: Math.round(price * 0.8),
+      status,
+      scheduledAt,
+      completedAt,
+      distance: 20 + (index % 150),
+      duration: 35 + (index % 190),
+      actualDuration: status === "COMPLETED" ? 30 + (index % 180) : undefined,
+      rating: status === "COMPLETED" ? Number((4 + (index % 10) * 0.1).toFixed(1)) : undefined,
+      review: status === "COMPLETED" ? "Completed successfully." : undefined,
     };
   });
 }
 
-const ALL_DRIVERS = generateMockDrivers(150);
-
-/**
- * 차주 목록 조회
- */
 export async function fetchDrivers(filter: DriverFilter = {}): Promise<DriverResponse> {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      const { search, status, rating, page = 1, size = 20 } = filter;
+  if (!isMockModeEnabled()) {
+    return fetchLiveDrivers(filter);
+  }
 
-      let filtered = ALL_DRIVERS.filter((driver) => {
-        if (search) {
-          const searchLower = search.toLowerCase();
-          if (
-            !driver.name.toLowerCase().includes(searchLower) &&
-            !driver.id.includes(searchLower) &&
-            !driver.phone.includes(searchLower) &&
-            !driver.vehicle.plateNumber.includes(searchLower)
-          ) {
-            return false;
-          }
-        }
-        if (status && driver.status !== status) return false;
-        if (rating && driver.rating !== rating) return false;
-        return true;
-      });
-
-      // 평점 높은순 정렬
-      filtered.sort((a, b) => b.stats.averageRating - a.stats.averageRating);
-
-      const total = filtered.length;
-      const start = (page - 1) * size;
-      const items = filtered.slice(start, start + size);
-
-      resolve({ items, total });
-    }, 300);
-  });
+  const page = filter.page ?? 1;
+  const size = filter.size ?? 20;
+  const filtered = applyDriverFilters(ALL_DRIVERS, filter);
+  return {
+    items: paginate(filtered, page, size),
+    total: filtered.length,
+  };
 }
 
-/**
- * 차주 상세 조회
- */
 export async function fetchDriver(driverId: string): Promise<Driver | null> {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve(ALL_DRIVERS.find((d) => d.id === driverId) ?? null);
-    }, 200);
-  });
+  if (!isMockModeEnabled()) {
+    return fetchLiveDriver(driverId);
+  }
+  return ALL_DRIVERS.find((item) => matchesDriverId(item.id, driverId)) ?? null;
 }
 
-/**
- * 차주 상태 변경
- */
-export async function updateDriverStatus(
-  driverId: string,
-  status: DriverStatus
-): Promise<boolean> {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      const driver = ALL_DRIVERS.find((d) => d.id === driverId);
-      if (driver) {
-        driver.status = status;
-        resolve(true);
-      } else {
-        resolve(false);
-      }
-    }, 200);
-  });
+export async function updateDriverStatus(driverId: string, status: DriverStatus): Promise<boolean> {
+  if (!isMockModeEnabled()) {
+    const target = await fetchLiveDriver(driverId);
+    if (!target) return false;
+    liveStatusOverrides.set(target.id, status);
+    return true;
+  }
+
+  const target = ALL_DRIVERS.find((item) => matchesDriverId(item.id, driverId));
+  if (!target) return false;
+  target.status = status;
+  return true;
 }
 
-/**
- * 차주 위반 이력 조회
- */
-export async function fetchDriverViolations(driverId: string) {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      const driver = ALL_DRIVERS.find((d) => d.id === driverId);
-      if (!driver) {
-        resolve(null);
-        return;
-      }
+export async function fetchDriverViolations(driverId: string): Promise<{
+  total: number;
+  critical: number;
+  severe: number;
+  minor: number;
+  items: Array<{ date: string; type: string; severity: string }>;
+} | null> {
+  const driver = await fetchDriver(driverId);
+  if (!driver) return null;
 
-      resolve({
-        total: driver.violations.length,
-        critical: driver.violations.filter((v) => v.severity === "심각").length,
-        severe: driver.violations.filter((v) => v.severity === "중대").length,
-        minor: driver.violations.filter((v) => v.severity === "경미").length,
-        items: driver.violations,
-      });
-    }, 200);
-  });
+  const critical = driver.violations.filter((item) => item.severity.toUpperCase() === "HIGH").length;
+  const severe = driver.violations.filter((item) => item.severity.toUpperCase() === "MEDIUM").length;
+  const minor = driver.violations.filter((item) => item.severity.toUpperCase() === "LOW").length;
+
+  return {
+    total: driver.violations.length,
+    critical,
+    severe,
+    minor,
+    items: driver.violations,
+  };
 }
 
-/**
- * 차주 배송 로그 조회
- */
 export async function fetchDriverDeliveries(driverId: string): Promise<DeliveryLog[]> {
-  const shippers = [
-    "삼성전자",
-    "LG전자",
-    "현대차",
-    "SK이노베이션",
-    "포스코",
-    "네이버",
-    "카카오",
-    "쿠팡",
-    "배달의민족",
-    "우아한형제들",
-  ];
+  if (!isMockModeEnabled()) {
+    const [matches, quotes, settlements] = await Promise.all([fetchMatches(), fetchQuotes(), fetchSettlements()]);
+    const target = await fetchLiveDriver(driverId);
+    if (!target) return [];
 
-  const origins = [
-    "인천 남동구",
-    "부천 오류동",
-    "서울 강서구",
-    "경기 시흥시",
-    "경기 안산시",
-    "경기 고양시",
-    "경기 의정부시",
-    "경기 성남시",
-  ];
+    const targetNumber = parseDriverNumber(target.id);
+    const quoteById = new Map<number, BackendQuote>();
+    for (const quote of quotes) {
+      if (typeof quote.quoteId === "number") quoteById.set(quote.quoteId, quote);
+    }
 
-  const destinations = [
-    "서울 종로구",
-    "서울 중구",
-    "서울 용산구",
-    "서울 강남구",
-    "서울 송파구",
-    "서울 강동구",
-    "경기 수원시",
-    "경기 평택시",
-  ];
+    const settlementByMatchId = new Map<number, BackendSettlement>();
+    for (const settlement of settlements) {
+      if (typeof settlement.matchId === "number") settlementByMatchId.set(settlement.matchId, settlement);
+    }
 
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      const driver = ALL_DRIVERS.find((d) => d.id === driverId);
-      if (!driver) {
-        resolve([]);
-        return;
-      }
+    return matches
+      .filter((match) => {
+        if (targetNumber === null) return true;
+        return match.driverId === targetNumber;
+      })
+      .map((match) => {
+        const quote = typeof match.quoteId === "number" ? quoteById.get(match.quoteId) : undefined;
+        const settlement = typeof match.matchId === "number" ? settlementByMatchId.get(match.matchId) : undefined;
+        const status = normalizeMatchStatus(match.status);
+        const price = settlement?.totalFare ?? quote?.finalPrice ?? quote?.desiredPrice ?? 0;
+        const earnedAmount = settlement?.driverPayout ?? Math.round(price * 0.8);
 
-      const logs: DeliveryLog[] = [];
-      const statuses: Array<"대기" | "진행중" | "완료" | "취소"> = [
-        "완료",
-        "완료",
-        "완료",
-        "진행중",
-        "대기",
-        "취소",
-      ];
-
-      for (let i = 0; i < Math.min(driver.stats.totalMatches, 50); i++) {
-        const status = statuses[Math.floor(Math.random() * statuses.length)];
-        const scheduledAt = new Date(
-          Date.now() - Math.random() * 90 * 24 * 60 * 60 * 1000
-        ).toISOString();
-        const daysToAdd = 1 + Math.floor(Math.random() * 3);
-        const completedAt =
-          status === "완료"
-            ? new Date(new Date(scheduledAt).getTime() + daysToAdd * 24 * 60 * 60 * 1000).toISOString()
-            : undefined;
-
-        const price = 50000 + Math.floor(Math.random() * 500000);
-        const earnedAmount = Math.floor(price * (0.7 + Math.random() * 0.25)); // 기사는 70-95% 수익
-
-        logs.push({
-          id: `delivery_${i}`,
-          quoteId: `quote_${i}`,
-          shipperId: `shipper_${Math.floor(Math.random() * 100)}`,
-          shipperName: shippers[Math.floor(Math.random() * shippers.length)],
-          origin: origins[Math.floor(Math.random() * origins.length)],
-          destination: destinations[Math.floor(Math.random() * destinations.length)],
-          weightKg: 100 + Math.floor(Math.random() * 2000),
+        return {
+          id: `delivery-${match.matchId ?? Date.now()}`,
+          quoteId: typeof match.quoteId === "number" ? `Q-${match.quoteId}` : "-",
+          shipperId: typeof quote?.shipperId === "number" ? `S-${quote.shipperId}` : "-",
+          shipperName: typeof quote?.shipperId === "number" ? `Shipper-${quote.shipperId}` : "-",
+          origin: quote?.originAddress ?? "-",
+          destination: quote?.destinationAddress ?? "-",
+          weightKg: quote?.weightKg ?? 0,
           price,
           earnedAmount,
           status,
-          scheduledAt,
-          completedAt,
-          distance: 10 + Math.floor(Math.random() * 300),
-          duration: 30 + Math.floor(Math.random() * 480),
-          actualDuration:
-            status === "완료"
-              ? 30 + Math.floor(Math.random() * 480)
-              : undefined,
-          rating: status === "완료" ? 3.5 + Math.random() * 1.5 : undefined,
-          review:
-            status === "완료" && Math.random() > 0.5
-              ? [
-                  "화물을 안전하게 배송했습니다.",
-                  "예정된 시간보다 빨리 도착했습니다.",
-                  "친절하고 전문적인 배송이었습니다.",
-                  "화물이 안전하게 도착했습니다.",
-                  "우수한 서비스 감사합니다.",
-                ][Math.floor(Math.random() * 5)]
-              : undefined,
-        });
-      }
+          scheduledAt: match.createdAt ?? new Date().toISOString(),
+          completedAt: status === "COMPLETED" ? settlement?.completedAt ?? match.updatedAt ?? undefined : undefined,
+          distance: quote?.distanceKm ?? 0,
+          duration: status === "COMPLETED" ? 120 : 0,
+          actualDuration: status === "COMPLETED" ? 110 : undefined,
+          rating: status === "COMPLETED" ? 4.4 : undefined,
+          review: status === "COMPLETED" ? "Completed successfully." : undefined,
+        } satisfies DeliveryLog;
+      })
+      .sort((a, b) => Date.parse(b.scheduledAt) - Date.parse(a.scheduledAt));
+  }
 
-      // 최신순 정렬
-      logs.sort(
-        (a, b) =>
-          new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime()
-      );
-
-      resolve(logs);
-    }, 300);
-  });
+  const driver = ALL_DRIVERS.find((item) => matchesDriverId(item.id, driverId));
+  if (!driver) return [];
+  return buildMockDeliveries(driver.id, driver.stats.totalMatches);
 }

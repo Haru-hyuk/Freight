@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { QuoteDetailResponse } from "@/entities/quote/model/quote.types";
-import { type DriverMatchItem, getDriverMatch } from "@/features/matching/api";
+import { type DriverMatchItem, getDriverMatch, getDriverQuoteSummaryDetail } from "@/features/matching/api";
 import { parseMatchPositiveInt } from "@/features/matching/api/shipper-match-parser";
-import { getShipperQuoteDetailByIdentifier } from "@/features/quote/api";
 import {
   getMatchDetailRouteSnapshotKey,
   normalizeMatchDetailRouteSnapshot,
@@ -56,7 +55,7 @@ export function useMatchDetail(matchId: number, routeSnapshot?: MatchDetailRoute
       }
 
       try {
-        const quoteDetail = await getShipperQuoteDetailByIdentifier(String(safeQuoteId));
+        const quoteDetail = await getDriverQuoteSummaryDetail(safeQuoteId);
         if (!mounted) return;
         setQuote(quoteDetail ?? null);
       } catch {

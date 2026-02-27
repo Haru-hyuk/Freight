@@ -200,6 +200,7 @@ export const QUOTE_ACTION_MATRIX: Record<QuoteStatusApi, QuoteActionPolicy> = {
   OPEN: buildQuoteActionPolicyByUiState(CUSTOMER_UI_STATE.REQUESTED),
   NEGOTIATING: buildQuoteActionPolicyByUiState(CUSTOMER_UI_STATE.NEGOTIATION_REQUIRED),
   ASSIGNED: buildQuoteActionPolicyByUiState(CUSTOMER_UI_STATE.PAYMENT_REQUIRED),
+  ACCEPTED: buildQuoteActionPolicyByUiState(CUSTOMER_UI_STATE.PAYMENT_REQUIRED),
   PICKUP: buildQuoteActionPolicyByUiState(CUSTOMER_UI_STATE.PICKUP_IN_PROGRESS),
   TRANSIT: buildQuoteActionPolicyByUiState(CUSTOMER_UI_STATE.TRANSIT_IN_PROGRESS),
   DROPOFF: buildQuoteActionPolicyByUiState(CUSTOMER_UI_STATE.COMPLETED),

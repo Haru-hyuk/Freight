@@ -1,40 +1,50 @@
 package com.freight.backend.gpsload.gps.api;
 
-import com.freight.backend.gpsload.gps.entity.GpsLog;
+import com.freight.backend.exception.CustomException;
+import com.freight.backend.exception.ErrorCode;
 import com.freight.backend.gpsload.gps.model.GpsLogRequest;
 import com.freight.backend.gpsload.gps.model.TrackingResponse;
 import com.freight.backend.gpsload.gps.model.TrackingResponse.RoutePoint;
-import com.freight.backend.gpsload.gps.service.GpsTrackingService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.freight.backend.gpsload.tracking.dto.GpsLogUpsertRequest;
+import com.freight.backend.gpsload.tracking.dto.GpsLogUpsertResponse;
+import com.freight.backend.gpsload.tracking.entity.GpsLog;
+import com.freight.backend.gpsload.tracking.service.TrackingService;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/gpsmiss-legacy")
+@RequestMapping("/api/gpsload-legacy")
 @ConditionalOnProperty(
-        name = "gpsmiss.legacy-api.enabled",
+        name = "gpsload.legacy-api.enabled",
         havingValue = "true",
         matchIfMissing = false
 )
 public class GpsTrackingController {
 
-    private static final Logger log = LoggerFactory.getLogger(GpsTrackingController.class);
+    private final TrackingService trackingService;
 
-    private final GpsTrackingService gpsTrackingService;
-
-    public GpsTrackingController(GpsTrackingService gpsTrackingService) {
-        this.gpsTrackingService = gpsTrackingService;
+    public GpsTrackingController(TrackingService trackingService) {
+        this.trackingService = trackingService;
     }
 
     @PostMapping("/driver/matches/{matchId}/gps")
     public ResponseEntity<?> submitGpsLocation(
+            @AuthenticationPrincipal UserDetails userDetails,
             @PathVariable Long matchId,
             @RequestBody GpsLogRequest request
     ) {
@@ -44,76 +54,109 @@ public class GpsTrackingController {
             );
         }
 
-        try {
-            // TODO: Resolve real driverId from JWT and validate ownership.
-            Long driverId = 0L;
+        Long driverId = requireRoleUserId(userDetails, "ROLE_DRIVER");
 
-            GpsLog savedLog = gpsTrackingService.receiveGpsLog(matchId, driverId, request);
+        GpsLogUpsertRequest upsert = new GpsLogUpsertRequest();
+        upsert.setLat(request.lat());
+        upsert.setLng(request.lng());
+        upsert.setSpeedKmh(request.speedKmh());
+        upsert.setBearing(request.bearing());
 
-            return ResponseEntity.ok(Map.of(
-                    "gpsLogId", savedLog.getGpsLogId(),
-                    "matchId", matchId,
-                    "loggedAt", savedLog.getLoggedAt().toString()
-            ));
-        } catch (Exception e) {
-            log.error("GPS submit failed (matchId={}): {}", matchId, e.getMessage(), e);
-            return ResponseEntity.internalServerError().body(
-                    Map.of("error", "Failed to save GPS location: " + e.getMessage())
-            );
-        }
+        GpsLogUpsertResponse saved = trackingService.upsertDriverLocation(driverId, matchId, upsert);
+
+        return ResponseEntity.ok(Map.of(
+                "gpsLogId", saved.getGpsLogId(),
+                "matchId", saved.getMatchId(),
+                "loggedAt", saved.getLoggedAt().toString()
+        ));
     }
 
     @GetMapping("/shipper/matches/{matchId}/tracking")
-    public ResponseEntity<?> getTrackingInfo(@PathVariable Long matchId) {
-        try {
-            // TODO: Read planned route and status from real tables.
-            List<RoutePoint> route = List.of();
-            String matchStatus = "IN_TRANSIT";
+    public ResponseEntity<?> getTrackingInfo(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable Long matchId
+    ) {
+        Long shipperId = requireRoleUserId(userDetails, "ROLE_SHIPPER");
+        com.freight.backend.gpsload.tracking.dto.TrackingResponse tracking =
+                trackingService.getShipperTracking(shipperId, matchId);
 
-            TrackingResponse tracking = gpsTrackingService.getTrackingInfo(
-                    matchId, route, matchStatus
-            );
-
-            return ResponseEntity.ok(tracking);
-        } catch (Exception e) {
-            log.error("Tracking lookup failed (matchId={}): {}", matchId, e.getMessage(), e);
-            return ResponseEntity.internalServerError().body(
-                    Map.of("error", "Failed to read tracking info: " + e.getMessage())
+        TrackingResponse.DriverLocation currentLocation = null;
+        if (tracking.getCurrentLocation() != null) {
+            currentLocation = new TrackingResponse.DriverLocation(
+                    tracking.getCurrentLocation().getLat(),
+                    tracking.getCurrentLocation().getLng(),
+                    tracking.getCurrentLocation().getSpeedKmh(),
+                    tracking.getCurrentLocation().getBearing(),
+                    Boolean.FALSE,
+                    null,
+                    tracking.getCurrentLocation().getLoggedAt()
             );
         }
+
+        List<RoutePoint> routePoints = tracking.getRecentPath() == null
+                ? List.of()
+                : tracking.getRecentPath().stream()
+                .map(p -> new RoutePoint(0, null, p.getLat(), p.getLng()))
+                .toList();
+
+        return ResponseEntity.ok(new TrackingResponse(
+                currentLocation,
+                routePoints,
+                List.of(),
+                tracking.getMatchStatus()
+        ));
     }
 
     @GetMapping("/matches/{matchId}/gps/history")
     public ResponseEntity<?> getGpsHistory(
+            @AuthenticationPrincipal UserDetails userDetails,
             @PathVariable Long matchId,
             @RequestParam(defaultValue = "100") int limit,
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime since
     ) {
+        List<GpsLog> history;
+        if (hasRole(userDetails, "ROLE_DRIVER")) {
+            Long driverId = requireRoleUserId(userDetails, "ROLE_DRIVER");
+            history = trackingService.getGpsHistoryForDriver(driverId, matchId, limit, since);
+        } else if (hasRole(userDetails, "ROLE_SHIPPER")) {
+            Long shipperId = requireRoleUserId(userDetails, "ROLE_SHIPPER");
+            history = trackingService.getGpsHistoryForShipper(shipperId, matchId, since, limit);
+        } else {
+            throw new CustomException(ErrorCode.AUTH_FORBIDDEN);
+        }
+
+        List<Map<String, Object>> response = history.stream()
+                .map(gl -> Map.<String, Object>of(
+                        "gpsLogId", gl.getGpsLogId(),
+                        "lat", gl.getLat().doubleValue(),
+                        "lng", gl.getLng().doubleValue(),
+                        "speedKmh", gl.getSpeedKmh() != null ? gl.getSpeedKmh().doubleValue() : 0D,
+                        "bearing", gl.getBearing() != null ? gl.getBearing().doubleValue() : 0D,
+                        "loggedAt", gl.getLoggedAt().toString()
+                ))
+                .toList();
+
+        return ResponseEntity.ok(Map.of(
+                "matchId", matchId,
+                "count", response.size(),
+                "logs", response
+        ));
+    }
+
+    private static boolean hasRole(UserDetails userDetails, String role) {
+        return userDetails != null
+                && userDetails.getAuthorities().contains(new SimpleGrantedAuthority(role));
+    }
+
+    private static Long requireRoleUserId(UserDetails userDetails, String role) {
+        if (!hasRole(userDetails, role)) {
+            throw new CustomException(ErrorCode.AUTH_FORBIDDEN);
+        }
         try {
-            List<GpsLog> history = gpsTrackingService.getGpsHistory(matchId, limit, since);
-
-            List<Map<String, Object>> response = history.stream()
-                    .map(gl -> Map.<String, Object>of(
-                            "gpsLogId", gl.getGpsLogId(),
-                            "lat", gl.getLat(),
-                            "lng", gl.getLng(),
-                            "speedKmh", gl.getSpeedKmh() != null ? gl.getSpeedKmh() : 0,
-                            "bearing", gl.getBearing() != null ? gl.getBearing() : 0,
-                            "loggedAt", gl.getLoggedAt().toString()
-                    ))
-                    .toList();
-
-            return ResponseEntity.ok(Map.of(
-                    "matchId", matchId,
-                    "count", response.size(),
-                    "logs", response
-            ));
-        } catch (Exception e) {
-            log.error("GPS history failed (matchId={}): {}", matchId, e.getMessage(), e);
-            return ResponseEntity.internalServerError().body(
-                    Map.of("error", "Failed to read GPS history: " + e.getMessage())
-            );
+            return Long.parseLong(userDetails.getUsername());
+        } catch (NumberFormatException e) {
+            throw new CustomException(ErrorCode.AUTH_UNAUTHORIZED);
         }
     }
 }
