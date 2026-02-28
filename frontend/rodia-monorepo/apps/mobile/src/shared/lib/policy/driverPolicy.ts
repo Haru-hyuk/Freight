@@ -10,16 +10,24 @@ import {
 } from "./types";
 import { getPhotoGatePendingCtaLabel, shouldBlockDriverPrimaryActionForPhotoGate } from "./photoGatePolicy";
 
+// ── 정책표 (정규화된 BackendStatus → DriverUiState) ──────────────────────────
+// 백엔드 rawStatus 8종:
+//   OPEN      → OPEN             → READY_TO_ACCEPT
+//   MATCHED   → MATCHED          → ASSIGNED
+//   IN_TRANSIT → IN_TRANSIT      → TRANSIT_IN_PROGRESS
+//   DELIVERED → DELIVERED        → COMPLETED
+//   READY     → READY (Match)    → ASSIGNED
+//   COMPLETED → COMPLETED        → COMPLETED
+//   CANCELLED → CANCELLED        → CANCELED
+//   UNKNOWN   → UNKNOWN          → UNKNOWN
 const DRIVER_UI_STATE_BY_BACKEND_STATUS: Readonly<Record<BackendStatus, DriverUiState>> = {
-  [BACKEND_STATUS.READY]: DRIVER_UI_STATE.ASSIGNED,
   [BACKEND_STATUS.OPEN]: DRIVER_UI_STATE.READY_TO_ACCEPT,
-  [BACKEND_STATUS.NEGOTIATING]: DRIVER_UI_STATE.NEGOTIATING,
-  [BACKEND_STATUS.ASSIGNED]: DRIVER_UI_STATE.ASSIGNED,
-  [BACKEND_STATUS.ACCEPTED]: DRIVER_UI_STATE.ASSIGNED,
-  [BACKEND_STATUS.PICKUP]: DRIVER_UI_STATE.PICKUP_IN_PROGRESS,
-  [BACKEND_STATUS.TRANSIT]: DRIVER_UI_STATE.TRANSIT_IN_PROGRESS,
-  [BACKEND_STATUS.DROPOFF]: DRIVER_UI_STATE.COMPLETED,
-  [BACKEND_STATUS.CANCELED]: DRIVER_UI_STATE.CANCELED,
+  [BACKEND_STATUS.MATCHED]: DRIVER_UI_STATE.ASSIGNED,
+  [BACKEND_STATUS.IN_TRANSIT]: DRIVER_UI_STATE.TRANSIT_IN_PROGRESS,
+  [BACKEND_STATUS.DELIVERED]: DRIVER_UI_STATE.COMPLETED,
+  [BACKEND_STATUS.READY]: DRIVER_UI_STATE.ASSIGNED,
+  [BACKEND_STATUS.COMPLETED]: DRIVER_UI_STATE.COMPLETED,
+  [BACKEND_STATUS.CANCELLED]: DRIVER_UI_STATE.CANCELED,
   [BACKEND_STATUS.UNKNOWN]: DRIVER_UI_STATE.UNKNOWN,
 };
 
@@ -85,13 +93,6 @@ const DRIVER_DEFAULT_CTA_MAP: Readonly<Record<DriverUiState, DriverCtaConfig>> =
   },
 };
 
-const DRIVER_ASSIGNED_PAYMENT_PENDING_CTA: DriverCtaConfig = {
-  id: DRIVER_CTA_ID.PAYMENT_PENDING,
-  label: "결제 확인 중",
-  variant: CTA_VARIANT.DISABLED,
-  enabled: false,
-};
-
 const DRIVER_ORDER_SORT_PRIORITY_MAP: Readonly<Record<DriverUiState, number>> = {
   [DRIVER_UI_STATE.READY_TO_ACCEPT]: 0,
   [DRIVER_UI_STATE.NEGOTIATING]: 1,
@@ -106,29 +107,19 @@ const DRIVER_ORDER_SORT_PRIORITY_MAP: Readonly<Record<DriverUiState, number>> = 
 export type DriverDomain = "market" | "my" | "run" | "unknown";
 
 export function getDriverDomain(backendStatus: BackendStatus): DriverDomain {
-  if (backendStatus === BACKEND_STATUS.OPEN) return "market";
-  if (backendStatus === BACKEND_STATUS.NEGOTIATING) return "my";
-  if (backendStatus === BACKEND_STATUS.ASSIGNED) return "my";
-  if (
-    backendStatus === BACKEND_STATUS.READY ||
-    backendStatus === BACKEND_STATUS.ACCEPTED ||
-    backendStatus === BACKEND_STATUS.PICKUP ||
-    backendStatus === BACKEND_STATUS.TRANSIT
-  ) {
-    return "run";
-  }
+  if (backendStatus === BACKEND_STATUS.OPEN) return "market";      // OPEN: 마켓
+  if (backendStatus === BACKEND_STATUS.MATCHED) return "run";      // MATCHED: 배차됨
+  if (backendStatus === BACKEND_STATUS.IN_TRANSIT) return "run";   // IN_TRANSIT: 운송 중
+  if (backendStatus === BACKEND_STATUS.DELIVERED) return "run";    // DELIVERED: 완료
+  if (backendStatus === BACKEND_STATUS.READY) return "run";        // READY (Match): 배차됨
+  if (backendStatus === BACKEND_STATUS.COMPLETED) return "run";    // COMPLETED: 완료
   return "unknown";
 }
 
 export function getDriverCta(
   uiState: DriverUiState,
   photoGatePassed: boolean,
-  rawBackendStatus: BackendStatus = BACKEND_STATUS.UNKNOWN
 ): DriverCtaConfig {
-  if (uiState === DRIVER_UI_STATE.ASSIGNED && rawBackendStatus === BACKEND_STATUS.ASSIGNED) {
-    return DRIVER_ASSIGNED_PAYMENT_PENDING_CTA;
-  }
-
   if (shouldBlockDriverPrimaryActionForPhotoGate(uiState, photoGatePassed)) {
     return {
       id: DRIVER_CTA_ID.PHOTO_GATE_PENDING,

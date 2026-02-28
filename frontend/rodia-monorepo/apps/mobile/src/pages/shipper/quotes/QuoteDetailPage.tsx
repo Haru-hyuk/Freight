@@ -58,13 +58,12 @@ const STATUS_PROMOTION_SOURCE_STATES: ReadonlySet<string> = new Set([
   BACKEND_STATUS.UNKNOWN,
 ]);
 const STATUS_PROMOTION_TARGET_STATES: ReadonlySet<string> = new Set([
-  BACKEND_STATUS.NEGOTIATING,
-  BACKEND_STATUS.ASSIGNED,
-  BACKEND_STATUS.ACCEPTED,
-  BACKEND_STATUS.PICKUP,
-  BACKEND_STATUS.TRANSIT,
-  BACKEND_STATUS.DROPOFF,
-  BACKEND_STATUS.CANCELED,
+  BACKEND_STATUS.MATCHED,
+  BACKEND_STATUS.IN_TRANSIT,
+  BACKEND_STATUS.DELIVERED,
+  BACKEND_STATUS.READY,
+  BACKEND_STATUS.COMPLETED,
+  BACKEND_STATUS.CANCELLED,
 ]);
 const FOCUS_REFETCH_THROTTLE_MS = 1500;
 
@@ -413,7 +412,7 @@ function resolveEffectiveQuoteStatus(quoteStatus: unknown, matchStatus: unknown)
 }
 
 function isCanceledMatchStatus(value: unknown): boolean {
-  return normalizeMatchStatus(value) === BACKEND_STATUS.CANCELED;
+  return normalizeMatchStatus(value) === BACKEND_STATUS.CANCELLED;
 }
 
 function toUpdatedAtTime(value: unknown): number {

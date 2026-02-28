@@ -127,7 +127,7 @@ export function mapDriverOrderCard(input: DriverOrderCardMapperInput): DriverOrd
   const backendStatus = normalizeStatus(rawStatus);
   const uiState = getDriverUiStateFromBackendStatus(rawStatus);
   const statusBadge = getDriverBadge(uiState);
-  const cta = getDriverCta(uiState, true, backendStatus);
+  const cta = getDriverCta(uiState, true);
   const statusLabel = statusBadge.label;
   const requestedAtText = formatDateTime(createdAt, "");
 

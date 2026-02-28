@@ -433,9 +433,7 @@ export function DriverOrdersBoard({ initialTab, assignedOnly, activeTab: control
   const filteredMyOrders = useMemo(
     () =>
       overview.myOrders.filter(
-        (item) =>
-          item.uiState === DRIVER_UI_STATE.NEGOTIATING ||
-          item.cta?.id === DRIVER_CTA_ID.PAYMENT_PENDING
+        (item) => item.uiState === DRIVER_UI_STATE.ASSIGNED  // MATCHED → READY → ASSIGNED
       ),
     [overview.myOrders]
   );

@@ -4,6 +4,13 @@ import { useActiveOrder } from "@/entities/order/model/active-order.store";
 import { PrepareForRunScreen } from "@/features/driver-run/ui/PrepareForRunScreen";
 import { RunActiveDetails } from "@/features/driver-run/ui/RunActiveDetails";
 import { DriverOrdersBoard } from "@/widgets/driver-orders/DriverOrdersBoard";
+import {
+  getDriverBadge,
+  getDriverCta,
+  getDriverStatusTitle,
+  getDriverUiStateFromBackendStatus,
+  normalizeStatus,
+} from "@/shared/lib/policy";
 
 export default function DriverRunPage() {
   const { activeOrder } = useActiveOrder();
@@ -17,5 +24,20 @@ export default function DriverRunPage() {
   }
 
   // Any other status on an active order implies it's in progress.
-  return <RunActiveDetails order={activeOrder} />;
+  const rawStatus = typeof activeOrder.status === "string" ? activeOrder.status : "";
+  const backendStatus = normalizeStatus(rawStatus);
+  const uiState = getDriverUiStateFromBackendStatus(rawStatus);
+  const badge = getDriverBadge(uiState);
+  const driverStatusTitle = getDriverStatusTitle(uiState);
+  const driverCta = getDriverCta(uiState, true);
+
+  return (
+    <RunActiveDetails
+      order={activeOrder}
+      driverBadgeLabel={badge.label}
+      driverBadgeTone={badge.tone}
+      driverStatusTitle={driverStatusTitle}
+      driverCta={driverCta}
+    />
+  );
 }

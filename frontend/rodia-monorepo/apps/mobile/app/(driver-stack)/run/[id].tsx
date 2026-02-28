@@ -184,7 +184,7 @@ export default function DriverRunRoute() {
   const effectiveRawStatus =
     isMarket && normalized === BACKEND_STATUS.READY ? BACKEND_STATUS.OPEN : rawStatus;
   const uiState = getDriverUiStateFromBackendStatus(effectiveRawStatus);
-  const cta = getDriverCta(uiState, true, normalizeStatus(effectiveRawStatus));
+  const cta = getDriverCta(uiState, true);
 
   return (
     <PageScaffold

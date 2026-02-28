@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import { StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
@@ -9,9 +9,14 @@ import { AppText } from "@/shared/ui/kit/AppText";
 import { PageScaffold } from "@/widgets/layout/PageScaffold";
 import type { ActiveOrder } from "@/entities/order/model/active-order.store";
 import { useActiveOrder } from "@/entities/order/model/active-order.store";
+import { BADGE_TONE, type BadgeTone, type DriverCtaConfig } from "@/shared/lib/policy";
 
 type Props = {
   order: ActiveOrder;
+  driverBadgeLabel: string;
+  driverBadgeTone: BadgeTone;
+  driverStatusTitle: string;
+  driverCta?: DriverCtaConfig;
 };
 
 const useStyles = createThemedStyles((theme) => {
@@ -22,7 +27,6 @@ const useStyles = createThemedStyles((theme) => {
   const cTextSub = safeString(theme?.colors?.textSub, "#334155");
   const cTextMuted = safeString(theme?.colors?.textMuted, "#64748B");
   const cBorder = safeString(theme?.colors?.borderDefault, "#E2E8F0");
-  const cSuccess = safeString(theme?.colors?.semanticSuccess, "#10B981");
 
   return StyleSheet.create({
     root: {
@@ -44,14 +48,11 @@ const useStyles = createThemedStyles((theme) => {
       minHeight: 28,
       borderRadius: 999,
       borderWidth: 1,
-      borderColor: tint(cSuccess, 0.4, cBorder),
-      backgroundColor: tint(cSuccess, 0.12, cSurface),
       paddingHorizontal: spacing * 3,
       alignItems: "center",
       justifyContent: "center",
     },
     statusBadgeText: {
-      color: cSuccess,
       fontSize: safeNumber(theme?.typography?.scale?.caption?.size, 12) + 1,
       lineHeight: safeNumber(theme?.typography?.scale?.caption?.lineHeight, 16) + 2,
       fontWeight: "900",
@@ -153,24 +154,47 @@ const useStyles = createThemedStyles((theme) => {
   });
 });
 
-const STATUS_LABEL_MAP: Record<string, string> = {
-  PREPARING: "운행 준비 중",
-  DRIVING: "운행 중",
-  COMPLETED: "운행 완료",
-  ASSIGNED: "배차 완료",
-};
+function resolveStatusPalette(tone: BadgeTone, colors: Record<string, string>) {
+  if (tone === BADGE_TONE.ATTENTION) {
+    return {
+      bg: tint(colors.brandPrimary, 0.1, colors.bgSurface),
+      text: colors.brandPrimary,
+      border: tint(colors.brandPrimary, 0.25, colors.borderDefault),
+    };
+  }
+  if (tone === BADGE_TONE.PROGRESS) {
+    return {
+      bg: tint(colors.semanticSuccess, 0.1, colors.bgSurface),
+      text: colors.semanticSuccess,
+      border: tint(colors.semanticSuccess, 0.25, colors.borderDefault),
+    };
+  }
+  if (tone === BADGE_TONE.CLOSED) {
+    return {
+      bg: tint(colors.semanticInfo, 0.1, colors.bgSurface),
+      text: colors.semanticInfo,
+      border: tint(colors.semanticInfo, 0.25, colors.borderDefault),
+    };
+  }
+  return {
+    bg: tint(colors.textMuted, 0.1, colors.bgSurface),
+    text: colors.textMuted,
+    border: tint(colors.textMuted, 0.25, colors.borderDefault),
+  };
+}
 
-export function RunActiveDetails({ order }: Props) {
+export function RunActiveDetails({ order, driverBadgeLabel, driverBadgeTone, driverStatusTitle }: Props) {
   const theme = useAppTheme();
   const styles = useStyles();
   const { clearActiveOrder } = useActiveOrder();
   const insets = useSafeAreaInsets();
+  const colors = theme.colors as Record<string, string>;
+  const badgePalette = resolveStatusPalette(driverBadgeTone, colors);
 
   const handleViewRunList = () => {
     clearActiveOrder();
   };
 
-  const statusLabel = STATUS_LABEL_MAP[order.status] ?? order.status;
   const originAddress = order.originAddress || "-";
   const destinationAddress = order.destinationAddress || "-";
 
@@ -179,8 +203,15 @@ export function RunActiveDetails({ order }: Props) {
       <View style={styles.root}>
         <View style={styles.content}>
           <View style={styles.statusBadgeRow}>
-            <View style={styles.statusBadge}>
-              <AppText style={styles.statusBadgeText}>{statusLabel}</AppText>
+            <View
+              style={[
+                styles.statusBadge,
+                { backgroundColor: badgePalette.bg, borderColor: badgePalette.border },
+              ]}
+            >
+              <AppText style={[styles.statusBadgeText, { color: badgePalette.text }]}>
+                {driverBadgeLabel}
+              </AppText>
             </View>
             <AppText style={styles.idText}>오더 #{order.quoteId}</AppText>
           </View>
@@ -214,7 +245,7 @@ export function RunActiveDetails({ order }: Props) {
             <AppText style={styles.infoCardTitle}>운행 정보</AppText>
             <View style={styles.infoRow}>
               <AppText style={styles.infoLabel}>운행 상태</AppText>
-              <AppText style={styles.infoValue}>{statusLabel}</AppText>
+              <AppText style={styles.infoValue}>{driverStatusTitle}</AppText>
             </View>
             <View style={styles.infoRow}>
               <AppText style={styles.infoLabel}>오더 ID</AppText>

@@ -355,7 +355,7 @@ export function DriverMatchDetailPage({ matchId, routeSnapshot }: DriverMatchDet
   const backendStatus = normalizeStatus(toText(detail.match?.status));
   const uiState = getDriverUiStateFromBackendStatus(backendStatus);
   const statusLabel = getDriverBadge(uiState).label;
-  const ctaPolicy = getDriverCta(uiState, true, backendStatus);
+  const ctaPolicy = getDriverCta(uiState, true);
   const decorations = useMemo(() => getDriverMatchDetailBadges(detail.match), [detail.match]);
 
   const isReadyAction =

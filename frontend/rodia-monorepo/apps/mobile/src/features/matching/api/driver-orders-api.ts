@@ -413,7 +413,7 @@ export async function loadDriverOrdersOverview(): Promise<DriverOrdersOverview> 
   const runMatches = myMatches.filter((match) => {
     if (match.accepted === true) return true;
     const status = normalizeStatus(match.status ?? "");
-    return status === BACKEND_STATUS.TRANSIT || status === BACKEND_STATUS.DROPOFF;
+    return status === BACKEND_STATUS.IN_TRANSIT || status === BACKEND_STATUS.DELIVERED;
   });
   const myPendingMatches = myMatches.filter((match) => !runMatches.includes(match));
 
