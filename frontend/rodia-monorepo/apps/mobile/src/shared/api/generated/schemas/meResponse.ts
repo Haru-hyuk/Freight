@@ -10,4 +10,5 @@ export interface MeResponse {
   role?: string;
   email?: string;
   name?: string;
+  phone?: string;
 }

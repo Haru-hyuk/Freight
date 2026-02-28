@@ -7,7 +7,8 @@
 import type {
   DriverSignupRequest,
   LoginRequest,
-  RefreshBody,
+  MeUpdateRequest,
+  RefreshTokenRequest,
   ShipperSignupRequest
 } from '.././schemas';
 
@@ -15,6 +16,37 @@ import { customInstance } from '../../orval/custom-instance';
 
 
 
+  export const me = (
+    
+ ) => {
+      return customInstance<Blob>(
+      {url: `/api/auth/me`, method: 'GET',
+        responseType: 'blob'
+    },
+      );
+    }
+  export const putMe = (
+    meUpdateRequest: MeUpdateRequest,
+ ) => {
+      return customInstance<Blob>(
+      {url: `/api/auth/me`, method: 'PUT',
+      headers: {'Content-Type': 'application/json', },
+      data: meUpdateRequest,
+        responseType: 'blob'
+    },
+      );
+    }
+  export const patchMe = (
+    meUpdateRequest: MeUpdateRequest,
+ ) => {
+      return customInstance<Blob>(
+      {url: `/api/auth/me`, method: 'PATCH',
+      headers: {'Content-Type': 'application/json', },
+      data: meUpdateRequest,
+        responseType: 'blob'
+    },
+      );
+    }
   export const shipperSignup = (
     shipperSignupRequest: ShipperSignupRequest,
  ) => {
@@ -38,12 +70,12 @@ import { customInstance } from '../../orval/custom-instance';
       );
     }
   export const refresh = (
-    refreshBody: RefreshBody,
+    refreshTokenRequest: RefreshTokenRequest,
  ) => {
       return customInstance<Blob>(
       {url: `/api/auth/refresh`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
-      data: refreshBody,
+      data: refreshTokenRequest,
         responseType: 'blob'
     },
       );
@@ -89,20 +121,13 @@ import { customInstance } from '../../orval/custom-instance';
     },
       );
     }
-  export const me = (
-    
- ) => {
-      return customInstance<Blob>(
-      {url: `/api/auth/me`, method: 'GET',
-        responseType: 'blob'
-    },
-      );
-    }
-  export type ShipperSignupResult = NonNullable<Awaited<ReturnType<typeof shipperSignup>>>
+  export type MeResult = NonNullable<Awaited<ReturnType<typeof me>>>
+export type PutMeResult = NonNullable<Awaited<ReturnType<typeof putMe>>>
+export type PatchMeResult = NonNullable<Awaited<ReturnType<typeof patchMe>>>
+export type ShipperSignupResult = NonNullable<Awaited<ReturnType<typeof shipperSignup>>>
 export type ShipperLoginResult = NonNullable<Awaited<ReturnType<typeof shipperLogin>>>
 export type RefreshResult = NonNullable<Awaited<ReturnType<typeof refresh>>>
 export type LogoutResult = NonNullable<Awaited<ReturnType<typeof logout>>>
 export type DriverSignupResult = NonNullable<Awaited<ReturnType<typeof driverSignup>>>
 export type DriverLoginResult = NonNullable<Awaited<ReturnType<typeof driverLogin>>>
 export type AdminLoginResult = NonNullable<Awaited<ReturnType<typeof adminLogin>>>
-export type MeResult = NonNullable<Awaited<ReturnType<typeof me>>>

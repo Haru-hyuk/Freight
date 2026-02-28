@@ -24,24 +24,24 @@ export interface QuoteCreateRequest {
    * @minimum -90
    * @maximum 90
    */
-  originLat: number;
+  originLat?: number;
   /**
    * @minimum -180
    * @maximum 180
    */
-  originLng: number;
+  originLng?: number;
   /**
    * @minimum -90
    * @maximum 90
    */
-  destinationLat: number;
+  destinationLat?: number;
   /**
    * @minimum -180
    * @maximum 180
    */
-  destinationLng: number;
+  destinationLng?: number;
   /** @minimum 1 */
-  distanceKm: number;
+  distanceKm?: number;
   /** @minimum 1 */
   weightKg: number;
   volumeCbm?: number;
@@ -58,7 +58,7 @@ export interface QuoteCreateRequest {
    * @maxLength 500
    */
   cargoDesc?: string;
-  basePrice: number;
+  basePrice?: number;
   distancePrice?: number;
   desiredPrice?: number;
   allowCombine?: boolean;

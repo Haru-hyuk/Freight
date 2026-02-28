@@ -5,6 +5,4 @@
  * OpenAPI spec version: v0
  */
 
-export interface MatchCreateRequest {
-  quoteId: number;
-}
+export type List1200Item = {[key: string]: { [key: string]: unknown }};

@@ -5,6 +5,6 @@
  * OpenAPI spec version: v0
  */
 
-export interface MatchCreateRequest {
-  quoteId: number;
+export interface RefreshTokenRequest {
+  refreshToken: string;
 }
