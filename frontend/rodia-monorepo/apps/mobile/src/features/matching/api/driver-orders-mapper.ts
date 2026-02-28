@@ -4,7 +4,6 @@ import {
   getDriverBadge,
   getDriverOrderSortPriority,
   getDriverUiStateFromBackendStatus,
-  normalizeStatus,
 } from "@/shared/lib/policy";
 import { formatDateTime, formatDistance, formatKrw } from "@/shared/lib/format/display";
 import {
@@ -29,6 +28,10 @@ type DriverOrderCardMapperInput = {
   filterLabels: DriverOrderTagLabelMap;
 };
 
+type StatusCarrier = {
+  status?: unknown;
+};
+
 function toText(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -43,6 +46,15 @@ function toSortTimestamp(value: unknown): number {
   if (!raw) return 0;
   const timestamp = Date.parse(raw);
   return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function resolveDriverOrderRawStatus(status: unknown, quote: ParsedDriverOrderQuote | null): string {
+  const quoteStatus =
+    quote && typeof (quote as ParsedDriverOrderQuote & StatusCarrier).status === "string"
+      ? String((quote as ParsedDriverOrderQuote & StatusCarrier).status).trim()
+      : "";
+  if (quoteStatus) return quoteStatus;
+  return typeof status === "string" ? status.trim() : "";
 }
 
 export function formatDriverOrderPrice(value: unknown): string {
@@ -123,8 +135,7 @@ export function mapDriverOrderCard(input: DriverOrderCardMapperInput): DriverOrd
   const { matchId, quoteId, status, createdAt, updatedAt, quote, scope, index, seed } = source;
   const mockDecoration = mode === "mock" ? selectMockFlowDriverOrderDecoration(seed, scope) : null;
 
-  const rawStatus = typeof status === "string" ? status : "";
-  const backendStatus = normalizeStatus(rawStatus);
+  const rawStatus = resolveDriverOrderRawStatus(status, quote);
   const uiState = getDriverUiStateFromBackendStatus(rawStatus);
   const statusBadge = getDriverBadge(uiState);
   const cta = getDriverCta(uiState, true);

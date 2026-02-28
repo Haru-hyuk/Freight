@@ -34,8 +34,8 @@ const DRIVER_UI_STATE_BY_BACKEND_STATUS: Readonly<Record<BackendStatus, DriverUi
 const DRIVER_STATUS_TITLE_MAP: Readonly<Record<DriverUiState, string>> = {
   [DRIVER_UI_STATE.READY_TO_ACCEPT]: "배차 요청이 도착했습니다",
   [DRIVER_UI_STATE.NEGOTIATING]: "운임 협의가 진행 중입니다",
-  [DRIVER_UI_STATE.ASSIGNED]: "배차가 확정되었습니다",
-  [DRIVER_UI_STATE.PICKUP_IN_PROGRESS]: "상차 진행 상태를 확인해주세요",
+  [DRIVER_UI_STATE.ASSIGNED]: "결제 대기 중입니다",
+  [DRIVER_UI_STATE.PICKUP_IN_PROGRESS]: "운행 준비 중입니다",
   [DRIVER_UI_STATE.TRANSIT_IN_PROGRESS]: "운송 중 상태를 확인해주세요",
   [DRIVER_UI_STATE.COMPLETED]: "운송이 완료되었습니다",
   [DRIVER_UI_STATE.CANCELED]: "배차가 취소되었습니다",
@@ -56,16 +56,16 @@ const DRIVER_DEFAULT_CTA_MAP: Readonly<Record<DriverUiState, DriverCtaConfig>> =
     enabled: true,
   },
   [DRIVER_UI_STATE.ASSIGNED]: {
-    id: DRIVER_CTA_ID.START_DRIVE,
-    label: "운행 준비 시작",
-    variant: CTA_VARIANT.PRIMARY,
-    enabled: true,
+    id: DRIVER_CTA_ID.PAYMENT_PENDING,
+    label: "결제 대기",
+    variant: CTA_VARIANT.SECONDARY,
+    enabled: false,
   },
   [DRIVER_UI_STATE.PICKUP_IN_PROGRESS]: {
-    id: DRIVER_CTA_ID.START_DRIVE,
-    label: "상차 진행",
-    variant: CTA_VARIANT.PRIMARY,
-    enabled: true,
+    id: DRIVER_CTA_ID.PAYMENT_PENDING,
+    label: "운행 준비 중",
+    variant: CTA_VARIANT.SECONDARY,
+    enabled: false,
   },
   [DRIVER_UI_STATE.TRANSIT_IN_PROGRESS]: {
     id: DRIVER_CTA_ID.MARK_DROPOFF,
@@ -107,12 +107,15 @@ const DRIVER_ORDER_SORT_PRIORITY_MAP: Readonly<Record<DriverUiState, number>> = 
 export type DriverDomain = "market" | "my" | "run" | "unknown";
 
 export function getDriverDomain(backendStatus: BackendStatus): DriverDomain {
-  if (backendStatus === BACKEND_STATUS.OPEN) return "market";      // OPEN: 마켓
-  if (backendStatus === BACKEND_STATUS.MATCHED) return "run";      // MATCHED: 배차됨
-  if (backendStatus === BACKEND_STATUS.IN_TRANSIT) return "run";   // IN_TRANSIT: 운송 중
-  if (backendStatus === BACKEND_STATUS.DELIVERED) return "run";    // DELIVERED: 완료
-  if (backendStatus === BACKEND_STATUS.READY) return "run";        // READY (Match): 배차됨
-  if (backendStatus === BACKEND_STATUS.COMPLETED) return "run";    // COMPLETED: 완료
+  if (backendStatus === BACKEND_STATUS.OPEN) return "market";
+  if (backendStatus === BACKEND_STATUS.MATCHED || backendStatus === BACKEND_STATUS.READY) return "my";
+  if (
+    backendStatus === BACKEND_STATUS.IN_TRANSIT ||
+    backendStatus === BACKEND_STATUS.DELIVERED ||
+    backendStatus === BACKEND_STATUS.COMPLETED
+  ) {
+    return "run";
+  }
   return "unknown";
 }
 

@@ -410,11 +410,14 @@ export async function loadDriverOrdersOverview(): Promise<DriverOrdersOverview> 
   const [openMatches, myMatches] = await Promise.all([listOpenDriverMatches(), listMyDriverMatches()]);
 
   const marketMatches = openMatches.filter((match) => parseDriverOrderPositiveInt(match.driverId) <= 0);
-  const runMatches = myMatches.filter((match) => {
-    if (match.accepted === true) return true;
-    const status = normalizeStatus(match.status ?? "");
-    return status === BACKEND_STATUS.IN_TRANSIT || status === BACKEND_STATUS.DELIVERED;
-  });
+const runMatches = myMatches.filter((match) => {
+  if (match.accepted === true) return true;
+  const status = normalizeStatus(match.status ?? "");
+  // READY는 Match 상태 (배차 확정), runMatches에 포함
+  return status === BACKEND_STATUS.READY || 
+         status === BACKEND_STATUS.IN_TRANSIT || 
+         status === BACKEND_STATUS.DELIVERED;
+});
   const myPendingMatches = myMatches.filter((match) => !runMatches.includes(match));
 
   const quoteIds = collectDriverOrderQuoteIds([...marketMatches, ...myMatches]);

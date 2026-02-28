@@ -432,19 +432,16 @@ export function DriverOrdersBoard({ initialTab, assignedOnly, activeTab: control
 
   const filteredMyOrders = useMemo(
     () =>
-      overview.myOrders.filter(
-        (item) => item.uiState === DRIVER_UI_STATE.ASSIGNED  // MATCHED → READY → ASSIGNED
-      ),
-    [overview.myOrders]
+      [...overview.myOrders, ...overview.runOrders].filter((item) => item.uiState === DRIVER_UI_STATE.ASSIGNED),
+    [overview.myOrders, overview.runOrders]
   );
 
   const filteredRunOrders = useMemo(
     () =>
       overview.runOrders.filter(
         (item) =>
-          item.cta?.id === DRIVER_CTA_ID.START_DRIVE ||
-          item.uiState === DRIVER_UI_STATE.PICKUP_IN_PROGRESS ||
-          item.uiState === DRIVER_UI_STATE.TRANSIT_IN_PROGRESS
+          item.uiState === DRIVER_UI_STATE.TRANSIT_IN_PROGRESS ||
+          item.uiState === DRIVER_UI_STATE.COMPLETED
       ),
     [overview.runOrders]
   );
@@ -624,7 +621,7 @@ export function DriverOrdersBoard({ initialTab, assignedOnly, activeTab: control
                   resolvedActiveTab === "market"
                     ? "새 오더가 등록되면 이곳에 표시됩니다."
                     : assignedOnly
-                      ? "수락 완료 또는 운행 중인 오더가 생기면 이곳에 표시됩니다."
+                      ? "운송 중이거나 완료된 오더가 생기면 이곳에 표시됩니다."
                       : "수락한 오더가 있으면 이곳에 표시됩니다."
                 }
                 fullScreen={false}

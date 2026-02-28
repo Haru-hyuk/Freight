@@ -1,5 +1,4 @@
 import type { QuoteDetailResponse } from "@/entities/quote/model/quote.types";
-import { normalizeStatus } from "@/shared/lib/policy";
 
 import type { DriverMatchItem } from "./shipper-match-api";
 
@@ -13,6 +12,7 @@ import type { DriverMatchItem } from "./shipper-match-api";
 export type DriverOrderScope = "market" | "my";
 
 export type ParsedDriverOrderQuote = {
+  status?: string;
   originAddress?: string;
   destinationAddress?: string;
   distanceKm?: number;
@@ -70,6 +70,7 @@ function parseDriverOrderQuote(quote: QuoteDetailResponse | null): ParsedDriverO
   if (!quote) return null;
 
   return {
+    status: toOptionalText(quote.status),
     originAddress: toOptionalText(quote.originAddress),
     destinationAddress: toOptionalText(quote.destinationAddress),
     distanceKm: toOptionalDistance(quote.distanceKm),
@@ -98,7 +99,7 @@ export function parseDriverOrderSource(input: {
   const quoteIdFromQuote = parseDriverOrderPositiveInt(quote?.quoteId);
   const quoteId = quoteIdFromMatch || quoteIdFromQuote || 0;
   const seed = matchId || quoteId || index + 1;
-  const rawStatus = typeof match.status === "string" ? match.status : "";
+  const rawStatus = typeof match.status === "string" ? match.status.trim() : "";
 
   return {
     scope,
@@ -106,7 +107,7 @@ export function parseDriverOrderSource(input: {
     seed,
     matchId,
     quoteId: quoteId > 0 ? quoteId : undefined,
-    status: normalizeStatus(rawStatus),
+    status: rawStatus,
     createdAt: toOptionalText(match.createdAt),
     updatedAt: toOptionalText(match.updatedAt),
     quote: parseDriverOrderQuote(quote),
