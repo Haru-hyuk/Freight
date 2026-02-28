@@ -17,7 +17,13 @@ export function ActiveOrderProvider({ children }: { children: React.ReactNode })
   const [activeOrder, setActiveOrderState] = useState<ActiveOrder | null>(null);
 
   const setActiveOrder = useCallback((order: ActiveOrder) => {
-    setActiveOrderState(order);
+    setActiveOrderState((prev) => {
+      const nextStatus = typeof order.status === "string" ? order.status.trim() : "";
+      if (!nextStatus && prev?.status) {
+        return { ...order, status: prev.status };
+      }
+      return order;
+    });
   }, []);
 
   const clearActiveOrder = useCallback(() => {

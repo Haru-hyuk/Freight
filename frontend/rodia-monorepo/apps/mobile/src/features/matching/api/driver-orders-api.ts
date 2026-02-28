@@ -292,7 +292,7 @@ function toQuoteDetailFromDriverSummary(
     allowCombine: pickFirstBoolean(candidates, ["allowCombine", "allow_combine"]) ?? false,
     loadMethod: pickFirstText(candidates, ["loadMethod", "load_method"]) ?? "",
     unloadMethod: pickFirstText(candidates, ["unloadMethod", "unload_method"]) ?? "",
-    status: "OPEN",
+    status: pickFirstText(candidates, ["status"]) as unknown as QuoteDetailResponse["status"],
     createdAt: "",
     updatedAt: "",
     senderName: undefined,

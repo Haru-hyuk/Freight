@@ -182,3 +182,4 @@ backend/build.gradle
 _local/
 backend/src/main/resources/application.yml
 _local/test-client/index.html
+frontend/rodia-monorepo/apps/mobile/.claude/settings.local.json

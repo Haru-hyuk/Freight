@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 import { useRouter } from "expo-router";
 import { AppEmptyState } from "@/shared/ui/kit/AppEmptyState";
 

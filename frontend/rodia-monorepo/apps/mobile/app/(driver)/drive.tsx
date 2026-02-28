@@ -1,7 +1,14 @@
 ﻿import React from "react";
-import DriverRoutePage from "@/pages/driver/routers/DriverRoutePage";
+import { Redirect } from "expo-router";
+import { useActiveOrder } from "@/entities/order/model/active-order.store";
 
-export default function DriverRoutePageRoute() {
-  return <DriverRoutePage />;
+export default function DriverDriveRoute() {
+  const { activeOrder } = useActiveOrder();
+
+  if (activeOrder) {
+    return <Redirect href="/(driver)/run" />;
+  }
+
+  return <Redirect href="/(driver)/quotes" />;
 }
 
