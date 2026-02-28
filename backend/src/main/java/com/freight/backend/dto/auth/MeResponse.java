@@ -12,4 +12,5 @@ public class MeResponse {
     private String role;
     private String email;
     private String name;
+    private String phone;
 }

@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, Modal, StyleSheet, Switch, TextInput, View } from "react-native";
+﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, Alert, Modal, Pressable, StyleSheet, Switch, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
@@ -11,6 +11,7 @@ import {
   type UpsertShipperAddressBookItemInput,
   updateShipperAddressBookItem,
 } from "@/features/shipper-settings/api/shipper-address-book-api";
+import { PostcodeModal } from "@/features/quote/ui/PostcodeModal";
 import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
 import type { AppTheme } from "@/shared/theme/types";
 import { useAppTheme } from "@/shared/theme/useAppTheme";
@@ -28,6 +29,12 @@ type AddressBookFormState = {
   address: string;
   addressDetail: string;
   memo: string;
+};
+
+type AddressSelectionPayload = {
+  address?: string;
+  roadAddress?: string;
+  jibunAddress?: string;
 };
 
 const EMPTY_FORM: AddressBookFormState = {
@@ -142,6 +149,31 @@ function createStyles(theme: AppTheme) {
       paddingVertical: 10,
       fontSize: 14,
     },
+    addressButton: {
+      minHeight: 42,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: theme.colors.borderDefault,
+      backgroundColor: theme.colors.bgSurface,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    addressButtonFilled: {
+      borderColor: theme.colors.brandPrimary,
+      backgroundColor: theme.colors.bgSurfaceAlt,
+    },
+    addressButtonText: {
+      flex: 1,
+      color: theme.colors.textMuted,
+      fontSize: 14,
+    },
+    addressButtonTextFilled: {
+      color: theme.colors.textMain,
+      fontWeight: "600",
+    },
     switchRow: {
       minHeight: 40,
       flexDirection: "row",
@@ -222,6 +254,7 @@ export default function ShipperAddressBookPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [addresses, setAddresses] = useState<ShipperAddressBookItem[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isPostcodeOpen, setIsPostcodeOpen] = useState(false);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [form, setForm] = useState<AddressBookFormState>(EMPTY_FORM);
 
@@ -262,6 +295,29 @@ export default function ShipperAddressBookPage() {
     if (isSaving) return;
     setIsFormOpen(false);
   }, [isSaving]);
+
+  const openPostcode = useCallback(() => {
+    setIsFormOpen(false);
+    setIsPostcodeOpen(true);
+  }, []);
+
+  const closePostcode = useCallback(() => {
+    setIsPostcodeOpen(false);
+    setIsFormOpen(true);
+  }, []);
+
+  const handleAddressSelected = useCallback(
+    (data: AddressSelectionPayload) => {
+      const selectedAddress = String(data?.address ?? data?.roadAddress ?? data?.jibunAddress ?? "").trim();
+      if (!selectedAddress) {
+        closePostcode();
+        return;
+      }
+      setForm((prev) => ({ ...prev, address: selectedAddress }));
+      closePostcode();
+    },
+    [closePostcode]
+  );
 
   const handleSave = useCallback(async () => {
     if (isSaving) return;
@@ -386,13 +442,22 @@ export default function ShipperAddressBookPage() {
               <AppText variant="caption" weight="700" style={styles.fieldLabel}>
                 주소
               </AppText>
-              <TextInput
-                value={form.address}
-                onChangeText={(value) => setForm((prev) => ({ ...prev, address: value ?? "" }))}
-                style={styles.input}
-                placeholder="도로명/지번 주소"
-                placeholderTextColor={theme.colors.textMuted}
-              />
+              <Pressable
+                onPress={openPostcode}
+                style={[styles.addressButton, form.address.trim() ? styles.addressButtonFilled : undefined]}
+              >
+                <AppText
+                  style={[styles.addressButtonText, form.address.trim() ? styles.addressButtonTextFilled : undefined]}
+                  numberOfLines={1}
+                >
+                  {form.address.trim() || "주소 검색"}
+                </AppText>
+                <Ionicons
+                  name="search"
+                  size={16}
+                  color={form.address.trim() ? theme.colors.brandPrimary : theme.colors.textMuted}
+                />
+              </Pressable>
             </View>
 
             <View style={styles.fieldGroup}>
@@ -445,6 +510,12 @@ export default function ShipperAddressBookPage() {
           </AppCard>
         </View>
       </Modal>
+
+      <PostcodeModal
+        visible={isPostcodeOpen}
+        onClose={closePostcode}
+        onSelected={handleAddressSelected}
+      />
     </PageScaffold>
   );
 }

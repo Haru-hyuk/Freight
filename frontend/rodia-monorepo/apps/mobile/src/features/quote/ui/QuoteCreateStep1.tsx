@@ -16,6 +16,10 @@ import {
   type ResolveAddressCoordinatesInput,
 } from "@/features/quote/api/quote-address-geocode";
 import {
+  listShipperAddressBook,
+  type ShipperAddressBookItem,
+} from "@/features/shipper-settings/api/shipper-address-book-api";
+import {
   useQuoteCreateDraft,
   type Waypoint,
 } from "@/features/quote/model/quoteCreateDraft";
@@ -165,6 +169,24 @@ const useStyles = createThemedStyles((theme: AppTheme) => {
     addrBtnFilled: { backgroundColor: tint(c.brandPrimary, 0.04, c.bgSurface), borderColor: c.brandPrimary },
     addrText: { flex: 1, fontSize: 14, fontWeight: "500", color: c.textSub },
     addrTextFilled: { fontWeight: "600", color: c.textMain },
+    savedAddressWrap: { marginTop: 8 },
+    savedAddressRow: { flexDirection: "row", gap: 8, paddingRight: 8 },
+    savedAddressChip: {
+      height: 32,
+      borderRadius: 16,
+      paddingHorizontal: 12,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: c.borderDefault,
+      backgroundColor: c.bgSurface,
+    },
+    savedAddressChipActive: {
+      borderColor: c.brandPrimary,
+      backgroundColor: tint(c.brandPrimary, 0.1, c.bgSurface),
+    },
+    savedAddressChipText: { fontSize: 12, color: c.textSub, fontWeight: "600" },
+    savedAddressChipTextActive: { color: c.brandPrimary },
 
     // 상세 입력 폼 (주소 선택 후 표시)
     formBox: { marginTop: 8, gap: 8 },
@@ -240,6 +262,8 @@ export function QuoteCreateStep1() {
 
   const [pickerMode, setPickerMode] = useState<"date" | "time" | null>(null);
   const [iosPickerValue, setIosPickerValue] = useState<Date | null>(null);
+  const [savedAddresses, setSavedAddresses] = useState<ShipperAddressBookItem[]>([]);
+  const [isAddressBookLoading, setIsAddressBookLoading] = useState(false);
   const coordRequestIdRef = useRef(0);
 
   const waypoints = draft?.waypoints ?? [];
@@ -272,6 +296,22 @@ export function QuoteCreateStep1() {
     waypointCoordSignature,
     waypoints,
   ]);
+
+  const loadSavedAddresses = useCallback(async () => {
+    setIsAddressBookLoading(true);
+    try {
+      const list = await listShipperAddressBook();
+      setSavedAddresses(Array.isArray(list) ? list : []);
+    } catch {
+      setSavedAddresses([]);
+    } finally {
+      setIsAddressBookLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadSavedAddresses();
+  }, [loadSavedAddresses]);
 
   const openPostcode = (type: "start" | "end" | number) => {
     setTargetField(type);
@@ -407,6 +447,76 @@ export function QuoteCreateStep1() {
     void resolveCoordinatesForTask(task);
   }, [applyAddressToTarget, closePostcode, resolveCoordinatesForTask, targetField]);
 
+  const applySavedAddress = useCallback(
+    (target: AddressTarget, item: ShipperAddressBookItem) => {
+      const selectedAddress = String(item?.address ?? "").trim();
+      if (!selectedAddress) return;
+
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      applyAddressToTarget(target, selectedAddress);
+
+      const detail = String(item?.addressDetail ?? "").trim();
+      if (target === "start") {
+        patchDraft({ startAddrDetail: detail });
+      } else if (target === "end") {
+        patchDraft({ endAddrDetail: detail });
+      } else {
+        setDraft((prev) => {
+          const currentWaypoints = Array.isArray(prev?.waypoints) ? prev.waypoints : [];
+          const nextWaypoints = currentWaypoints.map((waypoint) =>
+            waypoint?.id === target ? { ...waypoint, detail } : waypoint
+          );
+          return { ...prev, waypoints: nextWaypoints };
+        });
+      }
+
+      void resolveCoordinatesForTask({
+        target,
+        addressText: selectedAddress,
+      });
+    },
+    [applyAddressToTarget, patchDraft, resolveCoordinatesForTask, setDraft]
+  );
+
+  const renderSavedAddressChips = useCallback(
+    (target: AddressTarget, currentAddress: string) => {
+      const activeAddress = String(currentAddress ?? "").trim();
+      return (
+        <View style={styles.savedAddressWrap}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.savedAddressRow}>
+            {isAddressBookLoading ? (
+              <View style={styles.savedAddressChip}>
+                <AppText style={styles.savedAddressChipText}>주소록 불러오는 중...</AppText>
+              </View>
+            ) : savedAddresses.length > 0 ? (
+              savedAddresses.map((item) => {
+                const itemAddress = String(item?.address ?? "").trim();
+                const chipLabel = String(item?.label ?? "").trim() || itemAddress || "주소";
+                const isActive = itemAddress.length > 0 && itemAddress === activeAddress;
+                return (
+                  <Pressable
+                    key={item.id}
+                    onPress={() => applySavedAddress(target, item)}
+                    style={[styles.savedAddressChip, isActive ? styles.savedAddressChipActive : undefined]}
+                  >
+                    <AppText style={[styles.savedAddressChipText, isActive ? styles.savedAddressChipTextActive : undefined]}>
+                      {chipLabel}
+                    </AppText>
+                  </Pressable>
+                );
+              })
+            ) : (
+              <Pressable onPress={() => void loadSavedAddresses()} style={styles.savedAddressChip}>
+                <AppText style={styles.savedAddressChipText}>저장된 주소 없음 · 새로고침</AppText>
+              </Pressable>
+            )}
+          </ScrollView>
+        </View>
+      );
+    },
+    [applySavedAddress, isAddressBookLoading, loadSavedAddresses, savedAddresses, styles]
+  );
+
   // --- Handlers ---
   const addWaypoint = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -512,6 +622,7 @@ export function QuoteCreateStep1() {
                           </AppText>
                           <Ionicons name="search" size={16} color={draft?.startAddr ? theme.colors.brandPrimary : theme.colors.textMuted} />
                       </Pressable>
+                      {renderSavedAddressChips("start", String(draft?.startAddr ?? ""))}
 
                       {draft?.startAddr && (
                           <View style={styles.formBox}>
@@ -564,6 +675,7 @@ export function QuoteCreateStep1() {
                               </AppText>
                               <Ionicons name="search" size={16} color={waypointAddress ? theme.colors.brandPrimary : theme.colors.textMuted} />
                           </Pressable>
+                          {renderSavedAddressChips(wp.id, waypointAddress)}
 
                           <View style={styles.formBox}>
                               <AppInput placeholder="상세 주소" value={waypointDetail} onChangeText={v => updateWaypoint(wp.id, { detail: v })} shellStyle={styles.inputShell} />
@@ -619,6 +731,7 @@ export function QuoteCreateStep1() {
                           </AppText>
                           <Ionicons name="search" size={16} color={draft?.endAddr ? theme.colors.brandPrimary : theme.colors.textMuted} />
                       </Pressable>
+                      {renderSavedAddressChips("end", String(draft?.endAddr ?? ""))}
 
                       {draft?.endAddr && (
                           <View style={styles.formBox}>
