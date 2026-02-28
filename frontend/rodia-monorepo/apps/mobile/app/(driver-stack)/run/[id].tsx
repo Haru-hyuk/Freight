@@ -6,6 +6,7 @@ import { Pressable, StyleSheet, View } from "react-native";
 
 import { useMatchDetail } from "@/features/matching/model/useMatchDetail";
 import {
+  BACKEND_STATUS,
   DRIVER_CTA_ID,
   DRIVER_UI_STATE,
   getDriverCta,
@@ -24,6 +25,7 @@ import { DriverOrderPaymentPendingCard } from "@/widgets/driver-orders/ui/detail
 
 type DriverRunRouteParams = {
   id?: string | string[];
+  source?: string | string[];
 };
 
 const useStyles = createThemedStyles((theme) => {
@@ -47,6 +49,12 @@ function parsePositiveRouteId(rawId: string | string[] | undefined): number {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
 }
 
+function normalizeSource(rawSource: string | string[] | undefined): "market" | "my" | "run" {
+  const candidate = Array.isArray(rawSource) ? rawSource[0] : rawSource;
+  if (candidate === "market" || candidate === "my" || candidate === "run") return candidate;
+  return "run";
+}
+
 export default function DriverRunRoute() {
   const params = useLocalSearchParams<DriverRunRouteParams>();
   const router = useRouter();
@@ -54,6 +62,10 @@ export default function DriverRunRoute() {
   const theme = useAppTheme();
 
   const matchId = parsePositiveRouteId(params.id);
+  const source = normalizeSource(params.source);
+  const isMarket = source === "market";
+  const title = isMarket ? "오더 상세" : "운송 상세";
+  const subtitle = isMarket ? "오더 정보 확인" : "운송 정보 확인";
   const viewModel = useMatchDetail(matchId);
 
   useFocusEffect(
@@ -76,8 +88,8 @@ export default function DriverRunRoute() {
   if (matchId <= 0) {
     return (
       <PageScaffold
-        title="운송 상세"
-        subtitle="운송 정보 확인"
+        title={title}
+        subtitle={subtitle}
         scroll={false}
         padding={20}
         onPressBack={() => router.back()}
@@ -111,8 +123,8 @@ export default function DriverRunRoute() {
   if (viewModel.isLoading || (!viewModel.match && !viewModel.errorMessage)) {
     return (
       <PageScaffold
-        title="운송 상세"
-        subtitle="운송 정보 확인"
+        title={title}
+        subtitle={subtitle}
         scroll={false}
         padding={20}
         onPressBack={() => router.back()}
@@ -128,8 +140,8 @@ export default function DriverRunRoute() {
   if (viewModel.errorMessage) {
     return (
       <PageScaffold
-        title="운송 상세"
-        subtitle="운송 정보 확인"
+        title={title}
+        subtitle={subtitle}
         scroll={false}
         padding={20}
         onPressBack={() => router.back()}
@@ -153,8 +165,8 @@ export default function DriverRunRoute() {
   if (!viewModel.match) {
     return (
       <PageScaffold
-        title="운송 상세"
-        subtitle="운송 정보 확인"
+        title={title}
+        subtitle={subtitle}
         scroll={false}
         padding={20}
         onPressBack={() => router.back()}
@@ -168,13 +180,16 @@ export default function DriverRunRoute() {
   }
 
   const rawStatus = viewModel.match.status ?? "";
-  const uiState = getDriverUiStateFromBackendStatus(rawStatus);
-  const cta = getDriverCta(uiState, true, normalizeStatus(rawStatus));
+  const normalized = normalizeStatus(rawStatus);
+  const effectiveRawStatus =
+    isMarket && normalized === BACKEND_STATUS.READY ? BACKEND_STATUS.OPEN : rawStatus;
+  const uiState = getDriverUiStateFromBackendStatus(effectiveRawStatus);
+  const cta = getDriverCta(uiState, true, normalizeStatus(effectiveRawStatus));
 
   return (
     <PageScaffold
-      title="운송 상세"
-      subtitle="운송 정보 확인"
+      title={title}
+      subtitle={subtitle}
       scroll
       padding={20}
       onPressBack={() => router.back()}

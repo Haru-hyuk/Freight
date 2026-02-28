@@ -421,7 +421,12 @@ export function DriverOrdersBoard({ initialTab, assignedOnly, activeTab: control
   );
 
   const filteredMarketOrders = useMemo(
-    () => overview.marketOrders.filter((c) => matchesDriverOrderFilter(c, activeFilter)),
+    () =>
+      overview.marketOrders.filter(
+        (item) =>
+          item.uiState === DRIVER_UI_STATE.READY_TO_ACCEPT &&
+          matchesDriverOrderFilter(item, activeFilter)
+      ),
     [activeFilter, overview.marketOrders]
   );
 
@@ -435,15 +440,26 @@ export function DriverOrdersBoard({ initialTab, assignedOnly, activeTab: control
     [overview.myOrders]
   );
 
+  const filteredRunOrders = useMemo(
+    () =>
+      overview.runOrders.filter(
+        (item) =>
+          item.cta?.id === DRIVER_CTA_ID.START_DRIVE ||
+          item.uiState === DRIVER_UI_STATE.PICKUP_IN_PROGRESS ||
+          item.uiState === DRIVER_UI_STATE.TRANSIT_IN_PROGRESS
+      ),
+    [overview.runOrders]
+  );
+
   const visibleOrders = useMemo(() => {
     if (resolvedActiveTab === "market") {
       return filteredMarketOrders;
     }
     if (assignedOnly) {
-      return overview.runOrders;
+      return filteredRunOrders;
     }
     return filteredMyOrders;
-  }, [assignedOnly, filteredMarketOrders, filteredMyOrders, overview.runOrders, resolvedActiveTab]);
+  }, [assignedOnly, filteredMarketOrders, filteredMyOrders, filteredRunOrders, resolvedActiveTab]);
 
   const showFilters = resolvedActiveTab === "market" && overview.availableFilters.length > 1;
 
@@ -475,16 +491,17 @@ export function DriverOrdersBoard({ initialTab, assignedOnly, activeTab: control
       }
 
       const { id } = buildDriverOrderDetailParams(card);
+      const source = resolvedActiveTab === "market" ? "market" : assignedOnly ? "run" : "my";
       router.push({
         pathname: "/(driver-stack)/run/[id]",
-        params: { id },
+        params: { id, source },
       });
 
       setTimeout(() => {
         cardNavLockRef.current = false;
       }, 450);
     },
-    [router, showToast]
+    [assignedOnly, resolvedActiveTab, router, showToast]
   );
 
   const handlePrepareForDrive = useCallback(

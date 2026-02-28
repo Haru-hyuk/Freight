@@ -103,6 +103,23 @@ const DRIVER_ORDER_SORT_PRIORITY_MAP: Readonly<Record<DriverUiState, number>> = 
   [DRIVER_UI_STATE.UNKNOWN]: 7,
 };
 
+export type DriverDomain = "market" | "my" | "run" | "unknown";
+
+export function getDriverDomain(backendStatus: BackendStatus): DriverDomain {
+  if (backendStatus === BACKEND_STATUS.OPEN) return "market";
+  if (backendStatus === BACKEND_STATUS.NEGOTIATING) return "my";
+  if (backendStatus === BACKEND_STATUS.ASSIGNED) return "my";
+  if (
+    backendStatus === BACKEND_STATUS.READY ||
+    backendStatus === BACKEND_STATUS.ACCEPTED ||
+    backendStatus === BACKEND_STATUS.PICKUP ||
+    backendStatus === BACKEND_STATUS.TRANSIT
+  ) {
+    return "run";
+  }
+  return "unknown";
+}
+
 export function getDriverCta(
   uiState: DriverUiState,
   photoGatePassed: boolean,
