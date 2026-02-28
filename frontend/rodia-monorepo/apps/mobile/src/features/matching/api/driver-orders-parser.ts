@@ -98,6 +98,7 @@ export function parseDriverOrderSource(input: {
   const quoteIdFromQuote = parseDriverOrderPositiveInt(quote?.quoteId);
   const quoteId = quoteIdFromMatch || quoteIdFromQuote || 0;
   const seed = matchId || quoteId || index + 1;
+  const rawStatus = typeof match.status === "string" ? match.status : "";
 
   return {
     scope,
@@ -105,7 +106,7 @@ export function parseDriverOrderSource(input: {
     seed,
     matchId,
     quoteId: quoteId > 0 ? quoteId : undefined,
-    status: normalizeStatus(match.status ?? ""),
+    status: normalizeStatus(rawStatus),
     createdAt: toOptionalText(match.createdAt),
     updatedAt: toOptionalText(match.updatedAt),
     quote: parseDriverOrderQuote(quote),

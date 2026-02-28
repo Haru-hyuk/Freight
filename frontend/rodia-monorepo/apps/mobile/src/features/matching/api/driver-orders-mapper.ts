@@ -1,8 +1,12 @@
 import { formatWorkMethodLabel } from "@/features/quote/model/workMethod";
 import {
+  BACKEND_STATUS,
+  DRIVER_UI_STATE,
+  getDriverCta,
   getDriverBadge,
   getDriverOrderSortPriority,
-  getDriverUiStateFromBackendStatus,
+  type BackendStatus,
+  type DriverUiState,
 } from "@/shared/lib/policy";
 import { formatDateTime, formatDistance, formatKrw } from "@/shared/lib/format/display";
 import {
@@ -26,6 +30,25 @@ type DriverOrderCardMapperInput = {
   mode: "mock" | "server";
   filterLabels: DriverOrderTagLabelMap;
 };
+
+const BACKEND_STATUS_SET = new Set<string>(Object.values(BACKEND_STATUS));
+
+function toBackendStatus(status: string): BackendStatus {
+  return BACKEND_STATUS_SET.has(status) ? (status as BackendStatus) : BACKEND_STATUS.UNKNOWN;
+}
+
+function toDriverUiState(status: BackendStatus): DriverUiState {
+  if (status === BACKEND_STATUS.OPEN) return DRIVER_UI_STATE.READY_TO_ACCEPT;
+  if (status === BACKEND_STATUS.NEGOTIATING) return DRIVER_UI_STATE.NEGOTIATING;
+  if (status === BACKEND_STATUS.READY) return DRIVER_UI_STATE.ASSIGNED;
+  if (status === BACKEND_STATUS.ASSIGNED) return DRIVER_UI_STATE.ASSIGNED;
+  if (status === BACKEND_STATUS.ACCEPTED) return DRIVER_UI_STATE.ASSIGNED;
+  if (status === BACKEND_STATUS.PICKUP) return DRIVER_UI_STATE.PICKUP_IN_PROGRESS;
+  if (status === BACKEND_STATUS.TRANSIT) return DRIVER_UI_STATE.TRANSIT_IN_PROGRESS;
+  if (status === BACKEND_STATUS.DROPOFF) return DRIVER_UI_STATE.COMPLETED;
+  if (status === BACKEND_STATUS.CANCELED) return DRIVER_UI_STATE.CANCELED;
+  return DRIVER_UI_STATE.UNKNOWN;
+}
 
 function toText(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -121,7 +144,10 @@ export function mapDriverOrderCard(input: DriverOrderCardMapperInput): DriverOrd
   const { matchId, quoteId, status, createdAt, updatedAt, quote, scope, index, seed } = source;
   const mockDecoration = mode === "mock" ? selectMockFlowDriverOrderDecoration(seed, scope) : null;
 
-  const statusBadge = getDriverBadge(getDriverUiStateFromBackendStatus(status));
+  const normalizedStatus = toBackendStatus(status);
+  const uiState = toDriverUiState(normalizedStatus);
+  const statusBadge = getDriverBadge(uiState);
+  const cta = getDriverCta(uiState, true, normalizedStatus);
   const statusLabel = statusBadge.label;
   const requestedAtText = formatDateTime(createdAt, "");
 
@@ -148,9 +174,11 @@ export function mapDriverOrderCard(input: DriverOrderCardMapperInput): DriverOrd
     cardKey: `${scope}-${matchId}-${index}`,
     matchId,
     quoteId,
-    status,
+    status: normalizedStatus,
+    uiState,
     statusLabel,
     statusTone: statusBadge.tone,
+    cta,
     requestedAtText: requestedAtText || undefined,
     pickupTimeText: pickupTimeText || undefined,
     originAddress,
@@ -169,9 +197,7 @@ export function mapDriverOrderCard(input: DriverOrderCardMapperInput): DriverOrd
 
 export function sortDriverOrderCards(items: DriverOrderCard[]): DriverOrderCard[] {
   return [...items].sort((a, b) => {
-    const byStatus =
-      getDriverOrderSortPriority(getDriverUiStateFromBackendStatus(a.status)) -
-      getDriverOrderSortPriority(getDriverUiStateFromBackendStatus(b.status));
+    const byStatus = getDriverOrderSortPriority(a.uiState) - getDriverOrderSortPriority(b.uiState);
     if (byStatus !== 0) return byStatus;
     const byTime = (b.sortTimestamp ?? 0) - (a.sortTimestamp ?? 0);
     if (byTime !== 0) return byTime;
