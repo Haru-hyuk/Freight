@@ -425,7 +425,15 @@ export function DriverOrdersBoard({ initialTab, assignedOnly, activeTab: control
     [activeFilter, overview.marketOrders]
   );
 
-  const isMyTab = resolvedActiveTab === "my";
+  const filteredMyOrders = useMemo(
+    () =>
+      overview.myOrders.filter(
+        (item) =>
+          item.uiState === DRIVER_UI_STATE.NEGOTIATING ||
+          item.cta?.id === DRIVER_CTA_ID.PAYMENT_PENDING
+      ),
+    [overview.myOrders]
+  );
 
   const visibleOrders = useMemo(() => {
     if (resolvedActiveTab === "market") {
@@ -434,13 +442,8 @@ export function DriverOrdersBoard({ initialTab, assignedOnly, activeTab: control
     if (assignedOnly) {
       return overview.runOrders;
     }
-    const myOrders = overview.myOrders.filter(
-      (item) =>
-        item.uiState === DRIVER_UI_STATE.NEGOTIATING ||
-        item.cta?.id === DRIVER_CTA_ID.PAYMENT_PENDING
-    );
-    return myOrders;
-  }, [assignedOnly, filteredMarketOrders, overview.myOrders, overview.runOrders, resolvedActiveTab]);
+    return filteredMyOrders;
+  }, [assignedOnly, filteredMarketOrders, filteredMyOrders, overview.runOrders, resolvedActiveTab]);
 
   const showFilters = resolvedActiveTab === "market" && overview.availableFilters.length > 1;
 
@@ -471,17 +474,17 @@ export function DriverOrdersBoard({ initialTab, assignedOnly, activeTab: control
         return;
       }
 
-      if (isMyTab && card.uiState !== DRIVER_UI_STATE.NEGOTIATING && card.cta?.id !== DRIVER_CTA_ID.PAYMENT_PENDING) {
-        cardNavLockRef.current = false;
-        return;
-      }
-      router.push({ pathname: "/(driver)/run/[id]", params: buildDriverOrderDetailParams(card) });
+      const { id } = buildDriverOrderDetailParams(card);
+      router.push({
+        pathname: "/(driver-stack)/run/[id]",
+        params: { id },
+      });
 
       setTimeout(() => {
         cardNavLockRef.current = false;
       }, 450);
     },
-    [isMyTab, router, showToast]
+    [router, showToast]
   );
 
   const handlePrepareForDrive = useCallback(
@@ -553,9 +556,9 @@ export function DriverOrdersBoard({ initialTab, assignedOnly, activeTab: control
               onPress={() => changeTab("my")}
             >
               <AppText style={[styles.tabLabel, resolvedActiveTab === "my" ? styles.tabLabelActive : null]}>내 오더</AppText>
-              {overview.myCount > 0 ? (
+              {filteredMyOrders.length > 0 ? (
                 <View style={styles.tabBadge}>
-                  <AppText style={styles.tabBadgeText}>{overview.myCount}</AppText>
+                  <AppText style={styles.tabBadgeText}>{filteredMyOrders.length}</AppText>
                 </View>
               ) : null}
             </Pressable>
@@ -628,4 +631,3 @@ export function DriverOrdersBoard({ initialTab, assignedOnly, activeTab: control
 }
 
 export default DriverOrdersBoard;
-

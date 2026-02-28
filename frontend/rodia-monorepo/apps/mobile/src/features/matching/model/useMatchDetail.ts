@@ -25,6 +25,7 @@ const NETWORK_ERROR_TEXT = "네트워크 요청에 실패했습니다. 잠시 �
 export function useMatchDetail(matchId: number, routeSnapshot?: MatchDetailRouteSnapshot): UseMatchDetailViewModel {
   const safeMatchId = parseMatchPositiveInt(matchId);
   const routeSnapshotHash = getMatchDetailRouteSnapshotKey(routeSnapshot);
+  const stableRouteSnapshot = useMemo(() => routeSnapshot, [routeSnapshotHash]);
   const [match, setMatch] = useState<DriverMatchItem | null>(null);
   const [quote, setQuote] = useState<QuoteDetailResponse | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -33,8 +34,8 @@ export function useMatchDetail(matchId: number, routeSnapshot?: MatchDetailRoute
   const pendingRefetchResolversRef = useRef<Array<() => void>>([]);
 
   const bootstrapMatch = useMemo(
-    () => normalizeMatchDetailRouteSnapshot(routeSnapshot, safeMatchId),
-    [safeMatchId, routeSnapshot, routeSnapshotHash]
+    () => normalizeMatchDetailRouteSnapshot(stableRouteSnapshot, safeMatchId),
+    [safeMatchId, stableRouteSnapshot]
   );
 
   const refetch = useCallback(() => {
