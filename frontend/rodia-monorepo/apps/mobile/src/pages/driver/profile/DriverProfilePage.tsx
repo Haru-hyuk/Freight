@@ -125,7 +125,7 @@ export function DriverProfilePage() {
         headerRight={
           <Pressable style={[styles.dutyToggle, isOnDuty && styles.dutyToggleOn]} onPress={toggleDuty}>
             <View style={[styles.dutyDot, isOnDuty && styles.dutyDotOn]} />
-            <Text style={[styles.dutyText, isOnDuty && styles.dutyTextOn]}>{isOnDuty ? "출근 ON" : "퇴근 OFF"}</Text>
+            <Text style={[styles.dutyText, isOnDuty && styles.dutyTextOn]}>{isOnDuty ? "운행중 ON" : "퇴근 OFF"}</Text>
           </Pressable>
         }
         backgroundColor={COLORS.bg}

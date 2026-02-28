@@ -1,17 +1,16 @@
-import React, { useCallback, useEffect, useState } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Pressable,
-  Dimensions,
-  SafeAreaView,
-  Platform,
-} from "react-native";
-import { useRouter } from "expo-router";
 import { MaterialIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useRouter } from "expo-router";
+import React, { useCallback, useEffect, useState } from "react";
+import {
+  Platform,
+  Pressable,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View
+} from "react-native";
 
 const STORAGE_KEY = "rodia_data_v2";
 
