@@ -20,6 +20,7 @@ import {
 } from "@/features/matching/api";
 import {
   BADGE_TONE,
+  DRIVER_CTA_ID,
   DRIVER_UI_STATE,
   type BadgeTone,
 } from "@/shared/lib/policy";
@@ -305,7 +306,7 @@ function DriverOrderCardView({
           </View>
         </View>
 
-        {activeTab === "my" && item.uiState === DRIVER_UI_STATE.ASSIGNED ? (
+        {activeTab === "my" && item.uiState === DRIVER_UI_STATE.ASSIGNED && item.cta?.id !== DRIVER_CTA_ID.START_DRIVE ? (
           <View style={styles.prepareWrap}>
             <AppButton
               onPress={ctaPolicy.enabled ? () => onPrepareClick(item) : undefined}
@@ -424,6 +425,8 @@ export function DriverOrdersBoard({ initialTab, assignedOnly, activeTab: control
     [activeFilter, overview.marketOrders]
   );
 
+  const isMyTab = resolvedActiveTab === "my";
+
   const visibleOrders = useMemo(() => {
     if (resolvedActiveTab === "market") {
       return filteredMarketOrders;
@@ -431,7 +434,12 @@ export function DriverOrdersBoard({ initialTab, assignedOnly, activeTab: control
     if (assignedOnly) {
       return overview.runOrders;
     }
-    return overview.myOrders;
+    const myOrders = overview.myOrders.filter(
+      (item) =>
+        item.uiState === DRIVER_UI_STATE.NEGOTIATING ||
+        item.cta?.id === DRIVER_CTA_ID.PAYMENT_PENDING
+    );
+    return myOrders;
   }, [assignedOnly, filteredMarketOrders, overview.myOrders, overview.runOrders, resolvedActiveTab]);
 
   const showFilters = resolvedActiveTab === "market" && overview.availableFilters.length > 1;
@@ -463,13 +471,17 @@ export function DriverOrdersBoard({ initialTab, assignedOnly, activeTab: control
         return;
       }
 
+      if (isMyTab && card.uiState !== DRIVER_UI_STATE.NEGOTIATING && card.cta?.id !== DRIVER_CTA_ID.PAYMENT_PENDING) {
+        cardNavLockRef.current = false;
+        return;
+      }
       router.push({ pathname: "/(driver)/run/[id]", params: buildDriverOrderDetailParams(card) });
 
       setTimeout(() => {
         cardNavLockRef.current = false;
       }, 450);
     },
-    [router, showToast]
+    [isMyTab, router, showToast]
   );
 
   const handlePrepareForDrive = useCallback(
