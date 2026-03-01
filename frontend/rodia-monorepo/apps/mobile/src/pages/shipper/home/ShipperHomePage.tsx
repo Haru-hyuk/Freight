@@ -408,7 +408,7 @@ export function ShipperHomePage() {
         </AppText>
       }
       headerRight={
-        <Pressable style={styles.profileBtn} onPress={() => Alert.alert("마이페이지")}>
+        <Pressable style={styles.profileBtn} onPress={() => router.push("/(shipper)/profile")}>
           <Image
             source={{
               uri: `https://ui-avatars.com/api/?name=HwaJu&background=${avatarBg}&color=${avatarFg}&size=128`,

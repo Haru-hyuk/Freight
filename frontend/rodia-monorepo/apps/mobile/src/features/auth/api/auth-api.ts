@@ -613,6 +613,7 @@ export type MeProfile = {
   role?: string;
   email?: string;
   name?: string;
+  phone?: string;
 };
 
 export async function getMeProfile(): Promise<MeProfile | null> {
@@ -624,6 +625,7 @@ export async function getMeProfile(): Promise<MeProfile | null> {
       role: tokenUser?.role ?? "shipper",
       email: tokenUser?.email ?? "shipper@rodia.co.kr",
       name: tokenUser?.name ?? "로디아 화주",
+      phone: "",
     };
   }
 
@@ -637,6 +639,7 @@ export async function getMeProfile(): Promise<MeProfile | null> {
       role: pickString(source?.role),
       email: pickString(source?.email),
       name: pickString(source?.name),
+      phone: pickString(source?.phone),
     };
   } catch {
     return null;
@@ -649,14 +652,35 @@ export type MeUpdateInput = {
   phone?: string;
 };
 
-export async function updateMeProfile(input: MeUpdateInput): Promise<{ ok: boolean; message?: string }> {
+export async function updateMeProfile(input: MeUpdateInput): Promise<{ ok: boolean; profile?: MeProfile; message?: string }> {
   if (isMockMode()) {
-    return { ok: true };
+    return {
+      ok: true,
+      profile: {
+        id: "mock-user",
+        role: "shipper",
+        name: pickString(input?.name),
+        email: pickString(input?.email),
+        phone: pickString(input?.phone),
+      },
+    };
   }
 
   try {
-    await apiClient.patch("/api/auth/me", input);
-    return { ok: true };
+    const res = await apiClient.patch("/api/auth/me", input);
+    const data = (res as any)?.data ?? null;
+    const d = (data ?? {}) as AnyObj;
+    const source = (d?.data ?? d?.result ?? d) as AnyObj;
+    return {
+      ok: true,
+      profile: {
+        id: pickString(source?.id),
+        role: pickString(source?.role),
+        email: pickString(source?.email),
+        name: pickString(source?.name),
+        phone: pickString(source?.phone),
+      },
+    };
   } catch (err) {
     const meta = extractApiErrorMeta(err);
     return { ok: false, message: meta?.message ?? "저장에 실패했습니다." };
