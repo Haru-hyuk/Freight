@@ -29,6 +29,6 @@ export interface RecommendedRoute {
   scoreBreakdown?: ScoreBreakdown;
   scheduleViolations?: number;
   calibrationId?: string;
-  bundled?: boolean;
   single?: boolean;
+  bundled?: boolean;
 }

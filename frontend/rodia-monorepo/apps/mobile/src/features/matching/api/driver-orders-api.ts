@@ -1,7 +1,8 @@
 import type { QuoteDetailResponse } from "@/entities/quote/model/quote.types";
 import { getQuoteSummary } from "@/shared/api/generated";
 import { getDriverMatchMode } from "@/shared/lib/config/env";
-import type { BadgeTone } from "@/shared/lib/policy";
+import type { BadgeTone, DriverCtaConfig, DriverUiState } from "@/shared/lib/policy";
+import { BACKEND_STATUS, normalizeStatus } from "@/shared/lib/policy";
 import {
   selectMockFlowAiRecommendedDecoration,
   waitRandom,
@@ -40,8 +41,10 @@ export type DriverOrderCard = {
   matchId: number;
   quoteId?: number;
   status: string;
+  uiState: DriverUiState;
   statusLabel: string;
   statusTone: BadgeTone;
+  cta: DriverCtaConfig;
   requestedAtText?: string;
   pickupTimeText?: string;
   originAddress?: string;
@@ -65,6 +68,7 @@ export type DriverOrdersCapability = {
 export type DriverOrdersOverview = {
   marketOrders: DriverOrderCard[];
   myOrders: DriverOrderCard[];
+  runOrders: DriverOrderCard[];
   myCount: number;
   availableFilters: DriverOrderFilterKey[];
   capability: DriverOrdersCapability;
@@ -403,7 +407,18 @@ export async function loadDriverOrdersOverview(): Promise<DriverOrdersOverview> 
     await waitRandom();
   }
 
-  const [marketMatches, myMatches] = await Promise.all([listOpenDriverMatches(), listMyDriverMatches()]);
+  const [openMatches, myMatches] = await Promise.all([listOpenDriverMatches(), listMyDriverMatches()]);
+
+  const marketMatches = openMatches.filter((match) => parseDriverOrderPositiveInt(match.driverId) <= 0);
+const runMatches = myMatches.filter((match) => {
+  if (match.accepted === true) return true;
+  const status = normalizeStatus(match.status ?? "");
+  // READY는 Match 상태 (배차 확정), runMatches에 포함
+  return status === BACKEND_STATUS.READY || 
+         status === BACKEND_STATUS.IN_TRANSIT || 
+         status === BACKEND_STATUS.DELIVERED;
+});
+  const myPendingMatches = myMatches.filter((match) => !runMatches.includes(match));
 
   const quoteIds = collectDriverOrderQuoteIds([...marketMatches, ...myMatches]);
   const quoteMap = await loadQuoteDetailsByIds(quoteIds);
@@ -424,7 +439,23 @@ export async function loadDriverOrdersOverview(): Promise<DriverOrdersOverview> 
     });
   });
 
-  const myOrders = myMatches.map((match, index) => {
+  const runOrders = runMatches.map((match, index) => {
+    const quoteId = parseDriverOrderPositiveInt(match.quoteId);
+    const quote = quoteId > 0 ? quoteMap.get(quoteId) ?? null : null;
+    const source = parseDriverOrderSource({
+      match,
+      quote,
+      scope: "my",
+      index,
+    });
+    return mapDriverOrderCard({
+      source,
+      mode,
+      filterLabels: FILTER_LABELS,
+    });
+  });
+
+  const myOrders = myPendingMatches.map((match, index) => {
     const quoteId = parseDriverOrderPositiveInt(match.quoteId);
     const quote = quoteId > 0 ? quoteMap.get(quoteId) ?? null : null;
     const source = parseDriverOrderSource({
@@ -445,6 +476,7 @@ export async function loadDriverOrdersOverview(): Promise<DriverOrdersOverview> 
   return {
     marketOrders: sortDriverOrderCards(marketOrders),
     myOrders: sortDriverOrderCards(myOrders),
+    runOrders: sortDriverOrderCards(runOrders),
     myCount: myOrders.length,
     availableFilters,
     capability,

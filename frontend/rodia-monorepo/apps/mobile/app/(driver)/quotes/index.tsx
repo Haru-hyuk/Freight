@@ -1,5 +1,5 @@
 import React from "react";
-import DriverOrdersBoard from "@/widgets/driver-orders/DriverOrdersBoard";
+import DriverOrdersBoard from "@/features/driver-orders/ui/DriverOrdersBoard";
 
 export default function DriverQuotesRoute() {
   return <DriverOrdersBoard />;

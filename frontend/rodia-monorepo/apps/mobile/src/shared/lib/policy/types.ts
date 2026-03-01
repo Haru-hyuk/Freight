@@ -1,18 +1,26 @@
+/**
+ * 상태 타입 모음
+ * - 현재 사실을 표현하는 값의 집합(서버 상태, 화면 상태, 행동 버튼/배지 분류 등)
+ * - 의사결정은 여기서 하지 않고, 정책 파일의 순수 함수에서 수행한다.
+ */
 export const BACKEND_STATUS = {
-  READY: "READY",
+  // 견적(Quote) 상태
   OPEN: "OPEN",
-  NEGOTIATING: "NEGOTIATING",
-  ASSIGNED: "ASSIGNED",
-  ACCEPTED: "ACCEPTED",
-  PICKUP: "PICKUP",
-  TRANSIT: "TRANSIT",
-  DROPOFF: "DROPOFF",
-  CANCELED: "CANCELED",
+  MATCHED: "MATCHED",
+  IN_TRANSIT: "IN_TRANSIT",
+  DELIVERED: "DELIVERED",
+  
+  // 매칭(Match) 상태 (또는 겹치는 부분)
+  READY: "READY",
+  COMPLETED: "COMPLETED",
+  CANCELLED: "CANCELLED",
+  
   UNKNOWN: "UNKNOWN",
 } as const;
 
 export type BackendStatus = (typeof BACKEND_STATUS)[keyof typeof BACKEND_STATUS];
 
+// 화주(고객) 관점 화면 상태
 export const CUSTOMER_UI_STATE = {
   REQUESTED: "REQUESTED",
   NEGOTIATION_REQUIRED: "NEGOTIATION_REQUIRED",
@@ -26,6 +34,7 @@ export const CUSTOMER_UI_STATE = {
 
 export type CustomerUiState = (typeof CUSTOMER_UI_STATE)[keyof typeof CUSTOMER_UI_STATE];
 
+// 기사 관점 화면 상태
 export const DRIVER_UI_STATE = {
   READY_TO_ACCEPT: "READY_TO_ACCEPT",
   NEGOTIATING: "NEGOTIATING",

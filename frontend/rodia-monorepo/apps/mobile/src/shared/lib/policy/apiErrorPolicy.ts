@@ -1,6 +1,11 @@
 import { TOAST } from "./toastPolicy";
 import { API_ERROR_CODE, type ApiErrorCode } from "./types";
 
+/**
+ * API 에러 정책
+ * - 입력: 임의 에러 객체(`axios` 형태 포함)
+ * - 출력: 표준 에러 코드 + 사용자 토스트 문구
+ */
 type ErrorWithStatus = {
   status?: unknown;
   code?: unknown;
@@ -16,6 +21,7 @@ function readStatusCode(error: unknown): number {
   return status;
 }
 
+// 코드값 기반 네트워크 실패 판별
 function isNetworkCode(error: unknown): boolean {
   const source = (error ?? {}) as ErrorWithStatus;
   if (source.code === "ERR_NETWORK") return true;
@@ -23,6 +29,7 @@ function isNetworkCode(error: unknown): boolean {
   return false;
 }
 
+// 상태 코드/에러 코드를 표준 API_ERROR_CODE로 정규화
 export function getApiErrorCode(error: unknown): ApiErrorCode {
   if (isNetworkCode(error)) return API_ERROR_CODE.NETWORK;
 

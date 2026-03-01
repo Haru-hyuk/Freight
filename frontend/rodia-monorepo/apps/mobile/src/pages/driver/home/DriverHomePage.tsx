@@ -307,7 +307,7 @@ export function DriverHomePage() {
         <Pressable style={[styles.dutyToggle, isOnDuty && styles.dutyToggleOn]} onPress={() => setIsOnDuty((prev) => !prev)}>
           <View style={[styles.dutyDot, isOnDuty && styles.dutyDotOn]} />
           <AppText variant="caption" weight="800" style={[styles.dutyText, isOnDuty && styles.dutyTextOn]}>
-            {isOnDuty ? "운행중 ON" : "대기 OFF"}
+            {isOnDuty ? "운행중 ON" : "퇴근 OFF"}
           </AppText>
         </Pressable>
       }

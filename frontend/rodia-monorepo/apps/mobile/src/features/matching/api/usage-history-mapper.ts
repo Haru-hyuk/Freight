@@ -6,22 +6,21 @@ import type { QuoteDetailResponse } from "@/entities/quote/model/quote.types";
 
 function resolveStatusTone(status: string): ParsedUsageHistoryItem["statusTone"] {
   const normalized = normalizeStatus(status);
-  if (normalized === BACKEND_STATUS.CANCELED) return "destructive";
-  if (normalized === BACKEND_STATUS.DROPOFF) return "secondary";
+  if (normalized === BACKEND_STATUS.CANCELLED) return "destructive";
   if (normalized === BACKEND_STATUS.OPEN || normalized === BACKEND_STATUS.READY) return "neutral";
-  if (normalized === BACKEND_STATUS.ASSIGNED) return "accent";
+  if (normalized === BACKEND_STATUS.MATCHED) return "accent";
   return "primary";
 }
 
 function resolveStatusLabel(status: string): string {
   const normalized = normalizeStatus(status);
-  if (normalized === BACKEND_STATUS.READY || normalized === BACKEND_STATUS.OPEN) return "요청 접수";
-  if (normalized === BACKEND_STATUS.NEGOTIATING) return "매칭 협의";
-  if (normalized === BACKEND_STATUS.ASSIGNED) return "배차 완료";
-  if (normalized === BACKEND_STATUS.PICKUP) return "상차 진행";
-  if (normalized === BACKEND_STATUS.TRANSIT) return "운송 중";
-  if (normalized === BACKEND_STATUS.DROPOFF) return "운송 완료";
-  if (normalized === BACKEND_STATUS.CANCELED) return "취소됨";
+  if (normalized === BACKEND_STATUS.OPEN) return "요청 접수";
+  if (normalized === BACKEND_STATUS.MATCHED) return "배차 완료";
+  if (normalized === BACKEND_STATUS.IN_TRANSIT) return "운송 중";
+  if (normalized === BACKEND_STATUS.DELIVERED) return "운송 완료";
+  if (normalized === BACKEND_STATUS.READY) return "배차 완료";
+  if (normalized === BACKEND_STATUS.COMPLETED) return "운송 완료";
+  if (normalized === BACKEND_STATUS.CANCELLED) return "취소됨";
   return "상태 확인";
 }
 

@@ -21,7 +21,7 @@ export interface CargoItem {
   maxStackWeight?: number;
   handling?: CargoItemHandlingItem[];
   uprightFromHandling?: boolean;
-  fragileFromHandling?: boolean;
   easyBreakFromHandling?: boolean;
+  fragileFromHandling?: boolean;
   vulnerableFromHandling?: boolean;
 }

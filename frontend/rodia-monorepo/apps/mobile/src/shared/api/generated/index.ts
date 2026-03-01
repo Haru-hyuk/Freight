@@ -30,3 +30,5 @@ export * from './driver-settlement-controller/driver-settlement-controller';
 export * from './driver-quote-controller/driver-quote-controller';
 export * from './public-config-controller/public-config-controller';
 export * from './admin-transport-controller/admin-transport-controller';
+export * from './shipper-address-controller/shipper-address-controller';
+export * from './health-controller/health-controller';
