@@ -220,6 +220,19 @@ const useStyles = createThemedStyles((theme) => {
       lineHeight: safeNumber(detailScale?.lineHeight, 20),
       fontWeight: "600",
     },
+    cardTopMeta: {
+      alignItems: "flex-end",
+      gap: spacing,
+    },
+    statusTitleText: {
+      color: cTextSub,
+      fontSize: safeNumber(headingScale?.size, 18),
+      lineHeight: safeNumber(headingScale?.lineHeight, 26),
+      fontWeight: "700",
+      letterSpacing: safeNumber(headingScale?.letterSpacing, -0.1),
+      textAlign: "right",
+      maxWidth: spacing * 40,
+    },
 
     timelineWrap: { flexDirection: "row", alignItems: "stretch", marginBottom: cardPaddingMd },
     rail: { width: spacing * 6, alignItems: "center", marginRight: spacing * 3 },
@@ -412,7 +425,12 @@ function DriverOrderCardView({
           <View style={[styles.badge, { backgroundColor: pal.bg }]}>
             <AppText style={[styles.badgeText, { color: pal.text }]}>{item.statusLabel}</AppText>
           </View>
-          <AppText style={styles.timeText}>{item.requestedAtText || ""}</AppText>
+          <View style={styles.cardTopMeta}>
+            <AppText style={styles.timeText}>{item.requestedAtText || ""}</AppText>
+            <AppText style={styles.statusTitleText} numberOfLines={2}>
+                {item.statusTitle}
+              </AppText>
+          </View>
         </View>
 
         <View style={styles.timelineWrap}>

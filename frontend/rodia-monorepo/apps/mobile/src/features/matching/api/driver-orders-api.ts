@@ -44,6 +44,7 @@ export type DriverOrderCard = {
   status: string;
   uiState: DriverUiState;
   statusLabel: string;
+  statusTitle: string;
   statusTone: BadgeTone;
   cta: DriverCtaConfig;
   requestedAtText?: string;

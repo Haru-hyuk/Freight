@@ -14,6 +14,7 @@ import {
   DRIVER_UI_STATE,
   getDriverBadge,
   getDriverCta,
+  getDriverStatusTitle,
   getDriverUiStateFromRawStatus,
   type DriverUiState
 } from "@/shared/lib/policy";
@@ -125,6 +126,14 @@ const useStyles = createThemedStyles((theme) => {
       fontSize: safeNumber(theme?.typography?.scale?.caption?.size, 12) + 1,
       lineHeight: safeNumber(theme?.typography?.scale?.caption?.lineHeight, 16) + 1,
       fontWeight: "700",
+    },
+    statusTitle: {
+      color: safeString(theme?.colors?.textMain, "#111827"),
+      fontSize: safeNumber(theme?.typography?.scale?.heading?.size, 18),
+      lineHeight: safeNumber(theme?.typography?.scale?.heading?.lineHeight, 26),
+      fontWeight: "900",
+      letterSpacing: safeNumber(theme?.typography?.scale?.heading?.letterSpacing, -0.1),
+      marginTop: spacing * 2,
     },
     decorationRow: {
       flexDirection: "row",
@@ -354,6 +363,7 @@ export function DriverMatchDetailPage({ matchId, routeSnapshot }: DriverMatchDet
   const rawStatus = String(detail.quote?.status ?? detail.match?.status ?? "");
   const uiState = getDriverUiStateFromRawStatus(rawStatus);
   const statusLabel = getDriverBadge(uiState).label;
+  const statusTitle = getDriverStatusTitle(uiState);
   const ctaPolicy = getDriverCta(uiState, true);
   const decorations = useMemo(() => getDriverMatchDetailBadges(detail.match), [detail.match]);
 
@@ -615,6 +625,8 @@ export function DriverMatchDetailPage({ matchId, routeSnapshot }: DriverMatchDet
                 </View>
                 <AppText style={styles.requestedAtText}>{`요청 시각 ${requestedAtText}`}</AppText>
               </View>
+
+              <AppText style={styles.statusTitle}>{statusTitle}</AppText>
 
               {decorations.length > 0 ? (
                 <View style={styles.decorationRow}>
