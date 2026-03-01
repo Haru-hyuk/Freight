@@ -1,23 +1,22 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import CounterOfferModal, { type CounterOfferSubmitPayload } from "@/features/matching/ui/CounterOfferModal";
 import { acceptDriverMatch, getDriverMatchDetailBadges, postCounterOffer } from "@/features/matching/api";
-import { type MatchDetailRouteSnapshot, useMatchDetail } from "@/features/matching/model/useMatchDetail";
+import { useMatchDetail, type MatchDetailRouteSnapshot } from "@/features/matching/model/useMatchDetail";
+import CounterOfferModal, { type CounterOfferSubmitPayload } from "@/features/matching/ui/CounterOfferModal";
 import { formatWorkMethodLabel } from "@/features/quote/model/workMethod";
+import { formatDateTime, formatDistance, formatKrw } from "@/shared/lib/format/display";
 import {
   DRIVER_CTA_ID,
   DRIVER_UI_STATE,
   getDriverBadge,
   getDriverCta,
-  getDriverUiStateFromBackendStatus,
-  normalizeStatus,
-  type DriverUiState,
+  getDriverUiStateFromRawStatus,
+  type DriverUiState
 } from "@/shared/lib/policy";
-import { formatDateTime, formatDistance, formatKrw } from "@/shared/lib/format/display";
 import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppButton } from "@/shared/ui/kit/AppButton";
@@ -352,8 +351,8 @@ export function DriverMatchDetailPage({ matchId, routeSnapshot }: DriverMatchDet
   const spacing = safeNumber(theme?.layout?.spacing?.base, 4);
   const primaryColor = safeString(theme?.colors?.brandPrimary, "#FF6A00");
 
-  const backendStatus = normalizeStatus(toText(detail.match?.status));
-  const uiState = getDriverUiStateFromBackendStatus(backendStatus);
+  const rawStatus = String(detail.quote?.status ?? detail.match?.status ?? "");
+  const uiState = getDriverUiStateFromRawStatus(rawStatus);
   const statusLabel = getDriverBadge(uiState).label;
   const ctaPolicy = getDriverCta(uiState, true);
   const decorations = useMemo(() => getDriverMatchDetailBadges(detail.match), [detail.match]);

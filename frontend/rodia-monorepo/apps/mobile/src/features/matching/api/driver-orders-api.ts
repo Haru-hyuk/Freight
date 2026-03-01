@@ -421,9 +421,10 @@ const runMatches = myMatches.filter((match) => {
   if (match.accepted === true) return true;
   const status = normalizeStatus(match.status ?? "");
   // READY는 Match 상태 (배차 확정), runMatches에 포함
-  return status === BACKEND_STATUS.READY || 
-         status === BACKEND_STATUS.IN_TRANSIT || 
-         status === BACKEND_STATUS.DELIVERED;
+ return status === BACKEND_STATUS.READY ||
+       status === BACKEND_STATUS.IN_TRANSIT ||
+       status === BACKEND_STATUS.DELIVERED ||
+       status === BACKEND_STATUS.COMPLETED;
 });
   const myPendingMatches = myMatches.filter((match) => !runMatches.includes(match));
 

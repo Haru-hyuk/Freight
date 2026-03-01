@@ -2,7 +2,7 @@
 import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import { FlatList, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useActiveOrder } from "@/entities/order/model/active-order.store";
@@ -64,199 +64,352 @@ function resolveStatusPalette(tone: BadgeTone, colors: Record<string, string>) {
     return {
       bg: tint(colors.brandPrimary, 0.1, colors.bgSurface),
       text: colors.brandPrimary,
-      border: tint(colors.brandPrimary, 0.25, colors.borderDefault),
     };
   }
   if (tone === BADGE_TONE.PROGRESS) {
     return {
       bg: tint(colors.semanticSuccess, 0.1, colors.bgSurface),
       text: colors.semanticSuccess,
-      border: tint(colors.semanticSuccess, 0.25, colors.borderDefault),
     };
   }
   if (tone === BADGE_TONE.CLOSED) {
     return {
       bg: tint(colors.semanticInfo, 0.1, colors.bgSurface),
       text: colors.semanticInfo,
-      border: tint(colors.semanticInfo, 0.25, colors.borderDefault),
     };
   }
   return {
     bg: tint(colors.textMuted, 0.1, colors.bgSurface),
     text: colors.textMuted,
-    border: tint(colors.textMuted, 0.25, colors.borderDefault),
   };
 }
 
 const useStyles = createThemedStyles((theme) => {
   const spacing = safeNumber(theme?.layout?.spacing?.base, 4);
+  const radii = theme?.layout?.radii;
+  const buttonSm = theme?.components?.button?.sizes?.sm;
+  const buttonLg = theme?.components?.button?.sizes?.lg;
+  const cardPaddingMd = safeNumber(theme?.components?.card?.paddingMd, spacing * 5);
+
+  const detailScale = theme?.typography?.scale?.detail;
+  const captionScale = theme?.typography?.scale?.caption;
+  const headingScale = theme?.typography?.scale?.heading;
+  const titleScale = theme?.typography?.scale?.title;
+
+  const radiusCard = safeNumber(theme?.components?.card?.radius, safeNumber(radii?.card, spacing * 4));
+  const radiusControl = safeNumber(radii?.control, spacing * 3);
+  const radiusPill = safeNumber(radii?.pill, 999);
+
   const cSurface = safeString(theme?.colors?.bgSurface, "#FFFFFF");
-  const cSurfaceAlt = safeString(theme?.colors?.bgSurfaceAlt, "#F8FAFC");
+  const cSurfaceAlt = safeString(theme?.colors?.bgSurfaceAlt, "#F1F5F9");
   const cLine = safeString(theme?.colors?.borderDefault, "#E2E8F0");
-  const cTextMain = safeString(theme?.colors?.textMain, "#111827");
+  const cTextMain = safeString(theme?.colors?.textMain, "#0F172A");
   const cTextSub = safeString(theme?.colors?.textSub, "#334155");
   const cTextMuted = safeString(theme?.colors?.textMuted, "#64748B");
   const cPrimary = safeString(theme?.colors?.brandPrimary, "#FF6A00");
-  const cInfo = safeString(theme?.colors?.semanticInfo, "#2563EB");
-  const cToastBg = tint(cTextMain, 0.92, cTextMain);
+  const cOnBrand = safeString(theme?.colors?.textOnBrand, "#FFFFFF");
+  const cInfo = safeString(theme?.colors?.semanticInfo, "#3B82F6");
+  const cToastBg = tint(cTextMain, 0.9, cTextMain);
+
+  const iosRaised = theme?.elevation?.iosCardRaised;
+  const androidRaised = theme?.elevation?.androidCardRaised;
+  const createElevation = (opacityScale: number, radiusScale: number, heightScale: number) =>
+    Platform.select({
+      ios: {
+        shadowColor: safeString(iosRaised?.shadowColor, "#000000"),
+        shadowOpacity: safeNumber(iosRaised?.shadowOpacity, 0.08) * opacityScale,
+        shadowRadius: Math.max(1, safeNumber(iosRaised?.shadowRadius, 8) * radiusScale),
+        shadowOffset: {
+          width: safeNumber(iosRaised?.shadowOffset?.width, 0),
+          height: Math.max(1, safeNumber(iosRaised?.shadowOffset?.height, 2) * heightScale),
+        },
+      },
+      android: {
+        elevation: Math.max(1, Math.round(safeNumber(androidRaised?.elevation, 2) * opacityScale)),
+      },
+      default: {},
+    }) ?? {};
+
+  const raisedSoft = createElevation(0.5, 0.5, 0.5);
+  const raisedCard = createElevation(1, 1, 1);
 
   return StyleSheet.create({
     root: { flex: 1, backgroundColor: cSurfaceAlt },
 
-    tabsRow: {
+    tabsContainer: {
       flexDirection: "row",
-      paddingHorizontal: spacing * 2,
-      backgroundColor: cSurface,
-      borderBottomWidth: 1,
-      borderBottomColor: cLine,
+      backgroundColor: tint(cLine, 0.3, cSurfaceAlt),
+      borderRadius: radiusControl,
+      padding: safeNumber(buttonSm?.paddingY, spacing),
+      marginHorizontal: spacing * 4,
+      marginTop: spacing * 4,
+      marginBottom: spacing * 2,
     },
     tabBtn: {
       flex: 1,
-      paddingVertical: 14,
+      minHeight: safeNumber(buttonSm?.minHeight, spacing * 9),
+      paddingHorizontal: safeNumber(buttonSm?.paddingX, spacing * 4),
       alignItems: "center",
       justifyContent: "center",
       flexDirection: "row",
-      gap: 6,
-      borderBottomWidth: 2,
-      borderBottomColor: "transparent",
+      gap: spacing * 1.5,
+      borderRadius: radiusControl,
     },
-    tabBtnActive: { borderBottomColor: cPrimary },
-    tabLabel: { color: cTextMuted, fontSize: 15, fontWeight: "800" },
+    tabBtnActive: {
+      backgroundColor: cSurface,
+      ...(raisedSoft as any),
+    },
+    tabLabel: {
+      color: cTextMuted,
+      fontSize: safeNumber(detailScale?.size, 14),
+      lineHeight: safeNumber(detailScale?.lineHeight, 20),
+      letterSpacing: safeNumber(detailScale?.letterSpacing, 0),
+      fontWeight: "700",
+    },
     tabLabelActive: { color: cTextMain, fontWeight: "900" },
 
     tabBadge: {
       backgroundColor: cPrimary,
-      paddingHorizontal: 6,
-      paddingVertical: 2,
-      borderRadius: 10,
+      paddingHorizontal: spacing * 2,
+      paddingVertical: spacing,
+      borderRadius: radiusPill,
+      minWidth: safeNumber(buttonSm?.minHeight, 36) - spacing * 3,
+      alignItems: "center",
     },
-    tabBadgeText: { color: cSurface, fontSize: 11, fontWeight: "900" },
+    tabBadgeText: {
+      color: cOnBrand,
+      fontSize: safeNumber(captionScale?.size, 12),
+      lineHeight: safeNumber(captionScale?.lineHeight, 16),
+      letterSpacing: safeNumber(captionScale?.letterSpacing, 0),
+      fontWeight: "900",
+    },
 
-    listContent: { paddingHorizontal: spacing * 4, paddingTop: spacing * 4, paddingBottom: spacing * 24 },
-    separator: { height: spacing * 3.5 },
+    listContent: { paddingHorizontal: spacing * 4, paddingTop: spacing * 2, paddingBottom: spacing * 24 },
+    separator: { height: spacing * 4 },
 
     flex1: { flex: 1 },
 
     cardPressable: {},
     cardWrap: {
-      borderRadius: 16,
-      padding: spacing * 4,
+      borderRadius: radiusCard,
+      padding: cardPaddingMd,
+      borderWidth: 0,
     },
-    cardPressed: { transform: [{ scale: 0.99 }] },
+    cardPressed: { transform: [{ scale: 0.98 }], opacity: 0.9 },
 
     cardTop: {
       flexDirection: "row",
       justifyContent: "space-between",
       alignItems: "center",
-      marginBottom: spacing * 4,
+      marginBottom: cardPaddingMd,
     },
-    badge: { paddingHorizontal: spacing * 2, paddingVertical: spacing, borderRadius: 6, borderWidth: 1 },
-    badgeText: { fontSize: 12, fontWeight: "900", letterSpacing: -0.2 },
-    timeText: { color: cTextMuted, fontSize: 13, fontWeight: "700" },
+    badge: {
+      paddingHorizontal: spacing * 2.5,
+      paddingVertical: spacing * 1.5,
+      borderRadius: radiusControl,
+    },
+    badgeText: {
+      fontSize: safeNumber(detailScale?.size, 14),
+      lineHeight: safeNumber(detailScale?.lineHeight, 20),
+      letterSpacing: safeNumber(detailScale?.letterSpacing, 0),
+      fontWeight: "900",
+    },
+    timeText: {
+      color: cTextMuted,
+      fontSize: safeNumber(detailScale?.size, 14),
+      lineHeight: safeNumber(detailScale?.lineHeight, 20),
+      fontWeight: "600",
+    },
 
-    timelineWrap: { flexDirection: "row", alignItems: "stretch", marginBottom: spacing * 4 },
-    rail: { width: 24, alignItems: "center", marginRight: spacing * 2 },
-    dotStart: { width: 10, height: 10, borderRadius: 5, backgroundColor: cInfo, zIndex: 2 },
-    dotEnd: { width: 10, height: 10, borderRadius: 5, backgroundColor: cPrimary, zIndex: 2 },
-    line: { width: 2, flex: 1, backgroundColor: cLine, marginVertical: 4 },
-    addressWrap: { flex: 1, justifyContent: "space-between", paddingVertical: 1 },
-    addressSpacer: { height: spacing * 4 },
-    distanceWrap: { justifyContent: "center" },
-    addressBlock: { gap: 2 },
-    addressLabel: { color: cTextMuted, fontSize: 12, fontWeight: "800" },
-    addressText: { color: cTextMain, fontSize: 16, fontWeight: "900", lineHeight: 22, letterSpacing: -0.3 },
+    timelineWrap: { flexDirection: "row", alignItems: "stretch", marginBottom: cardPaddingMd },
+    rail: { width: spacing * 6, alignItems: "center", marginRight: spacing * 3 },
+    dotStart: {
+      width: spacing * 3,
+      height: spacing * 3,
+      borderRadius: spacing * 1.5,
+      backgroundColor: cInfo,
+      zIndex: 2,
+      borderWidth: Math.max(1, Math.round(spacing / 2)),
+      borderColor: tint(cInfo, 0.2, cSurface),
+    },
+    dotEnd: {
+      width: spacing * 3,
+      height: spacing * 3,
+      borderRadius: spacing * 1.5,
+      backgroundColor: cPrimary,
+      zIndex: 2,
+      borderWidth: Math.max(1, Math.round(spacing / 2)),
+      borderColor: tint(cPrimary, 0.2, cSurface),
+    },
+    line: {
+      width: Math.max(1, Math.round(spacing / 2)),
+      flex: 1,
+      backgroundColor: tint(cLine, 0.5, cSurfaceAlt),
+      marginVertical: spacing * 0.5,
+    },
+
+    addressWrap: { flex: 1, justifyContent: "space-between" },
+    addressSpacer: { height: cardPaddingMd },
+    distanceWrap: {
+      position: "absolute",
+      left: spacing * 8,
+      top: "50%",
+      marginTop: -safeNumber(captionScale?.lineHeight, 16),
+    },
+    addressBlock: { gap: spacing },
+    addressLabel: {
+      color: cTextMuted,
+      fontSize: safeNumber(captionScale?.size, 12),
+      lineHeight: safeNumber(captionScale?.lineHeight, 16),
+      letterSpacing: safeNumber(captionScale?.letterSpacing, 0),
+      fontWeight: "800",
+    },
+    addressText: {
+      color: cTextMain,
+      fontSize: safeNumber(headingScale?.size, 18),
+      lineHeight: safeNumber(headingScale?.lineHeight, 26),
+      fontWeight: "900",
+      letterSpacing: safeNumber(headingScale?.letterSpacing, -0.1),
+    },
 
     distanceChip: {
-      backgroundColor: cSurfaceAlt,
-      borderWidth: 1,
-      borderColor: cLine,
+      backgroundColor: tint(cTextMuted, 0.08, cSurface),
       paddingHorizontal: spacing * 2,
-      paddingVertical: 4,
-      borderRadius: 999,
+      paddingVertical: spacing,
+      borderRadius: radiusPill,
     },
-    distanceText: { color: cTextSub, fontSize: 12, fontWeight: "900" },
+    distanceText: {
+      color: cTextSub,
+      fontSize: safeNumber(captionScale?.size, 12),
+      lineHeight: safeNumber(captionScale?.lineHeight, 16),
+      letterSpacing: safeNumber(captionScale?.letterSpacing, 0),
+      fontWeight: "800",
+    },
 
     cardBottom: {
       flexDirection: "row",
       justifyContent: "space-between",
       alignItems: "flex-end",
-      paddingTop: spacing * 4,
+      paddingTop: cardPaddingMd,
       borderTopWidth: 1,
       borderTopColor: tint(cLine, 0.5, cSurfaceAlt),
     },
-    tagWrap: { flex: 1, flexDirection: "row", flexWrap: "wrap", gap: 6, paddingRight: 8 },
-    specText: { color: cTextMuted, fontSize: 13, fontWeight: "700" },
-    priceWrap: { flexDirection: "row", alignItems: "baseline", gap: 4 },
-    priceLabel: { color: cTextSub, fontSize: 13, fontWeight: "800" },
-    priceVal: { color: cPrimary, fontSize: 24, fontWeight: "900", letterSpacing: -0.5 },
-    prepareWrap: { marginTop: spacing * 3 },
-    prepareBtn: { minHeight: spacing * 12, borderRadius: spacing * 3 },
-    prepareBtnText: { fontWeight: "900", fontSize: 15 },
+    tagWrap: { flex: 1, flexDirection: "row", flexWrap: "wrap", gap: spacing * 1.5, paddingRight: spacing * 3 },
+    specPill: {
+      backgroundColor: tint(cTextMuted, 0.06, cSurfaceAlt),
+      paddingHorizontal: spacing * 2,
+      paddingVertical: spacing,
+      borderRadius: radiusControl,
+      minHeight: safeNumber(buttonSm?.minHeight, 36) - spacing * 4,
+      justifyContent: "center",
+    },
+    specText: {
+      color: cTextSub,
+      fontSize: safeNumber(captionScale?.size, 12),
+      lineHeight: safeNumber(captionScale?.lineHeight, 16),
+      letterSpacing: safeNumber(captionScale?.letterSpacing, 0),
+      fontWeight: "700",
+    },
+
+    priceWrap: { alignItems: "flex-end", gap: spacing * 0.5 },
+    priceLabel: {
+      color: cTextMuted,
+      fontSize: safeNumber(captionScale?.size, 12),
+      lineHeight: safeNumber(captionScale?.lineHeight, 16),
+      letterSpacing: safeNumber(captionScale?.letterSpacing, 0),
+      fontWeight: "800",
+    },
+    priceVal: {
+      color: cPrimary,
+      fontSize: safeNumber(titleScale?.size, 22),
+      lineHeight: safeNumber(titleScale?.lineHeight, 30),
+      fontWeight: "900",
+      letterSpacing: safeNumber(titleScale?.letterSpacing, -0.1),
+    },
+
+    prepareWrap: { marginTop: spacing * 4 },
+    prepareBtn: {
+      minHeight: safeNumber(buttonLg?.minHeight, spacing * 13),
+      borderRadius: safeNumber(buttonLg?.radius, radiusControl),
+    },
 
     filterScroll: {
       flexDirection: "row",
       paddingHorizontal: spacing * 4,
       paddingVertical: spacing * 2,
-      backgroundColor: cSurfaceAlt,
-      borderBottomWidth: 1,
-      borderBottomColor: tint(cLine, 0.7, cLine),
     },
     filterChip: {
-      minHeight: 32,
-      paddingHorizontal: spacing * 3,
-      borderRadius: 16,
+      minHeight: safeNumber(buttonSm?.minHeight, 36),
+      paddingHorizontal: safeNumber(buttonSm?.paddingX, spacing * 4),
+      borderRadius: radiusPill,
       borderWidth: 1,
-      borderColor: cLine,
+      borderColor: tint(cLine, 0.8, cLine),
       backgroundColor: cSurface,
       alignItems: "center",
       justifyContent: "center",
       marginRight: spacing * 2,
+      ...(raisedSoft as any),
     },
     filterChipActive: { borderColor: cTextMain, backgroundColor: cTextMain },
-    filterChipText: { color: cTextMuted, fontSize: 13, fontWeight: "800" },
-    filterChipTextActive: { color: cSurface, fontWeight: "900" },
+    filterChipText: {
+      color: cTextSub,
+      fontSize: safeNumber(detailScale?.size, 14),
+      lineHeight: safeNumber(detailScale?.lineHeight, 20),
+      letterSpacing: safeNumber(detailScale?.letterSpacing, 0),
+      fontWeight: "700",
+    },
+    filterChipTextActive: { color: cOnBrand, fontWeight: "900" },
 
-    errorWrap: { paddingHorizontal: spacing * 5, paddingTop: spacing * 4 },
+    errorWrap: { paddingHorizontal: spacing * 5, paddingTop: spacing * 8 },
     refreshBtn: { padding: spacing },
 
     toastWrap: { position: "absolute", left: 0, right: 0, alignItems: "center", zIndex: 45, pointerEvents: "none" },
     toastCard: {
       borderRadius: 999,
-      minHeight: 36,
-      paddingHorizontal: spacing * 4,
+      minHeight: safeNumber(buttonSm?.minHeight, 40),
+      paddingHorizontal: cardPaddingMd,
       alignItems: "center",
       justifyContent: "center",
       backgroundColor: cToastBg,
+      ...(raisedCard as any),
     },
-    toastText: { color: cSurface, fontSize: 14, fontWeight: "800" },
+    toastText: {
+      color: cOnBrand,
+      fontSize: safeNumber(detailScale?.size, 14),
+      lineHeight: safeNumber(detailScale?.lineHeight, 20),
+      letterSpacing: safeNumber(detailScale?.letterSpacing, 0),
+      fontWeight: "800",
+    },
   });
 });
+
+type DriverOrdersBoardStyles = ReturnType<typeof useStyles>;
 
 function DriverOrderCardView({
   item,
   onPress,
   activeTab,
   onPrepareClick,
+  styles,
+  colors,
 }: {
   item: DriverOrderCard;
   onPress: (card: DriverOrderCard) => void;
   activeTab: DriverOrdersTabKey;
   onPrepareClick: (card: DriverOrderCard) => void;
+  styles: DriverOrdersBoardStyles;
+  colors: Record<string, string>;
 }) {
-  const theme = useAppTheme();
-  const styles = useStyles();
-  const colors = theme.colors as Record<string, string>;
   const pal = resolveStatusPalette(item.statusTone, colors);
 
-  const specSummary = item.tags.map((t) => t.label).join(" · ");
   const ctaPolicy = item.cta;
   const ctaVariant = ctaPolicy.variant === "primary" ? "primary" : ctaPolicy.variant === "destructive" ? "destructive" : "secondary";
 
   return (
     <Pressable onPress={() => onPress(item)} style={({ pressed }) => [styles.cardPressable, pressed ? styles.cardPressed : null]}>
-      <AppCard style={styles.cardWrap} outlined elevated>
+      <AppCard style={styles.cardWrap} outlined={false}>
         <View style={styles.cardTop}>
-          <View style={[styles.badge, { backgroundColor: pal.bg, borderColor: pal.border }]}>
+          <View style={[styles.badge, { backgroundColor: pal.bg }]}>
             <AppText style={[styles.badgeText, { color: pal.text }]}>{item.statusLabel}</AppText>
           </View>
           <AppText style={styles.timeText}>{item.requestedAtText || ""}</AppText>
@@ -296,12 +449,16 @@ function DriverOrderCardView({
 
         <View style={styles.cardBottom}>
           <View style={styles.tagWrap}>
-            <AppText style={styles.specText} numberOfLines={1}>
-              {specSummary || ""}
-            </AppText>
+            {item.tags.map((tag, idx) => (
+              <View key={`${tag.label}-${idx}`} style={styles.specPill}>
+                <AppText style={styles.specText} numberOfLines={1}>
+                  {tag.label}
+                </AppText>
+              </View>
+            ))}
           </View>
           <View style={styles.priceWrap}>
-            <AppText style={styles.priceLabel}>운임</AppText>
+            <AppText style={styles.priceLabel}>총 운임</AppText>
             <AppText style={styles.priceVal}>{item.priceText || "-"}</AppText>
           </View>
         </View>
@@ -313,11 +470,9 @@ function DriverOrderCardView({
               variant={ctaPolicy.enabled ? ctaVariant : "secondary"}
               disabled={!ctaPolicy.enabled}
               style={styles.prepareBtn}
-            >
-              <AppText color={ctaPolicy.enabled ? "textOnBrand" : "textSecondary"} style={styles.prepareBtnText}>
-                {ctaPolicy.label}
-              </AppText>
-            </AppButton>
+              title={ctaPolicy.label}
+              textStyle={{ fontWeight: "900" }}
+            />
           </View>
         ) : null}
       </AppCard>
@@ -349,7 +504,9 @@ export function DriverOrdersBoard({ initialTab, assignedOnly, activeTab: control
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cardNavLockRef = useRef(false);
   const lastCardNavIdRef = useRef(0);
-  const focusRefetchMetaRef = useRef({ hasFocusedOnce: false, inFlight: false, lastRefetchAt: 0 });
+  const isFetchInFlightRef = useRef(false);
+  const focusRefetchMetaRef = useRef({ hasFocusedOnce: false, lastRefetchAt: 0 });
+  const themeColors = theme.colors as Record<string, string>;
 
   const showToast = useCallback((message: string) => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
@@ -368,6 +525,9 @@ export function DriverOrdersBoard({ initialTab, assignedOnly, activeTab: control
 
   const loadOrders = useCallback(
     async (mode: "initial" | "refresh" = "initial") => {
+      if (isFetchInFlightRef.current) return;
+      isFetchInFlightRef.current = true;
+
       if (mode === "refresh") setIsRefreshing(true);
       else setIsLoading(true);
 
@@ -380,6 +540,7 @@ export function DriverOrdersBoard({ initialTab, assignedOnly, activeTab: control
         setOverview(EMPTY_OVERVIEW);
         setErrorMessage(NETWORK_ERROR_TEXT);
       } finally {
+        isFetchInFlightRef.current = false;
         setIsLoading(false);
         setIsRefreshing(false);
       }
@@ -406,15 +567,12 @@ export function DriverOrdersBoard({ initialTab, assignedOnly, activeTab: control
       }
 
       const now = Date.now();
-      if (meta.inFlight || now - meta.lastRefetchAt < FOCUS_REFETCH_THROTTLE_MS) {
+      if (now - meta.lastRefetchAt < FOCUS_REFETCH_THROTTLE_MS) {
         return undefined;
       }
 
-      meta.inFlight = true;
       meta.lastRefetchAt = now;
-      void loadOrders("refresh").finally(() => {
-        meta.inFlight = false;
-      });
+      void loadOrders("refresh");
 
       return undefined;
     }, [loadOrders])
@@ -537,7 +695,26 @@ export function DriverOrdersBoard({ initialTab, assignedOnly, activeTab: control
         ))}
       </ScrollView>
     );
-  }, [activeFilter, overview.availableFilters, showFilters, styles.filterChip, styles.filterChipActive, styles.filterChipText, styles.filterChipTextActive, styles.filterScroll]);
+  }, [activeFilter, overview.availableFilters, showFilters, styles]);
+
+  const renderOrderItem = useCallback(
+    ({ item }: { item: DriverOrderCard }) => (
+      <DriverOrderCardView
+        item={item}
+        activeTab={resolvedActiveTab}
+        onPress={handlePressCard}
+        onPrepareClick={handlePrepareForDrive}
+        styles={styles}
+        colors={themeColors}
+      />
+    ),
+    [handlePrepareForDrive, handlePressCard, resolvedActiveTab, styles, themeColors]
+  );
+
+  const keyExtractor = useCallback(
+    (item: DriverOrderCard) => `${resolvedActiveTab}:${item.cardKey}`,
+    [resolvedActiveTab]
+  );
 
   return (
     <PageScaffold
@@ -555,7 +732,7 @@ export function DriverOrdersBoard({ initialTab, assignedOnly, activeTab: control
     >
       <View style={styles.flex1}>
         {!assignedOnly ? (
-          <View style={styles.tabsRow}>
+          <View style={styles.tabsContainer}>
             <Pressable
               style={[styles.tabBtn, resolvedActiveTab === "market" ? styles.tabBtnActive : null]}
               onPress={() => changeTab("market")}
@@ -591,17 +768,12 @@ export function DriverOrdersBoard({ initialTab, assignedOnly, activeTab: control
           </View>
         ) : (
           <FlatList
+            key={resolvedActiveTab}
+            extraData={activeFilter}
             style={styles.flex1}
             data={visibleOrders}
-            keyExtractor={(item) => item.cardKey}
-            renderItem={({ item }) => (
-              <DriverOrderCardView
-                item={item}
-                activeTab={resolvedActiveTab}
-                onPress={handlePressCard}
-                onPrepareClick={handlePrepareForDrive}
-              />
-            )}
+            keyExtractor={keyExtractor}
+            renderItem={renderOrderItem}
             ListHeaderComponent={renderListHeader}
             stickyHeaderIndices={showFilters ? [0] : undefined}
             ItemSeparatorComponent={() => <View style={styles.separator} />}
