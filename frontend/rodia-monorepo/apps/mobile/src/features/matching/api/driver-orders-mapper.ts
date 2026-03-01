@@ -3,7 +3,6 @@ import {
   getDriverCta,
   getDriverBadge,
   getDriverOrderSortPriority,
-  getDriverStatusTitle,
   getDriverUiStateFromRawStatus,
 } from "@/shared/lib/policy";
 import { formatDateTime, formatDistance, formatKrw } from "@/shared/lib/format/display";
@@ -141,7 +140,6 @@ export function mapDriverOrderCard(input: DriverOrderCardMapperInput): DriverOrd
   const statusBadge = getDriverBadge(uiState);
   const cta = getDriverCta(uiState, true);
   const statusLabel = statusBadge.label;
-  const statusTitle = getDriverStatusTitle(uiState);
   const requestedAtText = formatDateTime(createdAt, "");
 
   const originAddress = toOptionalText(quote?.originAddress) ?? toOptionalText(mockDecoration?.fallbackOriginAddress);
@@ -170,7 +168,6 @@ export function mapDriverOrderCard(input: DriverOrderCardMapperInput): DriverOrd
     status: rawStatus,
     uiState,
     statusLabel,
-    statusTitle,
     statusTone: statusBadge.tone,
     cta,
     requestedAtText: requestedAtText || undefined,

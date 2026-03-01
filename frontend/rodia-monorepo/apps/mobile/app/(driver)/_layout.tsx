@@ -11,7 +11,7 @@ type BottomTabKey = "home" | "quotes" | "run" | "settlement" | "profile";
 
 function shouldHideBottomBar(segments: readonly string[] | undefined | null): boolean {
   const segs = Array.isArray(segments) ? segments : [];
-  return segs.includes("verification");
+  return segs.includes("verification") || segs.includes("(stack)");
 }
 
 function pickActiveKey(segments: readonly string[] | undefined | null): BottomTabKey {

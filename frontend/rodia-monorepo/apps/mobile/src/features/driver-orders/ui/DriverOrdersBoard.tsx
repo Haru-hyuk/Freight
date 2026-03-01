@@ -2,7 +2,15 @@
 import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { FlatList, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import {
+  FlatList,
+  Platform,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useActiveOrder } from "@/entities/order/model/active-order.store";
@@ -93,10 +101,12 @@ const useStyles = createThemedStyles((theme) => {
 
   const detailScale = theme?.typography?.scale?.detail;
   const captionScale = theme?.typography?.scale?.caption;
-  const headingScale = theme?.typography?.scale?.heading;
   const titleScale = theme?.typography?.scale?.title;
 
-  const radiusCard = safeNumber(theme?.components?.card?.radius, safeNumber(radii?.card, spacing * 4));
+  const radiusCard = safeNumber(
+    theme?.components?.card?.radius,
+    safeNumber(radii?.card, spacing * 4)
+  );
   const radiusControl = safeNumber(radii?.control, spacing * 3);
   const radiusPill = safeNumber(radii?.pill, 999);
 
@@ -113,6 +123,7 @@ const useStyles = createThemedStyles((theme) => {
 
   const iosRaised = theme?.elevation?.iosCardRaised;
   const androidRaised = theme?.elevation?.androidCardRaised;
+
   const createElevation = (opacityScale: number, radiusScale: number, heightScale: number) =>
     Platform.select({
       ios: {
@@ -184,7 +195,11 @@ const useStyles = createThemedStyles((theme) => {
       fontWeight: "900",
     },
 
-    listContent: { paddingHorizontal: spacing * 4, paddingTop: spacing * 2, paddingBottom: spacing * 24 },
+    listContent: {
+      paddingHorizontal: spacing * 4,
+      paddingTop: spacing * 2,
+      paddingBottom: spacing * 24,
+    },
     separator: { height: spacing * 4 },
 
     flex1: { flex: 1 },
@@ -197,44 +212,38 @@ const useStyles = createThemedStyles((theme) => {
     },
     cardPressed: { transform: [{ scale: 0.98 }], opacity: 0.9 },
 
+    // Layout & Alignment (badge + meta)
     cardTop: {
       flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
+      alignItems: "flex-start",
+      justifyContent: "flex-start",
       marginBottom: cardPaddingMd,
+      gap: spacing * 2,
     },
     badge: {
       paddingHorizontal: spacing * 2.5,
       paddingVertical: spacing * 1.5,
       borderRadius: radiusControl,
-    },
-    badgeText: {
-      fontSize: safeNumber(detailScale?.size, 14),
-      lineHeight: safeNumber(detailScale?.lineHeight, 20),
-      letterSpacing: safeNumber(detailScale?.letterSpacing, 0),
-      fontWeight: "900",
-    },
-    timeText: {
-      color: cTextMuted,
-      fontSize: safeNumber(detailScale?.size, 14),
-      lineHeight: safeNumber(detailScale?.lineHeight, 20),
-      fontWeight: "600",
+      flexShrink: 0,
+      alignSelf: "flex-start",
     },
     cardTopMeta: {
+      flex: 1,
+      minWidth: 0,
+      marginLeft: spacing * 4,
       alignItems: "flex-end",
-      gap: spacing,
+      gap: spacing * 0.5,
     },
-    statusTitleText: {
-      color: cTextSub,
-      fontSize: safeNumber(headingScale?.size, 18),
-      lineHeight: safeNumber(headingScale?.lineHeight, 26),
-      fontWeight: "700",
-      letterSpacing: safeNumber(headingScale?.letterSpacing, -0.1),
+    timeText: {
       textAlign: "right",
-      maxWidth: spacing * 40,
+      flexShrink: 1,
     },
 
-    timelineWrap: { flexDirection: "row", alignItems: "stretch", marginBottom: cardPaddingMd },
+    timelineWrap: {
+      flexDirection: "row",
+      alignItems: "stretch",
+      marginBottom: cardPaddingMd,
+    },
     rail: { width: spacing * 6, alignItems: "center", marginRight: spacing * 3 },
     dotStart: {
       width: spacing * 3,
@@ -270,33 +279,14 @@ const useStyles = createThemedStyles((theme) => {
       marginTop: -safeNumber(captionScale?.lineHeight, 16),
     },
     addressBlock: { gap: spacing },
-    addressLabel: {
-      color: cTextMuted,
-      fontSize: safeNumber(captionScale?.size, 12),
-      lineHeight: safeNumber(captionScale?.lineHeight, 16),
-      letterSpacing: safeNumber(captionScale?.letterSpacing, 0),
-      fontWeight: "800",
-    },
-    addressText: {
-      color: cTextMain,
-      fontSize: safeNumber(headingScale?.size, 18),
-      lineHeight: safeNumber(headingScale?.lineHeight, 26),
-      fontWeight: "900",
-      letterSpacing: safeNumber(headingScale?.letterSpacing, -0.1),
-    },
+    addressLabel: { color: cTextMuted },
+    addressText: { color: cTextMain },
 
     distanceChip: {
       backgroundColor: tint(cTextMuted, 0.08, cSurface),
       paddingHorizontal: spacing * 2,
       paddingVertical: spacing,
       borderRadius: radiusPill,
-    },
-    distanceText: {
-      color: cTextSub,
-      fontSize: safeNumber(captionScale?.size, 12),
-      lineHeight: safeNumber(captionScale?.lineHeight, 16),
-      letterSpacing: safeNumber(captionScale?.letterSpacing, 0),
-      fontWeight: "800",
     },
 
     cardBottom: {
@@ -307,7 +297,13 @@ const useStyles = createThemedStyles((theme) => {
       borderTopWidth: 1,
       borderTopColor: tint(cLine, 0.5, cSurfaceAlt),
     },
-    tagWrap: { flex: 1, flexDirection: "row", flexWrap: "wrap", gap: spacing * 1.5, paddingRight: spacing * 3 },
+    tagWrap: {
+      flex: 1,
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: spacing * 1.5,
+      paddingRight: spacing * 3,
+    },
     specPill: {
       backgroundColor: tint(cTextMuted, 0.06, cSurfaceAlt),
       paddingHorizontal: spacing * 2,
@@ -316,29 +312,8 @@ const useStyles = createThemedStyles((theme) => {
       minHeight: safeNumber(buttonSm?.minHeight, 36) - spacing * 4,
       justifyContent: "center",
     },
-    specText: {
-      color: cTextSub,
-      fontSize: safeNumber(captionScale?.size, 12),
-      lineHeight: safeNumber(captionScale?.lineHeight, 16),
-      letterSpacing: safeNumber(captionScale?.letterSpacing, 0),
-      fontWeight: "700",
-    },
 
     priceWrap: { alignItems: "flex-end", gap: spacing * 0.5 },
-    priceLabel: {
-      color: cTextMuted,
-      fontSize: safeNumber(captionScale?.size, 12),
-      lineHeight: safeNumber(captionScale?.lineHeight, 16),
-      letterSpacing: safeNumber(captionScale?.letterSpacing, 0),
-      fontWeight: "800",
-    },
-    priceVal: {
-      color: cPrimary,
-      fontSize: safeNumber(titleScale?.size, 22),
-      lineHeight: safeNumber(titleScale?.lineHeight, 30),
-      fontWeight: "900",
-      letterSpacing: safeNumber(titleScale?.letterSpacing, -0.1),
-    },
 
     prepareWrap: { marginTop: spacing * 4 },
     prepareBtn: {
@@ -376,7 +351,14 @@ const useStyles = createThemedStyles((theme) => {
     errorWrap: { paddingHorizontal: spacing * 5, paddingTop: spacing * 8 },
     refreshBtn: { padding: spacing },
 
-    toastWrap: { position: "absolute", left: 0, right: 0, alignItems: "center", zIndex: 45, pointerEvents: "none" },
+    toastWrap: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      alignItems: "center",
+      zIndex: 45,
+      pointerEvents: "none",
+    },
     toastCard: {
       borderRadius: 999,
       minHeight: safeNumber(buttonSm?.minHeight, 40),
@@ -392,6 +374,15 @@ const useStyles = createThemedStyles((theme) => {
       lineHeight: safeNumber(detailScale?.lineHeight, 20),
       letterSpacing: safeNumber(detailScale?.letterSpacing, 0),
       fontWeight: "800",
+    },
+
+    // kept for AppText variant="title" parity
+    priceValText: {
+      color: cPrimary,
+      fontSize: safeNumber(titleScale?.size, 22),
+      lineHeight: safeNumber(titleScale?.lineHeight, 30),
+      fontWeight: "900",
+      letterSpacing: safeNumber(titleScale?.letterSpacing, -0.1),
     },
   });
 });
@@ -416,20 +407,36 @@ function DriverOrderCardView({
   const pal = resolveStatusPalette(item.statusTone, colors);
 
   const ctaPolicy = item.cta;
-  const ctaVariant = ctaPolicy.variant === "primary" ? "primary" : ctaPolicy.variant === "destructive" ? "destructive" : "secondary";
+  const ctaVariant =
+    ctaPolicy.variant === "primary"
+      ? "primary"
+      : ctaPolicy.variant === "destructive"
+        ? "destructive"
+        : "secondary";
 
   return (
-    <Pressable onPress={() => onPress(item)} style={({ pressed }) => [styles.cardPressable, pressed ? styles.cardPressed : null]}>
-      <AppCard style={styles.cardWrap} outlined={false}>
+    <Pressable
+      onPress={() => onPress(item)}
+      style={({ pressed }) => [styles.cardPressable, pressed ? styles.cardPressed : null]}
+    >
+      <AppCard style={styles.cardWrap} outlined={false} elevated>
         <View style={styles.cardTop}>
           <View style={[styles.badge, { backgroundColor: pal.bg }]}>
-            <AppText style={[styles.badgeText, { color: pal.text }]}>{item.statusLabel}</AppText>
+            <AppText variant="caption" weight="800" color={pal.text}>
+              {item.statusLabel}
+            </AppText>
           </View>
+
           <View style={styles.cardTopMeta}>
-            <AppText style={styles.timeText}>{item.requestedAtText || ""}</AppText>
-            <AppText style={styles.statusTitleText} numberOfLines={2}>
-                {item.statusTitle}
-              </AppText>
+            <AppText
+              variant="caption"
+              weight="700"
+              color="textMuted"
+              numberOfLines={1}
+              style={styles.timeText}
+            >
+              {item.requestedAtText || ""}
+            </AppText>
           </View>
         </View>
 
@@ -442,15 +449,33 @@ function DriverOrderCardView({
 
           <View style={styles.addressWrap}>
             <View style={styles.addressBlock}>
-              <AppText style={styles.addressLabel}>출발</AppText>
-              <AppText style={styles.addressText} numberOfLines={1}>
+              <AppText variant="caption" weight="800" color="textMuted" style={styles.addressLabel}>
+                출발
+              </AppText>
+              <AppText
+                variant="heading"
+                weight="900"
+                color="textMain"
+                numberOfLines={1}
+                style={styles.addressText}
+              >
                 {item.originAddress || "-"}
               </AppText>
             </View>
+
             <View style={styles.addressSpacer} />
+
             <View style={styles.addressBlock}>
-              <AppText style={styles.addressLabel}>도착</AppText>
-              <AppText style={styles.addressText} numberOfLines={1}>
+              <AppText variant="caption" weight="800" color="textMuted" style={styles.addressLabel}>
+                도착
+              </AppText>
+              <AppText
+                variant="heading"
+                weight="900"
+                color="textMain"
+                numberOfLines={1}
+                style={styles.addressText}
+              >
                 {item.destinationAddress || "-"}
               </AppText>
             </View>
@@ -459,7 +484,9 @@ function DriverOrderCardView({
           {item.routeDistanceText ? (
             <View style={styles.distanceWrap}>
               <View style={styles.distanceChip}>
-                <AppText style={styles.distanceText}>{item.routeDistanceText}</AppText>
+                <AppText variant="caption" weight="800" color="textSub">
+                  {item.routeDistanceText}
+                </AppText>
               </View>
             </View>
           ) : null}
@@ -469,19 +496,26 @@ function DriverOrderCardView({
           <View style={styles.tagWrap}>
             {item.tags.map((tag, idx) => (
               <View key={`${tag.label}-${idx}`} style={styles.specPill}>
-                <AppText style={styles.specText} numberOfLines={1}>
+                <AppText variant="caption" weight="700" color="textSub" numberOfLines={1}>
                   {tag.label}
                 </AppText>
               </View>
             ))}
           </View>
+
           <View style={styles.priceWrap}>
-            <AppText style={styles.priceLabel}>총 운임</AppText>
-            <AppText style={styles.priceVal}>{item.priceText || "-"}</AppText>
+            <AppText variant="caption" weight="800" color="textMuted">
+              총 운임
+            </AppText>
+            <AppText variant="title" weight="900" color="brandPrimary" style={styles.priceValText}>
+              {item.priceText || "-"}
+            </AppText>
           </View>
         </View>
 
-        {activeTab === "my" && item.uiState === DRIVER_UI_STATE.ASSIGNED && item.cta?.id !== DRIVER_CTA_ID.START_DRIVE ? (
+        {activeTab === "my" &&
+        item.uiState === DRIVER_UI_STATE.ASSIGNED &&
+        item.cta?.id !== DRIVER_CTA_ID.START_DRIVE ? (
           <View style={styles.prepareWrap}>
             <AppButton
               onPress={ctaPolicy.enabled ? () => onPrepareClick(item) : undefined}
@@ -498,7 +532,12 @@ function DriverOrderCardView({
   );
 }
 
-export function DriverOrdersBoard({ initialTab, assignedOnly, activeTab: controlledActiveTab, onChangeTab }: DriverOrdersBoardProps) {
+export function DriverOrdersBoard({
+  initialTab,
+  assignedOnly,
+  activeTab: controlledActiveTab,
+  onChangeTab,
+}: DriverOrdersBoardProps) {
   const router = useRouter();
   const theme = useAppTheme();
   const insets = useSafeAreaInsets();
@@ -526,6 +565,9 @@ export function DriverOrdersBoard({ initialTab, assignedOnly, activeTab: control
   const focusRefetchMetaRef = useRef({ hasFocusedOnce: false, lastRefetchAt: 0 });
   const themeColors = theme.colors as Record<string, string>;
 
+  const spacing = safeNumber(theme?.layout?.spacing?.base, 4);
+  const toastBottom = (insets?.bottom ?? 0) + spacing * 7;
+
   const showToast = useCallback((message: string) => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast({ visible: true, message });
@@ -541,30 +583,27 @@ export function DriverOrdersBoard({ initialTab, assignedOnly, activeTab: control
     };
   }, []);
 
-  const loadOrders = useCallback(
-    async (mode: "initial" | "refresh" = "initial") => {
-      if (isFetchInFlightRef.current) return;
-      isFetchInFlightRef.current = true;
+  const loadOrders = useCallback(async (mode: "initial" | "refresh" = "initial") => {
+    if (isFetchInFlightRef.current) return;
+    isFetchInFlightRef.current = true;
 
-      if (mode === "refresh") setIsRefreshing(true);
-      else setIsLoading(true);
+    if (mode === "refresh") setIsRefreshing(true);
+    else setIsLoading(true);
 
-      try {
-        const nextOverview = await loadDriverOrdersOverview();
-        setOverview(nextOverview);
-        setActiveFilter((prev) => (nextOverview.availableFilters.includes(prev) ? prev : "ALL"));
-        setErrorMessage(null);
-      } catch {
-        setOverview(EMPTY_OVERVIEW);
-        setErrorMessage(NETWORK_ERROR_TEXT);
-      } finally {
-        isFetchInFlightRef.current = false;
-        setIsLoading(false);
-        setIsRefreshing(false);
-      }
-    },
-    []
-  );
+    try {
+      const nextOverview = await loadDriverOrdersOverview();
+      setOverview(nextOverview);
+      setActiveFilter((prev) => (nextOverview.availableFilters.includes(prev) ? prev : "ALL"));
+      setErrorMessage(null);
+    } catch {
+      setOverview(EMPTY_OVERVIEW);
+      setErrorMessage(NETWORK_ERROR_TEXT);
+    } finally {
+      isFetchInFlightRef.current = false;
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  }, []);
 
   useEffect(() => {
     void loadOrders("initial");
@@ -591,7 +630,6 @@ export function DriverOrdersBoard({ initialTab, assignedOnly, activeTab: control
 
       meta.lastRefetchAt = now;
       void loadOrders("refresh");
-
       return undefined;
     }, [loadOrders])
   );
@@ -599,36 +637,27 @@ export function DriverOrdersBoard({ initialTab, assignedOnly, activeTab: control
   const filteredMarketOrders = useMemo(
     () =>
       overview.marketOrders.filter(
-        (item) =>
-          item.uiState === DRIVER_UI_STATE.READY_TO_ACCEPT &&
-          matchesDriverOrderFilter(item, activeFilter)
+        (item) => item.uiState === DRIVER_UI_STATE.READY_TO_ACCEPT && matchesDriverOrderFilter(item, activeFilter)
       ),
     [activeFilter, overview.marketOrders]
   );
 
   const filteredMyOrders = useMemo(
-    () =>
-      [...overview.myOrders, ...overview.runOrders].filter((item) => item.uiState === DRIVER_UI_STATE.ASSIGNED),
+    () => [...overview.myOrders, ...overview.runOrders].filter((item) => item.uiState === DRIVER_UI_STATE.ASSIGNED),
     [overview.myOrders, overview.runOrders]
   );
 
   const filteredRunOrders = useMemo(
     () =>
       overview.runOrders.filter(
-        (item) =>
-          item.uiState === DRIVER_UI_STATE.TRANSIT_IN_PROGRESS ||
-          item.uiState === DRIVER_UI_STATE.COMPLETED
+        (item) => item.uiState === DRIVER_UI_STATE.TRANSIT_IN_PROGRESS || item.uiState === DRIVER_UI_STATE.COMPLETED
       ),
     [overview.runOrders]
   );
 
   const visibleOrders = useMemo(() => {
-    if (resolvedActiveTab === "market") {
-      return filteredMarketOrders;
-    }
-    if (assignedOnly) {
-      return filteredRunOrders;
-    }
+    if (resolvedActiveTab === "market") return filteredMarketOrders;
+    if (assignedOnly) return filteredRunOrders;
     return filteredMyOrders;
   }, [assignedOnly, filteredMarketOrders, filteredMyOrders, filteredRunOrders, resolvedActiveTab]);
 
@@ -698,6 +727,7 @@ export function DriverOrdersBoard({ initialTab, assignedOnly, activeTab: control
 
   const renderListHeader = useCallback(() => {
     if (!showFilters) return null;
+
     return (
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
         {overview.availableFilters.map((f) => (
@@ -706,7 +736,10 @@ export function DriverOrdersBoard({ initialTab, assignedOnly, activeTab: control
             style={[styles.filterChip, activeFilter === f ? styles.filterChipActive : null]}
             onPress={() => setActiveFilter(f)}
           >
-            <AppText style={[styles.filterChipText, activeFilter === f ? styles.filterChipTextActive : null]}>
+            <AppText
+              style={[styles.filterChipText, activeFilter === f ? styles.filterChipTextActive : null]}
+              numberOfLines={1}
+            >
               {getDriverOrderFilterLabel(f)}
             </AppText>
           </Pressable>
@@ -729,10 +762,7 @@ export function DriverOrdersBoard({ initialTab, assignedOnly, activeTab: control
     [handlePrepareForDrive, handlePressCard, resolvedActiveTab, styles, themeColors]
   );
 
-  const keyExtractor = useCallback(
-    (item: DriverOrderCard) => `${resolvedActiveTab}:${item.cardKey}`,
-    [resolvedActiveTab]
-  );
+  const keyExtractor = useCallback((item: DriverOrderCard) => `${resolvedActiveTab}:${item.cardKey}`, [resolvedActiveTab]);
 
   return (
     <PageScaffold
@@ -755,14 +785,18 @@ export function DriverOrdersBoard({ initialTab, assignedOnly, activeTab: control
               style={[styles.tabBtn, resolvedActiveTab === "market" ? styles.tabBtnActive : null]}
               onPress={() => changeTab("market")}
             >
-              <AppText style={[styles.tabLabel, resolvedActiveTab === "market" ? styles.tabLabelActive : null]}>마켓</AppText>
+              <AppText style={[styles.tabLabel, resolvedActiveTab === "market" ? styles.tabLabelActive : null]}>
+                마켓
+              </AppText>
             </Pressable>
 
             <Pressable
               style={[styles.tabBtn, resolvedActiveTab === "my" ? styles.tabBtnActive : null]}
               onPress={() => changeTab("my")}
             >
-              <AppText style={[styles.tabLabel, resolvedActiveTab === "my" ? styles.tabLabelActive : null]}>내 오더</AppText>
+              <AppText style={[styles.tabLabel, resolvedActiveTab === "my" ? styles.tabLabelActive : null]}>
+                내 오더
+              </AppText>
               {filteredMyOrders.length > 0 ? (
                 <View style={styles.tabBadge}>
                   <AppText style={styles.tabBadgeText}>{filteredMyOrders.length}</AppText>
@@ -822,7 +856,7 @@ export function DriverOrdersBoard({ initialTab, assignedOnly, activeTab: control
       </View>
 
       {toast.visible ? (
-        <View style={[styles.toastWrap, { bottom: insets.bottom + 30 }]}>
+        <View style={[styles.toastWrap, { bottom: toastBottom }]}>
           <View style={styles.toastCard}>
             <AppText style={styles.toastText}>{toast.message}</AppText>
           </View>
