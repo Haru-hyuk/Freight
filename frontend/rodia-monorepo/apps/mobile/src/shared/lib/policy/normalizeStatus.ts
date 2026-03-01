@@ -1,6 +1,10 @@
 import { BACKEND_STATUS, type BackendStatus } from "./types";
 
-// Quote.status SSOT 매핑 (우선순위 최상단)
+/**
+ * 상태 정규화 정책
+ * - 여러 도메인(견적/매칭/레거시)의 원시 상태 문자열을 `BackendStatus`로 통일한다.
+ */
+// 견적 상태(`Quote.status`) 단일 기준 매핑 (우선순위 최상단)
 const QUOTE_STATUS_ALIAS: Readonly<Record<string, BackendStatus>> = {
   OPEN: BACKEND_STATUS.OPEN,
   MATCHED: BACKEND_STATUS.MATCHED,
@@ -10,7 +14,7 @@ const QUOTE_STATUS_ALIAS: Readonly<Record<string, BackendStatus>> = {
   CANCELED: BACKEND_STATUS.CANCELLED,
 };
 
-// Match.status fallback 매핑
+// 매칭 상태(`Match.status`) 보조 매핑
 const MATCH_STATUS_ALIAS: Readonly<Record<string, BackendStatus>> = {
   READY: BACKEND_STATUS.READY,
   IN_TRANSIT: BACKEND_STATUS.IN_TRANSIT,
@@ -26,6 +30,7 @@ const LEGACY_STATUS_ALIAS: Readonly<Record<string, BackendStatus>> = {
   DROPOFF: BACKEND_STATUS.DELIVERED,
 };
 
+// 입력 문자열을 매핑 키 형태(대문자/언더스코어)로 정규화
 function toStatusToken(rawStatus: string | null | undefined): string {
   return String(rawStatus ?? "")
     .trim()
@@ -34,6 +39,7 @@ function toStatusToken(rawStatus: string | null | undefined): string {
     .replace(/-/g, "_");
 }
 
+// 우선순위: 견적 → 매칭 → 레거시 → UNKNOWN
 export function normalizeStatus(rawStatus: string | null | undefined): BackendStatus {
   const token = toStatusToken(rawStatus);
   if (!token) return BACKEND_STATUS.UNKNOWN;

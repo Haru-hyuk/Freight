@@ -9,6 +9,12 @@ import {
   type CustomerUiState,
 } from "./types";
 
+/**
+ * 화주 정책
+ * - 상태 저장은 하지 않고, 주어진 상태를 기준으로 UI 결정을 반환한다.
+ * - 입력: `BackendStatus`, `CustomerUiState`
+ * - 출력: 행동 버튼, 상태 타이틀, 위치 조회 가능 여부
+ */
 const CUSTOMER_CTA_MAP: Readonly<Record<CustomerUiState, CustomerCtaConfig>> = {
   [CUSTOMER_UI_STATE.REQUESTED]: {
     id: CUSTOMER_CTA_ID.VIEW_DETAIL,
@@ -77,12 +83,12 @@ const LOCATION_VIEWABLE_STATE_SET: ReadonlySet<CustomerUiState> = new Set<Custom
 ]);
 
 // ── 정책표 (정규화된 BackendStatus → CustomerUiState) ────────────────────────
-// 백엔드 rawStatus 8종:
+// 백엔드 원본 상태값(`rawStatus`) 8종:
 //   OPEN      → OPEN             → REQUESTED
 //   MATCHED   → MATCHED          → PAYMENT_REQUIRED
 //   IN_TRANSIT → IN_TRANSIT      → TRANSIT_IN_PROGRESS
 //   DELIVERED → DELIVERED        → COMPLETED
-//   READY     → READY (Match)    → PAYMENT_REQUIRED
+//   READY     → READY (매칭)      → PAYMENT_REQUIRED
 //   COMPLETED → COMPLETED        → COMPLETED
 //   CANCELLED → CANCELLED        → CANCELED
 //   UNKNOWN   → UNKNOWN          → UNKNOWN
@@ -105,6 +111,7 @@ export function getCustomerCta(uiState: CustomerUiState): CustomerCtaConfig {
   return CUSTOMER_CTA_MAP[uiState] ?? CUSTOMER_CTA_MAP[CUSTOMER_UI_STATE.UNKNOWN];
 }
 
+// 화주 상태에 따른 상단 상태 문구 정책
 export function getCustomerStatusTitle(uiState: CustomerUiState, negotiatedAmount?: number): string {
   const baseTitle = CUSTOMER_STATUS_TITLE_MAP[uiState] ?? CUSTOMER_STATUS_TITLE_MAP[CUSTOMER_UI_STATE.UNKNOWN];
   if (uiState !== CUSTOMER_UI_STATE.NEGOTIATION_REQUIRED) return baseTitle;
@@ -112,13 +119,15 @@ export function getCustomerStatusTitle(uiState: CustomerUiState, negotiatedAmoun
   return `${baseTitle} (${formatKrw(negotiatedAmount ?? 0)})`;
 }
 
+// 화주가 실시간 위치를 볼 수 있는 상태 정책
 export function canCustomerViewLocation(uiState: CustomerUiState): boolean {
   return LOCATION_VIEWABLE_STATE_SET.has(uiState);
 }
 
 /**
- * Compat helper for legacy/mock paths where backend uiState is not available yet.
- * UI layer should consume uiState directly when backend contract is ready.
+ * 레거시/목 경로 호환을 위한 보조 함수입니다.
+ * 백엔드에서 `uiState`를 아직 제공하지 않는 경우를 대비합니다.
+ * 백엔드 계약이 준비되면 화면 계층은 변환 없이 `uiState`를 직접 사용해야 합니다.
  */
 export function getCustomerUiStateFromBackendStatus(rawStatus: string): CustomerUiState {
   const backendStatus = normalizeStatus(rawStatus);

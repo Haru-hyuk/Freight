@@ -7,6 +7,12 @@ import {
   type StateBadgePolicy,
 } from "./types";
 
+/**
+ * 화주 전용 배지 매핑
+ * - REQUESTED: 오더가 생성되어 기사에게 노출되기 시작한 초기 상태
+ * - ATTENTION: 화주가 가격 협의를 승인하거나 결제를 진행해야 하는 '액션 차례'
+ * - PROGRESS: 실제 운송 인프라(차량)가 움직이고 있는 실시간 상태
+ */
 const CUSTOMER_BADGE_MAP: Readonly<Record<CustomerUiState, StateBadgePolicy>> = {
   [CUSTOMER_UI_STATE.REQUESTED]: { label: "요청 접수", tone: BADGE_TONE.NEUTRAL },
   [CUSTOMER_UI_STATE.NEGOTIATION_REQUIRED]: { label: "협의 필요", tone: BADGE_TONE.ATTENTION },
@@ -17,7 +23,12 @@ const CUSTOMER_BADGE_MAP: Readonly<Record<CustomerUiState, StateBadgePolicy>> = 
   [CUSTOMER_UI_STATE.CANCELED]: { label: "요청 취소", tone: BADGE_TONE.CLOSED },
   [CUSTOMER_UI_STATE.UNKNOWN]: { label: "상태 확인", tone: BADGE_TONE.NEUTRAL },
 };
-
+/**
+ * 기사 전용 배지 매핑
+ * - READY_TO_ACCEPT: 수락 가능한 신규 오더 목록에 표시될 때 사용
+ * - NEGOTIATING: 기사가 역제안을 보낸 후 화주의 응답을 기다리는 중
+ * - ASSIGNED: 배차는 완료되었으나 화주의 결제가 완료되기 전 (실제 운송 시작 전 대기)
+ */
 const DRIVER_BADGE_MAP: Readonly<Record<DriverUiState, StateBadgePolicy>> = {
   [DRIVER_UI_STATE.READY_TO_ACCEPT]: { label: "요청 접수", tone: BADGE_TONE.NEUTRAL },
   [DRIVER_UI_STATE.NEGOTIATING]: { label: "협상 중", tone: BADGE_TONE.ATTENTION },

@@ -1,9 +1,9 @@
 ﻿import React from "react";
 
 import { useActiveOrder } from "@/entities/order/model/active-order.store";
+import { DriverOrdersBoard } from "@/features/driver-orders/ui/DriverOrdersBoard";
 import { PrepareForRunScreen } from "@/features/driver-run/ui/PrepareForRunScreen";
 import { RunActiveDetails } from "@/features/driver-run/ui/RunActiveDetails";
-import { DriverOrdersBoard } from "@/widgets/driver-orders/DriverOrdersBoard";
 import {
   getDriverBadge,
   getDriverCta,

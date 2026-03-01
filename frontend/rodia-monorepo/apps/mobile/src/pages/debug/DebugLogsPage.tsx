@@ -330,19 +330,19 @@ export default function DebugLogsPage() {
     setIsRunSampleLoading(true);
     try {
       const overview = await loadDriverOrdersOverview();
-      const sampleCard = overview.myOrders[0] ?? overview.marketOrders[0] ?? null;
+      const sampleCard = overview.runOrders[0] ?? null;
       if (!sampleCard) {
-        router.push("/(driver-stack)/run/current");
+        router.push("/(driver)/run");
         return;
       }
 
       const { id } = buildDriverOrderDetailParams(sampleCard);
       router.push({
-        pathname: "/(driver-stack)/run/[id]",
+        pathname: "/(driver)/(stack)/run/[id]",
         params: { id },
       });
     } catch {
-      router.push("/(driver-stack)/run/current");
+      router.push("/(driver)/run");
     } finally {
       setIsRunSampleLoading(false);
     }

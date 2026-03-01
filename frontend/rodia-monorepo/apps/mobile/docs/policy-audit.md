@@ -5,7 +5,7 @@
 - 백엔드 상태값(enum/union) 감사의 대체가 아닙니다.
 
 ## 사용 방법
-- 앱에서 `/(driver-stack)/policy-audit` 경로로 직접 진입합니다.
+- 앱에서 `/(driver)/(stack)/policy-audit` 경로로 직접 진입합니다.
 - `rawStatus`를 입력하고 `계산`을 눌러 결과를 확인합니다.
 
 ## 정책 체인

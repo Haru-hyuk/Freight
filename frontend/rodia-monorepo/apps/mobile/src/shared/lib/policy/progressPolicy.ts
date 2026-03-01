@@ -1,6 +1,10 @@
 import { normalizeStatus } from "./normalizeStatus";
 import { BACKEND_STATUS, type BackendStatus, type ProgressStep } from "./types";
 
+/**
+ * 운송 진행도 정책
+ * - 입력 `rawStatus`를 `BackendStatus`로 정규화한 뒤, 진행 단계 인덱스를 반환한다.
+ */
 export const DELIVERY_PROGRESS_STEPS: readonly ProgressStep[] = [
   { key: "REQUEST", label: "요청 접수" },
   { key: "ASSIGNED", label: "배차 확정" },
@@ -20,6 +24,7 @@ const ACTIVE_STEP_INDEX_BY_STATUS: Readonly<Record<BackendStatus, number>> = {
   [BACKEND_STATUS.UNKNOWN]: 0,        // 미지: 초기 상태로
 };
 
+// 진행도 바의 활성 단계 인덱스 계산
 export function getActiveStepIndex(rawStatus: string): number {
   const backendStatus = normalizeStatus(rawStatus);
   return ACTIVE_STEP_INDEX_BY_STATUS[backendStatus] ?? 0;

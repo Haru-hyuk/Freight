@@ -488,7 +488,7 @@ export function DriverOrdersBoard({ initialTab, assignedOnly, activeTab: control
       const { id } = buildDriverOrderDetailParams(card);
       const source = resolvedActiveTab === "market" ? "market" : assignedOnly ? "run" : "my";
       router.push({
-        pathname: "/(driver-stack)/run/[id]",
+        pathname: assignedOnly ? "/(driver)/(stack)/run/[id]" : "/(driver)/(stack)/order/[id]",
         params: { id, source },
       });
 

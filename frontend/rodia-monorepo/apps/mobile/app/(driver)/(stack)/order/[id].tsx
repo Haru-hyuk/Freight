@@ -17,13 +17,13 @@ import { safeNumber, safeString } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppErrorState } from "@/shared/ui/kit/AppErrorState";
 import { AppSpinner } from "@/shared/ui/kit/AppSpinner";
+import { DriverOrderActionBar } from "@/features/driver-orders/ui/detail/DriverOrderActionBar";
+import { DriverOrderDetailHeader } from "@/features/driver-orders/ui/detail/DriverOrderDetailHeader";
+import { DriverOrderNegotiatingCard } from "@/features/driver-orders/ui/detail/DriverOrderNegotiatingCard";
+import { DriverOrderPaymentPendingCard } from "@/features/driver-orders/ui/detail/DriverOrderPaymentPendingCard";
 import { PageScaffold } from "@/widgets/layout/PageScaffold";
-import { DriverOrderActionBar } from "@/widgets/driver-orders/ui/detail/DriverOrderActionBar";
-import { DriverOrderDetailHeader } from "@/widgets/driver-orders/ui/detail/DriverOrderDetailHeader";
-import { DriverOrderNegotiatingCard } from "@/widgets/driver-orders/ui/detail/DriverOrderNegotiatingCard";
-import { DriverOrderPaymentPendingCard } from "@/widgets/driver-orders/ui/detail/DriverOrderPaymentPendingCard";
 
-type DriverRunRouteParams = {
+type DriverOrderRouteParams = {
   id?: string | string[];
   source?: string | string[];
 };
@@ -52,11 +52,11 @@ function parsePositiveRouteId(rawId: string | string[] | undefined): number {
 function normalizeSource(rawSource: string | string[] | undefined): "market" | "my" | "run" {
   const candidate = Array.isArray(rawSource) ? rawSource[0] : rawSource;
   if (candidate === "market" || candidate === "my" || candidate === "run") return candidate;
-  return "run";
+  return "my";
 }
 
-export default function DriverRunRoute() {
-  const params = useLocalSearchParams<DriverRunRouteParams>();
+export default function DriverOrderDetailRoute() {
+  const params = useLocalSearchParams<DriverOrderRouteParams>();
   const router = useRouter();
   const styles = useStyles();
   const theme = useAppTheme();
@@ -64,8 +64,6 @@ export default function DriverRunRoute() {
   const matchId = parsePositiveRouteId(params.id);
   const source = normalizeSource(params.source);
   const isMarket = source === "market";
-  const title = isMarket ? "오더 상세" : "운송 상세";
-  const subtitle = isMarket ? "오더 정보 확인" : "운송 정보 확인";
   const viewModel = useMatchDetail(matchId);
 
   useFocusEffect(
@@ -88,16 +86,16 @@ export default function DriverRunRoute() {
   if (matchId <= 0) {
     return (
       <PageScaffold
-        title={title}
-        subtitle={subtitle}
+        title="오더 상세"
+        subtitle="오더 정보 확인"
         scroll={false}
         padding={20}
         onPressBack={() => router.back()}
       >
         <View style={styles.stateWrap}>
           <AppErrorState
-            title="유효한 운송 ID가 아닙니다."
-            description="목록에서 운송을 다시 선택해 주세요."
+            title="유효한 오더 ID가 아닙니다."
+            description="목록에서 오더를 다시 선택해 주세요."
             retryLabel="뒤로 가기"
             onRetry={() => router.back()}
             fullScreen={false}
@@ -123,15 +121,15 @@ export default function DriverRunRoute() {
   if (viewModel.isLoading || (!viewModel.match && !viewModel.errorMessage)) {
     return (
       <PageScaffold
-        title={title}
-        subtitle={subtitle}
+        title="오더 상세"
+        subtitle="오더 정보 확인"
         scroll={false}
         padding={20}
         onPressBack={() => router.back()}
         headerRight={headerRight}
       >
         <View style={styles.stateWrap}>
-          <AppSpinner label="운송 상세를 불러오는 중입니다." />
+          <AppSpinner label="오더 상세를 불러오는 중입니다." />
         </View>
       </PageScaffold>
     );
@@ -140,8 +138,8 @@ export default function DriverRunRoute() {
   if (viewModel.errorMessage) {
     return (
       <PageScaffold
-        title={title}
-        subtitle={subtitle}
+        title="오더 상세"
+        subtitle="오더 정보 확인"
         scroll={false}
         padding={20}
         onPressBack={() => router.back()}
@@ -149,7 +147,7 @@ export default function DriverRunRoute() {
       >
         <View style={styles.stateWrap}>
           <AppErrorState
-            title="운송 상세를 불러오지 못했습니다."
+            title="오더 상세를 불러오지 못했습니다."
             description={viewModel.errorMessage}
             retryLabel="다시 시도"
             onRetry={() => {
@@ -165,15 +163,15 @@ export default function DriverRunRoute() {
   if (!viewModel.match) {
     return (
       <PageScaffold
-        title={title}
-        subtitle={subtitle}
+        title="오더 상세"
+        subtitle="오더 정보 확인"
         scroll={false}
         padding={20}
         onPressBack={() => router.back()}
         headerRight={headerRight}
       >
         <View style={styles.stateWrap}>
-          <AppSpinner label="운송 상세를 불러오는 중입니다." />
+          <AppSpinner label="오더 상세를 불러오는 중입니다." />
         </View>
       </PageScaffold>
     );
@@ -188,8 +186,8 @@ export default function DriverRunRoute() {
 
   return (
     <PageScaffold
-      title={title}
-      subtitle={subtitle}
+      title="오더 상세"
+      subtitle="오더 정보 확인"
       scroll
       padding={20}
       onPressBack={() => router.back()}

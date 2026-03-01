@@ -10,13 +10,19 @@ import {
 } from "./types";
 import { getPhotoGatePendingCtaLabel, shouldBlockDriverPrimaryActionForPhotoGate } from "./photoGatePolicy";
 
+/**
+ * 기사 정책
+ * - 상태를 보고 기사 화면의 행동/문구/정렬 우선순위를 결정한다.
+ * - 입력: `BackendStatus`, `DriverUiState`, `photoGatePassed`
+ * - 출력: 도메인 분류, 행동 버튼, 상태 타이틀, 정렬 우선순위
+ */
 // ── 정책표 (정규화된 BackendStatus → DriverUiState) ──────────────────────────
-// 백엔드 rawStatus 8종:
+// 백엔드 원본 상태값(`rawStatus`) 8종:
 //   OPEN      → OPEN             → READY_TO_ACCEPT
 //   MATCHED   → MATCHED          → ASSIGNED
 //   IN_TRANSIT → IN_TRANSIT      → TRANSIT_IN_PROGRESS
 //   DELIVERED → DELIVERED        → COMPLETED
-//   READY     → READY (Match)    → ASSIGNED
+//   READY     → READY (매칭)      → ASSIGNED
 //   COMPLETED → COMPLETED        → COMPLETED
 //   CANCELLED → CANCELLED        → CANCELED
 //   UNKNOWN   → UNKNOWN          → UNKNOWN
@@ -106,6 +112,7 @@ const DRIVER_ORDER_SORT_PRIORITY_MAP: Readonly<Record<DriverUiState, number>> = 
 
 export type DriverDomain = "market" | "my" | "run" | "unknown";
 
+// 백엔드 상태를 기사 탭 도메인(마켓/내오더/운행)으로 분류하는 정책
 export function getDriverDomain(backendStatus: BackendStatus): DriverDomain {
   if (backendStatus === BACKEND_STATUS.OPEN) return "market";
   if (backendStatus === BACKEND_STATUS.MATCHED || backendStatus === BACKEND_STATUS.READY) return "my";
@@ -123,6 +130,7 @@ export function getDriverCta(
   uiState: DriverUiState,
   photoGatePassed: boolean,
 ): DriverCtaConfig {
+  // 사진 게이트 미통과 시, 주행 관련 주요 액션을 강제로 차단한다.
   if (shouldBlockDriverPrimaryActionForPhotoGate(uiState, photoGatePassed)) {
     return {
       id: DRIVER_CTA_ID.PHOTO_GATE_PENDING,
@@ -135,17 +143,20 @@ export function getDriverCta(
   return DRIVER_DEFAULT_CTA_MAP[uiState] ?? DRIVER_DEFAULT_CTA_MAP[DRIVER_UI_STATE.UNKNOWN];
 }
 
+// 기사 상태에 따른 상단 상태 문구 정책
 export function getDriverStatusTitle(uiState: DriverUiState): string {
   return DRIVER_STATUS_TITLE_MAP[uiState] ?? DRIVER_STATUS_TITLE_MAP[DRIVER_UI_STATE.UNKNOWN];
 }
 
+// 기사 오더 목록 정렬 우선순위 정책(숫자가 작을수록 먼저 노출)
 export function getDriverOrderSortPriority(uiState: DriverUiState): number {
   return DRIVER_ORDER_SORT_PRIORITY_MAP[uiState] ?? DRIVER_ORDER_SORT_PRIORITY_MAP[DRIVER_UI_STATE.UNKNOWN];
 }
 
 /**
- * Compat helper for legacy/mock paths where backend uiState is not available yet.
- * UI layer should consume uiState directly when backend contract is ready.
+ * 레거시/목 경로 호환을 위한 보조 함수입니다.
+ * 백엔드에서 `uiState`를 아직 제공하지 않는 경우를 대비합니다.
+ * 백엔드 계약이 준비되면 화면 계층은 변환 없이 `uiState`를 직접 사용해야 합니다.
  */
 export function getDriverUiStateFromBackendStatus(rawStatus: string): DriverUiState {
   const backendStatus = normalizeStatus(rawStatus);
