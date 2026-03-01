@@ -8,8 +8,7 @@ import {
   getDriverBadge,
   getDriverCta,
   getDriverStatusTitle,
-  getDriverUiStateFromBackendStatus,
-  normalizeStatus,
+  getDriverUiStateFromRawStatus,
 } from "@/shared/lib/policy";
 
 export default function DriverRunPage() {
@@ -25,8 +24,7 @@ export default function DriverRunPage() {
 
   // Any other status on an active order implies it's in progress.
   const rawStatus = typeof activeOrder.status === "string" ? activeOrder.status : "";
-  const backendStatus = normalizeStatus(rawStatus);
-  const uiState = getDriverUiStateFromBackendStatus(rawStatus);
+  const uiState = getDriverUiStateFromRawStatus(rawStatus);
   const badge = getDriverBadge(uiState);
   const driverStatusTitle = getDriverStatusTitle(uiState);
   const driverCta = getDriverCta(uiState, true);

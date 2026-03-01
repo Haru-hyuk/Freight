@@ -10,7 +10,7 @@ import {
   DRIVER_CTA_ID,
   DRIVER_UI_STATE,
   getDriverCta,
-  getDriverUiStateFromBackendStatus,
+  getDriverUiStateFromRawStatus,
   normalizeStatus,
 } from "@/shared/lib/policy";
 import { safeNumber, safeString } from "@/shared/theme/colorUtils";
@@ -177,11 +177,11 @@ export default function DriverOrderDetailRoute() {
     );
   }
 
-  const rawStatus = viewModel.match.status ?? "";
+  const rawStatus = String(viewModel.quote?.status ?? viewModel.match.status ?? "");
   const normalized = normalizeStatus(rawStatus);
   const effectiveRawStatus =
     isMarket && normalized === BACKEND_STATUS.READY ? BACKEND_STATUS.OPEN : rawStatus;
-  const uiState = getDriverUiStateFromBackendStatus(effectiveRawStatus);
+  const uiState = getDriverUiStateFromRawStatus(effectiveRawStatus);
   const cta = getDriverCta(uiState, true);
 
   return (

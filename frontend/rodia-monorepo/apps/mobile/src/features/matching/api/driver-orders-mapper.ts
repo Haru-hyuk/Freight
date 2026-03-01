@@ -3,7 +3,7 @@ import {
   getDriverCta,
   getDriverBadge,
   getDriverOrderSortPriority,
-  getDriverUiStateFromBackendStatus,
+  getDriverUiStateFromRawStatus,
 } from "@/shared/lib/policy";
 import { formatDateTime, formatDistance, formatKrw } from "@/shared/lib/format/display";
 import {
@@ -136,7 +136,7 @@ export function mapDriverOrderCard(input: DriverOrderCardMapperInput): DriverOrd
   const mockDecoration = mode === "mock" ? selectMockFlowDriverOrderDecoration(seed, scope) : null;
 
   const rawStatus = resolveDriverOrderRawStatus(status, quote);
-  const uiState = getDriverUiStateFromBackendStatus(rawStatus);
+  const uiState = getDriverUiStateFromRawStatus(rawStatus);
   const statusBadge = getDriverBadge(uiState);
   const cta = getDriverCta(uiState, true);
   const statusLabel = statusBadge.label;

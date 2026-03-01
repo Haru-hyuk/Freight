@@ -162,3 +162,23 @@ export function getDriverUiStateFromBackendStatus(rawStatus: string): DriverUiSt
   const backendStatus = normalizeStatus(rawStatus);
   return DRIVER_UI_STATE_BY_BACKEND_STATUS[backendStatus] ?? DRIVER_UI_STATE.UNKNOWN;
 }
+
+/**
+ * Driver 전용 rawStatus 보정 함수
+ * - QuoteStatusApi/ActiveOrder.status 등에서 들어오는 상태 문자열을 DriverUiState로 직접 매핑한다.
+ * - 알 수 없는 값은 기존 BackendStatus 정규화 경로로 폴백한다.
+ */
+export function getDriverUiStateFromRawStatus(rawStatus: string): DriverUiState {
+  const token = String(rawStatus ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "_")
+    .replace(/-/g, "_");
+
+  if (token === "NEGOTIATING") return DRIVER_UI_STATE.NEGOTIATING;
+  if (token === "PICKUP") return DRIVER_UI_STATE.PICKUP_IN_PROGRESS;
+  if (token === "PREPARING") return DRIVER_UI_STATE.PICKUP_IN_PROGRESS;
+  if (token === "DRIVING") return DRIVER_UI_STATE.TRANSIT_IN_PROGRESS;
+
+  return getDriverUiStateFromBackendStatus(rawStatus);
+}
