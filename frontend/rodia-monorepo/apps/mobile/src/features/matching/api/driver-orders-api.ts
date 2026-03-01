@@ -4,6 +4,7 @@ import { getDriverMatchMode } from "@/shared/lib/config/env";
 import type { BadgeTone, DriverCtaConfig, DriverUiState } from "@/shared/lib/policy";
 import { BACKEND_STATUS, normalizeStatus } from "@/shared/lib/policy";
 import {
+  getMockFlowShipperQuoteDetail,
   selectMockFlowAiRecommendedDecoration,
   waitRandom,
   type MockFlowDriverOrderTagKey,
@@ -311,6 +312,12 @@ function toQuoteDetailFromDriverSummary(
 export async function getDriverQuoteSummaryDetail(quoteId: number): Promise<QuoteDetailResponse | null> {
   const safeQuoteId = parseDriverOrderPositiveInt(quoteId);
   if (safeQuoteId <= 0) return null;
+
+  if (getDriverMatchMode() === "mock") {
+    const mockQuoteDetail = getMockFlowShipperQuoteDetail(safeQuoteId);
+    if (!mockQuoteDetail) return null;
+    return mockQuoteDetail as unknown as QuoteDetailResponse;
+  }
 
   try {
     const raw = (await getQuoteSummary(safeQuoteId)) as unknown;
