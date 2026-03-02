@@ -24,6 +24,8 @@ function pickActiveKey(segments: readonly string[] | undefined | null): BottomTa
       return "run";
     case "settlement":
       return "settlement";
+    case "settings":
+      return "profile";
     case "profile":
       return "profile";
     case "home":

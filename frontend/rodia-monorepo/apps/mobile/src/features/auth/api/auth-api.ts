@@ -614,6 +614,8 @@ export type MeProfile = {
   email?: string;
   name?: string;
   phone?: string;
+  bankName?: string;
+  bankAccount?: string;
 };
 
 export async function getMeProfile(): Promise<MeProfile | null> {
@@ -626,6 +628,8 @@ export async function getMeProfile(): Promise<MeProfile | null> {
       email: tokenUser?.email ?? "shipper@rodia.co.kr",
       name: tokenUser?.name ?? "로디아 화주",
       phone: "",
+      bankName: "",
+      bankAccount: "",
     };
   }
 
@@ -640,6 +644,8 @@ export async function getMeProfile(): Promise<MeProfile | null> {
       email: pickString(source?.email),
       name: pickString(source?.name),
       phone: pickString(source?.phone),
+      bankName: pickString(source?.bankName),
+      bankAccount: pickString(source?.bankAccount),
     };
   } catch {
     return null;
