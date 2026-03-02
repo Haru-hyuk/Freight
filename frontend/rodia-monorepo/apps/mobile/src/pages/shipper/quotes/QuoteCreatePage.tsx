@@ -179,7 +179,7 @@ function QuoteCreatePageInner() {
   const [bottomBarHeight, setBottomBarHeight] = useState(100);
   const [isSubmitDoneOpen, setIsSubmitDoneOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [previewPrice, setPreviewPrice] = useState<number | null>(null);
+  const [_previewPrice, setPreviewPrice] = useState<number | null>(null);
   const [createdQuoteIdentifier, setCreatedQuoteIdentifier] = useState("");
 
   const pricing = useMemo(() => computeQuotePricing(draft), [draft]);
@@ -245,8 +245,8 @@ function QuoteCreatePageInner() {
         if (canceled) return;
 
         const weighted = Number(preview?.estimatedWeightedPrice ?? NaN);
-        const min = Number(preview?.estimatedMinPrice ?? NaN);
-        const max = Number(preview?.estimatedMaxPrice ?? NaN);
+        const _min = Number(preview?.estimatedMinPrice ?? NaN);
+        const _max = Number(preview?.estimatedMaxPrice ?? NaN);
         const candidate = Number.isFinite(weighted) && weighted > 0
           ? weighted
           : Number(preview?.estimatedMaxPrice ?? preview?.estimatedMinPrice ?? NaN);

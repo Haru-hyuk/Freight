@@ -1,4 +1,4 @@
-// apps/mobile/src/features/matching/api/usage-history-mapper.ts
+import type { ParsedUsageHistoryItem } from "../ui/UsageHistoryCard";
 
 export type BackendStatus =
   | "OPEN"
@@ -29,16 +29,7 @@ export interface CustomerCtaConfig {
 }
 
 export interface DeriveCustomerUiStateInput {
-  /**
-   * 서버 응답이 단일 status 필드만 제공하는 경우 사용
-   * - 예: item.status
-   */
   rawStatus?: string | null;
-
-  /**
-   * 향후 서버가 quote/match 상태를 분리 제공할 경우 사용
-   * - 예: quote.status / match.status
-   */
   rawQuoteStatus?: string | null;
   rawMatchStatus?: string | null;
 }
@@ -58,8 +49,8 @@ function sanitizeToken(raw: string): string {
 
 /**
  * Step 1) Backend Raw -> BackendStatus (정규화)
- * - 대소문자/특수문자 제거 후 토큰 기반 매핑
- * - READY와 MATCHED를 반드시 분리 인식(READY 우선)
+ * - READY/MATCHED 분리 인식
+ * - UsageHistory에서 quote/match/legacy 문자열이 섞여 들어와도 안전하게 흡수
  */
 export function normalizeStatus(raw?: string | null): BackendStatus {
   if (!raw) return "UNKNOWN";
@@ -67,34 +58,41 @@ export function normalizeStatus(raw?: string | null): BackendStatus {
   const v = sanitizeToken(raw);
   if (!v) return "UNKNOWN";
 
-  // cancelled 계열 (CANCELED/ CANCELLED / CANCEL 등)
   if (v.includes("CANCEL")) return "CANCELLED";
 
-  // delivered/completed 계열
-  if (v.includes("DELIVER")) return "DELIVERED";
-  if (v === "COMPLETED" || v.includes("COMPLETE")) return "COMPLETED";
+  // 완료 계열
+  if (v.includes("DROPOFF") || v.includes("DELIVER")) return "DELIVERED";
+  if (v === "COMPLETED" || v.includes("DONE") || v.includes("FINISH") || v.includes("COMPLETE")) return "COMPLETED";
 
-  // in_transit 계열
+  // 운송중 계열
   if (v.includes("IN_TRANSIT") || v.includes("INTRANSIT")) return "IN_TRANSIT";
-  if (v.includes("TRANSIT") && (v.includes("IN") || v.startsWith("IN_"))) return "IN_TRANSIT";
+  if (v.includes("DRIV") || v.includes("DRIVING")) return "IN_TRANSIT";
+  if (v.includes("TRANSIT") && (v.includes("IN") || v.startsWith("IN_") || v === "TRANSIT")) return "IN_TRANSIT";
 
-  // READY 우선(기존 MATCHED로 뭉뚱그려지는 문제 방지)
+  // 결제 대기(매칭 READY) 계열
   if (v.includes("READY")) return "READY";
 
-  // matched 계열
+  // 배차/상차 이동 계열 (quote MATCHED/ASSIGNED/ACCEPTED/PREPARING/PICKUP 등)
   if (v.includes("MATCH")) return "MATCHED";
+  if (v.includes("ASSIGN") || v.includes("ACCEPT")) return "MATCHED";
+  if (v.includes("PREPAR")) return "MATCHED";
+  if (v.includes("PICKUP")) return "MATCHED";
 
-  // open/request 계열
+  // 요청 접수 계열
   if (v.includes("OPEN") || v.includes("REQUEST")) return "OPEN";
 
   return "UNKNOWN";
 }
 
+/**
+ * 상태 우선순위 (UsageHistory 표기 기준)
+ * - READY(결제대기) < MATCHED(상차지 이동) < IN_TRANSIT < 완료
+ */
 const statusRank: Record<BackendStatus, number> = {
   UNKNOWN: 0,
   OPEN: 10,
-  MATCHED: 20,
-  READY: 30,
+  READY: 20,
+  MATCHED: 30,
   IN_TRANSIT: 40,
   DELIVERED: 50,
   COMPLETED: 50,
@@ -102,13 +100,14 @@ const statusRank: Record<BackendStatus, number> = {
 };
 
 function pickMostRelevantStatus(statuses: BackendStatus[]): BackendStatus {
-  // CANCELLED는 항상 최우선
-  if (statuses.includes("CANCELLED")) return "CANCELLED";
+  const filtered = statuses.filter((s) => s !== "UNKNOWN");
+  if (!filtered.length) return "UNKNOWN";
+  if (filtered.includes("CANCELLED")) return "CANCELLED";
 
   let best: BackendStatus = "UNKNOWN";
   let bestRank = -1;
 
-  for (const s of statuses) {
+  for (const s of filtered) {
     const r = statusRank[s] ?? 0;
     if (r > bestRank) {
       best = s;
@@ -120,7 +119,7 @@ function pickMostRelevantStatus(statuses: BackendStatus[]): BackendStatus {
 }
 
 /**
- * Step 2) BackendStatus -> CustomerUiState (비즈니스 로직)
+ * Step 2) BackendStatus -> CustomerUiState (UsageHistory 비즈니스 로직)
  */
 export function mapBackendStatusToCustomerUiState(status: BackendStatus): CustomerUiState {
   switch (status) {
@@ -142,29 +141,59 @@ export function mapBackendStatusToCustomerUiState(status: BackendStatus): Custom
   }
 }
 
-/**
- * 단일 status 응답/분리 status 응답 모두 대응하는 최종 파이프라인
- */
 export function deriveCustomerUiState(input: DeriveCustomerUiStateInput): DeriveCustomerUiStateResult {
   const candidates: BackendStatus[] = [];
 
-  const rawStatus = input.rawStatus ?? null;
-  const rawQuoteStatus = input.rawQuoteStatus ?? null;
-  const rawMatchStatus = input.rawMatchStatus ?? null;
+  if (input.rawStatus) candidates.push(normalizeStatus(input.rawStatus));
+  if (input.rawQuoteStatus) candidates.push(normalizeStatus(input.rawQuoteStatus));
+  if (input.rawMatchStatus) candidates.push(normalizeStatus(input.rawMatchStatus));
 
-  if (rawStatus) candidates.push(normalizeStatus(rawStatus));
-  if (rawQuoteStatus) candidates.push(normalizeStatus(rawQuoteStatus));
-  if (rawMatchStatus) candidates.push(normalizeStatus(rawMatchStatus));
-
-  const backendStatus = pickMostRelevantStatus(candidates.length ? candidates : ["UNKNOWN"]);
+  const backendStatus = pickMostRelevantStatus(candidates);
   const uiState = mapBackendStatusToCustomerUiState(backendStatus);
 
   return { backendStatus, uiState };
 }
 
+export function getUsageHistoryStatusTone(uiState: CustomerUiState): ParsedUsageHistoryItem["statusTone"] {
+  if (uiState === "COMPLETED") return "secondary";
+  if (uiState === "CANCELED") return "destructive";
+  if (uiState === "PAYMENT_REQUIRED") return "accent";
+  if (uiState === "PICKUP_IN_PROGRESS" || uiState === "TRANSIT_IN_PROGRESS") return "primary";
+  return "neutral";
+}
+
 /**
- * 카드 상단 "상태 뱃지" (짧은 라벨)
+ * MatchingListPage에서 (match, quoteDetail) 두 인자를 넘기므로 시그니처 유지
  */
+export function mapToUsageHistoryItem(match: any, quote?: any): ParsedUsageHistoryItem {
+  const rawMatchStatus: string | null = typeof match?.status === "string" ? match.status : null;
+  const rawQuoteStatus: string | null = typeof quote?.status === "string" ? quote.status : null;
+
+  const { backendStatus, uiState } = deriveCustomerUiState({
+    rawMatchStatus,
+    rawQuoteStatus,
+    rawStatus: rawMatchStatus ?? rawQuoteStatus,
+  });
+
+  const statusTone = getUsageHistoryStatusTone(uiState);
+  const status = rawMatchStatus ?? rawQuoteStatus ?? backendStatus;
+
+  return {
+    id: String(match?.id ?? match?.matchId ?? match?.quoteId ?? quote?.id ?? quote?.quoteId ?? Math.random()),
+    quoteId: Number(match?.quoteId ?? quote?.quoteId ?? quote?.id ?? 0),
+    matchId: Number(match?.matchId ?? match?.id ?? 0) || undefined,
+    status,
+    backendStatus,
+    uiState,
+    statusTone,
+    originAddress: String(match?.originAddress ?? quote?.originAddress ?? "상차지 미정"),
+    destinationAddress: String(match?.destinationAddress ?? quote?.destinationAddress ?? "하차지 미정"),
+    priceText: String(match?.priceText ?? quote?.priceText ?? "0원"),
+    vehicleText: String(match?.vehicleText ?? quote?.vehicleText ?? "차량 정보 없음"),
+    dateText: String(match?.dateText ?? quote?.dateText ?? ""),
+  };
+}
+
 export function getCustomerStatusBadgeLabel(uiState: CustomerUiState): string {
   switch (uiState) {
     case "REQUESTED":
@@ -184,9 +213,6 @@ export function getCustomerStatusBadgeLabel(uiState: CustomerUiState): string {
   }
 }
 
-/**
- * 상태별 마이크로카피(진행형 문장)
- */
 export function getCustomerStatusTitle(uiState: CustomerUiState): string {
   switch (uiState) {
     case "REQUESTED":
@@ -206,9 +232,6 @@ export function getCustomerStatusTitle(uiState: CustomerUiState): string {
   }
 }
 
-/**
- * 컨텍스트 기반 CTA 정책
- */
 export function getCustomerCta(uiState: CustomerUiState): CustomerCtaConfig | null {
   switch (uiState) {
     case "PAYMENT_REQUIRED":
