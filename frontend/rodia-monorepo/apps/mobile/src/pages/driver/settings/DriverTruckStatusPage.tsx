@@ -19,8 +19,8 @@ function createStyles(theme: AppTheme) {
     card: {
       borderRadius: 14,
       borderWidth: 1,
-      borderColor: theme.colors.border,
-      backgroundColor: theme.colors.bgCard,
+      borderColor: theme.colors.borderDefault,
+      backgroundColor: theme.colors.bgSurface,
       padding: 14,
       gap: 8,
     },
