@@ -21,12 +21,15 @@ import {
   getDriverQuoteSummaryDetail,
   loadDriverOrdersOverview,
   matchesDriverOrderFilter,
+  postCounterOffer,
   probeDriverOrderDetailAccess,
   type DriverOrderCard,
   type DriverOrderFilterKey,
   type DriverOrdersOverview,
   type DriverOrdersTabKey,
 } from "@/features/matching/api";
+import CounterOfferModal, { type CounterOfferSubmitPayload } from "@/features/matching/ui/CounterOfferModal";
+import { formatKrw } from "@/shared/lib/format/display";
 import {
   BADGE_TONE,
   DRIVER_CTA_ID,
@@ -321,6 +324,40 @@ const useStyles = createThemedStyles((theme) => {
       minHeight: safeNumber(buttonLg?.minHeight, spacing * 13),
       borderRadius: safeNumber(buttonLg?.radius, radiusControl),
     },
+    dualCtaRow: {
+      marginTop: spacing * 4,
+      flexDirection: "row",
+      gap: spacing * 2,
+    },
+    dualCtaButton: {
+      flex: 1,
+      minHeight: safeNumber(buttonLg?.minHeight, spacing * 13),
+      borderRadius: safeNumber(buttonLg?.radius, radiusControl),
+    },
+    negotiatingMetaWrap: {
+      marginTop: spacing * 4,
+      padding: spacing * 3,
+      borderRadius: radiusControl,
+      backgroundColor: tint(cTextMuted, 0.06, cSurfaceAlt),
+      gap: spacing * 1.5,
+    },
+    negotiatingMetaRow: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      justifyContent: "space-between",
+      gap: spacing * 2,
+    },
+    negotiatingMetaLabel: {
+      flexShrink: 0,
+    },
+    negotiatingMetaValue: {
+      flex: 1,
+      textAlign: "right",
+    },
+    negotiatingMetaMessage: {
+      flex: 1,
+      textAlign: "right",
+    },
 
     filterScroll: {
       flexDirection: "row",
@@ -394,7 +431,9 @@ function DriverOrderCardView({
   item,
   onPress,
   onAcceptClick,
+  onOfferClick,
   acceptingMatchId,
+  isSubmittingOffer,
   activeTab,
   onPrepareClick,
   styles,
@@ -403,7 +442,9 @@ function DriverOrderCardView({
   item: DriverOrderCard;
   onPress: (card: DriverOrderCard) => void;
   onAcceptClick: (card: DriverOrderCard) => void;
+  onOfferClick: (card: DriverOrderCard) => void;
   acceptingMatchId?: number | null;
+  isSubmittingOffer: boolean;
   activeTab: DriverOrdersTabKey;
   onPrepareClick: (card: DriverOrderCard) => void;
   styles: DriverOrdersBoardStyles;
@@ -418,6 +459,14 @@ function DriverOrderCardView({
       : ctaPolicy.variant === "destructive"
         ? "destructive"
         : "secondary";
+  const counterOfferPriceText =
+    Number.isFinite(item.counterOfferProposedPrice) && Number(item.counterOfferProposedPrice) > 0
+      ? formatKrw(Number(item.counterOfferProposedPrice))
+      : undefined;
+  const counterOfferMessage =
+    typeof item.counterOfferMessage === "string" && item.counterOfferMessage.trim()
+      ? item.counterOfferMessage.trim()
+      : undefined;
 
   return (
     <Pressable
@@ -518,6 +567,51 @@ function DriverOrderCardView({
           </View>
         </View>
 
+        {activeTab === "my" && item.uiState === DRIVER_UI_STATE.NEGOTIATING ? (
+          <View style={styles.negotiatingMetaWrap}>
+            <View style={styles.negotiatingMetaRow}>
+              <AppText
+                variant="caption"
+                weight="800"
+                color="textMuted"
+                numberOfLines={1}
+                style={styles.negotiatingMetaLabel}
+              >
+                제안 금액
+              </AppText>
+              <AppText
+                variant="detail"
+                weight="900"
+                color="brandPrimary"
+                numberOfLines={1}
+                style={styles.negotiatingMetaValue}
+              >
+                {counterOfferPriceText ?? "-"}
+              </AppText>
+            </View>
+            <View style={styles.negotiatingMetaRow}>
+              <AppText
+                variant="caption"
+                weight="800"
+                color="textMuted"
+                numberOfLines={1}
+                style={styles.negotiatingMetaLabel}
+              >
+                제안 사유
+              </AppText>
+              <AppText
+                variant="caption"
+                weight="700"
+                color="textSub"
+                numberOfLines={2}
+                style={styles.negotiatingMetaMessage}
+              >
+                {counterOfferMessage ?? "-"}
+              </AppText>
+            </View>
+          </View>
+        ) : null}
+
         {activeTab === "my" &&
         item.uiState === DRIVER_UI_STATE.ASSIGNED &&
         item.cta?.id !== DRIVER_CTA_ID.START_DRIVE ? (
@@ -532,13 +626,21 @@ function DriverOrderCardView({
             />
           </View>
         ) : activeTab === "market" && item.uiState === DRIVER_UI_STATE.READY_TO_ACCEPT ? (
-          <View style={styles.prepareWrap}>
+          <View style={styles.dualCtaRow}>
+            <AppButton
+              onPress={() => onOfferClick(item)}
+              variant="secondary"
+              style={styles.dualCtaButton}
+              disabled={isSubmittingOffer || acceptingMatchId === item.matchId}
+              title="운임 제안"
+              textStyle={{ fontWeight: "900" }}
+            />
             <AppButton
               onPress={ctaPolicy.enabled ? () => onAcceptClick(item) : undefined}
               variant={ctaPolicy.enabled ? ctaVariant : "secondary"}
               disabled={!ctaPolicy.enabled}
               loading={acceptingMatchId === item.matchId}
-              style={styles.prepareBtn}
+              style={styles.dualCtaButton}
               title={ctaPolicy.label}
               textStyle={{ fontWeight: "900" }}
             />
@@ -569,6 +671,10 @@ export function DriverOrdersBoard({
   const [acceptingMatchId, setAcceptingMatchId] = useState<number | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastState>({ visible: false, message: "" });
+  const [isOfferOpen, setIsOfferOpen] = useState(false);
+  const [offerTargetCard, setOfferTargetCard] = useState<DriverOrderCard | null>(null);
+  const [isSubmittingOffer, setIsSubmittingOffer] = useState(false);
+  const [offerErrorMessage, setOfferErrorMessage] = useState<string | null>(null);
 
   const resolvedActiveTab = controlledActiveTab ?? activeTab;
   const refreshIconColor = safeString(
@@ -661,7 +767,10 @@ export function DriverOrdersBoard({
   );
 
   const filteredMyOrders = useMemo(
-    () => [...overview.myOrders, ...overview.runOrders].filter((item) => item.uiState === DRIVER_UI_STATE.ASSIGNED),
+    () =>
+      [...overview.myOrders, ...overview.runOrders].filter(
+        (item) => item.uiState === DRIVER_UI_STATE.ASSIGNED || item.uiState === DRIVER_UI_STATE.NEGOTIATING
+      ),
     [overview.myOrders, overview.runOrders]
   );
 
@@ -773,6 +882,58 @@ export function DriverOrdersBoard({
     [acceptingMatchId, changeTab, loadOrders, showToast]
   );
 
+  const handleOpenCounterOffer = useCallback((card: DriverOrderCard) => {
+    if (isSubmittingOffer) return;
+    if (card.uiState !== DRIVER_UI_STATE.READY_TO_ACCEPT) {
+      showToast("현재 상태에서는 역제안을 진행할 수 없습니다.");
+      return;
+    }
+    setOfferTargetCard(card);
+    setOfferErrorMessage(null);
+    setIsOfferOpen(true);
+  }, [isSubmittingOffer, showToast]);
+
+  const handleSubmitCounterOffer = useCallback(
+    async (payload: CounterOfferSubmitPayload) => {
+      if (isSubmittingOffer) return;
+
+      const target = offerTargetCard;
+      const safeMatchId = Number(target?.matchId);
+      if (!target || !Number.isInteger(safeMatchId) || safeMatchId <= 0) {
+        setOfferErrorMessage("유효하지 않은 매칭입니다.");
+        return;
+      }
+
+      setIsSubmittingOffer(true);
+      setOfferErrorMessage(null);
+      try {
+        const result = await postCounterOffer(
+          safeMatchId,
+          {
+            proposedPrice: payload.amount,
+            message: payload.message,
+          },
+          target.quoteId
+        );
+
+        if (!result) {
+          setOfferErrorMessage(NETWORK_ERROR_TEXT);
+          return;
+        }
+
+        setIsOfferOpen(false);
+        setOfferTargetCard(null);
+        showToast("역제안을 전송했습니다.");
+        await loadOrders("refresh");
+      } catch {
+        setOfferErrorMessage(NETWORK_ERROR_TEXT);
+      } finally {
+        setIsSubmittingOffer(false);
+      }
+    },
+    [isSubmittingOffer, loadOrders, offerTargetCard, showToast]
+  );
+
   const renderListHeader = useCallback(() => {
     if (!showFilters) return null;
 
@@ -803,116 +964,143 @@ export function DriverOrdersBoard({
         activeTab={resolvedActiveTab}
         onPress={handlePressCard}
         onAcceptClick={handleAcceptFromMarket}
+        onOfferClick={handleOpenCounterOffer}
         acceptingMatchId={acceptingMatchId}
+        isSubmittingOffer={isSubmittingOffer}
         onPrepareClick={handlePrepareForDrive}
         styles={styles}
         colors={themeColors}
       />
     ),
-    [acceptingMatchId, handleAcceptFromMarket, handlePrepareForDrive, handlePressCard, resolvedActiveTab, styles, themeColors]
+    [
+      acceptingMatchId,
+      handleAcceptFromMarket,
+      handleOpenCounterOffer,
+      handlePrepareForDrive,
+      handlePressCard,
+      isSubmittingOffer,
+      resolvedActiveTab,
+      styles,
+      themeColors,
+    ]
   );
 
   const keyExtractor = useCallback((item: DriverOrderCard) => `${resolvedActiveTab}:${item.cardKey}`, [resolvedActiveTab]);
 
   return (
-    <PageScaffold
-      title={assignedOnly ? "운행 오더" : "오더 보드"}
-      backgroundColor={theme.colors?.bgSurfaceAlt}
-      scroll={false}
-      padding={0}
-      headerRight={
-        assignedOnly ? null : (
-          <Pressable onPress={() => void loadOrders("refresh")} style={styles.refreshBtn}>
-            <Ionicons name="refresh" size={24} color={refreshIconColor} />
-          </Pressable>
-        )
-      }
-    >
-      <View style={styles.flex1}>
-        {!assignedOnly ? (
-          <View style={styles.tabsContainer}>
-            <Pressable
-              style={[styles.tabBtn, resolvedActiveTab === "market" ? styles.tabBtnActive : null]}
-              onPress={() => changeTab("market")}
-            >
-              <AppText style={[styles.tabLabel, resolvedActiveTab === "market" ? styles.tabLabelActive : null]}>
-                마켓
-              </AppText>
+    <>
+      <PageScaffold
+        title={assignedOnly ? "운행 오더" : "오더 보드"}
+        backgroundColor={theme.colors?.bgSurfaceAlt}
+        scroll={false}
+        padding={0}
+        headerRight={
+          assignedOnly ? null : (
+            <Pressable onPress={() => void loadOrders("refresh")} style={styles.refreshBtn}>
+              <Ionicons name="refresh" size={24} color={refreshIconColor} />
             </Pressable>
+          )
+        }
+      >
+        <View style={styles.flex1}>
+          {!assignedOnly ? (
+            <View style={styles.tabsContainer}>
+              <Pressable
+                style={[styles.tabBtn, resolvedActiveTab === "market" ? styles.tabBtnActive : null]}
+                onPress={() => changeTab("market")}
+              >
+                <AppText style={[styles.tabLabel, resolvedActiveTab === "market" ? styles.tabLabelActive : null]}>
+                  마켓
+                </AppText>
+              </Pressable>
 
-            <Pressable
-              style={[styles.tabBtn, resolvedActiveTab === "my" ? styles.tabBtnActive : null]}
-              onPress={() => changeTab("my")}
-            >
-              <AppText style={[styles.tabLabel, resolvedActiveTab === "my" ? styles.tabLabelActive : null]}>
-                내 오더
-              </AppText>
-              {filteredMyOrders.length > 0 ? (
-                <View style={styles.tabBadge}>
-                  <AppText style={styles.tabBadgeText}>{filteredMyOrders.length}</AppText>
-                </View>
-              ) : null}
-            </Pressable>
-          </View>
-        ) : null}
+              <Pressable
+                style={[styles.tabBtn, resolvedActiveTab === "my" ? styles.tabBtnActive : null]}
+                onPress={() => changeTab("my")}
+              >
+                <AppText style={[styles.tabLabel, resolvedActiveTab === "my" ? styles.tabLabelActive : null]}>
+                  내 오더
+                </AppText>
+                {filteredMyOrders.length > 0 ? (
+                  <View style={styles.tabBadge}>
+                    <AppText style={styles.tabBadgeText}>{filteredMyOrders.length}</AppText>
+                  </View>
+                ) : null}
+              </Pressable>
+            </View>
+          ) : null}
 
-        {isLoading ? (
-          <AppSpinner label="목록을 불러오는 중입니다." />
-        ) : errorMessage ? (
-          <View style={styles.errorWrap}>
-            <AppErrorState
-              title="오더 목록을 불러오지 못했어요"
-              description={errorMessage}
-              retryLabel="다시 시도"
-              onRetry={() => void loadOrders("initial")}
-              fullScreen={false}
-            />
-          </View>
-        ) : (
-          <FlatList
-            key={resolvedActiveTab}
-            extraData={activeFilter}
-            style={styles.flex1}
-            data={visibleOrders}
-            keyExtractor={keyExtractor}
-            renderItem={renderOrderItem}
-            ListHeaderComponent={renderListHeader}
-            stickyHeaderIndices={showFilters ? [0] : undefined}
-            ItemSeparatorComponent={() => <View style={styles.separator} />}
-            contentContainerStyle={styles.listContent}
-            showsVerticalScrollIndicator={false}
-            refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void loadOrders("refresh")} />}
-            ListEmptyComponent={
-              <AppEmptyState
-                title={
-                  resolvedActiveTab === "market"
-                    ? "오더 마켓이 비어 있습니다."
-                    : assignedOnly
-                      ? "운행 오더가 없습니다."
-                      : "내 오더가 없습니다."
-                }
-                description={
-                  resolvedActiveTab === "market"
-                    ? "새 오더가 등록되면 이곳에 표시됩니다."
-                    : assignedOnly
-                      ? "운송 중이거나 완료된 오더가 생기면 이곳에 표시됩니다."
-                      : "수락한 오더가 있으면 이곳에 표시됩니다."
-                }
+          {isLoading ? (
+            <AppSpinner label="목록을 불러오는 중입니다." />
+          ) : errorMessage ? (
+            <View style={styles.errorWrap}>
+              <AppErrorState
+                title="오더 목록을 불러오지 못했어요"
+                description={errorMessage}
+                retryLabel="다시 시도"
+                onRetry={() => void loadOrders("initial")}
                 fullScreen={false}
               />
-            }
-          />
-        )}
-      </View>
-
-      {toast.visible ? (
-        <View style={[styles.toastWrap, { bottom: toastBottom }]}>
-          <View style={styles.toastCard}>
-            <AppText style={styles.toastText}>{toast.message}</AppText>
-          </View>
+            </View>
+          ) : (
+            <FlatList
+              key={resolvedActiveTab}
+              extraData={activeFilter}
+              style={styles.flex1}
+              data={visibleOrders}
+              keyExtractor={keyExtractor}
+              renderItem={renderOrderItem}
+              ListHeaderComponent={renderListHeader}
+              stickyHeaderIndices={showFilters ? [0] : undefined}
+              ItemSeparatorComponent={() => <View style={styles.separator} />}
+              contentContainerStyle={styles.listContent}
+              showsVerticalScrollIndicator={false}
+              refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void loadOrders("refresh")} />}
+              ListEmptyComponent={
+                <AppEmptyState
+                  title={
+                    resolvedActiveTab === "market"
+                      ? "오더 마켓이 비어 있습니다."
+                      : assignedOnly
+                        ? "운행 오더가 없습니다."
+                        : "내 오더가 없습니다."
+                  }
+                  description={
+                    resolvedActiveTab === "market"
+                      ? "새 오더가 등록되면 이곳에 표시됩니다."
+                      : assignedOnly
+                        ? "운송 중이거나 완료된 오더가 생기면 이곳에 표시됩니다."
+                        : "수락한 오더가 있으면 이곳에 표시됩니다."
+                  }
+                  fullScreen={false}
+                />
+              }
+            />
+          )}
         </View>
-      ) : null}
-    </PageScaffold>
+
+        {toast.visible ? (
+          <View style={[styles.toastWrap, { bottom: toastBottom }]}>
+            <View style={styles.toastCard}>
+              <AppText style={styles.toastText}>{toast.message}</AppText>
+            </View>
+          </View>
+        ) : null}
+      </PageScaffold>
+
+      <CounterOfferModal
+        visible={isOfferOpen}
+        isSubmitting={isSubmittingOffer}
+        errorMessage={offerErrorMessage}
+        onClose={() => {
+          if (isSubmittingOffer) return;
+          setIsOfferOpen(false);
+          setOfferTargetCard(null);
+          setOfferErrorMessage(null);
+        }}
+        onSubmit={handleSubmitCounterOffer}
+      />
+    </>
   );
 }
 
