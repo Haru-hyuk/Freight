@@ -39,6 +39,35 @@ export interface DeriveCustomerUiStateResult {
   uiState: CustomerUiState;
 }
 
+// ---------------------------------------------------------------------------
+// Constants & Mappers (Localized)
+// ---------------------------------------------------------------------------
+
+const TONNAGE_MAP: Record<string, string> = {
+  TON_1: "1톤",
+  TON_1_4: "1.4톤",
+  TON_2_5: "2.5톤",
+  TON_3_5: "3.5톤",
+  TON_5: "5톤",
+  TON_5_AXLE: "5톤축",
+  TON_8: "8톤",
+  TON_11: "11톤",
+  TON_14: "14톤",
+  TON_15: "15톤",
+  TON_18: "18톤",
+  TON_25: "25톤",
+};
+
+const VEHICLE_TYPE_MAP: Record<string, string> = {
+  CARGO: "카고",
+  WING_BODY: "윙바디",
+  WINGBODY: "윙바디",
+  TOP_CAR: "탑차",
+  TOPCAR: "탑차",
+  FREEZER: "냉동",
+  REFRIGERATED: "냉장",
+};
+
 function sanitizeToken(raw: string): string {
   return raw
     .trim()
@@ -163,6 +192,80 @@ export function getUsageHistoryStatusTone(uiState: CustomerUiState): ParsedUsage
 }
 
 /**
+ * 차량 정보를 한국어로 포맷팅
+ */
+function formatVehicleText(match: any, quote: any): string {
+  const pickMappedToken = (values: unknown[], table: Record<string, string>): string => {
+    for (const v of values) {
+      const token = sanitizeToken(String(v ?? ""));
+      if (token && table[token]) return token;
+    }
+    return "";
+  };
+
+  const findKeyInToken = (raw: string, table: Record<string, string>): string => {
+    const token = sanitizeToken(raw);
+    if (!token) return "";
+    const keys = Object.keys(table).sort((a, b) => b.length - a.length);
+    for (const key of keys) {
+      if (token.includes(key)) return key;
+    }
+    return "";
+  };
+
+  // 1) 원본 코드 우선: quote(vehicleType=톤수, vehicleBodyType=차종) / match(tonType/tonnage/vehicleType, vehicleBodyType)
+  const tonToken =
+    pickMappedToken(
+      [
+        match?.tonType,
+        match?.tonnage,
+        match?.vehicleType,
+        quote?.tonType,
+        quote?.tonnage,
+        quote?.vehicleType,
+      ],
+      TONNAGE_MAP
+    ) || "";
+
+  const bodyToken =
+    pickMappedToken(
+      [
+        match?.vehicleBodyType,
+        match?.vehicle_body_type,
+        match?.bodyType,
+        match?.body_type,
+        quote?.vehicleBodyType,
+        quote?.vehicle_body_type,
+        // 일부 레거시가 vehicleType에 차종(CARGO 등)을 싣는 경우 대응
+        match?.vehicleType,
+      ],
+      VEHICLE_TYPE_MAP
+    ) || "";
+
+  let tonText = tonToken ? TONNAGE_MAP[tonToken] : "";
+  let typeText = bodyToken ? VEHICLE_TYPE_MAP[bodyToken] : "";
+
+  // 2) fallback: 기존 문자열(vehicleText)에서 토큰 스캔
+  const fallback = String(match?.vehicleText ?? quote?.vehicleText ?? "");
+  if ((!tonText || !typeText) && fallback && fallback !== "차량 정보 없음") {
+    if (!tonText) {
+      const k = findKeyInToken(fallback, TONNAGE_MAP);
+      tonText = k ? TONNAGE_MAP[k] : "";
+    }
+    if (!typeText) {
+      const k = findKeyInToken(fallback, VEHICLE_TYPE_MAP);
+      typeText = k ? VEHICLE_TYPE_MAP[k] : "";
+    }
+  }
+
+  // 3) 조합 결과
+  if (tonText && typeText) return `${tonText} ${typeText}`;
+  if (tonText || typeText) return tonText || typeText;
+
+  return "차량 정보 없음";
+}
+
+/**
  * MatchingListPage에서 (match, quoteDetail) 두 인자를 넘기므로 시그니처 유지
  */
 export function mapToUsageHistoryItem(match: any, quote?: any): ParsedUsageHistoryItem {
@@ -189,7 +292,7 @@ export function mapToUsageHistoryItem(match: any, quote?: any): ParsedUsageHisto
     originAddress: String(match?.originAddress ?? quote?.originAddress ?? "상차지 미정"),
     destinationAddress: String(match?.destinationAddress ?? quote?.destinationAddress ?? "하차지 미정"),
     priceText: String(match?.priceText ?? quote?.priceText ?? "0원"),
-    vehicleText: String(match?.vehicleText ?? quote?.vehicleText ?? "차량 정보 없음"),
+    vehicleText: formatVehicleText(match, quote),
     dateText: String(match?.dateText ?? quote?.dateText ?? ""),
   };
 }
