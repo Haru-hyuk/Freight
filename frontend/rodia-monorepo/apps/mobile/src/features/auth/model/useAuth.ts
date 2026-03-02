@@ -87,8 +87,50 @@ function safeTrim(v: unknown): string {
   return typeof v === "string" ? v.trim() : "";
 }
 
+function toOptString(v: unknown): string | undefined {
+  const s = safeTrim(v);
+  return s ? s : undefined;
+}
+
+function toAuthUserRole(v: unknown): AuthUserRole | null {
+  return v === "driver" || v === "shipper" ? v : null;
+}
+
 function onlyDigits(v: unknown): string {
   return safeTrim(v).replace(/\D/g, "");
+}
+
+async function loadUserPreferServer(): Promise<User | null> {
+  try {
+    const profile = await authApi.getMeProfile();
+    const role = toAuthUserRole(profile?.role);
+    if (role) {
+      return {
+        id: safeTrim(profile?.id) || "unknown",
+        role,
+        email: toOptString(profile?.email),
+        name: toOptString(profile?.name),
+        phone: toOptString(profile?.phone),
+      };
+    }
+  } catch {
+    // fallback below
+  }
+
+  try {
+    const user = await authApi.me();
+    if (!user?.role) return null;
+
+    return {
+      id: safeTrim(user.id) || "unknown",
+      role: user.role,
+      email: toOptString(user.email),
+      name: toOptString(user.name),
+      phone: toOptString(user.phone),
+    };
+  } catch {
+    return null;
+  }
 }
 
 function toPhoneHyphen(v: unknown): string {
@@ -240,7 +282,7 @@ async function runBootstrap() {
   }
 
   try {
-    const user = await authApi.me();
+    const user = await loadUserPreferServer();
     if (user?.role) {
       const pendingRole = await verificationStorage.getPendingRole();
       const nextPending = pendingRole === user.role ? pendingRole : null;
@@ -302,7 +344,7 @@ async function loginImpl(params: { email: string; password: string; role?: AuthR
     const ensuredUser = loginUser?.role ? loginUser : null;
 
     if (!ensuredUser?.role) {
-      const u = await authApi.me();
+      const u = await loadUserPreferServer();
       if (!u?.role) {
         await safeClearTokens();
         await verificationStorage.clearPendingRole();
