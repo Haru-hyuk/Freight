@@ -99,8 +99,12 @@ public class QuoteService {
         );
         int basePrice = pricing.rateWon().setScale(0, RoundingMode.HALF_UP).intValue();
         int weighted = pricing.weightedWon().setScale(0, RoundingMode.HALF_UP).intValue();
-        int extraPrice = Math.max(0, weighted - basePrice);
+        int checklistExtraPrice = sumChecklistExtraFee(req.getChecklistItems())
+                .setScale(0, RoundingMode.HALF_UP)
+                .intValue();
+        int extraPrice = Math.max(0, weighted - basePrice) + checklistExtraPrice;
         int finalPrice = pricing.finalChargeAfterDiscountWon()
+                .add(sumChecklistExtraFee(req.getChecklistItems()))
                 .setScale(0, RoundingMode.HALF_UP)
                 .intValue();
         int desiredPrice = req.getDesiredPrice() != null ? req.getDesiredPrice() : finalPrice;
@@ -257,8 +261,12 @@ public class QuoteService {
         );
         int basePrice = pricing.rateWon().setScale(0, RoundingMode.HALF_UP).intValue();
         int weighted = pricing.weightedWon().setScale(0, RoundingMode.HALF_UP).intValue();
-        int extraPrice = Math.max(0, weighted - basePrice);
+        int checklistExtraPrice = sumChecklistExtraFee(req.getChecklistItems())
+                .setScale(0, RoundingMode.HALF_UP)
+                .intValue();
+        int extraPrice = Math.max(0, weighted - basePrice) + checklistExtraPrice;
         int finalPrice = pricing.finalChargeAfterDiscountWon()
+                .add(sumChecklistExtraFee(req.getChecklistItems()))
                 .setScale(0, RoundingMode.HALF_UP)
                 .intValue();
         int desiredPrice = req.getDesiredPrice() != null ? req.getDesiredPrice() : finalPrice;
@@ -339,10 +347,14 @@ public class QuoteService {
                 req.getUnloadMethod(),
                 Boolean.TRUE.equals(req.getAllowCombine())
         );
+        BigDecimal checklistExtraFee = sumChecklistExtraFee(req.getChecklistItems());
+        BigDecimal estimatedMinWon = pricing.totalMinWon().add(checklistExtraFee);
+        BigDecimal estimatedMaxWon = pricing.totalMaxWon().add(checklistExtraFee);
+        BigDecimal estimatedWeightedWon = pricing.weightedWon().add(checklistExtraFee);
 
-        int estimatedMin = pricing.totalMinWon().setScale(0, RoundingMode.HALF_UP).intValue();
-        int estimatedMax = pricing.totalMaxWon().setScale(0, RoundingMode.HALF_UP).intValue();
-        int estimatedWeighted = pricing.weightedWon().setScale(0, RoundingMode.HALF_UP).intValue();
+        int estimatedMin = estimatedMinWon.setScale(0, RoundingMode.HALF_UP).intValue();
+        int estimatedMax = estimatedMaxWon.setScale(0, RoundingMode.HALF_UP).intValue();
+        int estimatedWeighted = estimatedWeightedWon.setScale(0, RoundingMode.HALF_UP).intValue();
 
         List<String> comments = new ArrayList<>();
         List<String> reasons = new ArrayList<>();
@@ -352,7 +364,7 @@ public class QuoteService {
         QuoteValidationResponse.PriceFit priceFit = QuoteValidationResponse.PriceFit.NORMAL;
         String priceLabel = "PRICE_OK";
         if (desired != null && desired > 0) {
-            BigDecimal threshold = pricing.totalMinWon()
+            BigDecimal threshold = estimatedMinWon
                     .multiply(new BigDecimal("0.85"))
                     .setScale(0, RoundingMode.HALF_UP);
             if (new BigDecimal(desired).compareTo(threshold) < 0) {
@@ -698,11 +710,27 @@ public class QuoteService {
         return switch (bodyType) {
             case "LIFT" -> "LIFT";
             case "LIFT_WINGBODY" -> "LIFT_WINGBODY";
-            case "TOP" -> "WINGBODY_TOP";
-            case "WINGBODY" -> null;
+            case "TOP", "TOP_CAR", "TOPCAR" -> "WINGBODY_TOP";
+            case "WINGBODY", "WING_BODY" -> null;
             case "CARGO" -> null;
             default -> null;
         };
+    }
+
+    private BigDecimal sumChecklistExtraFee(List<QuoteChecklistItemRequest> items) {
+        if (items == null || items.isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal total = BigDecimal.ZERO;
+        for (QuoteChecklistItemRequest item : items) {
+            if (item == null || item.getExtraFee() == null) {
+                continue;
+            }
+            if (item.getExtraFee().signum() > 0) {
+                total = total.add(item.getExtraFee());
+            }
+        }
+        return total;
     }
 
     /** DeepSeek AI용 프롬프트 생성 (견적 진단 조언) */

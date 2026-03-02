@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useActiveOrder } from "@/entities/order/model/active-order.store";
 import {
+  acceptDriverMatch,
   buildDriverOrderDetailParams,
   getDriverOrderFilterLabel,
   getDriverQuoteSummaryDetail,
@@ -392,6 +393,8 @@ type DriverOrdersBoardStyles = ReturnType<typeof useStyles>;
 function DriverOrderCardView({
   item,
   onPress,
+  onAcceptClick,
+  acceptingMatchId,
   activeTab,
   onPrepareClick,
   styles,
@@ -399,6 +402,8 @@ function DriverOrderCardView({
 }: {
   item: DriverOrderCard;
   onPress: (card: DriverOrderCard) => void;
+  onAcceptClick: (card: DriverOrderCard) => void;
+  acceptingMatchId?: number | null;
   activeTab: DriverOrdersTabKey;
   onPrepareClick: (card: DriverOrderCard) => void;
   styles: DriverOrdersBoardStyles;
@@ -526,6 +531,18 @@ function DriverOrderCardView({
               textStyle={{ fontWeight: "900" }}
             />
           </View>
+        ) : activeTab === "market" && item.uiState === DRIVER_UI_STATE.READY_TO_ACCEPT ? (
+          <View style={styles.prepareWrap}>
+            <AppButton
+              onPress={ctaPolicy.enabled ? () => onAcceptClick(item) : undefined}
+              variant={ctaPolicy.enabled ? ctaVariant : "secondary"}
+              disabled={!ctaPolicy.enabled}
+              loading={acceptingMatchId === item.matchId}
+              style={styles.prepareBtn}
+              title={ctaPolicy.label}
+              textStyle={{ fontWeight: "900" }}
+            />
+          </View>
         ) : null}
       </AppCard>
     </Pressable>
@@ -549,6 +566,7 @@ export function DriverOrdersBoard({
   const [activeFilter, setActiveFilter] = useState<DriverOrderFilterKey>("ALL");
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [acceptingMatchId, setAcceptingMatchId] = useState<number | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastState>({ visible: false, message: "" });
 
@@ -725,6 +743,36 @@ export function DriverOrdersBoard({
     [loadOrders, router, setActiveOrder, showToast]
   );
 
+  const handleAcceptFromMarket = useCallback(
+    async (card: DriverOrderCard) => {
+      if (acceptingMatchId !== null) return;
+
+      const safeMatchId = Number(card.matchId);
+      if (!Number.isInteger(safeMatchId) || safeMatchId <= 0) {
+        showToast("유효하지 않은 매칭입니다.");
+        return;
+      }
+
+      setAcceptingMatchId(safeMatchId);
+      try {
+        const result = await acceptDriverMatch(safeMatchId);
+        if (!result) {
+          showToast(NETWORK_ERROR_TEXT);
+          return;
+        }
+
+        await loadOrders("refresh");
+        changeTab("my");
+        showToast("오더를 수락했습니다.");
+      } catch {
+        showToast(NETWORK_ERROR_TEXT);
+      } finally {
+        setAcceptingMatchId(null);
+      }
+    },
+    [acceptingMatchId, changeTab, loadOrders, showToast]
+  );
+
   const renderListHeader = useCallback(() => {
     if (!showFilters) return null;
 
@@ -754,12 +802,14 @@ export function DriverOrdersBoard({
         item={item}
         activeTab={resolvedActiveTab}
         onPress={handlePressCard}
+        onAcceptClick={handleAcceptFromMarket}
+        acceptingMatchId={acceptingMatchId}
         onPrepareClick={handlePrepareForDrive}
         styles={styles}
         colors={themeColors}
       />
     ),
-    [handlePrepareForDrive, handlePressCard, resolvedActiveTab, styles, themeColors]
+    [acceptingMatchId, handleAcceptFromMarket, handlePrepareForDrive, handlePressCard, resolvedActiveTab, styles, themeColors]
   );
 
   const keyExtractor = useCallback((item: DriverOrderCard) => `${resolvedActiveTab}:${item.cardKey}`, [resolvedActiveTab]);
