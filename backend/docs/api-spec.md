@@ -191,7 +191,18 @@
 ### Counter Offer Accept
 - Method: `PATCH`
 - Path: `/api/shipper/counter-offers/{offerId}/accept`
-- Response: `204 No Content`
+- Response DTO: `CounterOfferAcceptResponse`
+
+`CounterOfferAcceptResponse` fields:
+- `counterOfferId`
+- `quoteId`
+- `matchId`
+- `driverId`
+- `counterOfferStatus` (`ACCEPTED`)
+- `quoteStatus` (`MATCHED`)
+- `matchStatus` (`READY`)
+- `paymentRequired` (`true`)
+- `nextAction` (`PAYMENT_REQUIRED`)
 
 ### Counter Offer Reject
 - Method: `PATCH`
