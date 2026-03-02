@@ -124,6 +124,8 @@ export function DriverProfilePage() {
 
   const profileName = auth.user?.name?.trim() || "기사 사용자";
   const profilePhone = auth.user?.phone ?? "-";
+  const bankName = auth.user?.bankName ?? "-";
+  const bankAccount = auth.user?.bankAccount ?? "-";
 
   const toggleDuty = () => {
     setIsOnDuty((prev) => {
@@ -289,8 +291,8 @@ export function DriverProfilePage() {
         <View style={styles.card}>
           <View style={styles.row}>
             <View style={{ gap: 4 }}>
-              <Text style={[styles.txtCaption, { color: COLORS.slate400 }]}>국민은행</Text>
-              <Text style={[styles.txtBody, { fontWeight: "800", letterSpacing: -0.2 }]}>123-4567-8901-23</Text>
+              <Text style={[styles.txtCaption, { color: COLORS.slate400 }]}>{bankName}</Text>
+              <Text style={[styles.txtBody, { fontWeight: "800", letterSpacing: -0.2 }]}>{bankAccount}</Text>
             </View>
             <View style={[styles.pill, styles.pillGray]}>
               <Text style={styles.pillTextGray}>기본</Text>
@@ -299,20 +301,38 @@ export function DriverProfilePage() {
         </View>
 
         <View style={styles.secHeader}>
-          <Text style={styles.secTitle}>설정</Text>
-          <Text style={styles.secSub}>관리</Text>
+          <Text style={styles.secTitle}>내 정보</Text>
+          <Text style={styles.secSub}>바로가기</Text>
         </View>
 
         <View style={[styles.card, { padding: 0, overflow: "hidden" }]}>
-          <Pressable style={styles.menuItem} onPress={() => showToast("공지사항 (데모)")}>
-            <Text style={styles.menuText}>공지사항</Text>
+          <Pressable style={styles.menuItem} onPress={() => router.push("/(driver)/settings/account" as never)}>
+            <Text style={styles.menuText}>회원정보 수정</Text>
+            <Text style={styles.menuRightText}>수정</Text>
+          </Pressable>
+          <View style={styles.menuDivider} />
+
+          <Pressable style={styles.menuItem} onPress={() => router.push("/(driver)/settings/trucks" as never)}>
+            <Text style={styles.menuText}>차량 승인 상태</Text>
             <Text style={styles.menuRightText}>보기</Text>
           </Pressable>
           <View style={styles.menuDivider} />
 
-          <Pressable style={styles.menuItem} onPress={() => router.push("/\(driver\)/settings" as never)}>
-            <Text style={styles.menuText}>설정/내 정보 관리</Text>
-            <Text style={styles.menuRightText}>관리</Text>
+          <Pressable style={styles.menuItem} onPress={() => router.push("/(driver)/settlement" as never)}>
+            <Text style={styles.menuText}>정산 내역</Text>
+            <Text style={styles.menuRightText}>보기</Text>
+          </Pressable>
+          <View style={styles.menuDivider} />
+
+          <Pressable style={styles.menuItem} onPress={() => showToast("고객센터 화면을 준비 중입니다.")}>
+            <Text style={styles.menuText}>1:1 문의 / 고객센터</Text>
+            <Text style={styles.menuRightText}>문의</Text>
+          </Pressable>
+          <View style={styles.menuDivider} />
+
+          <Pressable style={styles.menuItem} onPress={() => showToast("이용약관 화면을 준비 중입니다.")}>
+            <Text style={styles.menuText}>이용약관</Text>
+            <Text style={styles.menuRightText}>보기</Text>
           </Pressable>
           <View style={styles.menuDivider} />
 

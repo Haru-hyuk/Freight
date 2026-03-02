@@ -111,6 +111,8 @@ async function loadUserPreferServer(): Promise<User | null> {
         email: toOptString(profile?.email),
         name: toOptString(profile?.name),
         phone: toOptString(profile?.phone),
+        bankName: toOptString(profile?.bankName),
+        bankAccount: toOptString(profile?.bankAccount),
       };
     }
   } catch {
@@ -127,6 +129,8 @@ async function loadUserPreferServer(): Promise<User | null> {
       email: toOptString(user.email),
       name: toOptString(user.name),
       phone: toOptString(user.phone),
+      bankName: toOptString(user.bankName),
+      bankAccount: toOptString(user.bankAccount),
     };
   } catch {
     return null;

@@ -17,6 +17,8 @@ function pickBool(v: unknown): boolean | undefined {
 
 export type DriverTruck = {
   approved?: boolean;
+  tonnage?: number;
+  name?: string;
 };
 
 export async function listDriverTrucks(): Promise<DriverTruck[]> {
@@ -33,6 +35,8 @@ export async function listDriverTrucks(): Promise<DriverTruck[]> {
 
   return (arr as any[]).map((it) => ({
     approved: pickBool(it?.approved),
+    tonnage: typeof it?.tonnage === "number" ? it.tonnage : (typeof it?.tonnage === "string" ? Number(it.tonnage) : undefined),
+    name: typeof it?.name === "string" ? it.name : undefined,
   }));
 }
 
