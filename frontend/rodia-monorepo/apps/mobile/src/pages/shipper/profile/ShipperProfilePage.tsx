@@ -331,6 +331,20 @@ export function ShipperProfilePage() {
     }, 300);
   }, [router]);
 
+  const replaceRouteOnce = useCallback((path: string) => {
+    if (navLockRef.current) return;
+    navLockRef.current = true;
+    router.replace(path as never);
+    if (navUnlockTimerRef.current) {
+      clearTimeout(navUnlockTimerRef.current);
+    }
+    navUnlockTimerRef.current = setTimeout(() => {
+      navLockRef.current = false;
+      navUnlockTimerRef.current = null;
+    }, 300);
+  }, [router]);
+
+
   const pushSettingsOnce = useCallback(() => {
     pushRouteOnce("/(shipper)/settings");
   }, [pushRouteOnce]);
@@ -348,22 +362,22 @@ export function ShipperProfilePage() {
         label: "진행중",
         value: inProgressCount !== null ? String(inProgressCount) : "-",
         accent: true,
-        onPress: () => router.push("/(shipper)/matchings"),
+        onPress: () => replaceRouteOnce("/(shipper)/matchings"),
       },
       {
         id: "request-history",
         label: "견적요청",
         value: quotesCount !== null ? String(quotesCount) : "-",
-        onPress: () => router.push("/(shipper)/quotes"),
+        onPress: () => replaceRouteOnce("/(shipper)/quotes"),
       },
       {
         id: "settlement-wait",
         label: "정산대기",
         value: settlementPendingCount !== null ? String(settlementPendingCount) : "-",
-        onPress: () => router.push("/(shipper)/settings/tax-invoices"),
+        onPress: () => pushRouteOnce("/(shipper)/settings/tax-invoices"),
       },
     ],
-    [inProgressCount, quotesCount, router, settlementPendingCount]
+    [inProgressCount, quotesCount, replaceRouteOnce, pushRouteOnce, settlementPendingCount]
   );
 
   const businessMenus = useMemo<MenuAction[]>(
