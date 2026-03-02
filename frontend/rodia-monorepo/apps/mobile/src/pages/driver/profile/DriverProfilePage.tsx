@@ -63,6 +63,7 @@ function getReasonText(isLicenseVerified: boolean, isTruckApproved: boolean): { 
 }
 
 export function DriverProfilePage() {
+  const router = useRouter();
   const auth = useAuth();
 
   const [isOnDuty, setIsOnDuty] = useState(true);
@@ -309,8 +310,8 @@ export function DriverProfilePage() {
           </Pressable>
           <View style={styles.menuDivider} />
 
-          <Pressable style={styles.menuItem} onPress={() => showToast("알림 설정 (데모)")}>
-            <Text style={styles.menuText}>알림 설정</Text>
+          <Pressable style={styles.menuItem} onPress={() => router.push("/\(driver\)/settings" as never)}>
+            <Text style={styles.menuText}>설정/내 정보 관리</Text>
             <Text style={styles.menuRightText}>관리</Text>
           </Pressable>
           <View style={styles.menuDivider} />
