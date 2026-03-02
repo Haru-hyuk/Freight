@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useMemo, useRef, useState } from "react";
+﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
   Platform,
@@ -10,6 +10,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 
 import { useAuth } from "@/features/auth/model/useAuth";
+import { getDriverTruckApproved } from "@/features/driver-profile/api/driver-profile-api";
 import { PageScaffold } from "@/widgets/layout/PageScaffold";
 
 const COLORS = {
@@ -65,6 +66,7 @@ export function DriverProfilePage() {
 
   const [isOnDuty, setIsOnDuty] = useState(true);
   const [isTruckApproved, setIsTruckApproved] = useState(false);
+  const [truckApprovedFromServer, setTruckApprovedFromServer] = useState<boolean | null>(null);
   const [isLicenseVerified, setIsLicenseVerified] = useState(auth.pendingVerificationRole !== "driver");
 
   const [toastMsg, setToastMsg] = useState("");
@@ -92,11 +94,34 @@ export function DriverProfilePage() {
     [fadeAnim]
   );
 
-  const status = useMemo(() => getAcceptStatus(isLicenseVerified, isTruckApproved), [isLicenseVerified, isTruckApproved]);
-  const reason = useMemo(() => getReasonText(isLicenseVerified, isTruckApproved), [isLicenseVerified, isTruckApproved]);
+  useEffect(() => {
+    let cancelled = false;
+
+    if (auth.status !== "authenticated") {
+      setTruckApprovedFromServer(null);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    (async () => {
+      const v = await getDriverTruckApproved();
+      if (!cancelled) {
+        setTruckApprovedFromServer(v);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [auth.status]);
+
+  const effectiveTruckApproved = truckApprovedFromServer ?? isTruckApproved;
+  const status = useMemo(() => getAcceptStatus(isLicenseVerified, effectiveTruckApproved), [isLicenseVerified, effectiveTruckApproved]);
+  const reason = useMemo(() => getReasonText(isLicenseVerified, effectiveTruckApproved), [isLicenseVerified, effectiveTruckApproved]);
 
   const profileName = auth.user?.name?.trim() || "기사 사용자";
-  const profilePhone = "010-1234-5678";
+  const profilePhone = auth.user?.phone ?? "-";
 
   const toggleDuty = () => {
     setIsOnDuty((prev) => {
@@ -218,9 +243,9 @@ export function DriverProfilePage() {
 
           <View style={styles.row}>
             <Text style={styles.txtBody}>차량 등록 (11톤 윙바디)</Text>
-            <View style={[styles.pill, isTruckApproved ? styles.pillSuccess : styles.pillWarn]}>
-              <Text style={[styles.pillText, isTruckApproved ? { color: COLORS.successText } : { color: COLORS.warnText }]}>
-                {isTruckApproved ? "승인완료" : "심사중"}
+            <View style={[styles.pill, effectiveTruckApproved ? styles.pillSuccess : styles.pillWarn]}>
+              <Text style={[styles.pillText, effectiveTruckApproved ? { color: COLORS.successText } : { color: COLORS.warnText }]}>
+                {effectiveTruckApproved ? "승인완료" : "심사중"}
               </Text>
             </View>
           </View>
