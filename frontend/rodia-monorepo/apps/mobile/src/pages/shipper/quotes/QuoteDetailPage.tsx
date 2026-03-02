@@ -656,7 +656,7 @@ export default function QuoteDetailPage() {
   const theme = useAppTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const params = useLocalSearchParams<{ id?: string | string[] }>();
+  const params = useLocalSearchParams<{ id?: string | string[]; status?: string | string[] }>();
 
   const [isDeleting, setIsDeleting] = React.useState(false);
   const [isMatchSubmitting, setIsMatchSubmitting] = React.useState(false);
@@ -684,9 +684,15 @@ export default function QuoteDetailPage() {
   const hasActiveQuoteMatch = Boolean(activeQuoteMatch);
   const cancelTargetMatchId = React.useMemo(() => parsePositiveInt(activeQuoteMatch?.matchId), [activeQuoteMatch?.matchId]);
   const isCancelIdInvalid = hasActiveQuoteMatch && cancelTargetMatchId <= 0;
+  const routeStatus = readRouteParamText(params.status);
+
   const effectiveQuoteStatus = React.useMemo(
-    () => resolveEffectiveQuoteStatus(view.quote.status, activeQuoteMatch?.status),
-    [activeQuoteMatch?.status, view.quote.status]
+    () => {
+      const base = routeStatus || (matchHydrated ? view.quote.status : BACKEND_STATUS.UNKNOWN);
+      const matchStatus = matchHydrated ? activeQuoteMatch?.status : null;
+      return resolveEffectiveQuoteStatus(base, matchStatus);
+    },
+    [activeQuoteMatch?.status, matchHydrated, routeStatus, view.quote.status]
   );
   const effectivePolicy = React.useMemo(() => getQuoteActionPolicy(effectiveQuoteStatus), [effectiveQuoteStatus]);
   const effectiveActionsContext = React.useMemo(
