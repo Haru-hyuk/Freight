@@ -6,6 +6,7 @@ import { useFocusEffect } from "@react-navigation/native";
 
 import type { QuoteListItem, QuoteStatusApi } from "@/entities/quote/model/quote.types";
 import { listShipperQuotes } from "@/features/quote/api";
+import { listMyShipperMatches, type ShipperMatchItem } from "@/features/matching/api";
 import {
   getQuoteActionPolicy,
   resolveTonePalette,
@@ -13,7 +14,7 @@ import {
   type QuoteTonePaletteKey,
 } from "@/features/quote/model/quoteActionMatrix";
 import { formatDateTime, formatDistance, formatKrw } from "@/shared/lib/format/display";
-import { CUSTOMER_UI_STATE, getCustomerUiStateFromBackendStatus, type CustomerUiState } from "@/shared/lib/policy";
+import { BACKEND_STATUS, CUSTOMER_UI_STATE, getCustomerUiStateFromBackendStatus, normalizeStatus, type CustomerUiState } from "@/shared/lib/policy";
 import { safeNumber, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppCard } from "@/shared/ui/kit/AppCard";
@@ -97,6 +98,42 @@ const SORT_OPTIONS: Array<{ key: QuoteListSort; label: string }> = [
   { key: "PRICE", label: "금액순" },
 ];
 const FOCUS_REFETCH_THROTTLE_MS = 1500;
+
+const STATUS_PROMOTION_SOURCE_STATES: ReadonlySet<string> = new Set([
+  BACKEND_STATUS.READY,
+  BACKEND_STATUS.OPEN,
+  BACKEND_STATUS.UNKNOWN,
+]);
+
+const STATUS_PROMOTION_TARGET_STATES: ReadonlySet<string> = new Set([
+  BACKEND_STATUS.MATCHED,
+  BACKEND_STATUS.IN_TRANSIT,
+  BACKEND_STATUS.DELIVERED,
+  BACKEND_STATUS.READY,
+  BACKEND_STATUS.COMPLETED,
+  BACKEND_STATUS.CANCELLED,
+]);
+
+function normalizeMatchStatus(value: unknown): string {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  const normalized = normalizeStatus(text);
+  return normalized === BACKEND_STATUS.UNKNOWN ? "" : normalized;
+}
+
+function resolveEffectiveQuoteStatus(quoteStatus: unknown, matchStatus: unknown): string {
+  const quoteText = String(quoteStatus ?? "").trim();
+  const quoteNormalized = normalizeStatus(quoteText);
+  const normalizedMatchStatus = normalizeMatchStatus(matchStatus);
+  if (!normalizedMatchStatus) return quoteText;
+
+  if (STATUS_PROMOTION_SOURCE_STATES.has(quoteNormalized) && STATUS_PROMOTION_TARGET_STATES.has(normalizedMatchStatus)) {
+    return normalizedMatchStatus;
+  }
+
+  return quoteText || normalizedMatchStatus;
+}
+
 
 const useStyles = createThemedStyles((theme) => {
   const c = theme.colors;
@@ -767,10 +804,43 @@ export default function QuoteListPage() {
     }
 
     try {
-      const response = await listShipperQuotes();
+      
+      const [quoteResponse, matchResponse] = await Promise.all([
+        listShipperQuotes(),
+        listMyShipperMatches().catch(() => []),
+      ]);
+
       if (!isMountedRef.current) return;
-      setQuotes(Array.isArray(response) ? response : []);
-    } catch (error) {
+
+      const rawQuotes = Array.isArray(quoteResponse) ? quoteResponse : [];
+      const matches = Array.isArray(matchResponse) ? matchResponse : [];
+
+      const matchByQuoteId = new Map<number, { status: string; updatedAt: string }>();
+      for (const m of matches as ShipperMatchItem[]) {
+        const quoteId = typeof (m as any)?.quoteId === "number" ? (m as any).quoteId : 0;
+        if (quoteId <= 0) continue;
+
+        const status = typeof (m as any)?.status === "string" ? (m as any).status : "";
+        if (normalizeMatchStatus(status) === BACKEND_STATUS.CANCELLED) continue;
+
+        const updatedAt = typeof (m as any)?.updatedAt === "string" ? (m as any).updatedAt : "";
+        const prev = matchByQuoteId.get(quoteId);
+        const prevTs = prev?.updatedAt ? Date.parse(prev.updatedAt) : 0;
+        const nextTs = updatedAt ? Date.parse(updatedAt) : 0;
+
+        if (!prev || (Number.isFinite(nextTs) && nextTs >= (Number.isFinite(prevTs) ? prevTs : 0))) {
+          matchByQuoteId.set(quoteId, { status, updatedAt });
+        }
+      }
+
+      const effectiveQuotes = rawQuotes.map((q) => {
+        const match = matchByQuoteId.get(q.quoteId);
+        const effectiveStatus = resolveEffectiveQuoteStatus(q.status, match?.status);
+        return effectiveStatus && effectiveStatus !== q.status ? { ...q, status: effectiveStatus as QuoteStatusApi } : q;
+      });
+
+      setQuotes(effectiveQuotes);
+} catch (error) {
       if (!isMountedRef.current) return;
 
       const message =
