@@ -27,7 +27,7 @@ export type AppButtonProps = Omit<PressableProps, "style" | "children"> & {
   children?: React.ReactNode;
 };
 
-export function AppButton({
+function AppButtonBase({
   title,
   variant = "primary",
   size = "md",
@@ -107,7 +107,7 @@ export function AppButton({
 
     if (size === "icon") {
       return {
-        minHeight: resolved.minHeight,
+        height: resolved.minHeight,
         width: resolved.minHeight,
         borderRadius: resolved.radius,
         paddingHorizontal: 0,
@@ -116,7 +116,7 @@ export function AppButton({
     }
 
     return {
-      minHeight: resolved.minHeight,
+      height: resolved.minHeight,
       borderRadius: resolved.radius,
       paddingHorizontal: resolved.paddingX,
       paddingVertical: resolved.paddingY,
@@ -151,10 +151,13 @@ export function AppButton({
       <View style={[styles.content, contentStyle as any]}>
         {left ? <View style={styles.side}>{left}</View> : null}
 
-        {loading ? (
-          <ActivityIndicator size="small" color={spinnerColor} />
-        ) : title ? (
-          <AppText variant={labelVariant} weight="700" color={labelColor} style={textStyle as any}>
+        {title ? (
+          <AppText
+            variant={labelVariant}
+            weight="700"
+            color={loading ? "transparent" : labelColor}
+            style={textStyle as any}
+          >
             {title}
           </AppText>
         ) : (
@@ -162,10 +165,18 @@ export function AppButton({
         )}
 
         {right ? <View style={styles.side}>{right}</View> : null}
+
+        {loading && (
+          <View style={styles.spinnerOverlay}>
+            <ActivityIndicator size="small" color={spinnerColor} />
+          </View>
+        )}
       </View>
     </Pressable>
   );
 }
+
+export const AppButton = React.memo(AppButtonBase);
 
 const useStyles = createThemedStyles((theme) => {
   const gap = Math.max(8, theme.layout.spacing.base * 2);
@@ -189,6 +200,15 @@ const useStyles = createThemedStyles((theme) => {
     },
     pressed: {
       transform: [{ scale: 0.98 }],
+    },
+    spinnerOverlay: {
+      position: "absolute" as const,
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
     },
   };
 });

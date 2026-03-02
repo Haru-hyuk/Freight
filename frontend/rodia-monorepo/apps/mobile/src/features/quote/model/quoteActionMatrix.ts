@@ -210,6 +210,10 @@ export const QUOTE_ACTION_MATRIX: Record<QuoteStatusApi, QuoteActionPolicy> = {
 };
 
 export function getQuoteActionPolicy(status: QuoteStatusApi | string): QuoteActionPolicy {
+  const key = String(status ?? "").trim().toUpperCase() as QuoteStatusApi;
+  const fromMatrix = (QUOTE_ACTION_MATRIX as unknown as Record<string, QuoteActionPolicy>)[key];
+  if (fromMatrix) return fromMatrix;
+
   const uiState = toCustomerUiState(status);
   return buildQuoteActionPolicyByUiState(uiState);
 }

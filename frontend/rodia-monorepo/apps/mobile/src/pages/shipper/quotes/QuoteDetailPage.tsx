@@ -309,10 +309,15 @@ const useStyles = createThemedStyles((theme) => {
 
     bottomBar: {
       backgroundColor: c.bgSurface,
-      borderTopWidth: 1,
-      borderTopColor: c.borderDefault,
       paddingHorizontal: s * 5,
-      paddingTop: s * 3,
+      paddingTop: s * 2,
+      borderTopLeftRadius: safeNumber(theme.layout.radii.card, 16),
+      borderTopRightRadius: safeNumber(theme.layout.radii.card, 16),
+      shadowColor: c.textMain,
+      shadowOffset: { width: 0, height: -3 },
+      shadowOpacity: 0.08,
+      shadowRadius: 14,
+      elevation: 14,
     },
     bottomPlaceholder: {
       minHeight: 46,
@@ -327,7 +332,7 @@ const useStyles = createThemedStyles((theme) => {
       lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
       fontWeight: "700",
     },
-    bottomButton: { minHeight: 46 },
+    bottomButton: { minHeight: 48 },
   });
 });
 
@@ -662,7 +667,7 @@ export default function QuoteDetailPage() {
   const [isMatchSubmitting, setIsMatchSubmitting] = React.useState(false);
   const [matchSnapshot, setMatchSnapshot] = React.useState<MatchSnapshot>(EMPTY_MATCH_SNAPSHOT);
   const [matchHydrated, setMatchHydrated] = React.useState(false);
-  const [bottomBarHeight, setBottomBarHeight] = React.useState(0);
+  const [bottomBarHeight, setBottomBarHeight] = React.useState(140);
   const [pendingCounterOffer, setPendingCounterOffer] = React.useState<CounterOfferItem | null>(null);
   const matchLoadTokenRef = React.useRef(0);
   const focusRefetchMetaRef = React.useRef({ hasFocusedOnce: false, lastRefetchAt: 0 });
@@ -977,8 +982,14 @@ export default function QuoteDetailPage() {
 
   const spacing = safeNumber(theme.layout.spacing.base, 4);
   const shouldUsePolicyActionBar = POLICY_ACTION_UI_STATES.has(quoteUiState) && Boolean(effectivePolicy.bottomBar);
+  const isDriveInProgress =
+    quoteUiState === CUSTOMER_UI_STATE.PICKUP_IN_PROGRESS || quoteUiState === CUSTOMER_UI_STATE.TRANSIT_IN_PROGRESS;
   const bottomTitle = hasActiveQuoteMatch ? "배차 요청 취소" : "배차 요청";
-  const bottomVariant = hasActiveQuoteMatch ? "destructive" : "primary";
+  const bottomVariant = React.useMemo(() => {
+    if (hasActiveQuoteMatch) return "destructive";
+    if (quoteUiState === CUSTOMER_UI_STATE.UNKNOWN) return "secondary";
+    return "primary";
+  }, [hasActiveQuoteMatch, quoteUiState]);
   const handlePressBottomAction = React.useCallback(() => {
     if (hasActiveQuoteMatch) {
       void handleCancelMatch();
@@ -988,11 +999,18 @@ export default function QuoteDetailPage() {
   }, [handleCancelMatch, handleCreateMatch, hasActiveQuoteMatch]);
 
   const bottomBar = !isBlockedByFetchState ? (
-    <View style={[styles.bottomBar, { paddingBottom: insets.bottom + spacing * 2 }]} onLayout={(e) => setBottomBarHeight(e.nativeEvent.layout.height)}>
-      {!matchHydrated ? (
-        <View style={styles.bottomPlaceholder}>
-          <AppText style={styles.bottomPlaceholderText}>배차 상태 확인 중...</AppText>
-        </View>
+    <View style={[styles.bottomBar, { paddingBottom: insets.bottom + spacing * 2 }]} onLayout={(e) => {
+      const nextHeight = e?.nativeEvent?.layout?.height;
+      if (!nextHeight) return;
+      setBottomBarHeight((prev) => Math.max(prev, nextHeight));
+    }}>
+{!matchHydrated ? (
+        <AppButton
+          title="배차 상태 확인 중..."
+          variant="secondary"
+          style={styles.bottomButton}
+          disabled
+        />
       ) : shouldUsePolicyActionBar ? (
         <BottomActionRouter
           ctx={effectiveActionsContext}
@@ -1003,12 +1021,12 @@ export default function QuoteDetailPage() {
         />
       ) : (
         <AppButton
-          title={bottomTitle}
-          variant={bottomVariant}
+          title={isDriveInProgress ? (quoteUiState === CUSTOMER_UI_STATE.PICKUP_IN_PROGRESS ? "상차 진행 중..." : "운송 진행 중...") : bottomTitle}
+          variant={isDriveInProgress ? "secondary" : bottomVariant}
           style={styles.bottomButton}
           onPress={handlePressBottomAction}
           loading={isMatchSubmitting}
-          disabled={isMatchSubmitting || (hasActiveQuoteMatch && isCancelIdInvalid) || actionQuoteId <= 0}
+          disabled={isDriveInProgress || isMatchSubmitting || (hasActiveQuoteMatch && isCancelIdInvalid) || actionQuoteId <= 0}
         />
       )}
     </View>

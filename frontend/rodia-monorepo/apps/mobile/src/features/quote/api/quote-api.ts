@@ -153,8 +153,13 @@ function pickFirstStringFrom(objects: AnyObj[], keys: string[], fallback = ""): 
 function parseStatus(input: unknown): QuoteStatusApi {
   const raw = safeString(input, "").toUpperCase();
   if (!raw) return "UNKNOWN";
-  if (raw === "READY" || raw === "REQUESTED") return "OPEN";
-  if (raw === "ASSIGNED_CONFIRMED") return "ASSIGNED";
+  if (raw === "REQUESTED") return "OPEN";
+  // 서버/레거시: READY/MATCHED/ASSIGNED 계열은 "결제 필요" 단계로 통일
+  if (raw === "READY" || raw === "MATCHED" || raw === "ASSIGNED_CONFIRMED") return "ASSIGNED";
+  // 서버: IN_TRANSIT → 운행중(상세/리스트 정책 일치)
+  if (raw === "IN_TRANSIT") return "DRIVING";
+  // 서버: DELIVERED → 하차완료
+  if (raw === "DELIVERED") return "DROPOFF";
   if (raw === "ACCEPTED") return "ACCEPTED";
   if (raw === "CANCELLED" || raw === "CANCEL" || raw === "CANCELED") return "CANCELED";
   if (raw === "COMPLETED" || raw === "DONE" || raw === "FINISHED") return "DROPOFF";

@@ -17,9 +17,10 @@ export type CustomerUiState =
   | "TRANSIT_IN_PROGRESS"
   | "COMPLETED"
   | "CANCELED"
+  | "PROPOSED"
   | "UNKNOWN";
 
-export type CustomerCtaId = "PAY" | "TRACK" | "RECEIPT" | "RE_REQUEST";
+export type CustomerCtaId = "PAY" | "TRACK" | "RECEIPT" | "RE_REQUEST" | "ACCEPT" | "REJECT";
 
 export interface CustomerCtaConfig {
   id: CustomerCtaId;
@@ -78,8 +79,6 @@ function sanitizeToken(raw: string): string {
 
 /**
  * Step 1) Backend Raw -> BackendStatus (정규화)
- * - READY/MATCHED 분리 인식
- * - UsageHistory에서 quote/match/legacy 문자열이 섞여 들어와도 안전하게 흡수
  */
 export function normalizeStatus(raw?: string | null): BackendStatus {
   if (!raw) return "UNKNOWN";
@@ -89,33 +88,27 @@ export function normalizeStatus(raw?: string | null): BackendStatus {
 
   if (v.includes("CANCEL")) return "CANCELLED";
 
-  // 완료 계열
   if (v.includes("DROPOFF") || v.includes("DELIVER")) return "DELIVERED";
   if (v === "COMPLETED" || v.includes("DONE") || v.includes("FINISH") || v.includes("COMPLETE")) return "COMPLETED";
 
-  // 운송중 계열
   if (v.includes("IN_TRANSIT") || v.includes("INTRANSIT")) return "IN_TRANSIT";
   if (v.includes("DRIV") || v.includes("DRIVING")) return "IN_TRANSIT";
   if (v.includes("TRANSIT") && (v.includes("IN") || v.startsWith("IN_") || v === "TRANSIT")) return "IN_TRANSIT";
 
-  // 결제 대기(매칭 READY) 계열
   if (v.includes("READY")) return "READY";
 
-  // 배차/상차 이동 계열 (quote MATCHED/ASSIGNED/ACCEPTED/PREPARING/PICKUP 등)
   if (v.includes("MATCH")) return "MATCHED";
   if (v.includes("ASSIGN") || v.includes("ACCEPT")) return "MATCHED";
   if (v.includes("PREPAR")) return "MATCHED";
   if (v.includes("PICKUP")) return "MATCHED";
 
-  // 요청 접수 계열
   if (v.includes("OPEN") || v.includes("REQUEST")) return "OPEN";
 
   return "UNKNOWN";
 }
 
 /**
- * 상태 우선순위 (UsageHistory 표기 기준)
- * - READY(결제대기) < MATCHED(상차지 이동) < IN_TRANSIT < 완료
+ * 상태 우선순위
  */
 const statusRank: Record<BackendStatus, number> = {
   UNKNOWN: 0,
@@ -148,7 +141,7 @@ function pickMostRelevantStatus(statuses: BackendStatus[]): BackendStatus {
 }
 
 /**
- * Step 2) BackendStatus -> CustomerUiState (UsageHistory 비즈니스 로직)
+ * Step 2) BackendStatus -> CustomerUiState
  */
 export function mapBackendStatusToCustomerUiState(status: BackendStatus): CustomerUiState {
   switch (status) {
@@ -186,14 +179,15 @@ export function deriveCustomerUiState(input: DeriveCustomerUiStateInput): Derive
 export function getUsageHistoryStatusTone(uiState: CustomerUiState): ParsedUsageHistoryItem["statusTone"] {
   if (uiState === "COMPLETED") return "secondary";
   if (uiState === "CANCELED") return "destructive";
-  if (uiState === "PAYMENT_REQUIRED") return "accent";
+  if (uiState === "PAYMENT_REQUIRED" || uiState === "PROPOSED") return "accent";
   if (uiState === "PICKUP_IN_PROGRESS" || uiState === "TRANSIT_IN_PROGRESS") return "primary";
   return "neutral";
 }
 
-/**
- * 차량 정보를 한국어로 포맷팅
- */
+// ---------------------------------------------------------------------------
+// Vehicle text formatter
+// ---------------------------------------------------------------------------
+
 function formatVehicleText(match: any, quote: any): string {
   const pickMappedToken = (values: unknown[], table: Record<string, string>): string => {
     for (const v of values) {
@@ -213,7 +207,6 @@ function formatVehicleText(match: any, quote: any): string {
     return "";
   };
 
-  // 1) 원본 코드 우선: quote(vehicleType=톤수, vehicleBodyType=차종) / match(tonType/tonnage/vehicleType, vehicleBodyType)
   const tonToken =
     pickMappedToken(
       [
@@ -236,7 +229,6 @@ function formatVehicleText(match: any, quote: any): string {
         match?.body_type,
         quote?.vehicleBodyType,
         quote?.vehicle_body_type,
-        // 일부 레거시가 vehicleType에 차종(CARGO 등)을 싣는 경우 대응
         match?.vehicleType,
       ],
       VEHICLE_TYPE_MAP
@@ -245,7 +237,6 @@ function formatVehicleText(match: any, quote: any): string {
   let tonText = tonToken ? TONNAGE_MAP[tonToken] : "";
   let typeText = bodyToken ? VEHICLE_TYPE_MAP[bodyToken] : "";
 
-  // 2) fallback: 기존 문자열(vehicleText)에서 토큰 스캔
   const fallback = String(match?.vehicleText ?? quote?.vehicleText ?? "");
   if ((!tonText || !typeText) && fallback && fallback !== "차량 정보 없음") {
     if (!tonText) {
@@ -258,17 +249,72 @@ function formatVehicleText(match: any, quote: any): string {
     }
   }
 
-  // 3) 조합 결과
   if (tonText && typeText) return `${tonText} ${typeText}`;
   if (tonText || typeText) return tonText || typeText;
 
   return "차량 정보 없음";
 }
 
+// ---------------------------------------------------------------------------
+// Counter offer ID extraction
+// ---------------------------------------------------------------------------
+
 /**
- * MatchingListPage에서 (match, quoteDetail) 두 인자를 넘기므로 시그니처 유지
+ * match 객체에서 counterOfferId를 안전하게 추출합니다.
+ * 백엔드 응답 구조(any)가 다양하므로 여러 경로를 순서대로 탐색합니다.
+ */
+function extractCounterOfferId(match: any): number | undefined {
+  const candidates = [
+    match?.counterOfferId,
+    match?.counterOffer?.counterOfferId,
+    match?.offer?.counterOfferId,
+    match?.offerItem?.counterOfferId,
+    match?.proposalId,
+  ];
+  for (const c of candidates) {
+    const n = Number(c);
+    if (Number.isInteger(n) && n > 0) return n;
+  }
+  return undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Main mapper
+// ---------------------------------------------------------------------------
+
+/**
+ * MatchingListPage에서 (match, quoteDetail) 두 인자를 넘기므로 시그니처 유지.
  */
 export function mapToUsageHistoryItem(match: any, quote?: any): ParsedUsageHistoryItem {
+  // ── 1. PROPOSED 감지 (최우선) ──
+  // 기사 역제안은 어떤 백엔드 상태보다 우선합니다.
+  const isProposed =
+    match?.isProposal === true ||
+    match?.isCounterOffer === true ||
+    (typeof match?.suggestedPrice === "number" && match.suggestedPrice > 0) ||
+    String(match?.status ?? "").toUpperCase().includes("PROPOS") ||
+    String(quote?.status ?? "").toUpperCase().includes("PROPOS");
+
+  if (isProposed) {
+    const counterOfferId = extractCounterOfferId(match);
+    return {
+      id: String(match?.id ?? match?.matchId ?? match?.quoteId ?? quote?.id ?? quote?.quoteId ?? Math.random()),
+      quoteId: Number(match?.quoteId ?? quote?.quoteId ?? quote?.id ?? 0),
+      matchId: Number(match?.matchId ?? match?.id ?? 0) || undefined,
+      counterOfferId,
+      status: "PROPOSED",
+      backendStatus: "UNKNOWN",
+      uiState: "PROPOSED",
+      statusTone: "accent",
+      originAddress: String(match?.originAddress ?? quote?.originAddress ?? "상차지 미정"),
+      destinationAddress: String(match?.destinationAddress ?? quote?.destinationAddress ?? "하차지 미정"),
+      priceText: String(match?.priceText ?? quote?.priceText ?? "0원"),
+      vehicleText: formatVehicleText(match, quote),
+      dateText: String(match?.dateText ?? quote?.dateText ?? ""),
+    };
+  }
+
+  // ── 2. 일반 상태 처리 ──
   const rawMatchStatus: string | null = typeof match?.status === "string" ? match.status : null;
   const rawQuoteStatus: string | null = typeof quote?.status === "string" ? quote.status : null;
 
@@ -285,6 +331,7 @@ export function mapToUsageHistoryItem(match: any, quote?: any): ParsedUsageHisto
     id: String(match?.id ?? match?.matchId ?? match?.quoteId ?? quote?.id ?? quote?.quoteId ?? Math.random()),
     quoteId: Number(match?.quoteId ?? quote?.quoteId ?? quote?.id ?? 0),
     matchId: Number(match?.matchId ?? match?.id ?? 0) || undefined,
+    counterOfferId: undefined,
     status,
     backendStatus,
     uiState,
@@ -296,6 +343,10 @@ export function mapToUsageHistoryItem(match: any, quote?: any): ParsedUsageHisto
     dateText: String(match?.dateText ?? quote?.dateText ?? ""),
   };
 }
+
+// ---------------------------------------------------------------------------
+// Label / title / CTA helpers
+// ---------------------------------------------------------------------------
 
 export function getCustomerStatusBadgeLabel(uiState: CustomerUiState): string {
   switch (uiState) {
@@ -311,6 +362,8 @@ export function getCustomerStatusBadgeLabel(uiState: CustomerUiState): string {
       return "완료";
     case "CANCELED":
       return "취소";
+    case "PROPOSED":
+      return "역제안";
     default:
       return "상태확인";
   }
@@ -330,21 +383,32 @@ export function getCustomerStatusTitle(uiState: CustomerUiState): string {
       return "운송이 완료되었습니다";
     case "CANCELED":
       return "요청이 취소되었습니다";
+    case "PROPOSED":
+      return "기사님이 새로운 금액을 제안했습니다";
     default:
       return "상태를 확인하고 있습니다";
   }
 }
 
-export function getCustomerCta(uiState: CustomerUiState): CustomerCtaConfig | null {
+/**
+ * CTA 버튼 목록을 반환합니다.
+ * PROPOSED 상태에서는 수락/거절 두 버튼을 배열로 반환합니다.
+ */
+export function getCustomerCta(uiState: CustomerUiState): CustomerCtaConfig[] | null {
   switch (uiState) {
+    case "PROPOSED":
+      return [
+        { id: "ACCEPT", label: "수락하기", variant: "primary", enabled: true },
+        { id: "REJECT", label: "거절하기", variant: "secondary", enabled: true },
+      ];
     case "PAYMENT_REQUIRED":
-      return { id: "PAY", label: "즉시 결제하기", variant: "primary", enabled: true };
+      return [{ id: "PAY", label: "즉시 결제하기", variant: "primary", enabled: true }];
     case "TRANSIT_IN_PROGRESS":
-      return { id: "TRACK", label: "실시간 위치 확인", variant: "secondary", enabled: true };
+      return [{ id: "TRACK", label: "실시간 위치 확인", variant: "secondary", enabled: true }];
     case "COMPLETED":
-      return { id: "RECEIPT", label: "인수증 확인", variant: "secondary", enabled: true };
+      return [{ id: "RECEIPT", label: "인수증 확인", variant: "secondary", enabled: true }];
     case "CANCELED":
-      return { id: "RE_REQUEST", label: "다시 요청", variant: "primary", enabled: true };
+      return [{ id: "RE_REQUEST", label: "다시 요청", variant: "primary", enabled: true }];
     default:
       return null;
   }
