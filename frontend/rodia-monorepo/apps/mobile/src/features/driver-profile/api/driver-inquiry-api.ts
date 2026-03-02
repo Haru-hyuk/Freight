@@ -1,4 +1,4 @@
-import { apiClient } from "@/shared/api/client";
+import { apiClient } from "@/shared/lib/api/apiClient";
 
 type AnyObj = Record<string, any>;
 
