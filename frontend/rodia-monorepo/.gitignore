@@ -1,28 +1,34 @@
-# Node
+# Node & Package Manager
 node_modules/
 .pnpm-store/
+**/node_modules/
 npm-debug.log*
 pnpm-debug.log*
-yarn-debug.log*
-yarn-error.log*
 
 # OS / Editor
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
+*.swp
 
-# Build outputs (apps/web, apps/mobile)
-apps/**/dist/
-apps/**/.expo/
-apps/**/web-build/
-apps/**/build/
-apps/**/coverage/
-
-# Tokens build outputs
-packages/design-tokens/dist/
-packages/**/dist/
-
-# Env
+# Environment Variables (SSOT)
 .env
-.env.*
+.env.local
+# 예외: 예시 파일은 공유되어야 함
+!.env.example
+
+# Build Artifacts (Globbing)
+**/dist/
+**/build/
+**/.expo/
+**/web-build/
+**/coverage/
+
+# Documentation (아까 요청한 내역)
+docs/
+!docs/*.md
+
+# Patch & Temp
+*.patch
+*.tmp

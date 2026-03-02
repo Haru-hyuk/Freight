@@ -23,5 +23,10 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src"]
+  "include": [
+    "src",
+    "app", 
+    "vite-env.d.ts"
+  ],
+  "exclude": ["node_modules"]
 }

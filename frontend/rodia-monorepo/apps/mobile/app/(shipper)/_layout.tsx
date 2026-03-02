@@ -8,7 +8,7 @@ import { safeString } from "@/shared/theme/colorUtils";
 import { useAppTheme } from "@/shared/theme/useAppTheme";
 import { BottomTabBar } from "@/widgets/layout/BottomTabBar";
 
-type BottomTabKey = "home" | "quotes" | "matchings" | "profile";
+type BottomTabKey = "home" | "quotes" | "profile";
 
 function shouldHideBottomBar(segments: readonly string[] | undefined | null): boolean {
   const segs = Array.isArray(segments) ? segments : [];
@@ -22,7 +22,7 @@ function pickActiveKey(segments: readonly string[] | undefined | null): BottomTa
   const segs = Array.isArray(segments) ? segments : [];
 
   if (segs.includes("quotes")) return "quotes";
-  if (segs.includes("matchings")) return "matchings";
+  if (segs.includes("matchings")) return "quotes";
   if (segs.includes("profile")) return "profile";
   if (segs.includes("settings")) return "profile";
   if (segs.includes("home")) return "home";
@@ -33,7 +33,7 @@ function pickActiveKey(segments: readonly string[] | undefined | null): BottomTa
     .slice(-1)[0];
 
   if (last === "quotes") return "quotes";
-  if (last === "matchings") return "matchings";
+  if (last === "matchings") return "quotes";
   if (last === "profile") return "profile";
   if (last === "settings") return "profile";
   return "home";
@@ -42,7 +42,6 @@ function pickActiveKey(segments: readonly string[] | undefined | null): BottomTa
 function hrefForKey(key: BottomTabKey): `/(shipper)/${string}` {
   if (key === "home") return "/(shipper)/home";
   if (key === "quotes") return "/(shipper)/quotes";
-  if (key === "matchings") return "/(shipper)/matchings";
   return "/(shipper)/profile";
 }
 
@@ -155,7 +154,7 @@ export default function ShipperLayout() {
           onChange={onChangeTab}
           items={[
             { key: "home", label: "홈", iconActive: "home", iconInactive: "home-outline" },
-            { key: "quotes", label: "이용내역", iconActive: "clipboard", iconInactive: "clipboard-outline" },
+            { key: "quotes", label: "견적 내역", iconActive: "clipboard", iconInactive: "clipboard-outline" },
             { key: "profile", label: "내 정보", iconActive: "person", iconInactive: "person-outline" },
           ]}
         />
@@ -168,6 +167,6 @@ export default function ShipperLayout() {
 /*
 요약(3줄)
 - (shipper) 레이아웃에서 인증/role 가드를 유지하면서 Stack 아래에 BottomTabBar를 고정했습니다.
-- 탭 전환은 router.push로 / (shipper)/home|quotes|matchings|profile 라우트로 이동합니다.
-- useSegments 기반으로 하위 라우트에서도 활성 탭을 안정적으로 유지합니다.
+- 탭 전환은 router.replace로 /(shipper)/home|quotes|profile 라우트로 이동합니다.
+- matchings는 숨김 라우트로 유지하고, 활성 탭 표시는 quotes로 매핑합니다.
 */

@@ -116,10 +116,10 @@ export function MatchingListPage() {
   );
 
   return (
-    <PageScaffold title="이용 내역" backgroundColor="#F3F4F6">
+    <PageScaffold title="견적 내역" backgroundColor="#F3F4F6">
       <View style={styles.container}>
         {isLoading ? (
-          <AppSpinner label="이용 내역을 불러오는 중입니다." />
+          <AppSpinner label="견적 내역을 불러오는 중입니다." />
         ) : errorMessage ? (
           <AppErrorState
             title="목록을 불러오지 못했어요"

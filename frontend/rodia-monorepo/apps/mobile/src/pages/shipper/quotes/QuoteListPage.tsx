@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 
 import type { QuoteListItem, QuoteStatusApi } from "@/entities/quote/model/quote.types";
 import { listShipperQuotes } from "@/features/quote/api";
+import { listMyShipperMatches, type ShipperMatchItem } from "@/features/matching/api";
 import {
   getQuoteActionPolicy,
   resolveTonePalette,
@@ -13,7 +14,7 @@ import {
   type QuoteTonePaletteKey,
 } from "@/features/quote/model/quoteActionMatrix";
 import { formatDateTime, formatDistance, formatKrw } from "@/shared/lib/format/display";
-import { CUSTOMER_UI_STATE, getCustomerUiStateFromBackendStatus, type CustomerUiState } from "@/shared/lib/policy";
+import { BACKEND_STATUS, CUSTOMER_UI_STATE, getCustomerUiStateFromBackendStatus, normalizeStatus, type CustomerUiState } from "@/shared/lib/policy";
 import { safeNumber, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppCard } from "@/shared/ui/kit/AppCard";
@@ -97,6 +98,42 @@ const SORT_OPTIONS: Array<{ key: QuoteListSort; label: string }> = [
   { key: "PRICE", label: "금액순" },
 ];
 const FOCUS_REFETCH_THROTTLE_MS = 1500;
+
+const STATUS_PROMOTION_SOURCE_STATES: ReadonlySet<string> = new Set([
+  BACKEND_STATUS.READY,
+  BACKEND_STATUS.OPEN,
+  BACKEND_STATUS.UNKNOWN,
+]);
+
+const STATUS_PROMOTION_TARGET_STATES: ReadonlySet<string> = new Set([
+  BACKEND_STATUS.MATCHED,
+  BACKEND_STATUS.IN_TRANSIT,
+  BACKEND_STATUS.DELIVERED,
+  BACKEND_STATUS.READY,
+  BACKEND_STATUS.COMPLETED,
+  BACKEND_STATUS.CANCELLED,
+]);
+
+function normalizeMatchStatus(value: unknown): string {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  const normalized = normalizeStatus(text);
+  return normalized === BACKEND_STATUS.UNKNOWN ? "" : normalized;
+}
+
+function resolveEffectiveQuoteStatus(quoteStatus: unknown, matchStatus: unknown): string {
+  const quoteText = String(quoteStatus ?? "").trim();
+  const quoteNormalized = normalizeStatus(quoteText);
+  const normalizedMatchStatus = normalizeMatchStatus(matchStatus);
+  if (!normalizedMatchStatus) return quoteText;
+
+  if (STATUS_PROMOTION_SOURCE_STATES.has(quoteNormalized) && STATUS_PROMOTION_TARGET_STATES.has(normalizedMatchStatus)) {
+    return normalizedMatchStatus;
+  }
+
+  return quoteText || normalizedMatchStatus;
+}
+
 
 const useStyles = createThemedStyles((theme) => {
   const c = theme.colors;
@@ -730,6 +767,28 @@ export default function QuoteListPage() {
   const focusRefetchMetaRef = useRef({ hasFocusedOnce: false, inFlight: false, lastRefetchAt: 0 });
 
   const [activeTab, setActiveTab] = useState<QuoteListTab>("ALL");
+
+  const routeParams = useLocalSearchParams<{ tab?: string }>();
+
+  useEffect(() => {
+    const raw = String(routeParams?.tab ?? "").trim().toUpperCase();
+    if (!raw) return;
+
+    const next =
+      raw === "IN_PROGRESS" || raw === "INPROGRESS" || raw === "PROGRESS"
+        ? "IN_PROGRESS"
+        : raw === "COMPLETED"
+          ? "COMPLETED"
+          : raw === "CANCELED" || raw === "CANCELLED"
+            ? "CANCELED"
+            : raw === "ALL"
+              ? "ALL"
+              : null;
+
+    if (!next) return;
+    if (next === activeTab) return;
+    setActiveTab(next as any);
+  }, [activeTab, routeParams?.tab]);
   const [activeSort, setActiveSort] = useState<QuoteListSort>("LATEST");
   const [quotes, setQuotes] = useState<QuoteListItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -745,10 +804,43 @@ export default function QuoteListPage() {
     }
 
     try {
-      const response = await listShipperQuotes();
+      
+      const [quoteResponse, matchResponse] = await Promise.all([
+        listShipperQuotes(),
+        listMyShipperMatches().catch(() => []),
+      ]);
+
       if (!isMountedRef.current) return;
-      setQuotes(Array.isArray(response) ? response : []);
-    } catch (error) {
+
+      const rawQuotes = Array.isArray(quoteResponse) ? quoteResponse : [];
+      const matches = Array.isArray(matchResponse) ? matchResponse : [];
+
+      const matchByQuoteId = new Map<number, { status: string; updatedAt: string }>();
+      for (const m of matches as ShipperMatchItem[]) {
+        const quoteId = typeof (m as any)?.quoteId === "number" ? (m as any).quoteId : 0;
+        if (quoteId <= 0) continue;
+
+        const status = typeof (m as any)?.status === "string" ? (m as any).status : "";
+        if (normalizeMatchStatus(status) === BACKEND_STATUS.CANCELLED) continue;
+
+        const updatedAt = typeof (m as any)?.updatedAt === "string" ? (m as any).updatedAt : "";
+        const prev = matchByQuoteId.get(quoteId);
+        const prevTs = prev?.updatedAt ? Date.parse(prev.updatedAt) : 0;
+        const nextTs = updatedAt ? Date.parse(updatedAt) : 0;
+
+        if (!prev || (Number.isFinite(nextTs) && nextTs >= (Number.isFinite(prevTs) ? prevTs : 0))) {
+          matchByQuoteId.set(quoteId, { status, updatedAt });
+        }
+      }
+
+      const effectiveQuotes = rawQuotes.map((q) => {
+        const match = matchByQuoteId.get(q.quoteId);
+        const effectiveStatus = resolveEffectiveQuoteStatus(q.status, match?.status);
+        return effectiveStatus && effectiveStatus !== q.status ? { ...q, status: effectiveStatus as QuoteStatusApi } : q;
+      });
+
+      setQuotes(effectiveQuotes);
+} catch (error) {
       if (!isMountedRef.current) return;
 
       const message =
@@ -806,7 +898,7 @@ export default function QuoteListPage() {
     if (activeTab === "IN_PROGRESS") return "현재 진행 중인 운송 내역이 없습니다.";
     if (activeTab === "COMPLETED") return "완료된 운송 내역이 없습니다.";
     if (activeTab === "CANCELED") return "취소된 운송 내역이 없습니다.";
-    return "운송 요청을 시작하면 이용 내역을 확인할 수 있습니다.";
+    return "운송 요청을 시작하면 견적 내역을 확인할 수 있습니다.";
   }, [activeTab]);
 
   const handlePressCard = useCallback(
@@ -822,7 +914,7 @@ export default function QuoteListPage() {
 
   return (
     <PageScaffold
-      title="이용 내역"
+      title="견적 내역"
       backgroundColor={theme.colors.bgMain}
       contentStyle={styles.pageContent}
       floating={
@@ -888,7 +980,7 @@ export default function QuoteListPage() {
           />
         ) : isFilteredEmpty ? (
           <AppEmptyState
-            title="조건에 맞는 이용 내역이 없어요"
+            title="조건에 맞는 견적 내역이 없어요"
             description={emptyDescription}
             action={{ label: "견적 요청하기", onPress: () => router.push("/(shipper)/quotes/create") }}
           />

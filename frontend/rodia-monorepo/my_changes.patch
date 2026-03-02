@@ -1,0 +1,1805 @@
+diff --git a/.gitignore b/.gitignore
+index 186b907..a82e1ed 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -1,185 +1,185 @@
+-# =====================================================
+-# Created by https://www.toptal.com/developers/gitignore
+-# Templates: java,eclipse,react,reactnative
+-# Extended for Spring Boot + React + React Native
+-# =====================================================
+-
+-### Eclipse / STS ###
+-.metadata
+-bin/
+-tmp/
+-*.tmp
+-*.bak
+-*.swp
+-*~.nib
+-.settings/
+-.loadpath
+-.recommenders/
+-.externalToolBuilders/
+-*.launch
+-.factorypath
+-.buildpath
+-.target
+-.tern-project
+-.texlipse
+-.springBeans
+-.apt_generated/
+-.apt_generated_test/
+-.cache-main
+-.scala_dependencies
+-.worksheet
+-.sts4-cache/
+-
+-# Eclipse Gradle / Maven
+-.project
+-.classpath
+-
+-### Java / Spring Boot ###
+-*.class
+-*.log
+-hs_err_pid*
+-replay_pid*
+-
+-# Maven / Gradle
+-target/
+-build/
+-.gradle/
+-.gradletasknamecache
+-
+-# Package files
+-*.jar
+-*.war
+-*.ear
+-*.nar
+-*.zip
+-*.tar.gz
+-*.rar
+-
+-### IntelliJ / IDE ###
+-*.iml
+-.idea/
+-misc.xml
+-deploymentTargetDropDown.xml
+-render.experimental.xml
+-
+-### VS Code ###
+-.vscode/
+-.vscode-test
+-
+-### OS ###
+-.DS_Store
+-.DS_*
+-.AppleDouble
+-.LSOverride
+-Icon
+-._*
+-
+-### React / Frontend ###
+-node_modules/
+-bower_components/
+-jspm_packages/
+-web_modules/
+-
+-logs
+-npm-debug.log*
+-yarn-debug.log*
+-yarn-error.log*
+-pnpm-debug.log*
+-lerna-debug.log*
+-
+-coverage/
+-.nyc_output
+-*.lcov
+-
+-# Build outputs
+-dist
+-build
+-out
+-.next
+-.nuxt
+-
+-# Vite
+-.vite/
+-
+-# Cache
+-.cache
+-.parcel-cache
+-.rpt2_cache/
+-.rts2_cache_cjs/
+-.rts2_cache_es/
+-.rts2_cache_umd/
+-
+-# Env files
+-.env
+-.env.*
+-!.env.example
+-
+-### React Native ###
+-.expo
+-__generated__
+-
+-# Android
+-.gradle
+-**/build/
+-!src/**/build/
+-captures/
+-.externalNativeBuild/
+-.cxx/
+-*.apk
+-output.json
+-*.jks
+-*.keystore
+-google-services.json
+-*.hprof
+-local.properties
+-
+-# iOS / macOS
+-xcuserdata/
+-*.xcscmblueprint
+-*.xccheckout
+-DerivedData/
+-Pods/
+-
+-### React Native Buck ###
+-buck-out/
+-.buckconfig.local
+-.buckd/
+-.buckversion
+-.fakebuckversion
+-
+-### Node ###
+-pids
+-*.pid
+-*.seed
+-*.pid.lock
+-lib-cov
+-.grunt
+-.lock-wscript
+-build/Release
+-.npm
+-.eslintcache
+-.stylelintcache
+-.node_repl_history
+-
+-# Yarn v2+
+-.yarn/cache
+-.yarn/unplugged
+-.yarn/build-state.yml
+-.yarn/install-state.gz
+-.pnp.*
+-
+-### Linux ###
+-*~
+-.fuse_hidden*
+-.directory
+-.Trash-*
+-.nfs*
+-
+-# =====================================================
+-# End of .gitignore
+-# =====================================================
+-backend/build.gradle
+-_local/
+-backend/src/main/resources/application.yml
+-_local/test-client/index.html
+-frontend/rodia-monorepo/apps/mobile/.claude/settings.local.json
++# =====================================================
++# Created by https://www.toptal.com/developers/gitignore
++# Templates: java,eclipse,react,reactnative
++# Extended for Spring Boot + React + React Native
++# =====================================================
++
++### Eclipse / STS ###
++.metadata
++bin/
++tmp/
++*.tmp
++*.bak
++*.swp
++*~.nib
++.settings/
++.loadpath
++.recommenders/
++.externalToolBuilders/
++*.launch
++.factorypath
++.buildpath
++.target
++.tern-project
++.texlipse
++.springBeans
++.apt_generated/
++.apt_generated_test/
++.cache-main
++.scala_dependencies
++.worksheet
++.sts4-cache/
++
++# Eclipse Gradle / Maven
++.project
++.classpath
++
++### Java / Spring Boot ###
++*.class
++*.log
++hs_err_pid*
++replay_pid*
++
++# Maven / Gradle
++target/
++build/
++.gradle/
++.gradletasknamecache
++
++# Package files
++*.jar
++*.war
++*.ear
++*.nar
++*.zip
++*.tar.gz
++*.rar
++
++### IntelliJ / IDE ###
++*.iml
++.idea/
++misc.xml
++deploymentTargetDropDown.xml
++render.experimental.xml
++
++### VS Code ###
++.vscode/
++.vscode-test
++
++### OS ###
++.DS_Store
++.DS_*
++.AppleDouble
++.LSOverride
++Icon
++._*
++
++### React / Frontend ###
++node_modules/
++bower_components/
++jspm_packages/
++web_modules/
++
++logs
++npm-debug.log*
++yarn-debug.log*
++yarn-error.log*
++pnpm-debug.log*
++lerna-debug.log*
++
++coverage/
++.nyc_output
++*.lcov
++
++# Build outputs
++dist
++build
++out
++.next
++.nuxt
++
++# Vite
++.vite/
++
++# Cache
++.cache
++.parcel-cache
++.rpt2_cache/
++.rts2_cache_cjs/
++.rts2_cache_es/
++.rts2_cache_umd/
++
++# Env files
++.env
++.env.*
++!.env.example
++
++### React Native ###
++.expo
++__generated__
++
++# Android
++.gradle
++**/build/
++!src/**/build/
++captures/
++.externalNativeBuild/
++.cxx/
++*.apk
++output.json
++*.jks
++*.keystore
++google-services.json
++*.hprof
++local.properties
++
++# iOS / macOS
++xcuserdata/
++*.xcscmblueprint
++*.xccheckout
++DerivedData/
++Pods/
++
++### React Native Buck ###
++buck-out/
++.buckconfig.local
++.buckd/
++.buckversion
++.fakebuckversion
++
++### Node ###
++pids
++*.pid
++*.seed
++*.pid.lock
++lib-cov
++.grunt
++.lock-wscript
++build/Release
++.npm
++.eslintcache
++.stylelintcache
++.node_repl_history
++
++# Yarn v2+
++.yarn/cache
++.yarn/unplugged
++.yarn/build-state.yml
++.yarn/install-state.gz
++.pnp.*
++
++### Linux ###
++*~
++.fuse_hidden*
++.directory
++.Trash-*
++.nfs*
++
++# =====================================================
++# End of .gitignore
++# =====================================================
++backend/build.gradle
++_local/
++backend/src/main/resources/application.yml
++_local/test-client/index.html
++frontend/rodia-monorepo/apps/mobile/.claude/settings.local.json
+diff --git a/docs/Git Branch Strategy.md b/docs/Git Branch Strategy.md
+index 75b0875..a0a597e 100644
+--- a/docs/Git Branch Strategy.md	
++++ b/docs/Git Branch Strategy.md	
+@@ -1,80 +1,80 @@
+-## 🌿 브랜치 전략 안내
+-
+-### 📌 기본 원칙
+-
+-- **개발 기준 브랜치: `develop`**
+-- **배포 전용 브랜치: `main`**
+-- 평소 개발은 `main`을 사용하지 않습니다.
+-
+----
+-
+-### 🌱 브랜치 종류
+-
+-#### `feature/*`
+-- 기능 개발 브랜치
+-- 기능 1개 = 브랜치 1개
+-- `develop`에서 생성 → 작업 → `develop`으로 PR
+-
+-**예시**
+-`feature/auth-login feature/cargo-create feature/driver-vehicle feature/admin-matching`
+-
+----
+-
+-#### `fix/*`
+-- 버그 수정 브랜치
+-- `develop`에서 생성 → 수정 → `develop`으로 PR
+-- 
+-**예시**
+-`fix/exception-handling fix/db-long-to-int`
+-
+----
+-
+-#### `chore/*`
+-- 기능 외 작업 (설정, 리팩토링, 구조 정리 등)
+-- `develop`에서 생성 → 작업 → `develop`으로 PR
+-
+-**예시**
+-`chore/project-config chore/api-structure`
+-
+----
+-
+-### 🔄 작업 흐름
+-```
+-develop  
+-├─ feature/*  
+-├─ fix/*  
+-└─ chore/*         
+-		↓     
+-	PR → develop         
+-	    ↓     
+-	(배포 시)        
+-		↓       
+-	develop → main
+-```
+-
+-
+----
+-
+-### ❌ 주의 사항
+-
+-- `feature / fix / chore` → `main` 직접 PR ❌
+-- `main`에서 직접 작업 ❌
+-
+----
+-
+-### 📝 PR / 커밋 규칙 (간단)
+-
+-- PR 제목 예시
+-
+-`[FE] 화물 접수 기능 추가 [BE] 기사 차량 등록 API [FIX] 예외 처리 오류 수정`
+-
+-- 커밋 메시지 타입
+-
+-`feat: 기능 추가 fix: 버그 수정 chore: 설정/환경 docs: 문서 refactor: 리팩토링`
+-
+----
+-
+-### ✅ 한 줄 요약
+-
+-> **개발은 `develop`, 배포는 `main`**  
++## 🌿 브랜치 전략 안내
++
++### 📌 기본 원칙
++
++- **개발 기준 브랜치: `develop`**
++- **배포 전용 브랜치: `main`**
++- 평소 개발은 `main`을 사용하지 않습니다.
++
++---
++
++### 🌱 브랜치 종류
++
++#### `feature/*`
++- 기능 개발 브랜치
++- 기능 1개 = 브랜치 1개
++- `develop`에서 생성 → 작업 → `develop`으로 PR
++
++**예시**
++`feature/auth-login feature/cargo-create feature/driver-vehicle feature/admin-matching`
++
++---
++
++#### `fix/*`
++- 버그 수정 브랜치
++- `develop`에서 생성 → 수정 → `develop`으로 PR
++- 
++**예시**
++`fix/exception-handling fix/db-long-to-int`
++
++---
++
++#### `chore/*`
++- 기능 외 작업 (설정, 리팩토링, 구조 정리 등)
++- `develop`에서 생성 → 작업 → `develop`으로 PR
++
++**예시**
++`chore/project-config chore/api-structure`
++
++---
++
++### 🔄 작업 흐름
++```
++develop  
++├─ feature/*  
++├─ fix/*  
++└─ chore/*         
++		↓     
++	PR → develop         
++	    ↓     
++	(배포 시)        
++		↓       
++	develop → main
++```
++
++
++---
++
++### ❌ 주의 사항
++
++- `feature / fix / chore` → `main` 직접 PR ❌
++- `main`에서 직접 작업 ❌
++
++---
++
++### 📝 PR / 커밋 규칙 (간단)
++
++- PR 제목 예시
++
++`[FE] 화물 접수 기능 추가 [BE] 기사 차량 등록 API [FIX] 예외 처리 오류 수정`
++
++- 커밋 메시지 타입
++
++`feat: 기능 추가 fix: 버그 수정 chore: 설정/환경 docs: 문서 refactor: 리팩토링`
++
++---
++
++### ✅ 한 줄 요약
++
++> **개발은 `develop`, 배포는 `main`**  
+ > 모든 작업은 `develop` 기준으로 진행합니다.
+\ No newline at end of file
+diff --git "a/docs/\355\224\204\353\241\234\354\240\235\355\212\270 \354\243\274\354\240\234 \353\260\217 \352\265\254\354\241\260.md" "b/docs/\355\224\204\353\241\234\354\240\235\355\212\270 \354\243\274\354\240\234 \353\260\217 \352\265\254\354\241\260.md"
+index 1287a81..2bb523c 100644
+--- "a/docs/\355\224\204\353\241\234\354\240\235\355\212\270 \354\243\274\354\240\234 \353\260\217 \352\265\254\354\241\260.md"	
++++ "b/docs/\355\224\204\353\241\234\354\240\235\355\212\270 \354\243\274\354\240\234 \353\260\217 \352\265\254\354\241\260.md"	
+@@ -1,207 +1,207 @@
+-# 화물 운송 플랫폼 프로젝트 구조 정리 (최종 통합본)
+-
+----
+-
+-## 1. 프로젝트 한 줄 정의
+-
+-> **본 프로젝트는 화주가 운송 조건을 제시하고,  
+-> 기사가 자신의 차량 상태·적재 용량·경로 효율을 기준으로  
+-> 단건 또는 다건(합짐) 운송을 계획하여 매칭한 뒤  
+-> 매칭 확정 후 결제하는 화물 운송 플랫폼이다.**
+-
+----
+-
+-## 2. 핵심 설계 철학 (최종)
+-
+-### ① 계약 단위는 무조건 `매칭`
+-- 결제·운송·정산은 모두 매칭 기준
+-
+-### ② 기본은 단순, 확장은 조건부
+-- 기본: 즉시 수락 → 매칭
+-- 예외: 가격 협상 / 합짐 / 귀가노선
+-
+-### ③ 합짐은 “운송 중 끼워 넣기”가 아니다
+-- **운송 시작 전, 기사 주도 계획형 다건 운송**
+-
+-### ④ 모든 예외는 “사전 합의”
+-- 합짐 가능 여부
+-- 가격 협상 여부
+-
+- 전부 **견적/매칭 시점에 명시**
+-
+----
+-
+-## 3. 사용자 역할별 책임
+-
+-### 1️⃣ 화주
+-- 화물 등록
+-- 견적서 작성
+-    - 희망 금액
+-    - 화물 정보
+-    - 체크리스트
+-    -  **합짐 가능 여부 체크**
+-- 기사 가격 협상 제안 수락/거절
+-- 매칭 확정 후 결제
+-- 운송 상태 확인
+-- 이행 확인 및 정산 확인
+-
+----
+-
+-### 2️⃣ 기사
+-- 차량 등록 (적재 용량 포함)
+-- 견적 리스트 조회
+-- 차량 용량 기준 운송 계획 수립
+-    - 단건
+-    - **다건(합짐) 조합**
+-    - 귀가노선 조합
+-- 조건 만족 시 즉시 수락
+-- 가격이 과도하게 낮을 경우만 협상 요청
+-- 매칭 확정
+-- 운송 수행
+-- GPS 위치 전송
+-- 수익 확인
+-
+----
+-
+-### 3️⃣ 관리자
+-- 기사 / 차량 승인
+-- 요금 조정
+-- 정산 관리
+-- 시스템 운영
+-- 문의 처리 및 관리
+-- 공지사항 관리
+-
+----
+-
+-## 4. 견적서(Quote) 구조 – 화주 기준
+-
+-견적서는 **운송 제안서**이며, 다음 정보를 포함한다.
+-
+-- 출발지 / 도착지
+-- 화물 무게 / 부피
+-- 희망 금액
+-- 체크리스트 조건
+-- ✅ **합짐 가능 여부 (중요)**
+-
+-### 합짐 가능 여부의 의미
+-
+-- ❌ 체크 안 함 → 단건 운송만 허용
+-- ⭕ 체크 함 → 기사 다건 운송 조합 대상 가능
+-
+- 합짐은 **화주 동의 없이는 절대 발생하지 않음**
+-
+----
+-
+-## 5. 기사 견적 추천 구조 (핵심 기능)
+-
+-기사는 **운송을 시작하기 전**, 견적 리스트를 기반으로  
+-본인의 차량 상태에 맞는 운송을 계획한다.
+-
+-### 추천 유형 3가지
+-
+-#### ① 일반 추천 (단건)
+-- 기본 운송
+-- 즉시 수락
+-
+-#### ② 알뜰배달 추천 (합짐)
+-- 화주가 합짐 허용한 견적만 대상
+-- 기사 차량 적재 용량 기준
+-- 복수 견적 조합 추천
+-
+-#### ③ 귀가 노선 추천
+-- 기사 선호 지역(집) 기준
+-- 귀가 동선상 견적 추천
+-- 단건 또는 다건 가능
+-
+----
+-
+-## 6. 가격 협상 기능 (조건부)
+-
+-가격 협상은 **기본 흐름이 아니다.**
+-
+-### 협상 발생 조건
+-
+-- 견적 금액이 기사 최소 수익 기준 미달
+-- 합짐/귀가노선 대비 수익 부족
+-### 흐름
+-
+-`견적서  → 기사 협상 요청 (예외)  → 화주 수락  → 매칭 생성`
+-
+----
+-
+-## 7. 매칭(Matching) 구조 – 계약의 시작
+-
+-매칭은 다음을 의미한다.
+-
+-- 기사와 화주가 조건에 합의
+-- 운송 계약 성립
+-- 이후 모든 흐름의 기준
+-
+-### 중요한 원칙
+-
+-- **합짐이어도 매칭은 견적 1개당 1개**
+-- 다건 운송은 “운영상 개념”
+-- DB에서는 매칭 독립성 유지
+-
+----
+-
+-## 8. 결제 구조 – 매칭 후 결제
+-
+-- 선결제 ❌
+-- 매칭 확정 후 결제 ⭕
+-- 결제는 매칭 기준
+-
+-### 장점
+-
+-- 협상 완료 금액으로 결제
+-- 계약 안정성
+-- 취소/환불 단순화
+-
+----
+-
+-## 9. 운송 및 GPS 추적
+-
+-### GPS 구조
+-
+-- 실시간 위치 로그
+-
+----
+-
+-## 10. 체크리스트 이행 관리
+-
+-- 견적서 단계에서 조건 명시
+-- 운송 완료 후 이행 확인
+-- 미이행 시 정산 조정 가능
+-
+----
+-
+-## 11. 정산 구조
+-
+-정산은 운송 완료 후 수행된다.
+-
+-정산 요소:
+-- 결제 금액
+-- 플랫폼 수수료
+-- 기사 실수령액
+-
+----
+-
+-## 12. 대시보드 구조
+-
+-### 화주
+-- 주문 / 배차 / 운행 상태
+-- 누적 비용
+-
+-### 기사
+-- 운행 시간
+-- 운송 건수
+-- 누적 수익
+-
+----
+-
+-## 13. 전체 흐름 요약
+-
+- `[화주] 견적 등록 (합짐 허용 선택)  → 기사 선택/협상 수락  → 매칭 확정  → 결제  → 운송 확인  → 이행 확인  → 정산  
+-`` [기사] 견적 리스트 조회  → 차량 용량 기반 단건/다건 계획  → 합짐·귀가노선 선택  → (필요 시 협상)  → 매칭  → 운송  → GPS 전송  → 수익 확인`
+-
+----
++# 화물 운송 플랫폼 프로젝트 구조 정리 (최종 통합본)
++
++---
++
++## 1. 프로젝트 한 줄 정의
++
++> **본 프로젝트는 화주가 운송 조건을 제시하고,  
++> 기사가 자신의 차량 상태·적재 용량·경로 효율을 기준으로  
++> 단건 또는 다건(합짐) 운송을 계획하여 매칭한 뒤  
++> 매칭 확정 후 결제하는 화물 운송 플랫폼이다.**
++
++---
++
++## 2. 핵심 설계 철학 (최종)
++
++### ① 계약 단위는 무조건 `매칭`
++- 결제·운송·정산은 모두 매칭 기준
++
++### ② 기본은 단순, 확장은 조건부
++- 기본: 즉시 수락 → 매칭
++- 예외: 가격 협상 / 합짐 / 귀가노선
++
++### ③ 합짐은 “운송 중 끼워 넣기”가 아니다
++- **운송 시작 전, 기사 주도 계획형 다건 운송**
++
++### ④ 모든 예외는 “사전 합의”
++- 합짐 가능 여부
++- 가격 협상 여부
++
++ 전부 **견적/매칭 시점에 명시**
++
++---
++
++## 3. 사용자 역할별 책임
++
++### 1️⃣ 화주
++- 화물 등록
++- 견적서 작성
++    - 희망 금액
++    - 화물 정보
++    - 체크리스트
++    -  **합짐 가능 여부 체크**
++- 기사 가격 협상 제안 수락/거절
++- 매칭 확정 후 결제
++- 운송 상태 확인
++- 이행 확인 및 정산 확인
++
++---
++
++### 2️⃣ 기사
++- 차량 등록 (적재 용량 포함)
++- 견적 리스트 조회
++- 차량 용량 기준 운송 계획 수립
++    - 단건
++    - **다건(합짐) 조합**
++    - 귀가노선 조합
++- 조건 만족 시 즉시 수락
++- 가격이 과도하게 낮을 경우만 협상 요청
++- 매칭 확정
++- 운송 수행
++- GPS 위치 전송
++- 수익 확인
++
++---
++
++### 3️⃣ 관리자
++- 기사 / 차량 승인
++- 요금 조정
++- 정산 관리
++- 시스템 운영
++- 문의 처리 및 관리
++- 공지사항 관리
++
++---
++
++## 4. 견적서(Quote) 구조 – 화주 기준
++
++견적서는 **운송 제안서**이며, 다음 정보를 포함한다.
++
++- 출발지 / 도착지
++- 화물 무게 / 부피
++- 희망 금액
++- 체크리스트 조건
++- ✅ **합짐 가능 여부 (중요)**
++
++### 합짐 가능 여부의 의미
++
++- ❌ 체크 안 함 → 단건 운송만 허용
++- ⭕ 체크 함 → 기사 다건 운송 조합 대상 가능
++
++ 합짐은 **화주 동의 없이는 절대 발생하지 않음**
++
++---
++
++## 5. 기사 견적 추천 구조 (핵심 기능)
++
++기사는 **운송을 시작하기 전**, 견적 리스트를 기반으로  
++본인의 차량 상태에 맞는 운송을 계획한다.
++
++### 추천 유형 3가지
++
++#### ① 일반 추천 (단건)
++- 기본 운송
++- 즉시 수락
++
++#### ② 알뜰배달 추천 (합짐)
++- 화주가 합짐 허용한 견적만 대상
++- 기사 차량 적재 용량 기준
++- 복수 견적 조합 추천
++
++#### ③ 귀가 노선 추천
++- 기사 선호 지역(집) 기준
++- 귀가 동선상 견적 추천
++- 단건 또는 다건 가능
++
++---
++
++## 6. 가격 협상 기능 (조건부)
++
++가격 협상은 **기본 흐름이 아니다.**
++
++### 협상 발생 조건
++
++- 견적 금액이 기사 최소 수익 기준 미달
++- 합짐/귀가노선 대비 수익 부족
++### 흐름
++
++`견적서  → 기사 협상 요청 (예외)  → 화주 수락  → 매칭 생성`
++
++---
++
++## 7. 매칭(Matching) 구조 – 계약의 시작
++
++매칭은 다음을 의미한다.
++
++- 기사와 화주가 조건에 합의
++- 운송 계약 성립
++- 이후 모든 흐름의 기준
++
++### 중요한 원칙
++
++- **합짐이어도 매칭은 견적 1개당 1개**
++- 다건 운송은 “운영상 개념”
++- DB에서는 매칭 독립성 유지
++
++---
++
++## 8. 결제 구조 – 매칭 후 결제
++
++- 선결제 ❌
++- 매칭 확정 후 결제 ⭕
++- 결제는 매칭 기준
++
++### 장점
++
++- 협상 완료 금액으로 결제
++- 계약 안정성
++- 취소/환불 단순화
++
++---
++
++## 9. 운송 및 GPS 추적
++
++### GPS 구조
++
++- 실시간 위치 로그
++
++---
++
++## 10. 체크리스트 이행 관리
++
++- 견적서 단계에서 조건 명시
++- 운송 완료 후 이행 확인
++- 미이행 시 정산 조정 가능
++
++---
++
++## 11. 정산 구조
++
++정산은 운송 완료 후 수행된다.
++
++정산 요소:
++- 결제 금액
++- 플랫폼 수수료
++- 기사 실수령액
++
++---
++
++## 12. 대시보드 구조
++
++### 화주
++- 주문 / 배차 / 운행 상태
++- 누적 비용
++
++### 기사
++- 운행 시간
++- 운송 건수
++- 누적 수익
++
++---
++
++## 13. 전체 흐름 요약
++
++ `[화주] 견적 등록 (합짐 허용 선택)  → 기사 선택/협상 수락  → 매칭 확정  → 결제  → 운송 확인  → 이행 확인  → 정산  
++`` [기사] 견적 리스트 조회  → 차량 용량 기반 단건/다건 계획  → 합짐·귀가노선 선택  → (필요 시 협상)  → 매칭  → 운송  → GPS 전송  → 수익 확인`
++
++---
+diff --git a/frontend/rodia-monorepo/apps/mobile/app/(shipper)/_layout.tsx b/frontend/rodia-monorepo/apps/mobile/app/(shipper)/_layout.tsx
+index 68d687f..135f1fe 100644
+--- a/frontend/rodia-monorepo/apps/mobile/app/(shipper)/_layout.tsx
++++ b/frontend/rodia-monorepo/apps/mobile/app/(shipper)/_layout.tsx
+@@ -155,7 +155,7 @@ export default function ShipperLayout() {
+           onChange={onChangeTab}
+           items={[
+             { key: "home", label: "홈", iconActive: "home", iconInactive: "home-outline" },
+-            { key: "quotes", label: "이용내역", iconActive: "clipboard", iconInactive: "clipboard-outline" },
++            { key: "quotes", label: "견적 내역", iconActive: "clipboard", iconInactive: "clipboard-outline" },
+             { key: "profile", label: "내 정보", iconActive: "person", iconInactive: "person-outline" },
+           ]}
+         />
+diff --git a/frontend/rodia-monorepo/apps/mobile/docs/eslint-warnings-cleanup-files.txt b/frontend/rodia-monorepo/apps/mobile/docs/eslint-warnings-cleanup-files.txt
+index 1806277..3b09d2d 100644
+--- a/frontend/rodia-monorepo/apps/mobile/docs/eslint-warnings-cleanup-files.txt
++++ b/frontend/rodia-monorepo/apps/mobile/docs/eslint-warnings-cleanup-files.txt
+@@ -2798,7 +2798,7 @@ export function ShipperHomePage() {
+ 
+   const goToHistory = () => {
+     // navigation.navigate('History');
+-    Alert.alert("이용 내역", "이용 내역 화면으로 이동합니다.");
++    Alert.alert("견적 내역", "견적 내역 화면으로 이동합니다.");
+   };
+ 
+   return (
+diff --git a/frontend/rodia-monorepo/apps/mobile/docs/flow-structure-audit.txt b/frontend/rodia-monorepo/apps/mobile/docs/flow-structure-audit.txt
+index 46adaba..fd74396 100644
+--- a/frontend/rodia-monorepo/apps/mobile/docs/flow-structure-audit.txt
++++ b/frontend/rodia-monorepo/apps/mobile/docs/flow-structure-audit.txt
+@@ -105,9 +105,9 @@
+   - Driver UI 사용: DriverMatchDetailPage -> postCounterOffer -> shipper-match-api -> createDriverCounterOffer
+     - 근거: src/pages/driver/matches/DriverMatchDetailPage.tsx:L647-L654, src/features/matching/api/shipper-match-api.ts:L309-L327
+ 
+-4. Shipper 흐름(이용내역/상세/배차) 현재 구현 구조
++4. Shipper 흐름(견적 내역/상세/배차) 현재 구현 구조
+ 
+-- 이용내역(목록)
++- 견적 내역(목록)
+   - QuoteListPage에서 listShipperQuotes 로드 후 탭/정렬은 useMemo 파생값으로 필터링
+     - 근거: src/pages/shipper/quotes/QuoteListPage.tsx:L748-L757, L522-L552
+   - 탭 기준 상태 집합
+diff --git a/frontend/rodia-monorepo/apps/mobile/src/features/matching/api/usage-history-mapper.ts b/frontend/rodia-monorepo/apps/mobile/src/features/matching/api/usage-history-mapper.ts
+index de2014c..04e83b6 100644
+--- a/frontend/rodia-monorepo/apps/mobile/src/features/matching/api/usage-history-mapper.ts
++++ b/frontend/rodia-monorepo/apps/mobile/src/features/matching/api/usage-history-mapper.ts
+@@ -1,54 +1,225 @@
+-import { formatKrw, formatDateTime } from "@/shared/lib/format/display";
+-import { BACKEND_STATUS, normalizeStatus } from "@/shared/lib/policy";
+-import type { ParsedUsageHistoryItem } from "../ui/UsageHistoryCard";
+-import type { ShipperMatchItem } from "./shipper-match-api";
+-import type { QuoteDetailResponse } from "@/entities/quote/model/quote.types";
+-
+-function resolveStatusTone(status: string): ParsedUsageHistoryItem["statusTone"] {
+-  const normalized = normalizeStatus(status);
+-  if (normalized === BACKEND_STATUS.CANCELLED) return "destructive";
+-  if (normalized === BACKEND_STATUS.OPEN || normalized === BACKEND_STATUS.READY) return "neutral";
+-  if (normalized === BACKEND_STATUS.MATCHED) return "accent";
+-  return "primary";
+-}
+-
+-function resolveStatusLabel(status: string): string {
+-  const normalized = normalizeStatus(status);
+-  if (normalized === BACKEND_STATUS.OPEN) return "요청 접수";
+-  if (normalized === BACKEND_STATUS.MATCHED) return "배차 완료";
+-  if (normalized === BACKEND_STATUS.IN_TRANSIT) return "운송 중";
+-  if (normalized === BACKEND_STATUS.DELIVERED) return "운송 완료";
+-  if (normalized === BACKEND_STATUS.READY) return "배차 완료";
+-  if (normalized === BACKEND_STATUS.COMPLETED) return "운송 완료";
+-  if (normalized === BACKEND_STATUS.CANCELLED) return "취소됨";
+-  return "상태 확인";
+-}
+-
+-export function mapToUsageHistoryItem(
+-  match: ShipperMatchItem,
+-  quote: QuoteDetailResponse | null
+-): ParsedUsageHistoryItem {
+-  const origin = quote?.originAddress?.trim() || "출발지 미상";
+-  const dest = quote?.destinationAddress?.trim() || "도착지 미상";
+-  const price = quote?.finalPrice || quote?.basePrice || quote?.desiredPrice || 0;
+-  
+-  const vehicleTon = quote?.vehicleType === "TON_1" ? "1톤" : 
+-                     quote?.vehicleType === "TON_2_5" ? "2.5톤" : 
+-                     quote?.vehicleType === "TON_5" ? "5톤" : quote?.vehicleType || "";
+-  const vehicleBody = quote?.vehicleBodyType === "CARGO" ? "카고" :
+-                      quote?.vehicleBodyType === "WING_BODY" ? "윙바디" : 
+-                      quote?.vehicleBodyType === "TOP_CAR" ? "탑차" : quote?.vehicleBodyType || "";
+-  
+-  return {
+-    id: `history-${match.matchId}-${quote?.quoteId || 0}`,
+-    quoteId: match.quoteId || quote?.quoteId || 0,
+-    matchId: match.matchId,
+-    statusTone: resolveStatusTone(match.status ?? "OPEN"),
+-    statusLabel: resolveStatusLabel(match.status ?? "OPEN"),
+-    originAddress: origin,
+-    destinationAddress: dest,
+-    priceText: formatKrw(price, ""), // SSOT 포맷팅
+-    vehicleText: `${vehicleTon} ${vehicleBody}`.trim() || "차량 정보 없음",
+-    dateText: formatDateTime(match.createdAt || quote?.createdAt, "날짜 없음"),
+-  };
++// apps/mobile/src/features/matching/api/usage-history-mapper.ts
++
++export type BackendStatus =
++  | "OPEN"
++  | "MATCHED"
++  | "READY"
++  | "IN_TRANSIT"
++  | "DELIVERED"
++  | "COMPLETED"
++  | "CANCELLED"
++  | "UNKNOWN";
++
++export type CustomerUiState =
++  | "REQUESTED"
++  | "PICKUP_IN_PROGRESS"
++  | "PAYMENT_REQUIRED"
++  | "TRANSIT_IN_PROGRESS"
++  | "COMPLETED"
++  | "CANCELED"
++  | "UNKNOWN";
++
++export type CustomerCtaId = "PAY" | "TRACK" | "RECEIPT" | "RE_REQUEST";
++
++export interface CustomerCtaConfig {
++  id: CustomerCtaId;
++  label: string;
++  variant: "primary" | "secondary";
++  enabled: boolean;
++}
++
++export interface DeriveCustomerUiStateInput {
++  /**
++   * 서버 응답이 단일 status 필드만 제공하는 경우 사용
++   * - 예: item.status
++   */
++  rawStatus?: string | null;
++
++  /**
++   * 향후 서버가 quote/match 상태를 분리 제공할 경우 사용
++   * - 예: quote.status / match.status
++   */
++  rawQuoteStatus?: string | null;
++  rawMatchStatus?: string | null;
++}
++
++export interface DeriveCustomerUiStateResult {
++  backendStatus: BackendStatus;
++  uiState: CustomerUiState;
++}
++
++function sanitizeToken(raw: string): string {
++  return raw
++    .trim()
++    .toUpperCase()
++    .replace(/[^A-Z0-9]+/g, "_")
++    .replace(/^_+|_+$/g, "");
++}
++
++/**
++ * Step 1) Backend Raw -> BackendStatus (정규화)
++ * - 대소문자/특수문자 제거 후 토큰 기반 매핑
++ * - READY와 MATCHED를 반드시 분리 인식(READY 우선)
++ */
++export function normalizeStatus(raw?: string | null): BackendStatus {
++  if (!raw) return "UNKNOWN";
++
++  const v = sanitizeToken(raw);
++  if (!v) return "UNKNOWN";
++
++  // cancelled 계열 (CANCELED/ CANCELLED / CANCEL 등)
++  if (v.includes("CANCEL")) return "CANCELLED";
++
++  // delivered/completed 계열
++  if (v.includes("DELIVER")) return "DELIVERED";
++  if (v === "COMPLETED" || v.includes("COMPLETE")) return "COMPLETED";
++
++  // in_transit 계열
++  if (v.includes("IN_TRANSIT") || v.includes("INTRANSIT")) return "IN_TRANSIT";
++  if (v.includes("TRANSIT") && (v.includes("IN") || v.startsWith("IN_"))) return "IN_TRANSIT";
++
++  // READY 우선(기존 MATCHED로 뭉뚱그려지는 문제 방지)
++  if (v.includes("READY")) return "READY";
++
++  // matched 계열
++  if (v.includes("MATCH")) return "MATCHED";
++
++  // open/request 계열
++  if (v.includes("OPEN") || v.includes("REQUEST")) return "OPEN";
++
++  return "UNKNOWN";
++}
++
++const statusRank: Record<BackendStatus, number> = {
++  UNKNOWN: 0,
++  OPEN: 10,
++  MATCHED: 20,
++  READY: 30,
++  IN_TRANSIT: 40,
++  DELIVERED: 50,
++  COMPLETED: 50,
++  CANCELLED: 100,
++};
++
++function pickMostRelevantStatus(statuses: BackendStatus[]): BackendStatus {
++  // CANCELLED는 항상 최우선
++  if (statuses.includes("CANCELLED")) return "CANCELLED";
++
++  let best: BackendStatus = "UNKNOWN";
++  let bestRank = -1;
++
++  for (const s of statuses) {
++    const r = statusRank[s] ?? 0;
++    if (r > bestRank) {
++      best = s;
++      bestRank = r;
++    }
++  }
++
++  return best;
++}
++
++/**
++ * Step 2) BackendStatus -> CustomerUiState (비즈니스 로직)
++ */
++export function mapBackendStatusToCustomerUiState(status: BackendStatus): CustomerUiState {
++  switch (status) {
++    case "OPEN":
++      return "REQUESTED";
++    case "MATCHED":
++      return "PICKUP_IN_PROGRESS";
++    case "READY":
++      return "PAYMENT_REQUIRED";
++    case "IN_TRANSIT":
++      return "TRANSIT_IN_PROGRESS";
++    case "DELIVERED":
++    case "COMPLETED":
++      return "COMPLETED";
++    case "CANCELLED":
++      return "CANCELED";
++    default:
++      return "UNKNOWN";
++  }
++}
++
++/**
++ * 단일 status 응답/분리 status 응답 모두 대응하는 최종 파이프라인
++ */
++export function deriveCustomerUiState(input: DeriveCustomerUiStateInput): DeriveCustomerUiStateResult {
++  const candidates: BackendStatus[] = [];
++
++  const rawStatus = input.rawStatus ?? null;
++  const rawQuoteStatus = input.rawQuoteStatus ?? null;
++  const rawMatchStatus = input.rawMatchStatus ?? null;
++
++  if (rawStatus) candidates.push(normalizeStatus(rawStatus));
++  if (rawQuoteStatus) candidates.push(normalizeStatus(rawQuoteStatus));
++  if (rawMatchStatus) candidates.push(normalizeStatus(rawMatchStatus));
++
++  const backendStatus = pickMostRelevantStatus(candidates.length ? candidates : ["UNKNOWN"]);
++  const uiState = mapBackendStatusToCustomerUiState(backendStatus);
++
++  return { backendStatus, uiState };
++}
++
++/**
++ * 카드 상단 "상태 뱃지" (짧은 라벨)
++ */
++export function getCustomerStatusBadgeLabel(uiState: CustomerUiState): string {
++  switch (uiState) {
++    case "REQUESTED":
++      return "요청됨";
++    case "PICKUP_IN_PROGRESS":
++      return "배차완료";
++    case "PAYMENT_REQUIRED":
++      return "결제대기";
++    case "TRANSIT_IN_PROGRESS":
++      return "운송중";
++    case "COMPLETED":
++      return "완료";
++    case "CANCELED":
++      return "취소";
++    default:
++      return "상태확인";
++  }
++}
++
++/**
++ * 상태별 마이크로카피(진행형 문장)
++ */
++export function getCustomerStatusTitle(uiState: CustomerUiState): string {
++  switch (uiState) {
++    case "REQUESTED":
++      return "기사 배정을 기다리고 있습니다";
++    case "PICKUP_IN_PROGRESS":
++      return "기사님이 상차지로 이동하고 있습니다";
++    case "PAYMENT_REQUIRED":
++      return "결제를 진행하면 운송이 시작됩니다";
++    case "TRANSIT_IN_PROGRESS":
++      return "상차를 완료하고 목적지로 이동하고 있습니다";
++    case "COMPLETED":
++      return "운송이 완료되었습니다";
++    case "CANCELED":
++      return "요청이 취소되었습니다";
++    default:
++      return "상태를 확인하고 있습니다";
++  }
++}
++
++/**
++ * 컨텍스트 기반 CTA 정책
++ */
++export function getCustomerCta(uiState: CustomerUiState): CustomerCtaConfig | null {
++  switch (uiState) {
++    case "PAYMENT_REQUIRED":
++      return { id: "PAY", label: "즉시 결제하기", variant: "primary", enabled: true };
++    case "TRANSIT_IN_PROGRESS":
++      return { id: "TRACK", label: "실시간 위치 확인", variant: "secondary", enabled: true };
++    case "COMPLETED":
++      return { id: "RECEIPT", label: "인수증 확인", variant: "secondary", enabled: true };
++    case "CANCELED":
++      return { id: "RE_REQUEST", label: "다시 요청", variant: "primary", enabled: true };
++    default:
++      return null;
++  }
+ }
+\ No newline at end of file
+diff --git a/frontend/rodia-monorepo/apps/mobile/src/features/matching/ui/UsageHistoryCard.tsx b/frontend/rodia-monorepo/apps/mobile/src/features/matching/ui/UsageHistoryCard.tsx
+index 0aedef9..889e916 100644
+--- a/frontend/rodia-monorepo/apps/mobile/src/features/matching/ui/UsageHistoryCard.tsx
++++ b/frontend/rodia-monorepo/apps/mobile/src/features/matching/ui/UsageHistoryCard.tsx
+@@ -1,9 +1,9 @@
+-import React, { useCallback } from "react";
+-import { Pressable, StyleSheet, View } from "react-native";
++// apps/mobile/src/features/matching/ui/UsageHistoryCard.tsx
++import React, { useCallback, useMemo } from "react";
++import { Pressable, StyleSheet, View, type GestureResponderEvent } from "react-native";
+ import { router } from "expo-router";
+ import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
+ import { AppText } from "@/shared/ui/kit/AppText";
+-import type { AppThemeColors } from "@/shared/theme/types";
+ 
+ // ---------------------------------------------------------------------------
+ // Data contract — mirrors what shipper-match-parser's ACL layer provides.
+@@ -12,8 +12,7 @@ export type ParsedUsageHistoryItem = {
+   id: string;
+   quoteId: number;
+   matchId?: number;
+-  statusTone: "primary" | "secondary" | "neutral" | "destructive" | "accent";
+-  statusLabel: string;
++  status: string;
+   originAddress: string;
+   destinationAddress: string;
+   priceText: string; // pre-formatted by formatKrw
+@@ -22,33 +21,169 @@ export type ParsedUsageHistoryItem = {
+ };
+ 
+ // ---------------------------------------------------------------------------
+-// Badge color resolution — no hardcoded hex; built from theme tokens.
++// Domain mapping (Raw -> BackendStatus -> CustomerUiState)
++// - Backend 근거: Quote.status = OPEN/MATCHED/IN_TRANSIT/DELIVERED/CANCELLED
++//               Match.Status = READY/IN_TRANSIT/COMPLETED/CANCELLED
+ // ---------------------------------------------------------------------------
+-type BadgeColors = { bg: string; text: string };
+-
+-function hexToRgba(hex: string, alpha: number): string {
+-  const h = hex.trim().replace(/^#/, "");
+-  const full = h.length === 3 ? h.split("").map((c) => c + c).join("") : h.slice(0, 6);
+-  const r = parseInt(full.slice(0, 2), 16);
+-  const g = parseInt(full.slice(2, 4), 16);
+-  const b = parseInt(full.slice(4, 6), 16);
+-  if ([r, g, b].some(Number.isNaN)) return hex;
+-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
++type BackendStatus =
++  | "OPEN"
++  | "MATCHED"
++  | "READY"
++  | "IN_TRANSIT"
++  | "DELIVERED"
++  | "COMPLETED"
++  | "CANCELLED"
++  | "UNKNOWN";
++
++type CustomerUiState =
++  | "REQUESTED"
++  | "PICKUP_IN_PROGRESS"
++  | "PAYMENT_REQUIRED"
++  | "TRANSIT_IN_PROGRESS"
++  | "COMPLETED"
++  | "CANCELED"
++  | "UNKNOWN";
++
++type CustomerCtaId = "PAY" | "TRACK" | "RECEIPT" | "RE_REQUEST";
++
++type CustomerCtaConfig = {
++  id: CustomerCtaId;
++  label: string;
++  variant: "primary" | "secondary";
++  enabled: boolean;
++};
++
++function sanitizeToken(raw: string): string {
++  return raw
++    .trim()
++    .toUpperCase()
++    .replace(/[^A-Z0-9]+/g, "_")
++    .replace(/^_+|_+$/g, "");
++}
++
++/**
++ * Step 1) Backend Raw -> BackendStatus
++ * - READY와 MATCHED를 반드시 분리 인식(READY 우선)
++ */
++function normalizeStatus(raw?: string | null): BackendStatus {
++  if (!raw) return "UNKNOWN";
++
++  const v = sanitizeToken(raw);
++  if (!v) return "UNKNOWN";
++
++  if (v.includes("CANCEL")) return "CANCELLED";
++
++  if (v.includes("DELIVER")) return "DELIVERED";
++  if (v === "COMPLETED" || v.includes("COMPLETE")) return "COMPLETED";
++
++  if (v.includes("IN_TRANSIT") || v.includes("INTRANSIT")) return "IN_TRANSIT";
++  if (v.includes("TRANSIT") && (v.includes("IN") || v.startsWith("IN_"))) return "IN_TRANSIT";
++
++  // READY 우선 처리(READY가 MATCHED로 뭉개지는 문제 방지)
++  if (v.includes("READY")) return "READY";
++
++  if (v.includes("MATCH")) return "MATCHED";
++  if (v.includes("OPEN") || v.includes("REQUEST")) return "OPEN";
++
++  return "UNKNOWN";
+ }
+ 
+-function resolveBadgeColors(colors: AppThemeColors, tone: ParsedUsageHistoryItem["statusTone"]): BadgeColors {
+-  switch (tone) {
+-    case "primary":
+-      return { bg: hexToRgba(colors.brandPrimary, 0.12), text: colors.brandPrimary };
+-    case "accent":
+-      return { bg: hexToRgba(colors.brandAccent, 0.14), text: colors.semanticSuccess };
+-    case "secondary":
+-      return { bg: hexToRgba(colors.brandSecondary, 0.07), text: colors.brandSecondary };
+-    case "destructive":
+-      return { bg: hexToRgba(colors.semanticDanger, 0.12), text: colors.semanticDanger };
+-    case "neutral":
++/**
++ * Step 2) BackendStatus -> CustomerUiState
++ */
++function mapBackendStatusToCustomerUiState(status: BackendStatus): CustomerUiState {
++  switch (status) {
++    case "OPEN":
++      return "REQUESTED";
++    case "MATCHED":
++      return "PICKUP_IN_PROGRESS";
++    case "READY":
++      return "PAYMENT_REQUIRED";
++    case "IN_TRANSIT":
++      return "TRANSIT_IN_PROGRESS";
++    case "DELIVERED":
++    case "COMPLETED":
++      return "COMPLETED";
++    case "CANCELLED":
++      return "CANCELED";
+     default:
+-      return { bg: colors.bgSurfaceAlt, text: colors.textMuted };
++      return "UNKNOWN";
++  }
++}
++
++function getCustomerStatusBadgeLabel(uiState: CustomerUiState): string {
++  switch (uiState) {
++    case "REQUESTED":
++      return "요청됨";
++    case "PICKUP_IN_PROGRESS":
++      return "배차완료";
++    case "PAYMENT_REQUIRED":
++      return "결제대기";
++    case "TRANSIT_IN_PROGRESS":
++      return "운송중";
++    case "COMPLETED":
++      return "완료";
++    case "CANCELED":
++      return "취소";
++    default:
++      return "상태확인";
++  }
++}
++
++function getCustomerStatusTitle(uiState: CustomerUiState): string {
++  switch (uiState) {
++    case "REQUESTED":
++      return "기사 배정을 기다리고 있습니다";
++    case "PICKUP_IN_PROGRESS":
++      return "기사님이 상차지로 이동하고 있습니다";
++    case "PAYMENT_REQUIRED":
++      return "결제를 진행하면 운송이 시작됩니다";
++    case "TRANSIT_IN_PROGRESS":
++      return "상차를 완료하고 목적지로 이동하고 있습니다";
++    case "COMPLETED":
++      return "운송이 완료되었습니다";
++    case "CANCELED":
++      return "요청이 취소되었습니다";
++    default:
++      return "상태를 확인하고 있습니다";
++  }
++}
++
++function getCustomerCta(uiState: CustomerUiState): CustomerCtaConfig | null {
++  switch (uiState) {
++    case "PAYMENT_REQUIRED":
++      return { id: "PAY", label: "즉시 결제하기", variant: "primary", enabled: true };
++    case "TRANSIT_IN_PROGRESS":
++      return { id: "TRACK", label: "실시간 위치 확인", variant: "secondary", enabled: true };
++    case "COMPLETED":
++      return { id: "RECEIPT", label: "인수증 확인", variant: "secondary", enabled: true };
++    case "CANCELED":
++      return { id: "RE_REQUEST", label: "다시 요청", variant: "primary", enabled: true };
++    default:
++      return null;
++  }
++}
++
++function stopEvent(e?: GestureResponderEvent) {
++  e?.stopPropagation?.();
++}
++
++type BadgeTokens = { bg: string; border: string; text: string };
++
++function getBadgeTokens(theme: ReturnType<typeof useAppTheme>, uiState: CustomerUiState): BadgeTokens {
++  switch (uiState) {
++    case "PAYMENT_REQUIRED":
++      return { bg: theme.colors.stateOverlayPressed, border: theme.colors.brandPrimary, text: theme.colors.brandPrimary };
++    case "PICKUP_IN_PROGRESS":
++    case "TRANSIT_IN_PROGRESS":
++      return { bg: theme.colors.stateOverlayPressed, border: theme.colors.borderDefault, text: theme.colors.brandPrimary };
++    case "COMPLETED":
++      return { bg: theme.colors.bgSurface, border: theme.colors.borderStrong, text: theme.colors.textMain };
++    case "CANCELED":
++      return { bg: theme.colors.bgSurface, border: theme.colors.borderDefault, text: theme.colors.textMuted };
++    case "REQUESTED":
++    default:
++      return { bg: theme.colors.bgSurface, border: theme.colors.borderDefault, text: theme.colors.textMuted };
+   }
+ }
+ 
+@@ -62,11 +197,52 @@ export type UsageHistoryCardProps = {
+ export function UsageHistoryCard({ item }: UsageHistoryCardProps) {
+   const theme = useAppTheme();
+   const styles = useCardStyles();
+-  const badge = resolveBadgeColors(theme.colors, item.statusTone);
++
++  const { backendStatus, uiState, badgeLabel, statusTitle, cta, badgeTokens } = useMemo(() => {
++    const backendStatus = normalizeStatus(item.status);
++    const uiState = mapBackendStatusToCustomerUiState(backendStatus);
++    return {
++      backendStatus,
++      uiState,
++      badgeLabel: getCustomerStatusBadgeLabel(uiState),
++      statusTitle: getCustomerStatusTitle(uiState),
++      cta: getCustomerCta(uiState),
++      badgeTokens: getBadgeTokens(theme, uiState),
++    };
++  }, [item.status, theme]);
+ 
+   const handlePress = useCallback(() => {
+-    router.push(`/(shipper)/quotes/${item.quoteId}` as any);
+-  }, [item.quoteId]);
++    router.push(
++      {
++        pathname: "/(shipper)/quotes/[id]",
++        params: { id: String(item.quoteId), status: item.status },
++      } as any
++    );
++  }, [item.quoteId, item.status]);
++
++  const handleCtaPress = useCallback(
++    (e?: GestureResponderEvent) => {
++      stopEvent(e);
++
++      if (!cta?.enabled) return;
++
++      // 상세 페이지가 action 파라미터를 활용할 수 있게 전달(서버 연동/확장 대비)
++      router.push(
++        {
++          pathname: "/(shipper)/quotes/[id]",
++          params: {
++            id: String(item.quoteId),
++            status: item.status,
++            action: cta.id,
++            matchId: item.matchId ? String(item.matchId) : undefined,
++            backendStatus,
++            uiState,
++          },
++        } as any
++      );
++    },
++    [backendStatus, cta, item.matchId, item.quoteId, item.status, uiState]
++  );
+ 
+   return (
+     <Pressable
+@@ -76,9 +252,9 @@ export function UsageHistoryCard({ item }: UsageHistoryCardProps) {
+     >
+       {/* ── Top row: Status badge ← → Date ── */}
+       <View style={styles.topRow}>
+-        <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
+-          <AppText variant="caption" weight="600" style={{ color: badge.text }}>
+-            {item.statusLabel}
++        <View style={[styles.statusBadge, { backgroundColor: badgeTokens.bg, borderColor: badgeTokens.border }]}>
++          <AppText variant="caption" weight="600" style={{ color: badgeTokens.text }}>
++            {badgeLabel}
+           </AppText>
+         </View>
+         <AppText variant="caption" color="textMuted">
+@@ -86,6 +262,11 @@ export function UsageHistoryCard({ item }: UsageHistoryCardProps) {
+         </AppText>
+       </View>
+ 
++      {/* ── Status microcopy ── */}
++      <AppText variant="detail" weight="500" color="textSub" numberOfLines={1} style={styles.statusTitle}>
++        {statusTitle}
++      </AppText>
++
+       {/* ── Route: Origin ↕ Destination ── */}
+       <View style={styles.routeSection}>
+         {/* Origin */}
+@@ -94,13 +275,7 @@ export function UsageHistoryCard({ item }: UsageHistoryCardProps) {
+             <View style={[styles.dot, { backgroundColor: theme.colors.brandPrimary }]} />
+             <View style={[styles.connectorLine, { backgroundColor: theme.colors.borderStrong }]} />
+           </View>
+-          <AppText
+-            variant="body"
+-            weight="500"
+-            color="textMain"
+-            numberOfLines={1}
+-            style={styles.routeLabel}
+-          >
++          <AppText variant="body" weight="500" color="textMain" numberOfLines={1} style={styles.routeLabel}>
+             {item.originAddress}
+           </AppText>
+         </View>
+@@ -110,13 +285,7 @@ export function UsageHistoryCard({ item }: UsageHistoryCardProps) {
+           <View style={styles.dotCol}>
+             <View style={[styles.dot, { backgroundColor: theme.colors.textMuted }]} />
+           </View>
+-          <AppText
+-            variant="body"
+-            weight="500"
+-            color="textSub"
+-            numberOfLines={1}
+-            style={styles.routeLabel}
+-          >
++          <AppText variant="body" weight="500" color="textSub" numberOfLines={1} style={styles.routeLabel}>
+             {item.destinationAddress}
+           </AppText>
+         </View>
+@@ -134,6 +303,32 @@ export function UsageHistoryCard({ item }: UsageHistoryCardProps) {
+           {item.priceText}
+         </AppText>
+       </View>
++
++      {/* ── CTA (conditional) ── */}
++      {cta?.enabled ? (
++        <View style={styles.ctaWrap}>
++          <Pressable
++            onPressIn={stopEvent}
++            onPress={handleCtaPress}
++            style={({ pressed }) => [
++              styles.ctaButton,
++              cta.variant === "primary" ? styles.ctaPrimary : styles.ctaSecondary,
++              pressed && styles.ctaPressed,
++            ]}
++            android_ripple={{ color: theme.colors.stateOverlayPressed, borderless: false }}
++          >
++            <AppText
++              variant="body"
++              weight="700"
++              style={{
++                color: cta.variant === "primary" ? theme.colors.bgSurface : theme.colors.brandPrimary,
++              }}
++            >
++              {cta.label}
++            </AppText>
++          </Pressable>
++        </View>
++      ) : null}
+     </Pressable>
+   );
+ }
+@@ -163,12 +358,16 @@ const useCardStyles = createThemedStyles((theme) => ({
+     flexDirection: "row",
+     justifyContent: "space-between",
+     alignItems: "center",
+-    marginBottom: 16,
++    marginBottom: 10,
+   },
+   statusBadge: {
+     paddingHorizontal: 10,
+     paddingVertical: 4,
+     borderRadius: theme.layout.radii.pill,
++    borderWidth: StyleSheet.hairlineWidth,
++  },
++  statusTitle: {
++    marginBottom: 14,
+   },
+   routeSection: {
+     marginBottom: 16,
+@@ -182,7 +381,7 @@ const useCardStyles = createThemedStyles((theme) => ({
+   dotCol: {
+     width: 8,
+     alignItems: "center",
+-    paddingTop: 5, // vertically align dot with first text line
++    paddingTop: 5,
+   },
+   dot: {
+     width: 8,
+@@ -196,7 +395,7 @@ const useCardStyles = createThemedStyles((theme) => ({
+   },
+   routeLabel: {
+     flex: 1,
+-    paddingBottom: 18, // breathing room between origin and destination rows
++    paddingBottom: 18,
+   },
+   divider: {
+     height: StyleSheet.hairlineWidth,
+@@ -207,4 +406,26 @@ const useCardStyles = createThemedStyles((theme) => ({
+     justifyContent: "space-between",
+     alignItems: "center",
+   },
+-}));
++  ctaWrap: {
++    marginTop: 14,
++  },
++  ctaButton: {
++    borderRadius: theme.layout.radii.pill,
++    paddingVertical: 12,
++    paddingHorizontal: 14,
++    alignItems: "center",
++    justifyContent: "center",
++    borderWidth: StyleSheet.hairlineWidth,
++  },
++  ctaPrimary: {
++    backgroundColor: theme.colors.brandPrimary,
++    borderColor: theme.colors.brandPrimary,
++  },
++  ctaSecondary: {
++    backgroundColor: theme.colors.bgSurface,
++    borderColor: theme.colors.brandPrimary,
++  },
++  ctaPressed: {
++    opacity: 0.9,
++  },
++}));
+\ No newline at end of file
+diff --git a/frontend/rodia-monorepo/apps/mobile/src/features/matching/ui/UsageHistoryWidget.tsx b/frontend/rodia-monorepo/apps/mobile/src/features/matching/ui/UsageHistoryWidget.tsx
+index c0f13b7..6755219 100644
+--- a/frontend/rodia-monorepo/apps/mobile/src/features/matching/ui/UsageHistoryWidget.tsx
++++ b/frontend/rodia-monorepo/apps/mobile/src/features/matching/ui/UsageHistoryWidget.tsx
+@@ -67,7 +67,7 @@ export function UsageHistoryWidget({ items }: UsageHistoryWidgetProps) {
+     () => (
+       <View style={styles.emptyWrapper}>
+         <AppEmptyState
+-          title="이용 내역이 없어요"
++          title="견적 내역이 없어요"
+           description="조건을 바꾸거나 새로운 견적을 요청해 보세요."
+         />
+       </View>
+diff --git a/frontend/rodia-monorepo/apps/mobile/src/pages/shipper/home/ShipperHomePage.tsx b/frontend/rodia-monorepo/apps/mobile/src/pages/shipper/home/ShipperHomePage.tsx
+index def21ba..987c0dd 100644
+--- a/frontend/rodia-monorepo/apps/mobile/src/pages/shipper/home/ShipperHomePage.tsx
++++ b/frontend/rodia-monorepo/apps/mobile/src/pages/shipper/home/ShipperHomePage.tsx
+@@ -545,7 +545,7 @@ export function ShipperHomePage() {
+           <AppCard style={styles.recentItemCard} elevated={true} outlined={true}>
+             <View style={styles.recentItemContent}>
+               <AppText variant="detail" color={cSub}>
+-                완료된 이용내역이 없습니다.
++                완료된 견적 내역이 없습니다.
+               </AppText>
+             </View>
+           </AppCard>
+diff --git a/frontend/rodia-monorepo/apps/mobile/src/pages/shipper/matchings/MatchingListPage.tsx b/frontend/rodia-monorepo/apps/mobile/src/pages/shipper/matchings/MatchingListPage.tsx
+index d0b01e7..4d8a06f 100644
+--- a/frontend/rodia-monorepo/apps/mobile/src/pages/shipper/matchings/MatchingListPage.tsx
++++ b/frontend/rodia-monorepo/apps/mobile/src/pages/shipper/matchings/MatchingListPage.tsx
+@@ -116,10 +116,10 @@ export function MatchingListPage() {
+   );
+ 
+   return (
+-    <PageScaffold title="이용 내역" backgroundColor="#F3F4F6">
++    <PageScaffold title="견적 내역" backgroundColor="#F3F4F6">
+       <View style={styles.container}>
+         {isLoading ? (
+-          <AppSpinner label="이용 내역을 불러오는 중입니다." />
++          <AppSpinner label="견적 내역을 불러오는 중입니다." />
+         ) : errorMessage ? (
+           <AppErrorState
+             title="목록을 불러오지 못했어요"
+diff --git a/frontend/rodia-monorepo/apps/mobile/src/pages/shipper/quotes/QuoteListPage.tsx b/frontend/rodia-monorepo/apps/mobile/src/pages/shipper/quotes/QuoteListPage.tsx
+index f28d334..ee9f3de 100644
+--- a/frontend/rodia-monorepo/apps/mobile/src/pages/shipper/quotes/QuoteListPage.tsx
++++ b/frontend/rodia-monorepo/apps/mobile/src/pages/shipper/quotes/QuoteListPage.tsx
+@@ -806,7 +806,7 @@ export default function QuoteListPage() {
+     if (activeTab === "IN_PROGRESS") return "현재 진행 중인 운송 내역이 없습니다.";
+     if (activeTab === "COMPLETED") return "완료된 운송 내역이 없습니다.";
+     if (activeTab === "CANCELED") return "취소된 운송 내역이 없습니다.";
+-    return "운송 요청을 시작하면 이용 내역을 확인할 수 있습니다.";
++    return "운송 요청을 시작하면 견적 내역을 확인할 수 있습니다.";
+   }, [activeTab]);
+ 
+   const handlePressCard = useCallback(
+@@ -822,7 +822,7 @@ export default function QuoteListPage() {
+ 
+   return (
+     <PageScaffold
+-      title="이용 내역"
++      title="견적 내역"
+       backgroundColor={theme.colors.bgMain}
+       contentStyle={styles.pageContent}
+       floating={
+@@ -888,7 +888,7 @@ export default function QuoteListPage() {
+           />
+         ) : isFilteredEmpty ? (
+           <AppEmptyState
+-            title="조건에 맞는 이용 내역이 없어요"
++            title="조건에 맞는 견적 내역이 없어요"
+             description={emptyDescription}
+             action={{ label: "견적 요청하기", onPress: () => router.push("/(shipper)/quotes/create") }}
+           />
+diff --git a/package.json b/package.json
+index 74593a4..04f2901 100644
+--- a/package.json
++++ b/package.json
+@@ -1,6 +1,6 @@
+-{
+-	"dependencies": {
+-		"react-router-dom": "^7.13.0"
+-	},
+-	"packageManager": "pnpm@9.0.0+sha512.b4106707c7225b1748b61595953ccbebff97b54ad05d002aa3635f633b9c53cd666f7ce9b8bc44704f1fa048b9a49b55371ab2d9e9d667d1efe2ef1514bcd513"
+-}
++{
++	"dependencies": {
++		"react-router-dom": "^7.13.0"
++	},
++	"packageManager": "pnpm@9.0.0+sha512.b4106707c7225b1748b61595953ccbebff97b54ad05d002aa3635f633b9c53cd666f7ce9b8bc44704f1fa048b9a49b55371ab2d9e9d667d1efe2ef1514bcd513"
++}
