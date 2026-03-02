@@ -179,7 +179,7 @@ function QuoteCreatePageInner() {
   const [bottomBarHeight, setBottomBarHeight] = useState(100);
   const [isSubmitDoneOpen, setIsSubmitDoneOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [_previewPrice, setPreviewPrice] = useState<number | null>(null);
+  const [previewPrice, setPreviewPrice] = useState<number | null>(null);
   const [createdQuoteIdentifier, setCreatedQuoteIdentifier] = useState("");
 
   const pricing = useMemo(() => computeQuotePricing(draft), [draft]);
@@ -409,7 +409,10 @@ function QuoteCreatePageInner() {
   };
 
   const getBottomPrice = () => {
-      return formatKrw(pricing.finalPrice || pricing.basePrice);
+      const resolved = Number.isFinite(previewPrice) && (previewPrice ?? 0) > 0
+        ? (previewPrice as number)
+        : (pricing.finalPrice || pricing.basePrice);
+      return formatKrw(resolved);
   };
 
   const startAddrLabel = String(draft?.startAddr ?? "").trim().split(/\s+/).filter(Boolean)[0] ?? "-";
@@ -540,5 +543,4 @@ export function QuoteCreatePage() {
 }
 
 export default QuoteCreatePage;
-
 

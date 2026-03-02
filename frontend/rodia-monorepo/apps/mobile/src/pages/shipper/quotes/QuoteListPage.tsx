@@ -121,11 +121,16 @@ function normalizeMatchStatus(value: unknown): string {
   return normalized === BACKEND_STATUS.UNKNOWN ? "" : normalized;
 }
 
-function resolveEffectiveQuoteStatus(quoteStatus: unknown, matchStatus: unknown): string {
+function resolveEffectiveQuoteStatus(quoteStatus: unknown, matchStatus: unknown, matchAccepted?: unknown): string {
   const quoteText = String(quoteStatus ?? "").trim();
   const quoteNormalized = normalizeStatus(quoteText);
   const normalizedMatchStatus = normalizeMatchStatus(matchStatus);
   if (!normalizedMatchStatus) return quoteText;
+
+  // READY는 기사 수락 전/후를 구분해야 결제 상태가 조기 노출되지 않는다.
+  if (normalizedMatchStatus === BACKEND_STATUS.READY && matchAccepted !== true) {
+    return quoteText || normalizedMatchStatus;
+  }
 
   if (STATUS_PROMOTION_SOURCE_STATES.has(quoteNormalized) && STATUS_PROMOTION_TARGET_STATES.has(normalizedMatchStatus)) {
     return normalizedMatchStatus;
@@ -815,13 +820,14 @@ export default function QuoteListPage() {
       const rawQuotes = Array.isArray(quoteResponse) ? quoteResponse : [];
       const matches = Array.isArray(matchResponse) ? matchResponse : [];
 
-      const matchByQuoteId = new Map<number, { status: string; updatedAt: string }>();
+      const matchByQuoteId = new Map<number, { status: string; updatedAt: string; accepted: boolean }>();
       for (const m of matches as ShipperMatchItem[]) {
         const quoteId = typeof (m as any)?.quoteId === "number" ? (m as any).quoteId : 0;
         if (quoteId <= 0) continue;
 
         const status = typeof (m as any)?.status === "string" ? (m as any).status : "";
         if (normalizeMatchStatus(status) === BACKEND_STATUS.CANCELLED) continue;
+        const accepted = (m as any)?.accepted === true;
 
         const updatedAt = typeof (m as any)?.updatedAt === "string" ? (m as any).updatedAt : "";
         const prev = matchByQuoteId.get(quoteId);
@@ -829,13 +835,13 @@ export default function QuoteListPage() {
         const nextTs = updatedAt ? Date.parse(updatedAt) : 0;
 
         if (!prev || (Number.isFinite(nextTs) && nextTs >= (Number.isFinite(prevTs) ? prevTs : 0))) {
-          matchByQuoteId.set(quoteId, { status, updatedAt });
+          matchByQuoteId.set(quoteId, { status, updatedAt, accepted });
         }
       }
 
       const effectiveQuotes = rawQuotes.map((q) => {
         const match = matchByQuoteId.get(q.quoteId);
-        const effectiveStatus = resolveEffectiveQuoteStatus(q.status, match?.status);
+        const effectiveStatus = resolveEffectiveQuoteStatus(q.status, match?.status, match?.accepted);
         return effectiveStatus && effectiveStatus !== q.status ? { ...q, status: effectiveStatus as QuoteStatusApi } : q;
       });
 

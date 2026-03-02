@@ -370,7 +370,8 @@ function resolvePriceSummary(quote: QuoteDetailQuote): PriceSummary {
   const desired = toPositiveAmount(quote.desiredPrice);
   const finalPrice = toPositiveAmount(quote.finalPrice);
   const estimated = toPositiveAmount(quote.basePrice) + toPositiveAmount(quote.distancePrice) + toPositiveAmount(quote.extraPrice);
-  const estimatedAmount = estimated > 0 ? estimated : finalPrice;
+  // 결제 금액(source of truth)과 화면 금액을 일치시킨다.
+  const estimatedAmount = finalPrice > 0 ? finalPrice : estimated;
   const isCompleted = uiState === CUSTOMER_UI_STATE.COMPLETED;
 
   if (isCompleted && finalPrice > 0) {
@@ -403,11 +404,16 @@ function normalizeMatchStatus(value: unknown): string {
   return normalized === BACKEND_STATUS.UNKNOWN ? "" : normalized;
 }
 
-function resolveEffectiveQuoteStatus(quoteStatus: unknown, matchStatus: unknown): string {
+function resolveEffectiveQuoteStatus(quoteStatus: unknown, matchStatus: unknown, matchAccepted?: unknown): string {
   const quoteText = toText(quoteStatus);
   const quoteNormalized = normalizeStatus(quoteText);
   const normalizedMatchStatus = normalizeMatchStatus(matchStatus);
   if (!normalizedMatchStatus) return quoteText;
+
+  // READY는 배차요청 직후(accepted=false)와 배차수락 후(accepted=true)를 구분해야 한다.
+  if (normalizedMatchStatus === BACKEND_STATUS.READY && matchAccepted !== true) {
+    return quoteText || normalizedMatchStatus;
+  }
 
   if (STATUS_PROMOTION_SOURCE_STATES.has(quoteNormalized) && STATUS_PROMOTION_TARGET_STATES.has(normalizedMatchStatus)) {
     return normalizedMatchStatus;
@@ -695,9 +701,10 @@ export default function QuoteDetailPage() {
     () => {
       const base = routeStatus || (matchHydrated ? view.quote.status : BACKEND_STATUS.UNKNOWN);
       const matchStatus = matchHydrated ? activeQuoteMatch?.status : null;
-      return resolveEffectiveQuoteStatus(base, matchStatus);
+      const matchAccepted = matchHydrated ? activeQuoteMatch?.accepted : null;
+      return resolveEffectiveQuoteStatus(base, matchStatus, matchAccepted);
     },
-    [activeQuoteMatch?.status, matchHydrated, routeStatus, view.quote.status]
+    [activeQuoteMatch?.accepted, activeQuoteMatch?.status, matchHydrated, routeStatus, view.quote.status]
   );
   const effectivePolicy = React.useMemo(() => getQuoteActionPolicy(effectiveQuoteStatus), [effectiveQuoteStatus]);
   const effectiveActionsContext = React.useMemo(

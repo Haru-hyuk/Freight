@@ -52,7 +52,12 @@ public class MatchService {
         if (!quote.isOpen()) {
             throw new CustomException(ErrorCode.QUOTE_NOT_OPEN);
         }
-        if (matchRepository.existsByQuoteIdAndStatusNot(quoteId, Match.Status.CANCELLED)) {
+        Match existing = matchRepository.findByQuoteId(quoteId).orElse(null);
+        if (existing != null && existing.getStatus() != Match.Status.CANCELLED) {
+            // 배차요청 재시도는 멱등하게 허용해 오더마켓 노출 누락을 줄인다.
+            if (existing.getStatus() == Match.Status.READY && !Boolean.TRUE.equals(existing.getAccepted())) {
+                return MatchResponse.from(existing);
+            }
             throw new CustomException(ErrorCode.MATCH_ALREADY_EXISTS);
         }
 

@@ -1,9 +1,12 @@
 import { formatWorkMethodLabel } from "@/features/quote/model/workMethod";
 import {
+  BACKEND_STATUS,
+  DRIVER_UI_STATE,
   getDriverCta,
   getDriverBadge,
   getDriverOrderSortPriority,
   getDriverUiStateFromRawStatus,
+  normalizeStatus,
 } from "@/shared/lib/policy";
 import { formatDateTime, formatDistance, formatKrw } from "@/shared/lib/format/display";
 import {
@@ -136,7 +139,11 @@ export function mapDriverOrderCard(input: DriverOrderCardMapperInput): DriverOrd
   const mockDecoration = mode === "mock" ? selectMockFlowDriverOrderDecoration(seed, scope) : null;
 
   const rawStatus = resolveDriverOrderRawStatus(status, quote);
-  const uiState = getDriverUiStateFromRawStatus(rawStatus);
+  const normalizedStatus = normalizeStatus(rawStatus);
+  const uiState =
+    scope === "market" && normalizedStatus === BACKEND_STATUS.READY
+      ? DRIVER_UI_STATE.READY_TO_ACCEPT
+      : getDriverUiStateFromRawStatus(rawStatus);
   const statusBadge = getDriverBadge(uiState);
   const cta = getDriverCta(uiState, true);
   const statusLabel = statusBadge.label;

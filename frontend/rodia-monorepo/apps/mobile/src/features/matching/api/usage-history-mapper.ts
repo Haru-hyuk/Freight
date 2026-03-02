@@ -113,8 +113,8 @@ export function normalizeStatus(raw?: string | null): BackendStatus {
 const statusRank: Record<BackendStatus, number> = {
   UNKNOWN: 0,
   OPEN: 10,
-  READY: 20,
-  MATCHED: 30,
+  MATCHED: 20,
+  READY: 30,
   IN_TRANSIT: 40,
   DELIVERED: 50,
   COMPLETED: 50,
