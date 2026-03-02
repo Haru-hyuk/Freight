@@ -2798,7 +2798,7 @@ export function ShipperHomePage() {
 
   const goToHistory = () => {
     // navigation.navigate('History');
-    Alert.alert("이용 내역", "이용 내역 화면으로 이동합니다.");
+    Alert.alert("견적 내역", "견적 내역 화면으로 이동합니다.");
   };
 
   return (
