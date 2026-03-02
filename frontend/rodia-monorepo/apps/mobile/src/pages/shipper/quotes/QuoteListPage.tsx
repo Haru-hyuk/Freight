@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 
@@ -730,6 +730,28 @@ export default function QuoteListPage() {
   const focusRefetchMetaRef = useRef({ hasFocusedOnce: false, inFlight: false, lastRefetchAt: 0 });
 
   const [activeTab, setActiveTab] = useState<QuoteListTab>("ALL");
+
+  const routeParams = useLocalSearchParams<{ tab?: string }>();
+
+  useEffect(() => {
+    const raw = String(routeParams?.tab ?? "").trim().toUpperCase();
+    if (!raw) return;
+
+    const next =
+      raw === "IN_PROGRESS" || raw === "INPROGRESS" || raw === "PROGRESS"
+        ? "IN_PROGRESS"
+        : raw === "COMPLETED"
+          ? "COMPLETED"
+          : raw === "CANCELED" || raw === "CANCELLED"
+            ? "CANCELED"
+            : raw === "ALL"
+              ? "ALL"
+              : null;
+
+    if (!next) return;
+    if (next === activeTab) return;
+    setActiveTab(next as any);
+  }, [activeTab, routeParams?.tab]);
   const [activeSort, setActiveSort] = useState<QuoteListSort>("LATEST");
   const [quotes, setQuotes] = useState<QuoteListItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);

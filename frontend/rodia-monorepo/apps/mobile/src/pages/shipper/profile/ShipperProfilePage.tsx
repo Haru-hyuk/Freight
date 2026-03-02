@@ -362,7 +362,7 @@ export function ShipperProfilePage() {
         label: "진행중",
         value: inProgressCount !== null ? String(inProgressCount) : "-",
         accent: true,
-        onPress: () => replaceRouteOnce("/(shipper)/matchings"),
+        onPress: () => replaceRouteOnce("/(shipper)/quotes?tab=IN_PROGRESS"),
       },
       {
         id: "request-history",
