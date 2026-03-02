@@ -155,7 +155,7 @@ export default function ShipperLayout() {
           onChange={onChangeTab}
           items={[
             { key: "home", label: "홈", iconActive: "home", iconInactive: "home-outline" },
-            { key: "quotes", label: "이용내역", iconActive: "clipboard", iconInactive: "clipboard-outline" },
+            { key: "quotes", label: "견적 내역", iconActive: "clipboard", iconInactive: "clipboard-outline" },
             { key: "profile", label: "내 정보", iconActive: "person", iconInactive: "person-outline" },
           ]}
         />

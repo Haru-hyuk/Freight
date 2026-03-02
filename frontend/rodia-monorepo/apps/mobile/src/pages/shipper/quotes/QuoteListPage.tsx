@@ -806,7 +806,7 @@ export default function QuoteListPage() {
     if (activeTab === "IN_PROGRESS") return "현재 진행 중인 운송 내역이 없습니다.";
     if (activeTab === "COMPLETED") return "완료된 운송 내역이 없습니다.";
     if (activeTab === "CANCELED") return "취소된 운송 내역이 없습니다.";
-    return "운송 요청을 시작하면 이용 내역을 확인할 수 있습니다.";
+    return "운송 요청을 시작하면 견적 내역을 확인할 수 있습니다.";
   }, [activeTab]);
 
   const handlePressCard = useCallback(
@@ -822,7 +822,7 @@ export default function QuoteListPage() {
 
   return (
     <PageScaffold
-      title="이용 내역"
+      title="견적 내역"
       backgroundColor={theme.colors.bgMain}
       contentStyle={styles.pageContent}
       floating={
@@ -888,7 +888,7 @@ export default function QuoteListPage() {
           />
         ) : isFilteredEmpty ? (
           <AppEmptyState
-            title="조건에 맞는 이용 내역이 없어요"
+            title="조건에 맞는 견적 내역이 없어요"
             description={emptyDescription}
             action={{ label: "견적 요청하기", onPress: () => router.push("/(shipper)/quotes/create") }}
           />

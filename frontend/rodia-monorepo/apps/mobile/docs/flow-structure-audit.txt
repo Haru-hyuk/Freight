@@ -105,9 +105,9 @@
   - Driver UI 사용: DriverMatchDetailPage -> postCounterOffer -> shipper-match-api -> createDriverCounterOffer
     - 근거: src/pages/driver/matches/DriverMatchDetailPage.tsx:L647-L654, src/features/matching/api/shipper-match-api.ts:L309-L327
 
-4. Shipper 흐름(이용내역/상세/배차) 현재 구현 구조
+4. Shipper 흐름(견적 내역/상세/배차) 현재 구현 구조
 
-- 이용내역(목록)
+- 견적 내역(목록)
   - QuoteListPage에서 listShipperQuotes 로드 후 탭/정렬은 useMemo 파생값으로 필터링
     - 근거: src/pages/shipper/quotes/QuoteListPage.tsx:L748-L757, L522-L552
   - 탭 기준 상태 집합

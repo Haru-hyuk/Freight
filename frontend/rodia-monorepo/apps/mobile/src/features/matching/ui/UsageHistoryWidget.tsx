@@ -67,7 +67,7 @@ export function UsageHistoryWidget({ items }: UsageHistoryWidgetProps) {
     () => (
       <View style={styles.emptyWrapper}>
         <AppEmptyState
-          title="이용 내역이 없어요"
+          title="견적 내역이 없어요"
           description="조건을 바꾸거나 새로운 견적을 요청해 보세요."
         />
       </View>

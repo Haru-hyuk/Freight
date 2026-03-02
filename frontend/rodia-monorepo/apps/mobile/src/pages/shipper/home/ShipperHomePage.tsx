@@ -545,7 +545,7 @@ export function ShipperHomePage() {
           <AppCard style={styles.recentItemCard} elevated={true} outlined={true}>
             <View style={styles.recentItemContent}>
               <AppText variant="detail" color={cSub}>
-                완료된 이용내역이 없습니다.
+                완료된 견적 내역이 없습니다.
               </AppText>
             </View>
           </AppCard>
