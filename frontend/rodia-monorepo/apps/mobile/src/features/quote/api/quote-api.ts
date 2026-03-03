@@ -4,6 +4,7 @@ import type {
   QuoteCreateRequestDto,
   QuoteCreateResponseDto,
   QuoteDetailResponseDto,
+  QuoteItemDto,
   QuoteListItemDto,
   QuoteStopDto,
   QuoteStopRequestDto,
@@ -291,6 +292,40 @@ function mapChecklistItems(input: unknown): QuoteDetailResponse["checklistItems"
     });
 
   return mapped.filter((item): item is QuoteDetailResponse["checklistItems"][number] => item !== null);
+}
+
+function mapQuoteItems(input: unknown): QuoteDetailResponse["quoteItems"] {
+  if (!Array.isArray(input)) return [];
+
+  return input.slice(0, 200).map((item, index) => {
+    const source = asObject(item as QuoteItemDto);
+    const quoteItemId = Math.max(0, safeInt(source.quoteItemId, 0));
+    const quantity = Math.max(1, safeInt(source.quantity, 1));
+    const unitWeightKg = Math.max(0, safeNumber(source.unitWeightKg, 0));
+    const unitVolumeCbm = Math.max(0, safeNumber(source.unitVolumeCbm, 0));
+
+    return {
+      quoteItemId,
+      itemName: safeString(source.itemName, ""),
+      itemType: safeString(source.itemType, ""),
+      itemDescription: safeString(source.itemDescription, ""),
+      quantity,
+      lengthCm: Math.max(0, safeNumber(source.lengthCm, 0)),
+      widthCm: Math.max(0, safeNumber(source.widthCm, 0)),
+      heightCm: Math.max(0, safeNumber(source.heightCm, 0)),
+      unitWeightKg,
+      unitVolumeCbm,
+      fragile: Boolean(source.fragile),
+      upright: Boolean(source.upright),
+      noStack: Boolean(source.noStack),
+      bottomOnly: Boolean(source.bottomOnly),
+      rotatable: Boolean(source.rotatable),
+      stackable: Boolean(source.stackable),
+      maxStackWeightKg: Math.max(0, safeNumber(source.maxStackWeightKg, unitWeightKg * quantity)),
+      handlingTags: safeString(source.handlingTags, ""),
+      sortOrder: Math.max(0, safeInt(source.sortOrder, index)),
+    };
+  });
 }
 
 function mapStops(input: unknown): QuoteDetailResponse["stops"] {
@@ -644,6 +679,7 @@ function toQuoteDetail(input: unknown, fallbackQuoteId = 0): QuoteDetailResponse
     senderPhone: senderPhone || undefined,
     receiverName: receiverName || undefined,
     receiverPhone: receiverPhone || undefined,
+    quoteItems: mapQuoteItems(source.quoteItems),
     checklistItems: mapChecklistItems(source.checklistItems),
     stops: mapStops(source.stops),
   };

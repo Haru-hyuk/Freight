@@ -31,6 +31,28 @@ export type QuoteChecklistItemDto = {
   extraFee?: number;
 };
 
+export type QuoteItemDto = {
+  quoteItemId?: number | string;
+  itemName?: string;
+  itemType?: string;
+  itemDescription?: string;
+  quantity?: number | string;
+  lengthCm?: number | string;
+  widthCm?: number | string;
+  heightCm?: number | string;
+  unitWeightKg?: number | string;
+  unitVolumeCbm?: number | string;
+  fragile?: boolean;
+  upright?: boolean;
+  noStack?: boolean;
+  bottomOnly?: boolean;
+  rotatable?: boolean;
+  stackable?: boolean;
+  maxStackWeightKg?: number | string;
+  handlingTags?: string;
+  sortOrder?: number | string;
+};
+
 export type QuoteStopDto = {
   quoteStopId?: number | string;
   seq?: number | string;
@@ -77,6 +99,7 @@ export type QuoteCreateRequestDto = {
   loadMethod: QuoteWorkMethod;
   unloadMethod: QuoteWorkMethod;
   checklistItems: QuoteChecklistItemDto[];
+  quoteItems?: QuoteItemDto[] | null;
   stops?: QuoteStopRequestDto[] | null;
 };
 
@@ -141,6 +164,7 @@ export type QuoteDetailResponseDto = {
   senderPhone?: string;
   receiverName?: string;
   receiverPhone?: string;
+  quoteItems?: QuoteItemDto[] | null;
   checklistItems?: QuoteChecklistItemDto[] | null;
   stops?: QuoteStopDto[] | null;
 };

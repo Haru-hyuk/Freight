@@ -100,7 +100,40 @@ function toDraftDate(raw: unknown): Date {
   return new Date();
 }
 
+function toCargoItemCategory(value: unknown): QuoteCreateDraft["cargoList"][number]["itemCategory"] {
+  const normalized = String(value ?? "").trim().toUpperCase();
+  if (normalized === "PALLET") return "PALLET";
+  if (normalized === "FURNITURE") return "FURNITURE";
+  return "BOX";
+}
+
 function buildCargoFromDetail(detail: QuoteDetailResponse): QuoteCreateDraft["cargoList"] {
+  const rawItems = Array.isArray(detail?.quoteItems) ? detail.quoteItems : [];
+  const mappedItems = rawItems
+    .slice()
+    .sort((a, b) => toSafeInt(a?.sortOrder, 0) - toSafeInt(b?.sortOrder, 0))
+    .map((item, index) => {
+      const quantity = Math.max(1, toSafeInt(item?.quantity, 1));
+      const unitWeightKg = Math.max(0, toSafeNumber(item?.unitWeightKg, 0));
+      const totalWeightKg = unitWeightKg > 0 ? Math.max(0, Math.round(unitWeightKg * quantity)) : 0;
+
+      return {
+        id: Math.max(1, toSafeInt(item?.quoteItemId, index + 1)),
+        itemCategory: toCargoItemCategory(item?.itemType),
+        type: String(item?.itemName ?? "").trim() || String(detail?.cargoName ?? "").trim() || "일반 화물",
+        quantity: String(quantity),
+        lengthCm: Math.max(0, toSafeInt(item?.lengthCm, 0)) > 0 ? String(Math.max(0, toSafeInt(item?.lengthCm, 0))) : "",
+        widthCm: Math.max(0, toSafeInt(item?.widthCm, 0)) > 0 ? String(Math.max(0, toSafeInt(item?.widthCm, 0))) : "",
+        heightCm: Math.max(0, toSafeInt(item?.heightCm, 0)) > 0 ? String(Math.max(0, toSafeInt(item?.heightCm, 0))) : "",
+        weight: totalWeightKg > 0 ? String(totalWeightKg) : "",
+        dropOffKey: "END" as const,
+      };
+    });
+
+  if (mappedItems.length > 0) {
+    return mappedItems;
+  }
+
   const safeWeight = Math.max(0, Math.round(toSafeNumber(detail?.weightKg, 0)));
   const safeVolume = Math.max(0, toSafeNumber(detail?.volumeCbm, 0));
   const approxHeightCm = safeVolume > 0 ? Math.max(1, Math.round((safeVolume / 4) * 100)) : 0;

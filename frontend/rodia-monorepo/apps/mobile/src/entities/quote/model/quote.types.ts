@@ -32,6 +32,28 @@ export type QuoteStop = {
   managerName: string;
 };
 
+export type QuoteItem = {
+  quoteItemId: number;
+  itemName: string;
+  itemType: string;
+  itemDescription: string;
+  quantity: number;
+  lengthCm: number;
+  widthCm: number;
+  heightCm: number;
+  unitWeightKg: number;
+  unitVolumeCbm: number;
+  fragile: boolean;
+  upright: boolean;
+  noStack: boolean;
+  bottomOnly: boolean;
+  rotatable: boolean;
+  stackable: boolean;
+  maxStackWeightKg: number;
+  handlingTags: string;
+  sortOrder: number;
+};
+
 export type QuoteCreateRequest = {
   truckId: number;
   originAddress: string;
@@ -118,6 +140,7 @@ export type QuoteDetailResponse = {
   senderPhone?: string;
   receiverName?: string;
   receiverPhone?: string;
+  quoteItems: QuoteItem[];
   checklistItems: QuoteChecklistItem[];
   stops: QuoteStop[];
 };
