@@ -648,10 +648,12 @@ export function createMockFlowSeed(): MockFlowSeed {
   const counterOffers = COUNTER_OFFER_SEED_INPUTS.map((input) => buildSeedCounterOffer(input));
 
   // matches 배열에 담겨 반환되는 동일 인스턴스에 주입해야 mock store에서도 그대로 참조된다.
-  const match7003 = matches.find((m) => m.matchId === 7003) as MatchWithLoadData | undefined;
-  if (match7003) {
-    match7003.loadPlan = DEMO_LOAD_PLAN;
-    match7003.truckSpec = DEMO_TRUCK_SPEC;
+  // Market(7001/7002) + Assigned(7003) 모두 3D 시뮬레이션 데이터를 노출한다.
+  for (const targetId of [7001, 7002, 7003] as const) {
+    const match = matches.find((m) => m.matchId === targetId) as MatchWithLoadData | undefined;
+    if (!match) continue;
+    match.loadPlan = DEMO_LOAD_PLAN;
+    match.truckSpec = DEMO_TRUCK_SPEC;
   }
 
   return {

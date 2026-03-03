@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { Canvas } from "@react-three/fiber/native";
+import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, StyleSheet, View } from "react-native";
@@ -66,12 +67,6 @@ function resolveWorkflowStepIndex(uiState: DriverUiState): number {
 function toPositiveInt(value: unknown): number {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
-}
-
-let mockPhotoCounter = 0;
-function generateMockPhotoUri(): string {
-  mockPhotoCounter += 1;
-  return `mock://cargo-photo-${mockPhotoCounter}-${Date.now()}`;
 }
 
 const CargoBox = ({ placement }: { placement: Placement }) => {
@@ -417,6 +412,19 @@ export default function DriverOrderDetailRoute() {
     [viewModel.refetch]
   );
 
+  const handleAddPhoto = useCallback(async (setter: React.Dispatch<React.SetStateAction<string[]>>) => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsMultipleSelection: true,
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets) {
+      const uris = result.assets.map((asset: { uri: string }) => asset.uri);
+      setter((prev) => [...prev, ...uris]);
+    }
+  }, []);
+
   useEffect(() => {
     const match = (viewModel.match as MatchWithWorkflowPayload | null) ?? null;
     if (!match) return;
@@ -434,72 +442,13 @@ export default function DriverOrderDetailRoute() {
     </Pressable>
   );
 
-  if (matchId <= 0) {
-    return (
-      <PageScaffold
-        title="오더 상세"
-        subtitle="오더 정보 확인"
-        scroll={false}
-        padding={20}
-        onPressBack={() => router.back()}
-      >
-        <View style={themedStyles.stateWrap}>
-          <AppErrorState
-            title="유효한 오더 ID가 아닙니다."
-            description="목록에서 오더를 다시 선택해 주세요."
-            retryLabel="뒤로 가기"
-            onRetry={() => router.back()}
-            fullScreen={false}
-          />
-        </View>
-      </PageScaffold>
-    );
-  }
-
-  if (viewModel.isLoading || (!viewModel.match && !viewModel.errorMessage)) {
-    return (
-      <PageScaffold
-        title="오더 상세"
-        subtitle="오더 정보 확인"
-        scroll={false}
-        padding={20}
-        onPressBack={() => router.back()}
-        headerRight={headerRight}
-      >
-        <View style={themedStyles.stateWrap}>
-          <AppSpinner label="오더 상세를 불러오는 중입니다." />
-        </View>
-      </PageScaffold>
-    );
-  }
-
-  if (viewModel.errorMessage) {
-    return (
-      <PageScaffold
-        title="오더 상세"
-        subtitle="오더 정보 확인"
-        scroll={false}
-        padding={20}
-        onPressBack={() => router.back()}
-        headerRight={headerRight}
-      >
-        <View style={themedStyles.stateWrap}>
-          <AppErrorState
-            title="오더 상세를 불러오지 못했습니다."
-            description={viewModel.errorMessage}
-            retryLabel="다시 시도"
-            onRetry={() => void viewModel.refetch()}
-            fullScreen={false}
-          />
-        </View>
-      </PageScaffold>
-    );
-  }
-
   const parsedMatch = (viewModel.match as MatchWithWorkflowPayload | null) ?? null;
   const rawStatus = String(viewModel.quote?.status ?? parsedMatch?.status ?? "");
   const uiState = getDriverUiStateFromRawStatus(rawStatus);
   const cta = getDriverCta(uiState, true);
+  const isQuoteState =
+    uiState === DRIVER_UI_STATE.READY_TO_ACCEPT || uiState === DRIVER_UI_STATE.NEGOTIATING;
+  const pageTitle = isQuoteState ? "견적 상세" : "오더 상세";
 
   const loadPlan: LoadPlanResponse | undefined = parsedMatch?.loadPlan;
   const placements: Placement[] = Array.isArray(loadPlan?.placements) ? loadPlan.placements : [];
@@ -582,7 +531,7 @@ export default function DriverOrderDetailRoute() {
           <AppText style={themedStyles.workflowBodyText}>
             상차 사진을 등록한 뒤 하단의 상차 완료 버튼으로 다음 단계를 진행해 주세요.
           </AppText>
-          <PhotoGrid photos={loadingPhotos} onAdd={() => setLoadingPhotos((prev) => [...prev, generateMockPhotoUri()])} />
+          <PhotoGrid photos={loadingPhotos} onAdd={() => void handleAddPhoto(setLoadingPhotos)} />
         </AppCard>
       );
     }
@@ -598,7 +547,7 @@ export default function DriverOrderDetailRoute() {
           </AppText>
           <PhotoGrid
             photos={unloadingPhotos}
-            onAdd={() => setUnloadingPhotos((prev) => [...prev, generateMockPhotoUri()])}
+            onAdd={() => void handleAddPhoto(setUnloadingPhotos)}
           />
         </AppCard>
       );
@@ -624,7 +573,77 @@ export default function DriverOrderDetailRoute() {
     }
 
     return null;
-  }, [loadingPhotos, themedStyles.workflowBodyText, themedStyles.workflowCard, themedStyles.workflowTitle, uiState, unloadingPhotos]);
+  }, [
+    handleAddPhoto,
+    loadingPhotos,
+    themedStyles.workflowBodyText,
+    themedStyles.workflowCard,
+    themedStyles.workflowTitle,
+    uiState,
+    unloadingPhotos,
+  ]);
+
+  if (matchId <= 0) {
+    return (
+      <PageScaffold
+        title={pageTitle}
+        subtitle="오더 정보 확인"
+        scroll={false}
+        padding={20}
+        onPressBack={() => router.back()}
+      >
+        <View style={themedStyles.stateWrap}>
+          <AppErrorState
+            title="유효한 오더 ID가 아닙니다."
+            description="목록에서 오더를 다시 선택해 주세요."
+            retryLabel="뒤로 가기"
+            onRetry={() => router.back()}
+            fullScreen={false}
+          />
+        </View>
+      </PageScaffold>
+    );
+  }
+
+  if (viewModel.isLoading || (!viewModel.match && !viewModel.errorMessage)) {
+    return (
+      <PageScaffold
+        title={pageTitle}
+        subtitle="오더 정보 확인"
+        scroll={false}
+        padding={20}
+        onPressBack={() => router.back()}
+        headerRight={headerRight}
+      >
+        <View style={themedStyles.stateWrap}>
+          <AppSpinner label="오더 상세를 불러오는 중입니다." />
+        </View>
+      </PageScaffold>
+    );
+  }
+
+  if (viewModel.errorMessage) {
+    return (
+      <PageScaffold
+        title={pageTitle}
+        subtitle="오더 정보 확인"
+        scroll={false}
+        padding={20}
+        onPressBack={() => router.back()}
+        headerRight={headerRight}
+      >
+        <View style={themedStyles.stateWrap}>
+          <AppErrorState
+            title="오더 상세를 불러오지 못했습니다."
+            description={viewModel.errorMessage}
+            retryLabel="다시 시도"
+            onRetry={() => void viewModel.refetch()}
+            fullScreen={false}
+          />
+        </View>
+      </PageScaffold>
+    );
+  }
 
   const staticStatusCard =
     cta.id === DRIVER_CTA_ID.PAYMENT_PENDING ? (
@@ -661,7 +680,7 @@ export default function DriverOrderDetailRoute() {
               variant="secondary"
               style={themedStyles.actionBtn}
               disabled={isBusy}
-              onPress={() => setLoadingPhotos((prev) => [...prev, generateMockPhotoUri()])}
+              onPress={() => void handleAddPhoto(setLoadingPhotos)}
               textStyle={{ fontSize: 16, fontWeight: "900" }}
             />
             <AppButton
@@ -683,7 +702,7 @@ export default function DriverOrderDetailRoute() {
               variant="secondary"
               style={themedStyles.actionBtn}
               disabled={isBusy}
-              onPress={() => setUnloadingPhotos((prev) => [...prev, generateMockPhotoUri()])}
+              onPress={() => void handleAddPhoto(setUnloadingPhotos)}
               textStyle={{ fontSize: 16, fontWeight: "900" }}
             />
             <AppButton
@@ -703,7 +722,7 @@ export default function DriverOrderDetailRoute() {
 
   return (
     <PageScaffold
-      title="오더 상세"
+      title={pageTitle}
       subtitle={`오더 #${matchId}`}
       scroll
       padding={20}
