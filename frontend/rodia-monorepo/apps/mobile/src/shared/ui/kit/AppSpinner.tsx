@@ -33,6 +33,8 @@ function mapSize(size: AppSpinnerSize) {
 
 const useStyles = createThemedStyles((theme) => ({
   inlineRoot: {
+    flex: 1,
+    alignSelf: "stretch",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,

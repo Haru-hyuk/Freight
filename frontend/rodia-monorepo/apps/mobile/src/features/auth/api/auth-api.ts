@@ -607,6 +607,92 @@ export async function checkDuplicateEmail(_: DuplicateEmailCheckParams): Promise
   return { isDuplicate: null };
 }
 
+// GET /api/auth/me → MeResponse { id, role, email, name }
+export type MeProfile = {
+  id?: string;
+  role?: string;
+  email?: string;
+  name?: string;
+  phone?: string;
+  bankName?: string;
+  bankAccount?: string;
+};
+
+export async function getMeProfile(): Promise<MeProfile | null> {
+  if (isMockMode()) {
+    const access = await tokenStorage.getAccessToken();
+    const tokenUser = isTruthyString(access) ? extractUserFromAccessToken(access) : null;
+    return {
+      id: tokenUser?.id ?? "mock-user",
+      role: tokenUser?.role ?? "shipper",
+      email: tokenUser?.email ?? "shipper@rodia.co.kr",
+      name: tokenUser?.name ?? "로디아 화주",
+      phone: "",
+      bankName: "",
+      bankAccount: "",
+    };
+  }
+
+  try {
+    const res = await apiClient.get("/api/auth/me");
+    const data = (res as any)?.data ?? null;
+    const d = (data ?? {}) as AnyObj;
+    const source = (d?.data ?? d?.result ?? d) as AnyObj;
+    return {
+      id: pickString(source?.id),
+      role: pickString(source?.role),
+      email: pickString(source?.email),
+      name: pickString(source?.name),
+      phone: pickString(source?.phone),
+      bankName: pickString(source?.bankName),
+      bankAccount: pickString(source?.bankAccount),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export type MeUpdateInput = {
+  name?: string;
+  email?: string;
+  phone?: string;
+};
+
+export async function updateMeProfile(input: MeUpdateInput): Promise<{ ok: boolean; profile?: MeProfile; message?: string }> {
+  if (isMockMode()) {
+    return {
+      ok: true,
+      profile: {
+        id: "mock-user",
+        role: "shipper",
+        name: pickString(input?.name),
+        email: pickString(input?.email),
+        phone: pickString(input?.phone),
+      },
+    };
+  }
+
+  try {
+    const res = await apiClient.patch("/api/auth/me", input);
+    const data = (res as any)?.data ?? null;
+    const d = (data ?? {}) as AnyObj;
+    const source = (d?.data ?? d?.result ?? d) as AnyObj;
+    return {
+      ok: true,
+      profile: {
+        id: pickString(source?.id),
+        role: pickString(source?.role),
+        email: pickString(source?.email),
+        name: pickString(source?.name),
+        phone: pickString(source?.phone),
+      },
+    };
+  } catch (err) {
+    const meta = extractApiErrorMeta(err);
+    return { ok: false, message: meta?.message ?? "저장에 실패했습니다." };
+  }
+}
+
 /**
  * 1) 로그인/회원가입 endpoint는 스펙 경로를 하드코딩해 경로 꼬임(가입→로그인 호출) 리스크를 제거.
  * 2) 서버가 accessToken만 내려줘도 refreshToken을 accessToken으로 채워 토큰 저장/부팅 크래시 방지.

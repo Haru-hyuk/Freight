@@ -11,33 +11,36 @@ type BottomTabKey = "home" | "quotes" | "run" | "settlement" | "profile";
 
 function shouldHideBottomBar(segments: readonly string[] | undefined | null): boolean {
   const segs = Array.isArray(segments) ? segments : [];
-  return segs.includes("verification");
+  return segs.includes("verification") || segs.includes("(stack)");
 }
 
 function pickActiveKey(segments: readonly string[] | undefined | null): BottomTabKey {
-  const segs = Array.isArray(segments) ? segments : [];
+  const topLevelSegment = segments?.[1];
 
-  if (segs.includes("quotes")) return "quotes";
-  if (segs.includes("run") || segs.includes("matches")) return "run";
-  if (segs.includes("settlement")) return "settlement";
-  if (segs.includes("profile")) return "profile";
-  if (segs.includes("home")) return "home";
-
-  const last = segs
-    .filter((s) => safeString(s).trim() && !safeString(s).startsWith("("))
-    .slice(-1)[0];
-
-  if (last === "quotes") return "quotes";
-  if (last === "run" || last === "matches") return "run";
-  if (last === "settlement") return "settlement";
-  if (last === "profile") return "profile";
-  return "home";
+  switch (topLevelSegment) {
+    case "quotes":
+      return "quotes";
+    case "run":
+      return "run";
+    case "settlement":
+      return "settlement";
+    case "settings":
+      return "profile";
+    case "profile":
+      return "profile";
+    case "home":
+      return "home";
+    default:
+      // Fallback for routes that don't match a main tab, like 'verification'.
+      // It's better to return a sensible default like 'home' or the previous key.
+      return "home";
+  }
 }
 
 function hrefForKey(key: BottomTabKey): `/(driver)/${string}` {
   if (key === "home") return "/(driver)/home";
   if (key === "quotes") return "/(driver)/quotes";
-  if (key === "run") return "/(driver)/run/current";
+  if (key === "run") return "/(driver)/run";
   if (key === "settlement") return "/(driver)/settlement";
   return "/(driver)/profile";
 }

@@ -1,8 +1,23 @@
 import type { QuoteDetailResponse } from "@/entities/quote/model/quote.types";
+import {
+  isCounterOfferPending,
+  listMyDriverCounterOffers,
+  type CounterOfferItem,
+} from "@/features/counter-offer/api";
 import { getQuoteSummary } from "@/shared/api/generated";
 import { getDriverMatchMode } from "@/shared/lib/config/env";
-import type { BadgeTone } from "@/shared/lib/policy";
 import {
+  BACKEND_STATUS,
+  DRIVER_UI_STATE,
+  getDriverBadge,
+  getDriverCta,
+  normalizeStatus,
+  type BadgeTone,
+  type DriverCtaConfig,
+  type DriverUiState,
+} from "@/shared/lib/policy";
+import {
+  getMockFlowShipperQuoteDetail,
   selectMockFlowAiRecommendedDecoration,
   waitRandom,
   type MockFlowDriverOrderTagKey,
@@ -40,8 +55,10 @@ export type DriverOrderCard = {
   matchId: number;
   quoteId?: number;
   status: string;
+  uiState: DriverUiState;
   statusLabel: string;
   statusTone: BadgeTone;
+  cta: DriverCtaConfig;
   requestedAtText?: string;
   pickupTimeText?: string;
   originAddress?: string;
@@ -53,6 +70,9 @@ export type DriverOrderCard = {
   emptyDistanceText?: string;
   priceText?: string;
   priceValue?: number;
+  counterOfferProposedPrice?: number;
+  counterOfferMessage?: string;
+  counterOfferStatus?: string;
   sortTimestamp?: number;
   tags: DriverOrderTag[];
 };
@@ -65,6 +85,7 @@ export type DriverOrdersCapability = {
 export type DriverOrdersOverview = {
   marketOrders: DriverOrderCard[];
   myOrders: DriverOrderCard[];
+  runOrders: DriverOrderCard[];
   myCount: number;
   availableFilters: DriverOrderFilterKey[];
   capability: DriverOrdersCapability;
@@ -108,6 +129,48 @@ function toOptionalBoolean(value: unknown): boolean | undefined {
   if (normalized === "true" || normalized === "yes" || normalized === "y" || normalized === "1") return true;
   if (normalized === "false" || normalized === "no" || normalized === "n" || normalized === "0") return false;
   return undefined;
+}
+
+function normalizeCounterOfferMessage(value: unknown): string | undefined {
+  return toOptionalText(value);
+}
+
+function buildPendingCounterOfferByQuoteId(
+  offers: readonly CounterOfferItem[]
+): Map<number, CounterOfferItem> {
+  const byQuoteId = new Map<number, CounterOfferItem>();
+  offers.forEach((offer) => {
+    const quoteId = parseDriverOrderPositiveInt(offer.quoteId);
+    if (quoteId <= 0) return;
+    if (!isCounterOfferPending(offer.status)) return;
+    if (byQuoteId.has(quoteId)) return;
+    byQuoteId.set(quoteId, offer);
+  });
+  return byQuoteId;
+}
+
+function applyPendingCounterOfferOverlay(
+  card: DriverOrderCard,
+  pendingOffer: CounterOfferItem | undefined
+): DriverOrderCard {
+  if (!pendingOffer) return card;
+
+  const negotiatingBadge = getDriverBadge(DRIVER_UI_STATE.NEGOTIATING);
+  const proposedPrice =
+    Number.isFinite(pendingOffer.proposedPrice) && pendingOffer.proposedPrice > 0
+      ? Math.trunc(pendingOffer.proposedPrice)
+      : undefined;
+
+  return {
+    ...card,
+    uiState: DRIVER_UI_STATE.NEGOTIATING,
+    statusLabel: negotiatingBadge.label,
+    statusTone: negotiatingBadge.tone,
+    cta: getDriverCta(DRIVER_UI_STATE.NEGOTIATING, true),
+    counterOfferProposedPrice: proposedPrice,
+    counterOfferMessage: normalizeCounterOfferMessage(pendingOffer.message),
+    counterOfferStatus: pendingOffer.status,
+  };
 }
 
 function collectCandidateObjects(input: unknown): AnyObject[] {
@@ -292,7 +355,7 @@ function toQuoteDetailFromDriverSummary(
     allowCombine: pickFirstBoolean(candidates, ["allowCombine", "allow_combine"]) ?? false,
     loadMethod: pickFirstText(candidates, ["loadMethod", "load_method"]) ?? "",
     unloadMethod: pickFirstText(candidates, ["unloadMethod", "unload_method"]) ?? "",
-    status: "OPEN",
+    status: pickFirstText(candidates, ["status"]) as unknown as QuoteDetailResponse["status"],
     createdAt: "",
     updatedAt: "",
     senderName: undefined,
@@ -307,6 +370,12 @@ function toQuoteDetailFromDriverSummary(
 export async function getDriverQuoteSummaryDetail(quoteId: number): Promise<QuoteDetailResponse | null> {
   const safeQuoteId = parseDriverOrderPositiveInt(quoteId);
   if (safeQuoteId <= 0) return null;
+
+  if (getDriverMatchMode() === "mock") {
+    const mockQuoteDetail = getMockFlowShipperQuoteDetail(safeQuoteId);
+    if (!mockQuoteDetail) return null;
+    return mockQuoteDetail as unknown as QuoteDetailResponse;
+  }
 
   try {
     const raw = (await getQuoteSummary(safeQuoteId)) as unknown;
@@ -403,9 +472,47 @@ export async function loadDriverOrdersOverview(): Promise<DriverOrdersOverview> 
     await waitRandom();
   }
 
-  const [marketMatches, myMatches] = await Promise.all([listOpenDriverMatches(), listMyDriverMatches()]);
+  const [openMatches, myMatches, myCounterOffers] = await Promise.all([
+    listOpenDriverMatches(),
+    listMyDriverMatches(),
+    listMyDriverCounterOffers(),
+  ]);
+  const pendingCounterOfferByQuoteId = buildPendingCounterOfferByQuoteId(myCounterOffers);
 
-  const quoteIds = collectDriverOrderQuoteIds([...marketMatches, ...myMatches]);
+  const marketMatches = openMatches.filter((match) => {
+    if (parseDriverOrderPositiveInt(match.driverId) > 0) return false;
+    const quoteId = parseDriverOrderPositiveInt(match.quoteId);
+    if (quoteId > 0 && pendingCounterOfferByQuoteId.has(quoteId)) return false;
+    return true;
+  });
+  const runMatches = myMatches.filter((match) => {
+    if (match.accepted === true) return true;
+    const status = normalizeStatus(match.status ?? "");
+    // READY는 Match 상태 (배차 확정), runMatches에 포함
+    return (
+      status === BACKEND_STATUS.READY ||
+      status === BACKEND_STATUS.IN_TRANSIT ||
+      status === BACKEND_STATUS.DELIVERED ||
+      status === BACKEND_STATUS.COMPLETED
+    );
+  });
+  const myPendingMatches = myMatches.filter((match) => !runMatches.includes(match));
+  const negotiatingMarketMatches = openMatches.filter((match) => {
+    if (parseDriverOrderPositiveInt(match.driverId) > 0) return false;
+    const quoteId = parseDriverOrderPositiveInt(match.quoteId);
+    return quoteId > 0 && pendingCounterOfferByQuoteId.has(quoteId);
+  });
+  const myMatchesForBoard: typeof myMatches = [...myPendingMatches];
+  const seenMyMatchIds = new Set(myMatchesForBoard.map((match) => parseDriverOrderPositiveInt(match.matchId)));
+  negotiatingMarketMatches.forEach((match) => {
+    const safeMatchId = parseDriverOrderPositiveInt(match.matchId);
+    if (safeMatchId <= 0) return;
+    if (seenMyMatchIds.has(safeMatchId)) return;
+    seenMyMatchIds.add(safeMatchId);
+    myMatchesForBoard.push(match);
+  });
+
+  const quoteIds = collectDriverOrderQuoteIds([...marketMatches, ...myMatches, ...negotiatingMarketMatches]);
   const quoteMap = await loadQuoteDetailsByIds(quoteIds);
 
   const marketOrders = marketMatches.map((match, index) => {
@@ -424,7 +531,7 @@ export async function loadDriverOrdersOverview(): Promise<DriverOrdersOverview> 
     });
   });
 
-  const myOrders = myMatches.map((match, index) => {
+  const runOrders = runMatches.map((match, index) => {
     const quoteId = parseDriverOrderPositiveInt(match.quoteId);
     const quote = quoteId > 0 ? quoteMap.get(quoteId) ?? null : null;
     const source = parseDriverOrderSource({
@@ -440,12 +547,30 @@ export async function loadDriverOrdersOverview(): Promise<DriverOrdersOverview> 
     });
   });
 
+  const myOrdersWithNegotiating = myMatchesForBoard.map((match, index) => {
+    const quoteId = parseDriverOrderPositiveInt(match.quoteId);
+    const quote = quoteId > 0 ? quoteMap.get(quoteId) ?? null : null;
+    const source = parseDriverOrderSource({
+      match,
+      quote,
+      scope: "my",
+      index,
+    });
+    const baseCard = mapDriverOrderCard({
+      source,
+      mode,
+      filterLabels: FILTER_LABELS,
+    });
+    return applyPendingCounterOfferOverlay(baseCard, pendingCounterOfferByQuoteId.get(quoteId));
+  });
+
   const availableFilters = resolveAvailableFilters(capability, marketOrders);
 
   return {
     marketOrders: sortDriverOrderCards(marketOrders),
-    myOrders: sortDriverOrderCards(myOrders),
-    myCount: myOrders.length,
+    myOrders: sortDriverOrderCards(myOrdersWithNegotiating),
+    runOrders: sortDriverOrderCards(runOrders),
+    myCount: myOrdersWithNegotiating.length,
     availableFilters,
     capability,
   };

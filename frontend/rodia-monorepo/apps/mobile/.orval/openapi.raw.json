@@ -100,6 +100,67 @@
         }
       }
     },
+    "/api/shipper/addresses/{addressId}": {
+      "put": {
+        "tags": [
+          "shipper-address-controller"
+        ],
+        "operationId": "update",
+        "parameters": [
+          {
+            "name": "addressId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShipperAddressUpsertRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShipperAddressItemResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "shipper-address-controller"
+        ],
+        "operationId": "delete",
+        "parameters": [
+          {
+            "name": "addressId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
     "/api/driver/trucks/{truckId}": {
       "get": {
         "tags": [
@@ -192,6 +253,82 @@
         }
       }
     },
+    "/api/auth/me": {
+      "get": {
+        "tags": [
+          "auth-controller"
+        ],
+        "operationId": "me",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "auth-controller"
+        ],
+        "operationId": "putMe",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MeUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "auth-controller"
+        ],
+        "operationId": "patchMe",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MeUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/admin/announcements/{announcementId}": {
       "get": {
         "tags": [
@@ -226,7 +363,7 @@
         "tags": [
           "admin-announcement-controller"
         ],
-        "operationId": "update",
+        "operationId": "update_1",
         "parameters": [
           {
             "name": "announcementId",
@@ -265,7 +402,7 @@
         "tags": [
           "admin-announcement-controller"
         ],
-        "operationId": "delete",
+        "operationId": "delete_1",
         "parameters": [
           {
             "name": "announcementId",
@@ -509,6 +646,57 @@
               "*/*": {
                 "schema": {
                   "$ref": "#/components/schemas/InquiryResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/shipper/addresses": {
+      "get": {
+        "tags": [
+          "shipper-address-controller"
+        ],
+        "operationId": "list",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ShipperAddressItemResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "shipper-address-controller"
+        ],
+        "operationId": "create_1",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShipperAddressUpsertRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShipperAddressItemResponse"
                 }
               }
             }
@@ -1384,10 +1572,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "additionalProperties": {
-                  "type": "string"
-                }
+                "$ref": "#/components/schemas/RefreshTokenRequest"
               }
             }
           },
@@ -1515,7 +1700,7 @@
         "tags": [
           "admin-sanction-controller"
         ],
-        "operationId": "list",
+        "operationId": "list_1",
         "responses": {
           "200": {
             "description": "OK",
@@ -1539,7 +1724,7 @@
         "tags": [
           "admin-sanction-controller"
         ],
-        "operationId": "create_1",
+        "operationId": "create_2",
         "requestBody": {
           "content": {
             "application/json": {
@@ -1593,7 +1778,7 @@
         "tags": [
           "admin-announcement-controller"
         ],
-        "operationId": "create_2",
+        "operationId": "create_3",
         "requestBody": {
           "content": {
             "application/json": {
@@ -2572,6 +2757,29 @@
         }
       }
     },
+    "/api/health": {
+      "get": {
+        "tags": [
+          "health-controller"
+        ],
+        "operationId": "health_2",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/driver/settlements": {
       "get": {
         "tags": [
@@ -2873,26 +3081,6 @@
                   "items": {
                     "$ref": "#/components/schemas/ChecklistItemResponse"
                   }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/auth/me": {
-      "get": {
-        "tags": [
-          "auth-controller"
-        ],
-        "operationId": "me",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/MeResponse"
                 }
               }
             }
@@ -3770,6 +3958,64 @@
           }
         }
       },
+      "ShipperAddressUpsertRequest": {
+        "required": [
+          "address",
+          "label"
+        ],
+        "type": "object",
+        "properties": {
+          "label": {
+            "maxLength": 100,
+            "minLength": 0,
+            "type": "string"
+          },
+          "isDefault": {
+            "type": "boolean"
+          },
+          "address": {
+            "maxLength": 255,
+            "minLength": 0,
+            "type": "string"
+          },
+          "addressDetail": {
+            "maxLength": 255,
+            "minLength": 0,
+            "type": "string"
+          },
+          "memo": {
+            "maxLength": 500,
+            "minLength": 0,
+            "type": "string"
+          }
+        }
+      },
+      "ShipperAddressItemResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "addressDetail": {
+            "type": "string"
+          },
+          "memo": {
+            "type": "string"
+          },
+          "default": {
+            "type": "boolean"
+          },
+          "isDefault": {
+            "type": "boolean"
+          }
+        }
+      },
       "TruckUpdateRequest": {
         "type": "object",
         "properties": {
@@ -3879,6 +4125,46 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "MeUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "maxLength": 100,
+            "minLength": 0,
+            "type": "string"
+          },
+          "email": {
+            "maxLength": 255,
+            "minLength": 0,
+            "type": "string"
+          },
+          "phone": {
+            "maxLength": 30,
+            "minLength": 0,
+            "type": "string"
+          }
+        }
+      },
+      "MeResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
           }
         }
       },
@@ -4000,17 +4286,11 @@
       },
       "QuoteCreateRequest": {
         "required": [
-          "basePrice",
           "cargoName",
           "cargoType",
           "destinationAddress",
-          "destinationLat",
-          "destinationLng",
-          "distanceKm",
           "loadMethod",
           "originAddress",
-          "originLat",
-          "originLng",
           "unloadMethod",
           "vehicleBodyType",
           "vehicleType",
@@ -4423,6 +4703,9 @@
         }
       },
       "MatchCreateRequest": {
+        "required": [
+          "quoteId"
+        ],
         "type": "object",
         "properties": {
           "quoteId": {
@@ -5057,10 +5340,10 @@
           "calibrationId": {
             "type": "string"
           },
-          "bundled": {
+          "single": {
             "type": "boolean"
           },
-          "single": {
+          "bundled": {
             "type": "boolean"
           }
         }
@@ -5371,10 +5654,10 @@
           "uprightFromHandling": {
             "type": "boolean"
           },
-          "fragileFromHandling": {
+          "easyBreakFromHandling": {
             "type": "boolean"
           },
-          "easyBreakFromHandling": {
+          "fragileFromHandling": {
             "type": "boolean"
           },
           "vulnerableFromHandling": {
@@ -5619,6 +5902,8 @@
             "format": "int32"
           },
           "message": {
+            "maxLength": 500,
+            "minLength": 0,
             "type": "string"
           }
         }
@@ -6008,6 +6293,17 @@
             "type": "string"
           },
           "userId": {
+            "type": "string"
+          }
+        }
+      },
+      "RefreshTokenRequest": {
+        "required": [
+          "refreshToken"
+        ],
+        "type": "object",
+        "properties": {
+          "refreshToken": {
             "type": "string"
           }
         }
@@ -6504,23 +6800,6 @@
           "sortOrder": {
             "type": "integer",
             "format": "int32"
-          }
-        }
-      },
-      "MeResponse": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "role": {
-            "type": "string"
-          },
-          "email": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
           }
         }
       }

@@ -77,7 +77,7 @@ function toDriverMatchList(value: unknown): DriverMatchItem[] {
 
 function toShipperMatchList(value: unknown): ShipperMatchItem[] {
   return toDriverMatchList(value).map((item) => {
-    const cancelable = normalizeStatus(item.status ?? "") !== BACKEND_STATUS.CANCELED;
+    const cancelable = normalizeStatus(item.status ?? "") !== BACKEND_STATUS.CANCELLED;
     return {
       ...item,
       cancelable,
@@ -107,7 +107,7 @@ export function getDriverMatchDetailBadges(match: DriverMatchItem | null): Drive
     badges.push({ key: "AI_RECOMMENDED", label: "AI 추천" });
   }
 
-  if ((status === BACKEND_STATUS.OPEN || status === BACKEND_STATUS.NEGOTIATING) && safeMatchId % 3 === 0) {
+  if ((status === BACKEND_STATUS.OPEN || status === BACKEND_STATUS.MATCHED) && safeMatchId % 3 === 0) {
     badges.push({ key: "URGENT", label: "긴급 배차" });
   }
 
@@ -142,7 +142,7 @@ export async function createShipperMatch(quoteId: number): Promise<ShipperMatchI
   if (!item) return null;
   return {
     ...item,
-    cancelable: normalizeStatus(item.status ?? "") !== BACKEND_STATUS.CANCELED,
+    cancelable: normalizeStatus(item.status ?? "") !== BACKEND_STATUS.CANCELLED,
   };
 }
 

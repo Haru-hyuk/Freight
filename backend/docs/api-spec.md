@@ -41,6 +41,17 @@
 - Path: `/api/auth/logout`
 - Response: `204 No Content`
 
+### My Profile
+- Method: `GET`
+- Path: `/api/auth/me`
+- Response DTO: `MeResponse`
+
+### My Profile Update
+- Method: `PATCH`
+- Path: `/api/auth/me`
+- Request DTO: `MeUpdateRequest`
+- Response DTO: `MeResponse`
+
 ## Driver Trucks
 
 ### Truck Create
@@ -126,6 +137,30 @@
 - Path: `/api/shipper/quotes/{quoteIdentifier}`
 - Response: `204 No Content`
 
+## Shipper Address Book
+
+### Address List
+- Method: `GET`
+- Path: `/api/shipper/addresses`
+- Response DTO: `List<ShipperAddressItemResponse>`
+
+### Address Create
+- Method: `POST`
+- Path: `/api/shipper/addresses`
+- Request DTO: `ShipperAddressUpsertRequest`
+- Response DTO: `ShipperAddressItemResponse`
+
+### Address Update
+- Method: `PUT`
+- Path: `/api/shipper/addresses/{addressId}`
+- Request DTO: `ShipperAddressUpsertRequest`
+- Response DTO: `ShipperAddressItemResponse`
+
+### Address Delete
+- Method: `DELETE`
+- Path: `/api/shipper/addresses/{addressId}`
+- Response: `204 No Content`
+
 ## Checklist
 
 ### Checklist Items
@@ -156,7 +191,18 @@
 ### Counter Offer Accept
 - Method: `PATCH`
 - Path: `/api/shipper/counter-offers/{offerId}/accept`
-- Response: `204 No Content`
+- Response DTO: `CounterOfferAcceptResponse`
+
+`CounterOfferAcceptResponse` fields:
+- `counterOfferId`
+- `quoteId`
+- `matchId`
+- `driverId`
+- `counterOfferStatus` (`ACCEPTED`)
+- `quoteStatus` (`MATCHED`)
+- `matchStatus` (`READY`)
+- `paymentRequired` (`true`)
+- `nextAction` (`PAYMENT_REQUIRED`)
 
 ### Counter Offer Reject
 - Method: `PATCH`

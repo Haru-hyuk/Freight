@@ -200,6 +200,8 @@ export const QUOTE_ACTION_MATRIX: Record<QuoteStatusApi, QuoteActionPolicy> = {
   OPEN: buildQuoteActionPolicyByUiState(CUSTOMER_UI_STATE.REQUESTED),
   NEGOTIATING: buildQuoteActionPolicyByUiState(CUSTOMER_UI_STATE.NEGOTIATION_REQUIRED),
   ASSIGNED: buildQuoteActionPolicyByUiState(CUSTOMER_UI_STATE.PAYMENT_REQUIRED),
+  PREPARING: buildQuoteActionPolicyByUiState(CUSTOMER_UI_STATE.PAYMENT_REQUIRED),
+  DRIVING: buildQuoteActionPolicyByUiState(CUSTOMER_UI_STATE.TRANSIT_IN_PROGRESS),
   ACCEPTED: buildQuoteActionPolicyByUiState(CUSTOMER_UI_STATE.PAYMENT_REQUIRED),
   PICKUP: buildQuoteActionPolicyByUiState(CUSTOMER_UI_STATE.PICKUP_IN_PROGRESS),
   TRANSIT: buildQuoteActionPolicyByUiState(CUSTOMER_UI_STATE.TRANSIT_IN_PROGRESS),
@@ -208,6 +210,10 @@ export const QUOTE_ACTION_MATRIX: Record<QuoteStatusApi, QuoteActionPolicy> = {
 };
 
 export function getQuoteActionPolicy(status: QuoteStatusApi | string): QuoteActionPolicy {
+  const key = String(status ?? "").trim().toUpperCase() as QuoteStatusApi;
+  const fromMatrix = (QUOTE_ACTION_MATRIX as unknown as Record<string, QuoteActionPolicy>)[key];
+  if (fromMatrix) return fromMatrix;
+
   const uiState = toCustomerUiState(status);
   return buildQuoteActionPolicyByUiState(uiState);
 }

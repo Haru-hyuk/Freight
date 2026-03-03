@@ -1,6 +1,6 @@
 import React from "react";
-import DriverQuoteBrowsePage from "@/pages/driver/quotes/DriverQuoteBrowsePage";
+import DriverOrdersBoard from "@/features/driver-orders/ui/DriverOrdersBoard";
 
-export default function DriverQuoteBrowseRoute() {
-  return <DriverQuoteBrowsePage />;
+export default function DriverQuotesRoute() {
+  return <DriverOrdersBoard />;
 }

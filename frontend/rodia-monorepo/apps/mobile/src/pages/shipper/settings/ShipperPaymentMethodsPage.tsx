@@ -5,6 +5,7 @@ import { useRouter } from "expo-router";
 
 import type { PaymentMethodMock, PaymentMethodType } from "@/features/shipper-settings/api/shipper-settings-mock";
 import { shipperSettingsMock } from "@/features/shipper-settings/api/shipper-settings-mock";
+import { isMockMode } from "@/shared/lib/config/env";
 import type { AppTheme } from "@/shared/theme/types";
 import { useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppButton } from "@/shared/ui/kit/AppButton";
@@ -147,7 +148,7 @@ export default function ShipperPaymentMethodsPage() {
   const router = useRouter();
   const theme = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const methods = shipperSettingsMock.paymentMethods;
+  const methods: PaymentMethodMock[] = isMockMode() ? shipperSettingsMock.paymentMethods : [];
 
   return (
     <PageScaffold

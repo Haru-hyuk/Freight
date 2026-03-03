@@ -3,6 +3,21 @@ type AnyObj = Record<string, any>;
 
 type MaskMode = "partial" | "full";
 
+declare const __DEV__: boolean;
+
+// TEMP(DEV): Authorization 원문 노출 토글
+// - 기본값: false (항상 마스킹)
+// - 활성화 방법(둘 중 하나):
+//   1) 환경변수: EXPO_PUBLIC_EXPOSE_AUTH_TOKEN=1
+//   2) 런타임 플래그: (globalThis as any).__EXPOSE_AUTH_TOKEN__ = true
+const EXPOSE_AUTH_TOKEN_IN_DEV =
+  typeof __DEV__ !== "undefined" &&
+  __DEV__ === true &&
+  ((typeof process !== "undefined" &&
+    typeof process.env !== "undefined" &&
+    process.env.EXPO_PUBLIC_EXPOSE_AUTH_TOKEN === "1") ||
+    (globalThis as any)?.__EXPOSE_AUTH_TOKEN__ === true);
+
 const SENSITIVE_KEY_NORMALIZED = new Set<string>([
   "password",
   "pass",
@@ -42,6 +57,12 @@ function shouldMaskKey(key: string): boolean {
 function shouldFullMaskKey(key: string): boolean {
   const normalized = normalizeSensitiveKey(key);
   if (!normalized) return false;
+
+  // DEV 토글이 켜져 있으면 Authorization은 full mask 하지 않음(원문 유지)
+  if (normalized.includes("authorization")) {
+    return !EXPOSE_AUTH_TOKEN_IN_DEV;
+  }
+
   return normalized.includes("authorization");
 }
 
@@ -77,37 +98,34 @@ function normalizeBase64UrlToBase64(base64Url: string): string {
 
 // 브라우저 환경 (atob) 디코딩 시도
 function tryAtobDecodeToUtf8(b64: string): string | undefined {
-  // 실행 환경에 atob가 없는 경우(예: 순수 Node.js 환경) 방어
   if (typeof globalThis.atob !== "function") return undefined;
 
   try {
     const bin = globalThis.atob(b64);
-    // JWT 클레임은 보통 ASCII지만, 다국어 처리를 위해 디코딩 시도
     try {
       return decodeURIComponent(
         Array.prototype.map
           .call(bin, (c: string) => `%${(`00${c.charCodeAt(0).toString(16)}`).slice(-2)}`)
-          .join(""),
+          .join("")
       );
     } catch {
-      return bin; // 디코딩 실패 시 원본 바이너리 문자열 반환
+      return bin;
     }
   } catch {
-    return undefined; // 디코딩 실패 처리
+    return undefined;
   }
 }
 
 // Node.js 환경 (Buffer) 디코딩 시도
 function tryBufferDecodeToUtf8(b64: string): string | undefined {
-  // 실행 환경에 Buffer가 없는 경우(예: 브라우저 환경) 방어 및 타입 안정성 확보
   const globalBuffer = (globalThis as unknown as { Buffer?: { from: Function } }).Buffer;
   if (!globalBuffer || typeof globalBuffer.from !== "function") return undefined;
 
   try {
     const buf = globalBuffer.from(b64, "base64");
-    return typeof buf.toString === "function" ? buf.toString("utf8") : String(buf);
+    return typeof (buf as any).toString === "function" ? (buf as any).toString("utf8") : String(buf);
   } catch {
-    return undefined; // 디코딩 실패 처리
+    return undefined;
   }
 }
 
@@ -115,11 +133,9 @@ function base64DecodeToUtf8(base64UrlOrBase64: string): string | undefined {
   const b64 = normalizeBase64UrlToBase64(base64UrlOrBase64);
   if (!b64) return undefined;
 
-  // 1순위: atob (브라우저/RN 일부 환경)
   const viaAtob = tryAtobDecodeToUtf8(b64);
   if (typeof viaAtob === "string" && viaAtob) return viaAtob;
 
-  // 2순위: Buffer (Node.js/RN 일부 환경)
   const viaBuf = tryBufferDecodeToUtf8(b64);
   if (typeof viaBuf === "string" && viaBuf) return viaBuf;
 
@@ -166,7 +182,6 @@ function pickClaimsPreview(claims: AnyObj): AnyObj {
     if (claims?.[k] !== undefined) out[k] = claims[k];
   }
 
-  // 만료 시간 등은 ISO 포맷으로 추가 제공하여 디버깅 편의성 증대
   const expIso = toIsoFromEpochSeconds(claims?.exp);
   const iatIso = toIsoFromEpochSeconds(claims?.iat);
   const nbfIso = toIsoFromEpochSeconds(claims?.nbf);
@@ -185,7 +200,6 @@ function tryExtractJwtClaims(value: unknown): AnyObj | undefined {
   const token = stripBearer(raw);
   if (!token) return undefined;
 
-  // JWT는 3개의 파트로 구성됨 (Header.Payload.Signature)
   const parts = token.split(".");
   if (parts.length < 2) return undefined;
 
@@ -215,6 +229,13 @@ function shouldTryExtractClaimsForKey(key: string): boolean {
   return false;
 }
 
+function shouldExposeAuthRawForKey(key: string): boolean {
+  if (!EXPOSE_AUTH_TOKEN_IN_DEV) return false;
+  const normalized = normalizeSensitiveKey(key);
+  if (!normalized) return false;
+  return normalized.includes("authorization");
+}
+
 export function sanitizeHeaders(headers: unknown): AnyObj | undefined {
   if (!headers) return undefined;
 
@@ -224,53 +245,58 @@ export function sanitizeHeaders(headers: unknown): AnyObj | undefined {
   const out: AnyObj = {};
   for (const [k, v] of Object.entries(h)) {
     if (shouldMaskKey(k)) {
-      out[k] = maskValue(v, shouldFullMaskKey(k) ? "full" : "partial");
+      if (shouldExposeAuthRawForKey(k)) {
+        out[k] = v; // DEV에서만 Authorization 원문 유지
+      } else {
+        out[k] = maskValue(v, shouldFullMaskKey(k) ? "full" : "partial");
+      }
 
-      // 헤더의 경우 깊이가 얕으므로 조건 충족 시 항상 파싱 시도
       if (shouldTryExtractClaimsForKey(k)) {
         const claims = tryExtractJwtClaims(v);
         if (claims) out[`${k}Claims`] = claims;
       }
       continue;
     }
+
     out[k] = v;
   }
   return out;
 }
 
 export function sanitizeDeep(input: unknown, depth = 0): unknown {
-  // 무한 루프 및 과도한 로깅 방지용 최대 깊이 제한
   if (depth > 6) return "[truncated]";
 
   if (Array.isArray(input)) {
-    // 배열 요소 개수 제한으로 성능 저하 방지
     return input.slice(0, 50).map((x) => sanitizeDeep(x, depth + 1));
   }
 
   if (isPlainObject(input)) {
     const out: AnyObj = {};
-    // 객체 키 개수 제한으로 성능 저하 방지
     const entries = Object.entries(input).slice(0, 120);
+
     for (const [k, v] of entries) {
       if (shouldMaskKey(k)) {
-        out[k] = maskValue(v, shouldFullMaskKey(k) ? "full" : "partial");
+        if (shouldExposeAuthRawForKey(k)) {
+          out[k] = v; // DEV에서만 Authorization 원문 유지
+        } else {
+          out[k] = maskValue(v, shouldFullMaskKey(k) ? "full" : "partial");
+        }
 
-        // 성능 최적화: JWT 파싱은 최상단(depth 0) 또는 1단계(depth 1) 객체에서만 수행
-        // 깊은 뎁스에서 무거운 디코딩 로직이 반복 실행되는 것을 방지함
         if (depth <= 1 && shouldTryExtractClaimsForKey(k)) {
           const claims = tryExtractJwtClaims(v);
           if (claims) out[`${k}Claims`] = claims;
         }
         continue;
       }
+
       out[k] = sanitizeDeep(v, depth + 1);
     }
+
     return out;
   }
 
   if (typeof input === "string") {
     const s = input;
-    // 과도하게 긴 문자열 로그 절삭
     if (s.length > 4000) return `${s.slice(0, 4000)}…`;
     return s;
   }

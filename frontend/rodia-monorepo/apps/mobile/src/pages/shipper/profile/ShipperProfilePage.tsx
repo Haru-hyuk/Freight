@@ -1,9 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Image, Pressable, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
 import { useAuth } from "@/features/auth/model/useAuth";
+import { listMyShipperMatches } from "@/features/matching/api";
+import { listShipperQuotes } from "@/features/quote/api";
+import { listMyShipperSettlements } from "@/features/shipper-settings/api/shipper-settlement-api";
 import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppButton } from "@/shared/ui/kit/AppButton";
@@ -286,6 +289,27 @@ export function ShipperProfilePage() {
   const email = safeString(user?.email, "shipper@rodia.co.kr");
   const isVerified = auth.pendingVerificationRole !== "shipper";
 
+  const [inProgressCount, setInProgressCount] = useState<number | null>(null);
+  const [quotesCount, setQuotesCount] = useState<number | null>(null);
+  const [settlementPendingCount, setSettlementPendingCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    let canceled = false;
+    Promise.all([
+      listMyShipperMatches().catch(() => []),
+      listShipperQuotes().catch(() => []),
+      listMyShipperSettlements().catch(() => []),
+    ]).then(([matches, quotes, settlements]) => {
+      if (canceled) return;
+      setInProgressCount(matches.filter((m) => m.cancelable).length);
+      setQuotesCount(quotes.length);
+      setSettlementPendingCount(settlements.filter((s) => s.settlementStatus === "PENDING").length);
+    });
+    return () => {
+      canceled = true;
+    };
+  }, []);
+
   useEffect(() => {
     return () => {
       if (navUnlockTimerRef.current) {
@@ -307,6 +331,20 @@ export function ShipperProfilePage() {
     }, 300);
   }, [router]);
 
+  const replaceRouteOnce = useCallback((path: string) => {
+    if (navLockRef.current) return;
+    navLockRef.current = true;
+    router.replace(path as never);
+    if (navUnlockTimerRef.current) {
+      clearTimeout(navUnlockTimerRef.current);
+    }
+    navUnlockTimerRef.current = setTimeout(() => {
+      navLockRef.current = false;
+      navUnlockTimerRef.current = null;
+    }, 300);
+  }, [router]);
+
+
   const pushSettingsOnce = useCallback(() => {
     pushRouteOnce("/(shipper)/settings");
   }, [pushRouteOnce]);
@@ -322,24 +360,24 @@ export function ShipperProfilePage() {
       {
         id: "in-progress",
         label: "진행중",
-        value: "3",
+        value: inProgressCount !== null ? String(inProgressCount) : "-",
         accent: true,
-        onPress: () => router.push("/(shipper)/matchings"),
+        onPress: () => replaceRouteOnce("/(shipper)/quotes?tab=IN_PROGRESS"),
       },
       {
         id: "request-history",
         label: "견적요청",
-        value: "15",
-        onPress: () => router.push("/(shipper)/quotes"),
+        value: quotesCount !== null ? String(quotesCount) : "-",
+        onPress: () => replaceRouteOnce("/(shipper)/quotes"),
       },
       {
         id: "settlement-wait",
         label: "정산대기",
-        value: "1",
-        onPress: () => Alert.alert("정산 내역", "정산 상세 화면을 준비 중입니다."),
+        value: settlementPendingCount !== null ? String(settlementPendingCount) : "-",
+        onPress: () => pushRouteOnce("/(shipper)/settings/tax-invoices"),
       },
     ],
-    [router]
+    [inProgressCount, quotesCount, replaceRouteOnce, pushRouteOnce, settlementPendingCount]
   );
 
   const businessMenus = useMemo<MenuAction[]>(
@@ -474,7 +512,7 @@ export function ShipperProfilePage() {
           <AppButton
             size="icon"
             variant="secondary"
-            onPress={() => Alert.alert("프로필 관리", "프로필 수정 화면을 준비 중입니다.")}
+            onPress={() => pushRouteOnce("/(shipper)/settings/account")}
           >
             <Ionicons name="chevron-forward" size={18} color={cText} />
           </AppButton>

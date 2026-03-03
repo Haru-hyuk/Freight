@@ -4,7 +4,9 @@ export type QuoteId = number;
 export type QuoteStatusApi =
   | "OPEN"
   | "NEGOTIATING"
-  | "ASSIGNED"
+  | "ASSIGNED" // 배차완료 (MATCHED)
+  | "PREPARING" // 운행준비
+  | "DRIVING" // 운행중
   | "ACCEPTED"
   | "PICKUP"
   | "TRANSIT"

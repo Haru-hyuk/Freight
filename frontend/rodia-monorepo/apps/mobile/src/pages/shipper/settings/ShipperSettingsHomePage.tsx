@@ -4,9 +4,7 @@ import { useRouter } from "expo-router";
 
 import type { AppTheme } from "@/shared/theme/types";
 import { useAppTheme } from "@/shared/theme/useAppTheme";
-import { AppText } from "@/shared/ui/kit/AppText";
 import { PageScaffold } from "@/widgets/layout/PageScaffold";
-import { shipperSettingsMock } from "@/features/shipper-settings/api/shipper-settings-mock";
 
 import SettingRow from "./ui/SettingRow";
 import SettingSection from "./ui/SettingSection";
@@ -26,11 +24,6 @@ function createStyles(theme: AppTheme) {
       paddingTop: 16,
       paddingBottom: 32,
       backgroundColor: theme.colors.bgMain,
-    },
-    helperText: {
-      color: theme.colors.textMuted,
-      marginBottom: 14,
-      paddingHorizontal: 4,
     },
     menuGroup: {
       gap: 8,
@@ -66,7 +59,6 @@ export default function ShipperSettingsHomePage() {
     }, 300);
   };
 
-  const verificationSummary = shipperSettingsMock.businessInfo.verificationStatus;
   const menuGroups = useMemo(
     () =>
       [
@@ -80,7 +72,6 @@ export default function ShipperSettingsHomePage() {
               title: "사업자 정보",
               subtitle: "상호/대표자/사업자번호/담당자 정보",
               path: "/(shipper)/settings/business",
-              trailingText: verificationSummary,
             },
             {
               id: "menu-verification",
@@ -93,7 +84,7 @@ export default function ShipperSettingsHomePage() {
         {
           id: "group-profile",
           title: "회원/주소/결제",
-          description: "수정은 Alert 동작으로만 제공",
+          description: "회원정보, 상하차지 주소, 결제수단 관리",
           items: [
             {
               id: "menu-account",
@@ -106,26 +97,23 @@ export default function ShipperSettingsHomePage() {
               title: "상/하차지 주소 관리",
               subtitle: "기본 주소, 메모, 편집/삭제",
               path: "/(shipper)/settings/addresses",
-              trailingText: `${shipperSettingsMock.addresses.primary.length}개`,
             },
             {
               id: "menu-payments",
               title: "운임 결제수단 관리",
               subtitle: "카드/계좌/후불 수단",
               path: "/(shipper)/settings/payments",
-              trailingText: `${shipperSettingsMock.paymentMethods.length}개`,
             },
             {
               id: "menu-tax",
-              title: "세금계산서 발행내역",
-              subtitle: "기간 필터 + 발행 히스토리",
+              title: "정산 내역",
+              subtitle: "정산 현황 및 결제 히스토리",
               path: "/(shipper)/settings/tax-invoices",
-              trailingText: `${shipperSettingsMock.taxInvoices.length}건`,
             },
           ] as MenuItem[],
         },
       ] as Array<{ id: string; title: string; description: string; items: MenuItem[] }>,
-    [verificationSummary]
+    []
   );
 
   return (
@@ -136,10 +124,6 @@ export default function ShipperSettingsHomePage() {
       onPressBack={() => router.back()}
       backLabel="이전"
     >
-      <AppText variant="detail" style={styles.helperText}>
-        모든 화면은 목업 데이터로만 구성되어 있으며 저장/추가는 안내 메시지만 표시됩니다.
-      </AppText>
-
       {menuGroups.map((group) => (
         <SettingSection key={group.id} title={group.title} description={group.description}>
           <View style={styles.menuGroup}>

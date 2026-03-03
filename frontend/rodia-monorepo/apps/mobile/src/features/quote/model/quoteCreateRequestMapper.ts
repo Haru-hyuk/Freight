@@ -1,5 +1,6 @@
 import type {
   QuoteCargoType,
+  QuoteChecklistItemDto,
   QuoteCreateRequestDto,
   QuoteStopRequestDto,
   QuoteVehicleBodyType,
@@ -8,9 +9,24 @@ import type {
 import { EXTRA_OPTIONS, type QuoteCreateDraft } from "@/features/quote/model/quoteCreateDraft";
 import { DEFAULT_LOAD_METHOD, DEFAULT_UNLOAD_METHOD, toActorOnlyWorkMethod } from "@/features/quote/model/workMethod";
 
-const VEHICLE_TYPE_BY_TON_INDEX: QuoteVehicleType[] = ["TON_1", "TON_2_5", "TON_5"];
+const VEHICLE_TYPE_BY_TON_INDEX: QuoteVehicleType[] = [
+  "DAMAS",
+  "LABO",
+  "TON_1",
+  "TON_1_4",
+  "TON_2_5",
+  "TON_3_5",
+  "TON_5",
+  "TON_5_AXLE",
+  "TON_8",
+  "TON_11",
+  "TON_14",
+  "TON_15",
+  "TON_18",
+  "TON_25",
+];
 const VEHICLE_BODY_BY_TYPE_INDEX: QuoteVehicleBodyType[] = ["CARGO", "WING_BODY", "TOP_CAR"];
-type QuoteCreateRequestPayload = QuoteCreateRequestDto & { basePrice: number };
+type QuoteCreateRequestPayload = Omit<QuoteCreateRequestDto, "basePrice"> & { basePrice?: number };
 const CARGO_CATEGORY_LABELS: Readonly<Record<string, string>> = {
   BOX: "박스",
   PALLET: "파렛트",
@@ -151,21 +167,21 @@ function resolveBasePrice(draft: QuoteCreateDraft) {
   return Math.max(0, toInt(safeRaw, 0));
 }
 
-function buildChecklistItems(draft: QuoteCreateDraft): QuoteCreateRequestDto["checklistItems"] {
+function buildChecklistItems(draft: QuoteCreateDraft): QuoteChecklistItemDto[] {
   const selected = Array.isArray(draft?.selectedOpts) ? draft.selectedOpts : [];
-  if (selected.length === 0) return [];
+  if (!selected.length) return [];
 
-  return selected.map((optionId, index) => {
-    const option = EXTRA_OPTIONS.find((item) => item?.id === optionId);
-    const title = String(option?.title ?? optionId ?? "").trim();
-    const extraFee = Math.max(0, toInt(option?.price, 0));
-
-    return {
-      checklistItemId: index + 1,
-      extraInput: title || `옵션 ${index + 1}`,
-      extraFee,
-    };
-  });
+  return selected
+    .map((optionId) => {
+      const option = EXTRA_OPTIONS.find((item) => item.id === optionId);
+      if (!option) return null;
+      return {
+        checklistItemId: 0,
+        extraInput: option.title,
+        extraFee: Math.max(0, Math.trunc(option.price)),
+      } as QuoteChecklistItemDto;
+    })
+    .filter((item): item is QuoteChecklistItemDto => Boolean(item));
 }
 
 export function buildQuoteCreateRequest(draft: QuoteCreateDraft): QuoteCreateRequestPayload {
@@ -176,25 +192,25 @@ export function buildQuoteCreateRequest(draft: QuoteCreateDraft): QuoteCreateReq
   const originLng = readFirstFiniteNumber(extendedDraft, ["originLng", "startLng", "srcLng"], 0);
   const destinationLat = readFirstFiniteNumber(extendedDraft, ["destinationLat", "endLat", "destLat"], 0);
   const destinationLng = readFirstFiniteNumber(extendedDraft, ["destinationLng", "endLng", "destLng"], 0);
+  
+  const truckId = toInt(draft.truckId, 0);
   const distanceKm = readFirstFiniteNumber(extendedDraft, ["distanceKm", "distance"], 0);
+  const basePrice = resolveBasePrice(draft);
 
-  return {
-    truckId: Math.max(1, toInt(draft.truckId, 1)),
+  const payload: QuoteCreateRequestPayload = {
     originAddress,
     destinationAddress,
     originLat,
     originLng,
     destinationLat,
     destinationLng,
-    distanceKm,
     weightKg: calculateWeightKg(draft),
-    volumeCbm: calculateVolumeCbm(draft),
+    volumeCbm: Math.max(0, calculateVolumeCbm(draft)),
     vehicleType: mapVehicleType(draft.tonIdx),
     vehicleBodyType: mapVehicleBodyType(draft.typeIdx),
     cargoName: summarizeCargoName(draft),
     cargoType: mapCargoType(draft.isFrozen),
     cargoDesc: summarizeCargoDesc(draft),
-    basePrice: resolveBasePrice(draft),
     desiredPrice: resolveDesiredPrice(draft),
     allowCombine: !!draft.isPool,
     loadMethod: toActorOnlyWorkMethod(draft.loadMethod, DEFAULT_LOAD_METHOD),
@@ -202,4 +218,15 @@ export function buildQuoteCreateRequest(draft: QuoteCreateDraft): QuoteCreateReq
     checklistItems: buildChecklistItems(draft),
     stops: buildStops(draft),
   };
+
+if (truckId > 0) {
+    payload.truckId = truckId;
+  } else {
+    // 확실히 하기 위해 삭제
+    delete (payload as any).truckId;
+  }
+  if (distanceKm > 0) payload.distanceKm = distanceKm;
+  if (basePrice > 0) payload.basePrice = basePrice;
+
+  return payload;
 }

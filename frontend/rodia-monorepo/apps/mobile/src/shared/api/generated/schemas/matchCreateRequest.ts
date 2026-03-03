@@ -6,5 +6,5 @@
  */
 
 export interface MatchCreateRequest {
-  quoteId?: number;
+  quoteId: number;
 }

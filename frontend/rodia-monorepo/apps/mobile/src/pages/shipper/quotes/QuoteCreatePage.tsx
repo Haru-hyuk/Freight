@@ -1,8 +1,8 @@
-﻿import React, { useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Modal, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, type NavigationProp, type ParamListBase } from "@react-navigation/native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
@@ -20,7 +20,7 @@ import {
   useQuoteCreateDraft,
 } from "@/features/quote/model/quoteCreateDraft";
 import { createShipperMatch } from "@/features/matching/api";
-import { createShipperQuote } from "@/features/quote/api/quote-api";
+import { createShipperQuote, previewShipperQuote } from "@/features/quote/api/quote-api";
 import { buildQuoteCreateRequest } from "@/features/quote/model/quoteCreateRequestMapper";
 import { isActorOnlyWorkMethod } from "@/features/quote/model/workMethod";
 import { getQuoteFlatCardStyle, QUOTE_PROGRESS_TOKENS } from "@/features/quote/ui/QuoteCreateUiPrimitives";
@@ -45,7 +45,6 @@ const useStyles = createThemedStyles((theme: AppTheme) => {
   return StyleSheet.create({
     content: { backgroundColor: c.bgMain, paddingTop: 16 },
 
-    // 상단 스텝 바 (Progress Bar)
     stepBarContainer: {
         paddingHorizontal: spacing * 5,
         marginBottom: spacing * 4,
@@ -87,7 +86,6 @@ const useStyles = createThemedStyles((theme: AppTheme) => {
     stepLabel: { fontSize: 11, fontWeight: '600', color: c.textMuted },
     stepLabelActive: { color: c.brandPrimary, fontWeight: '700' },
 
-    // 하단 바 (Bottom Bar)
     bottomBar: {
       backgroundColor: c.bgSurface,
       borderTopWidth: 1,
@@ -97,18 +95,15 @@ const useStyles = createThemedStyles((theme: AppTheme) => {
     },
     bottomContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
     
-    // 요약 텍스트
     summaryBox: { flex: 1, justifyContent: 'center' },
     summaryLabel: { fontSize: 11, color: c.textMuted, marginBottom: 2 },
     summaryMain: { fontSize: 13, fontWeight: '700', color: c.textSub },
     priceText: { fontSize: 18, fontWeight: '800', color: c.brandPrimary },
 
-    // 버튼 그룹
     btnGroup: { flexDirection: "row", gap: 10 },
     btnBack: { minHeight: safeNumber(theme.components.button.sizes.lg.minHeight, 52), minWidth: 88 },
     btnNext: { minHeight: safeNumber(theme.components.button.sizes.lg.minHeight, 52), minWidth: 136 },
 
-    // 완료 모달
     requestModalOverlay: {
       flex: 1,
       backgroundColor: overlay,
@@ -116,13 +111,13 @@ const useStyles = createThemedStyles((theme: AppTheme) => {
       alignItems: "center",
       paddingHorizontal: spacing * 4,
     },
-    requestModalWrap: { width: "100%", maxWidth: 360 }, // 너비 조정
+    requestModalWrap: { width: "100%", maxWidth: 360 },
     requestModalCard: {
       ...flatCard,
       width: "100%",
       paddingHorizontal: spacing * 6,
       paddingVertical: spacing * 6,
-      alignItems: "center", // 중앙 정렬
+      alignItems: "center",
     },
     requestModalIcon: {
       width: 72, height: 72, borderRadius: 36, backgroundColor: tint(c.brandPrimary, 0.1, c.bgSurface),
@@ -157,16 +152,6 @@ function toFiniteNumber(value: unknown): number | null {
   return parsed;
 }
 
-function isResolvedLatLng(lat: unknown, lng: unknown): boolean {
-  const safeLat = toFiniteNumber(lat);
-  const safeLng = toFiniteNumber(lng);
-  if (safeLat === null || safeLng === null) return false;
-  if (Math.abs(safeLat) <= 0.001 || Math.abs(safeLng) <= 0.001) return false;
-  if (Math.abs(safeLat) > 90) return false;
-  if (Math.abs(safeLng) > 180) return false;
-  return true;
-}
-
 function isStrictPositiveNumber(value: unknown): boolean {
   const parsed = toFiniteNumber(value);
   if (parsed === null) return false;
@@ -183,15 +168,18 @@ function QuoteCreatePageInner() {
   const theme = useAppTheme();
   const styles = useStyles();
   const router = useRouter();
+  const params = useLocalSearchParams<{ prefillStartAddr?: string; prefillEndAddr?: string }>();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const insets = useSafeAreaInsets();
 
-  const { draft } = useQuoteCreateDraft();
+  const { draft, patchDraft } = useQuoteCreateDraft();
+  const appliedPrefillKeyRef = useRef("");
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [bottomBarHeight, setBottomBarHeight] = useState(100);
   const [isSubmitDoneOpen, setIsSubmitDoneOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [previewPrice, setPreviewPrice] = useState<number | null>(null);
   const [createdQuoteIdentifier, setCreatedQuoteIdentifier] = useState("");
 
   const pricing = useMemo(() => computeQuotePricing(draft), [draft]);
@@ -199,12 +187,10 @@ function QuoteCreatePageInner() {
   const hasText = (v?: string) => (v ?? "").trim().length > 0;
   const parseQty = (v?: string) => parseInt((v ?? "").replace(/[^\d]/g, ""), 10) || 0;
 
-  // Step 1 Validation
   const isStep1Ready = useMemo(() => {
     return hasText(draft?.startAddr) && hasText(draft?.endAddr) && hasText(draft?.senderPhone);
   }, [draft?.startAddr, draft?.endAddr, draft?.senderPhone]);
 
-  // Step 2 Validation
   const cargoList = draft?.cargoList ?? [];
   const validCargoCount = useMemo(() => {
     return cargoList.filter((cargo) => {
@@ -215,11 +201,68 @@ function QuoteCreatePageInner() {
   }, [cargoList]);
   const isStep2Ready = cargoList.length > 0 && validCargoCount === cargoList.length;
 
-  // Step 3 Validation (Vehicle selected?)
-  // const isStep3Ready = useMemo(() => {
-  //     // 기본값이 있으므로 사실상 항상 준비됨
-  //     return true; 
-  // }, [draft.tonIdx, draft.typeIdx]);
+  useEffect(() => {
+    const startAddr = String(params?.prefillStartAddr ?? "").trim();
+    const endAddr = String(params?.prefillEndAddr ?? "").trim();
+    if (!startAddr && !endAddr) return;
+
+    const key = `${startAddr}__${endAddr}`;
+    if (appliedPrefillKeyRef.current === key) return;
+    appliedPrefillKeyRef.current = key;
+
+    patchDraft({
+      startAddr: startAddr || draft?.startAddr || "",
+      endAddr: endAddr || draft?.endAddr || "",
+      startAddrDetail: "",
+      endAddrDetail: "",
+      waypoints: [],
+      originLat: undefined,
+      originLng: undefined,
+      destinationLat: undefined,
+      destinationLng: undefined,
+      distanceKm: undefined,
+    });
+  }, [draft?.endAddr, draft?.startAddr, params?.prefillEndAddr, params?.prefillStartAddr, patchDraft]);
+
+  useEffect(() => {
+    const submitBasePrice = Math.max(0, Math.trunc(Number(pricing?.basePrice ?? 0)));
+    const draftForPreview: typeof draft & { basePrice?: number } = {
+      ...draft,
+      basePrice: submitBasePrice,
+    };
+    const payload = buildQuoteCreateRequest(draftForPreview);
+    const { truckId: _ignoredTruckId, ...previewPayload } = payload;
+
+    if (!String(previewPayload?.originAddress ?? "").trim() || !String(previewPayload?.destinationAddress ?? "").trim()) {
+      setPreviewPrice(null);
+      return;
+    }
+
+    let canceled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const preview = await previewShipperQuote(previewPayload);
+        if (canceled) return;
+
+        const weighted = Number(preview?.estimatedWeightedPrice ?? NaN);
+        const _min = Number(preview?.estimatedMinPrice ?? NaN);
+        const _max = Number(preview?.estimatedMaxPrice ?? NaN);
+        const candidate = Number.isFinite(weighted) && weighted > 0
+          ? weighted
+          : Number(preview?.estimatedMaxPrice ?? preview?.estimatedMinPrice ?? NaN);
+        const nextPreviewPrice = Number.isFinite(candidate) && candidate > 0 ? Math.trunc(candidate) : null;
+        setPreviewPrice(nextPreviewPrice);
+      } catch {
+        if (canceled) return;
+        setPreviewPrice(null);
+      }
+    }, 350);
+
+    return () => {
+      canceled = true;
+      clearTimeout(timer);
+    };
+  }, [draft, pricing?.basePrice]);
 
   const goBack = () => {
     if (step > 1) {
@@ -269,33 +312,16 @@ function QuoteCreatePageInner() {
       ...draft,
       basePrice: submitBasePrice,
     };
+    
     const payload = buildQuoteCreateRequest(draftForSubmit);
+    const { truckId: _ignoredTruckId, ...createPayload } = payload;
+
     const stops = Array.isArray(payload?.stops) ? payload.stops : [];
     const addressCandidates = [
       payload?.originAddress,
       payload?.destinationAddress,
       ...stops.map((stop) => (stop as { address?: unknown })?.address),
     ];
-
-    if (!isResolvedLatLng(payload?.originLat, payload?.originLng)) {
-      Alert.alert("견적 요청 실패", "출발지 위치가 확정되지 않았어요. 주소 검색 결과에서 선택해 위치를 확정해 주세요.");
-      return;
-    }
-
-    if (!isResolvedLatLng(payload?.destinationLat, payload?.destinationLng)) {
-      Alert.alert("견적 요청 실패", "도착지 위치가 확정되지 않았어요. 주소 검색 결과에서 선택해 위치를 확정해 주세요.");
-      return;
-    }
-
-    if (!isStrictPositiveNumber(payload?.distanceKm)) {
-      Alert.alert("견적 요청 실패", "운행 거리가 확정되지 않았어요. 경로를 다시 확인해주세요.");
-      return;
-    }
-
-    if (!isStrictPositiveNumber(payload?.basePrice)) {
-      Alert.alert("견적 요청 실패", "기본 운임이 확정되지 않았어요. 차량과 옵션을 다시 확인해주세요.");
-      return;
-    }
 
     if (!isActorOnlyWorkMethod(payload?.loadMethod) || !isActorOnlyWorkMethod(payload?.unloadMethod)) {
       Alert.alert("견적 요청 실패", "상하차 방식이 확정되지 않았어요. 상하차 방식을 다시 선택해주세요.");
@@ -320,7 +346,7 @@ function QuoteCreatePageInner() {
     try {
       setIsSubmitting(true);
       setCreatedQuoteIdentifier("");
-      const response = await createShipperQuote(payload);
+      const response = await createShipperQuote(createPayload);
       const nextQuoteIdentifier = resolveCreatedQuoteIdentifier(response);
       const nextQuoteId =
         resolveCreatedQuoteId(response) ||
@@ -373,10 +399,9 @@ function QuoteCreatePageInner() {
   const goToHome = () => {
     setIsSubmitDoneOpen(false);
     setCreatedQuoteIdentifier("");
-    router.replace("/(shipper)/home"); // 홈 경로로 이동 (가정)
+    router.replace("/(shipper)/home");
   };
 
-  // Helper text for Bottom Bar
   const getBottomSummary = () => {
       if (step === 1) return isStep1Ready ? "경로 입력 완료" : "경로를 입력해주세요";
       if (step === 2) return `화물 ${validCargoCount}건 입력됨`;
@@ -384,8 +409,10 @@ function QuoteCreatePageInner() {
   };
 
   const getBottomPrice = () => {
-      // 아직 차량 선택 전(Step 1,2)이라도 AI 예상 견적(1톤 기준) 보여줌 (동기부여)
-      return formatKrw(pricing.finalPrice || pricing.basePrice);
+      const resolved = Number.isFinite(previewPrice) && (previewPrice ?? 0) > 0
+        ? (previewPrice as number)
+        : (pricing.finalPrice || pricing.basePrice);
+      return formatKrw(resolved);
   };
 
   const startAddrLabel = String(draft?.startAddr ?? "").trim().split(/\s+/).filter(Boolean)[0] ?? "-";
@@ -438,7 +465,6 @@ function QuoteCreatePageInner() {
       contentStyle={StyleSheet.flatten([styles.content, { paddingBottom: bottomBarHeight + 20 }])}
       bottomBar={bottomBar}
     >
-      {/* Step Progress Bar */}
       <View style={styles.stepBarContainer}>
           <View style={styles.stepBar}>
               <View style={styles.stepLineTrack}>
@@ -465,12 +491,10 @@ function QuoteCreatePageInner() {
           </View>
       </View>
 
-      {/* Content Area */}
       {step === 1 && <QuoteCreateStep1 />}
       {step === 2 && <QuoteCreateStep2 />}
       {step === 3 && <QuoteCreateStep3 />}
 
-      {/* 완료 모달 */}
       <Modal visible={isSubmitDoneOpen} transparent animationType="fade" onRequestClose={goToQuoteList}>
         <View style={styles.requestModalOverlay}>
           <View style={styles.requestModalWrap}>
@@ -519,3 +543,4 @@ export function QuoteCreatePage() {
 }
 
 export default QuoteCreatePage;
+

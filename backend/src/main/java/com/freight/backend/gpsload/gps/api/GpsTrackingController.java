@@ -28,9 +28,9 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/gpsmiss-legacy")
+@RequestMapping("/api/gpsload-legacy")
 @ConditionalOnProperty(
-        name = "gpsmiss.legacy-api.enabled",
+        name = "gpsload.legacy-api.enabled",
         havingValue = "true",
         matchIfMissing = false
 )
@@ -93,9 +93,15 @@ public class GpsTrackingController {
             );
         }
 
+        List<RoutePoint> routePoints = tracking.getRecentPath() == null
+                ? List.of()
+                : tracking.getRecentPath().stream()
+                .map(p -> new RoutePoint(0, null, p.getLat(), p.getLng()))
+                .toList();
+
         return ResponseEntity.ok(new TrackingResponse(
                 currentLocation,
-                List.<RoutePoint>of(),
+                routePoints,
                 List.of(),
                 tracking.getMatchStatus()
         ));

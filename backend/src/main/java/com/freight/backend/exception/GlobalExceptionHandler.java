@@ -18,6 +18,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -77,6 +78,19 @@ public class GlobalExceptionHandler {
                 HttpStatus.BAD_REQUEST,
                 ErrorCode.INVALID_REQUEST.name(),
                 "Invalid JSON payload.",
+                request
+        );
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ErrorResponse> handleNoResourceFound(
+            NoResourceFoundException e,
+            HttpServletRequest request
+    ) {
+        return buildResponse(
+                HttpStatus.NOT_FOUND,
+                ErrorCode.INVALID_REQUEST.name(),
+                "Resource not found.",
                 request
         );
     }

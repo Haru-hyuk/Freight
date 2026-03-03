@@ -11,6 +11,7 @@ import {
   isCounterOfferPending,
   listShipperCounterOffers,
   rejectShipperCounterOffer,
+  type CounterOfferItem,
 } from "@/features/counter-offer/api";
 import { deleteShipperQuote } from "@/features/quote/api";
 import { getQuoteActionPolicy, resolveTonePalette, type DecisionActionId } from "@/features/quote/model/quoteActionMatrix";
@@ -57,13 +58,12 @@ const STATUS_PROMOTION_SOURCE_STATES: ReadonlySet<string> = new Set([
   BACKEND_STATUS.UNKNOWN,
 ]);
 const STATUS_PROMOTION_TARGET_STATES: ReadonlySet<string> = new Set([
-  BACKEND_STATUS.NEGOTIATING,
-  BACKEND_STATUS.ASSIGNED,
-  BACKEND_STATUS.ACCEPTED,
-  BACKEND_STATUS.PICKUP,
-  BACKEND_STATUS.TRANSIT,
-  BACKEND_STATUS.DROPOFF,
-  BACKEND_STATUS.CANCELED,
+  BACKEND_STATUS.MATCHED,
+  BACKEND_STATUS.IN_TRANSIT,
+  BACKEND_STATUS.DELIVERED,
+  BACKEND_STATUS.READY,
+  BACKEND_STATUS.COMPLETED,
+  BACKEND_STATUS.CANCELLED,
 ]);
 const FOCUS_REFETCH_THROTTLE_MS = 1500;
 
@@ -116,6 +116,59 @@ const useStyles = createThemedStyles((theme) => {
       fontSize: safeNumber(theme.typography.scale.detail.size, 14),
       lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20),
       fontWeight: "700",
+    },
+
+    counterOfferSection: { marginBottom: s * 3 },
+    counterOfferCard: {
+      backgroundColor: c.bgSurface,
+      borderRadius: safeNumber(theme.layout.radii.card, 16),
+      borderWidth: 1,
+      borderColor: c.brandPrimary,
+      padding: s * 4,
+      gap: s * 2,
+    },
+    counterOfferHeader: { flexDirection: "row", alignItems: "center", gap: s * 2 },
+    counterOfferBadge: {
+      borderRadius: 999,
+      paddingHorizontal: s * 2,
+      paddingVertical: s,
+      backgroundColor: c.brandPrimary,
+    },
+    counterOfferBadgeText: {
+      color: c.textOnBrand,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
+      fontWeight: "900",
+    },
+    counterOfferTitle: {
+      flex: 1,
+      color: c.textMain,
+      fontSize: safeNumber(theme.typography.scale.detail.size, 14),
+      fontWeight: "900",
+    },
+    counterOfferPrice: {
+      color: c.brandPrimary,
+      fontSize: safeNumber(theme.typography.scale.display.size, 30),
+      lineHeight: safeNumber(theme.typography.scale.display.lineHeight, 38),
+      fontWeight: "900",
+      letterSpacing: -0.6,
+    },
+    counterOfferPriceLabel: {
+      color: c.textMuted,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
+      fontWeight: "700",
+      marginBottom: s / 2,
+    },
+    counterOfferDivider: { height: 1, backgroundColor: c.borderDefault },
+    counterOfferMessageLabel: {
+      color: c.textMuted,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
+      fontWeight: "700",
+    },
+    counterOfferMessage: {
+      color: c.textMain,
+      fontSize: safeNumber(theme.typography.scale.detail.size, 14),
+      fontWeight: "700",
+      lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20),
     },
 
     routeSection: { marginBottom: s * 3, gap: s * 2 },
@@ -256,10 +309,15 @@ const useStyles = createThemedStyles((theme) => {
 
     bottomBar: {
       backgroundColor: c.bgSurface,
-      borderTopWidth: 1,
-      borderTopColor: c.borderDefault,
       paddingHorizontal: s * 5,
-      paddingTop: s * 3,
+      paddingTop: s * 2,
+      borderTopLeftRadius: safeNumber(theme.layout.radii.card, 16),
+      borderTopRightRadius: safeNumber(theme.layout.radii.card, 16),
+      shadowColor: c.textMain,
+      shadowOffset: { width: 0, height: -3 },
+      shadowOpacity: 0.08,
+      shadowRadius: 14,
+      elevation: 14,
     },
     bottomPlaceholder: {
       minHeight: 46,
@@ -274,7 +332,7 @@ const useStyles = createThemedStyles((theme) => {
       lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
       fontWeight: "700",
     },
-    bottomButton: { minHeight: 46 },
+    bottomButton: { minHeight: 48 },
   });
 });
 
@@ -312,7 +370,8 @@ function resolvePriceSummary(quote: QuoteDetailQuote): PriceSummary {
   const desired = toPositiveAmount(quote.desiredPrice);
   const finalPrice = toPositiveAmount(quote.finalPrice);
   const estimated = toPositiveAmount(quote.basePrice) + toPositiveAmount(quote.distancePrice) + toPositiveAmount(quote.extraPrice);
-  const estimatedAmount = estimated > 0 ? estimated : finalPrice;
+  // 결제 금액(source of truth)과 화면 금액을 일치시킨다.
+  const estimatedAmount = finalPrice > 0 ? finalPrice : estimated;
   const isCompleted = uiState === CUSTOMER_UI_STATE.COMPLETED;
 
   if (isCompleted && finalPrice > 0) {
@@ -345,11 +404,16 @@ function normalizeMatchStatus(value: unknown): string {
   return normalized === BACKEND_STATUS.UNKNOWN ? "" : normalized;
 }
 
-function resolveEffectiveQuoteStatus(quoteStatus: unknown, matchStatus: unknown): string {
+function resolveEffectiveQuoteStatus(quoteStatus: unknown, matchStatus: unknown, matchAccepted?: unknown): string {
   const quoteText = toText(quoteStatus);
   const quoteNormalized = normalizeStatus(quoteText);
   const normalizedMatchStatus = normalizeMatchStatus(matchStatus);
   if (!normalizedMatchStatus) return quoteText;
+
+  // READY는 배차요청 직후(accepted=false)와 배차수락 후(accepted=true)를 구분해야 한다.
+  if (normalizedMatchStatus === BACKEND_STATUS.READY && matchAccepted !== true) {
+    return quoteText || normalizedMatchStatus;
+  }
 
   if (STATUS_PROMOTION_SOURCE_STATES.has(quoteNormalized) && STATUS_PROMOTION_TARGET_STATES.has(normalizedMatchStatus)) {
     return normalizedMatchStatus;
@@ -359,7 +423,7 @@ function resolveEffectiveQuoteStatus(quoteStatus: unknown, matchStatus: unknown)
 }
 
 function isCanceledMatchStatus(value: unknown): boolean {
-  return normalizeMatchStatus(value) === BACKEND_STATUS.CANCELED;
+  return normalizeMatchStatus(value) === BACKEND_STATUS.CANCELLED;
 }
 
 function toUpdatedAtTime(value: unknown): number {
@@ -431,6 +495,35 @@ function buildRouteNodes(core: QuoteDetailCoreSummary): RouteNode[] {
   if (waypointCount > 0) nodes.push({ key: "waypoint", title: `경유지 ${waypointCount}곳`, address: "", kind: "waypoint" });
   nodes.push({ key: "destination", title: "도착지", address: toDisplayText(core.destinationAddress), kind: "destination" });
   return nodes;
+}
+
+function CounterOfferCard({ offer }: { offer: CounterOfferItem }) {
+  const styles = useStyles();
+  return (
+    <View style={styles.counterOfferSection}>
+      <AppCard elevated={false} style={styles.counterOfferCard}>
+        <View style={styles.counterOfferHeader}>
+          <View style={styles.counterOfferBadge}>
+            <AppText style={styles.counterOfferBadgeText}>기사 역제안</AppText>
+          </View>
+          <AppText style={styles.counterOfferTitle}>기사가 운임을 제안했습니다</AppText>
+        </View>
+        <View>
+          <AppText style={styles.counterOfferPriceLabel}>제안 금액</AppText>
+          <AppText style={styles.counterOfferPrice}>{formatKrw(offer.proposedPrice)}</AppText>
+        </View>
+        {offer.message ? (
+          <>
+            <View style={styles.counterOfferDivider} />
+            <View>
+              <AppText style={styles.counterOfferMessageLabel}>제안 사유</AppText>
+              <AppText style={styles.counterOfferMessage}>{offer.message}</AppText>
+            </View>
+          </>
+        ) : null}
+      </AppCard>
+    </View>
+  );
 }
 
 function RouteFlowCard({ coreSummary }: { coreSummary: QuoteDetailCoreSummary }) {
@@ -574,13 +667,14 @@ export default function QuoteDetailPage() {
   const theme = useAppTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const params = useLocalSearchParams<{ id?: string | string[] }>();
+  const params = useLocalSearchParams<{ id?: string | string[]; status?: string | string[] }>();
 
   const [isDeleting, setIsDeleting] = React.useState(false);
   const [isMatchSubmitting, setIsMatchSubmitting] = React.useState(false);
   const [matchSnapshot, setMatchSnapshot] = React.useState<MatchSnapshot>(EMPTY_MATCH_SNAPSHOT);
   const [matchHydrated, setMatchHydrated] = React.useState(false);
-  const [bottomBarHeight, setBottomBarHeight] = React.useState(0);
+  const [bottomBarHeight, setBottomBarHeight] = React.useState(140);
+  const [pendingCounterOffer, setPendingCounterOffer] = React.useState<CounterOfferItem | null>(null);
   const matchLoadTokenRef = React.useRef(0);
   const focusRefetchMetaRef = React.useRef({ hasFocusedOnce: false, lastRefetchAt: 0 });
   const refreshInFlightRef = React.useRef<Promise<void> | null>(null);
@@ -601,9 +695,16 @@ export default function QuoteDetailPage() {
   const hasActiveQuoteMatch = Boolean(activeQuoteMatch);
   const cancelTargetMatchId = React.useMemo(() => parsePositiveInt(activeQuoteMatch?.matchId), [activeQuoteMatch?.matchId]);
   const isCancelIdInvalid = hasActiveQuoteMatch && cancelTargetMatchId <= 0;
+  const routeStatus = readRouteParamText(params.status);
+
   const effectiveQuoteStatus = React.useMemo(
-    () => resolveEffectiveQuoteStatus(view.quote.status, activeQuoteMatch?.status),
-    [activeQuoteMatch?.status, view.quote.status]
+    () => {
+      const base = routeStatus || (matchHydrated ? view.quote.status : BACKEND_STATUS.UNKNOWN);
+      const matchStatus = matchHydrated ? activeQuoteMatch?.status : null;
+      const matchAccepted = matchHydrated ? activeQuoteMatch?.accepted : null;
+      return resolveEffectiveQuoteStatus(base, matchStatus, matchAccepted);
+    },
+    [activeQuoteMatch?.accepted, activeQuoteMatch?.status, matchHydrated, routeStatus, view.quote.status]
   );
   const effectivePolicy = React.useMemo(() => getQuoteActionPolicy(effectiveQuoteStatus), [effectiveQuoteStatus]);
   const effectiveActionsContext = React.useMemo(
@@ -634,6 +735,21 @@ export default function QuoteDetailPage() {
     }
   }, []);
 
+  const loadPendingCounterOffer = React.useCallback(async (targetQuoteId: number) => {
+    const safeQuoteId = parsePositiveInt(targetQuoteId);
+    if (safeQuoteId <= 0) {
+      setPendingCounterOffer(null);
+      return;
+    }
+    try {
+      const offers = await listShipperCounterOffers(safeQuoteId);
+      const pending = offers.find((o) => isCounterOfferPending(o.status)) ?? null;
+      setPendingCounterOffer(pending);
+    } catch {
+      setPendingCounterOffer(null);
+    }
+  }, []);
+
   const refreshQuoteAndMatchData = React.useCallback(async () => {
     if (refreshInFlightRef.current) {
       await refreshInFlightRef.current;
@@ -642,7 +758,10 @@ export default function QuoteDetailPage() {
 
     const task = (async () => {
       const tasks: Array<Promise<unknown>> = [view.refetch()];
-      if (actionQuoteId > 0) tasks.push(loadMatchSnapshot(actionQuoteId));
+      if (actionQuoteId > 0) {
+        tasks.push(loadMatchSnapshot(actionQuoteId));
+        tasks.push(loadPendingCounterOffer(actionQuoteId));
+      }
       await Promise.all(tasks);
     })();
 
@@ -654,7 +773,15 @@ export default function QuoteDetailPage() {
         refreshInFlightRef.current = null;
       }
     }
-  }, [actionQuoteId, loadMatchSnapshot, view.refetch]);
+  }, [actionQuoteId, loadMatchSnapshot, loadPendingCounterOffer, view.refetch]);
+
+  React.useEffect(() => {
+    if (actionQuoteId > 0) {
+      void loadPendingCounterOffer(actionQuoteId);
+    } else {
+      setPendingCounterOffer(null);
+    }
+  }, [actionQuoteId, loadPendingCounterOffer]);
 
   React.useEffect(() => {
     const safeQuoteId = parsePositiveInt(actionQuoteId);
@@ -862,8 +989,14 @@ export default function QuoteDetailPage() {
 
   const spacing = safeNumber(theme.layout.spacing.base, 4);
   const shouldUsePolicyActionBar = POLICY_ACTION_UI_STATES.has(quoteUiState) && Boolean(effectivePolicy.bottomBar);
+  const isDriveInProgress =
+    quoteUiState === CUSTOMER_UI_STATE.PICKUP_IN_PROGRESS || quoteUiState === CUSTOMER_UI_STATE.TRANSIT_IN_PROGRESS;
   const bottomTitle = hasActiveQuoteMatch ? "배차 요청 취소" : "배차 요청";
-  const bottomVariant = hasActiveQuoteMatch ? "destructive" : "primary";
+  const bottomVariant = React.useMemo(() => {
+    if (hasActiveQuoteMatch) return "destructive";
+    if (quoteUiState === CUSTOMER_UI_STATE.UNKNOWN) return "secondary";
+    return "primary";
+  }, [hasActiveQuoteMatch, quoteUiState]);
   const handlePressBottomAction = React.useCallback(() => {
     if (hasActiveQuoteMatch) {
       void handleCancelMatch();
@@ -873,11 +1006,18 @@ export default function QuoteDetailPage() {
   }, [handleCancelMatch, handleCreateMatch, hasActiveQuoteMatch]);
 
   const bottomBar = !isBlockedByFetchState ? (
-    <View style={[styles.bottomBar, { paddingBottom: insets.bottom + spacing * 2 }]} onLayout={(e) => setBottomBarHeight(e.nativeEvent.layout.height)}>
-      {!matchHydrated ? (
-        <View style={styles.bottomPlaceholder}>
-          <AppText style={styles.bottomPlaceholderText}>배차 상태 확인 중...</AppText>
-        </View>
+    <View style={[styles.bottomBar, { paddingBottom: insets.bottom + spacing * 2 }]} onLayout={(e) => {
+      const nextHeight = e?.nativeEvent?.layout?.height;
+      if (!nextHeight) return;
+      setBottomBarHeight((prev) => Math.max(prev, nextHeight));
+    }}>
+{!matchHydrated ? (
+        <AppButton
+          title="배차 상태 확인 중..."
+          variant="secondary"
+          style={styles.bottomButton}
+          disabled
+        />
       ) : shouldUsePolicyActionBar ? (
         <BottomActionRouter
           ctx={effectiveActionsContext}
@@ -888,12 +1028,12 @@ export default function QuoteDetailPage() {
         />
       ) : (
         <AppButton
-          title={bottomTitle}
-          variant={bottomVariant}
+          title={isDriveInProgress ? (quoteUiState === CUSTOMER_UI_STATE.PICKUP_IN_PROGRESS ? "상차 진행 중..." : "운송 진행 중...") : bottomTitle}
+          variant={isDriveInProgress ? "secondary" : bottomVariant}
           style={styles.bottomButton}
           onPress={handlePressBottomAction}
           loading={isMatchSubmitting}
-          disabled={isMatchSubmitting || (hasActiveQuoteMatch && isCancelIdInvalid) || actionQuoteId <= 0}
+          disabled={isDriveInProgress || isMatchSubmitting || (hasActiveQuoteMatch && isCancelIdInvalid) || actionQuoteId <= 0}
         />
       )}
     </View>
@@ -949,6 +1089,7 @@ export default function QuoteDetailPage() {
               </View>
             ) : null}
           </View>
+          {pendingCounterOffer ? <CounterOfferCard offer={pendingCounterOffer} /> : null}
           <RouteFlowCard coreSummary={view.coreSummary} />
           <SummaryCard view={view} />
           <SpecificationArchive view={view} />

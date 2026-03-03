@@ -7,5 +7,9 @@
 
 export interface CounterOfferCreateRequest {
   proposedPrice?: number;
+  /**
+   * @minLength 0
+   * @maxLength 500
+   */
   message?: string;
 }

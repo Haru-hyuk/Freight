@@ -22,7 +22,7 @@ import { customInstance } from '../../orval/custom-instance';
     },
       );
     }
-  export const update = (
+  export const update1 = (
     announcementId: number,
     announcementUpdateRequest: AnnouncementUpdateRequest,
  ) => {
@@ -34,7 +34,7 @@ import { customInstance } from '../../orval/custom-instance';
     },
       );
     }
-  export const _delete = (
+  export const delete1 = (
     announcementId: number,
  ) => {
       return customInstance<void>(
@@ -51,7 +51,7 @@ import { customInstance } from '../../orval/custom-instance';
     },
       );
     }
-  export const create2 = (
+  export const create3 = (
     announcementCreateRequest: AnnouncementCreateRequest,
  ) => {
       return customInstance<Blob>(
@@ -63,7 +63,7 @@ import { customInstance } from '../../orval/custom-instance';
       );
     }
   export type Get1Result = NonNullable<Awaited<ReturnType<typeof get1>>>
-export type UpdateResult = NonNullable<Awaited<ReturnType<typeof update>>>
-export type _DeleteResult = NonNullable<Awaited<ReturnType<typeof _delete>>>
+export type Update1Result = NonNullable<Awaited<ReturnType<typeof update1>>>
+export type Delete1Result = NonNullable<Awaited<ReturnType<typeof delete1>>>
 export type ListAllResult = NonNullable<Awaited<ReturnType<typeof listAll>>>
-export type Create2Result = NonNullable<Awaited<ReturnType<typeof create2>>>
+export type Create3Result = NonNullable<Awaited<ReturnType<typeof create3>>>

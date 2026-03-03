@@ -6,6 +6,9 @@ export type User = {
 
   email?: string;
   name?: string;
+  phone?: string;
+  bankName?: string;
+  bankAccount?: string;
 
   createdAt?: string;
   updatedAt?: string;

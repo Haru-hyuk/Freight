@@ -12,7 +12,7 @@ import { customInstance } from '../../orval/custom-instance';
 
 
 
-  export const list = (
+  export const list1 = (
     
  ) => {
       return customInstance<Blob>(
@@ -21,7 +21,7 @@ import { customInstance } from '../../orval/custom-instance';
     },
       );
     }
-  export const create1 = (
+  export const create2 = (
     adminSanctionCreateRequest: AdminSanctionCreateRequest,
  ) => {
       return customInstance<Blob>(
@@ -41,6 +41,6 @@ import { customInstance } from '../../orval/custom-instance';
     },
       );
     }
-  export type ListResult = NonNullable<Awaited<ReturnType<typeof list>>>
-export type Create1Result = NonNullable<Awaited<ReturnType<typeof create1>>>
+  export type List1Result = NonNullable<Awaited<ReturnType<typeof list1>>>
+export type Create2Result = NonNullable<Awaited<ReturnType<typeof create2>>>
 export type ReleaseResult = NonNullable<Awaited<ReturnType<typeof release>>>

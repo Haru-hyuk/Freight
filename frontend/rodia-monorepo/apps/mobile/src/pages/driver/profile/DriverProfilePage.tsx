@@ -1,4 +1,5 @@
-﻿import React, { useCallback, useMemo, useRef, useState } from "react";
+﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "expo-router";
 import {
   Animated,
   Platform,
@@ -10,6 +11,9 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 
 import { useAuth } from "@/features/auth/model/useAuth";
+import { listDriverTrucks } from "@/features/driver-profile/api/driver-profile-api";
+import { listDriverSettlementsMe } from "@/features/driver-profile/api/driver-settlement-api";
+import { listDriverInquiriesMe } from "@/features/driver-profile/api/driver-inquiry-api";
 import { PageScaffold } from "@/widgets/layout/PageScaffold";
 
 const COLORS = {
@@ -61,11 +65,16 @@ function getReasonText(isLicenseVerified: boolean, isTruckApproved: boolean): { 
 }
 
 export function DriverProfilePage() {
+  const router = useRouter();
   const auth = useAuth();
 
   const [isOnDuty, setIsOnDuty] = useState(true);
   const [isTruckApproved, setIsTruckApproved] = useState(false);
+  const [truckApprovedFromServer, setTruckApprovedFromServer] = useState<boolean | null>(null);
   const [isLicenseVerified, setIsLicenseVerified] = useState(auth.pendingVerificationRole !== "driver");
+  const [pendingSettlementCount, setPendingSettlementCount] = useState(0);
+  const [unansweredInquiryCount, setUnansweredInquiryCount] = useState(0);
+  const [truckTitle, setTruckTitle] = useState("차량 등록 (-)");
 
   const [toastMsg, setToastMsg] = useState("");
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -92,11 +101,54 @@ export function DriverProfilePage() {
     [fadeAnim]
   );
 
-  const status = useMemo(() => getAcceptStatus(isLicenseVerified, isTruckApproved), [isLicenseVerified, isTruckApproved]);
-  const reason = useMemo(() => getReasonText(isLicenseVerified, isTruckApproved), [isLicenseVerified, isTruckApproved]);
+  useEffect(() => {
+    let cancelled = false;
+
+    if (auth.status !== "authenticated") {
+      setTruckApprovedFromServer(null);
+      setPendingSettlementCount(0);
+      setUnansweredInquiryCount(0);
+      setTruckTitle("차량 등록 (-)");
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    (async () => {
+      const [trucks, settlements, inquiries] = await Promise.all([
+        listDriverTrucks().catch(() => []),
+        listDriverSettlementsMe().catch(() => []),
+        listDriverInquiriesMe().catch(() => []),
+      ]);
+      if (cancelled) return;
+
+      const firstTruck = trucks[0];
+      const tonnageLabel =
+        typeof firstTruck?.tonnage === "number" && Number.isFinite(firstTruck.tonnage) ? `${firstTruck.tonnage}톤` : "";
+      const truckName = typeof firstTruck?.name === "string" ? firstTruck.name.trim() : "";
+      const truckLabel = [tonnageLabel, truckName].filter(Boolean).join(" ");
+      setTruckTitle(truckLabel ? `차량 등록 (${truckLabel})` : "차량 등록 (-)");
+
+      const approved = trucks.find((t) => typeof t.approved === "boolean")?.approved;
+      setTruckApprovedFromServer(typeof approved === "boolean" ? approved : null);
+
+      setPendingSettlementCount(settlements.filter((s) => s?.settlementStatus === "PENDING").length);
+      setUnansweredInquiryCount(inquiries.filter((q) => !q?.answer).length);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [auth.status]);
+
+  const effectiveTruckApproved = truckApprovedFromServer ?? isTruckApproved;
+  const status = useMemo(() => getAcceptStatus(isLicenseVerified, effectiveTruckApproved), [isLicenseVerified, effectiveTruckApproved]);
+  const reason = useMemo(() => getReasonText(isLicenseVerified, effectiveTruckApproved), [isLicenseVerified, effectiveTruckApproved]);
 
   const profileName = auth.user?.name?.trim() || "기사 사용자";
-  const profilePhone = "010-1234-5678";
+  const profilePhone = auth.user?.phone ?? "-";
+  const bankName = auth.user?.bankName ?? "-";
+  const bankAccount = auth.user?.bankAccount ?? "-";
 
   const toggleDuty = () => {
     setIsOnDuty((prev) => {
@@ -125,7 +177,7 @@ export function DriverProfilePage() {
         headerRight={
           <Pressable style={[styles.dutyToggle, isOnDuty && styles.dutyToggleOn]} onPress={toggleDuty}>
             <View style={[styles.dutyDot, isOnDuty && styles.dutyDotOn]} />
-            <Text style={[styles.dutyText, isOnDuty && styles.dutyTextOn]}>{isOnDuty ? "출근 ON" : "퇴근 OFF"}</Text>
+            <Text style={[styles.dutyText, isOnDuty && styles.dutyTextOn]}>{isOnDuty ? "운행중 ON" : "퇴근 OFF"}</Text>
           </Pressable>
         }
         backgroundColor={COLORS.bg}
@@ -217,10 +269,10 @@ export function DriverProfilePage() {
           </View>
 
           <View style={styles.row}>
-            <Text style={styles.txtBody}>차량 등록 (11톤 윙바디)</Text>
-            <View style={[styles.pill, isTruckApproved ? styles.pillSuccess : styles.pillWarn]}>
-              <Text style={[styles.pillText, isTruckApproved ? { color: COLORS.successText } : { color: COLORS.warnText }]}>
-                {isTruckApproved ? "승인완료" : "심사중"}
+            <Text style={styles.txtBody}>{truckTitle}</Text>
+            <View style={[styles.pill, effectiveTruckApproved ? styles.pillSuccess : styles.pillWarn]}>
+              <Text style={[styles.pillText, effectiveTruckApproved ? { color: COLORS.successText } : { color: COLORS.warnText }]}>
+                {effectiveTruckApproved ? "승인완료" : "심사중"}
               </Text>
             </View>
           </View>
@@ -262,8 +314,8 @@ export function DriverProfilePage() {
         <View style={styles.card}>
           <View style={styles.row}>
             <View style={{ gap: 4 }}>
-              <Text style={[styles.txtCaption, { color: COLORS.slate400 }]}>국민은행</Text>
-              <Text style={[styles.txtBody, { fontWeight: "800", letterSpacing: -0.2 }]}>123-4567-8901-23</Text>
+              <Text style={[styles.txtCaption, { color: COLORS.slate400 }]}>{bankName}</Text>
+              <Text style={[styles.txtBody, { fontWeight: "800", letterSpacing: -0.2 }]}>{bankAccount}</Text>
             </View>
             <View style={[styles.pill, styles.pillGray]}>
               <Text style={styles.pillTextGray}>기본</Text>
@@ -272,20 +324,32 @@ export function DriverProfilePage() {
         </View>
 
         <View style={styles.secHeader}>
-          <Text style={styles.secTitle}>설정</Text>
-          <Text style={styles.secSub}>관리</Text>
+          <Text style={styles.secTitle}>내 정보</Text>
+          <Text style={styles.secSub}>바로가기</Text>
         </View>
 
         <View style={[styles.card, { padding: 0, overflow: "hidden" }]}>
-          <Pressable style={styles.menuItem} onPress={() => showToast("공지사항 (데모)")}>
-            <Text style={styles.menuText}>공지사항</Text>
+          <Pressable style={styles.menuItem} onPress={() => router.push("/(driver)/settings/account" as never)}>
+            <Text style={styles.menuText}>회원정보 수정</Text>
+            <Text style={styles.menuRightText}>수정</Text>
+          </Pressable>
+          <View style={styles.menuDivider} />
+
+          <Pressable style={styles.menuItem} onPress={() => router.push("/(driver)/settings/trucks" as never)}>
+            <Text style={styles.menuText}>차량 승인 상태</Text>
             <Text style={styles.menuRightText}>보기</Text>
           </Pressable>
           <View style={styles.menuDivider} />
 
-          <Pressable style={styles.menuItem} onPress={() => showToast("알림 설정 (데모)")}>
-            <Text style={styles.menuText}>알림 설정</Text>
-            <Text style={styles.menuRightText}>관리</Text>
+          <Pressable style={styles.menuItem} onPress={() => router.push("/(driver)/settlement" as never)}>
+            <Text style={styles.menuText}>정산 내역</Text>
+            <Text style={styles.menuRightText}>{pendingSettlementCount > 0 ? `${pendingSettlementCount}건` : "보기"}</Text>
+          </Pressable>
+          <View style={styles.menuDivider} />
+
+          <Pressable style={styles.menuItem} onPress={() => router.push("/(driver)/inquiries" as never)}>
+            <Text style={styles.menuText}>1:1 문의 / 고객센터</Text>
+            <Text style={styles.menuRightText}>{unansweredInquiryCount > 0 ? `${unansweredInquiryCount}건` : "보기"}</Text>
           </Pressable>
           <View style={styles.menuDivider} />
 

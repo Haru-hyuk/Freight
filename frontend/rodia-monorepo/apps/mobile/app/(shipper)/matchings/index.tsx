@@ -1,8 +1,7 @@
 // apps/mobile/app/(shipper)/matchings/index.tsx
 import React from "react";
-
-import MatchingListPage from "@/pages/shipper/matchings/MatchingListPage";
+import { Redirect } from "expo-router";
 
 export default function ShipperMatchingsRoute() {
-  return <MatchingListPage />;
+  return <Redirect href={{ pathname: "/(shipper)/quotes", params: { tab: "IN_PROGRESS" } }} />;
 }

@@ -142,3 +142,7 @@ export function isApiDebugLogsEnabled(): boolean {
 export function getShipperQuoteCreatePath(): string {
   return readString("EXPO_PUBLIC_SHIPPER_QUOTE_CREATE_PATH", "/api/shipper/quotes");
 }
+
+export function getShipperAddressBookPath(): string {
+  return readString("EXPO_PUBLIC_SHIPPER_ADDRESS_BOOK_PATH", "/api/shipper/addresses");
+}

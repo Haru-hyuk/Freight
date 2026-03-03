@@ -1,5 +1,6 @@
 package com.freight.backend.controller;
 
+import com.freight.backend.dto.counter.CounterOfferAcceptResponse;
 import com.freight.backend.dto.counter.CounterOfferResponse;
 import com.freight.backend.exception.CustomException;
 import com.freight.backend.exception.ErrorCode;
@@ -40,13 +41,12 @@ public class ShipperCounterOfferController {
     }
 
     @PatchMapping("/counter-offers/{offerId}/accept")
-    public ResponseEntity<Void> acceptCounterOffer(
+    public ResponseEntity<CounterOfferAcceptResponse> acceptCounterOffer(
             @AuthenticationPrincipal UserDetails userDetails,
             @PathVariable Long offerId
     ) {
         Long shipperId = requireShipperId(userDetails);
-        counterOfferService.acceptOffer(shipperId, offerId);
-        return ResponseEntity.noContent().build();
+        return ResponseEntity.ok(counterOfferService.acceptOffer(shipperId, offerId));
     }
 
     @PatchMapping("/counter-offers/{offerId}/reject")

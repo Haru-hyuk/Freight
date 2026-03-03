@@ -85,4 +85,11 @@ public class Driver {
         this.status = status;
         this.updatedAt = LocalDateTime.now();
     }
+
+    public void updateProfile(String name, String email, String phone) {
+        this.name = name;
+        this.email = email;
+        this.phone = phone;
+        this.updatedAt = LocalDateTime.now();
+    }
 }

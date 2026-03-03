@@ -68,9 +68,23 @@ function readDetailValue(source: QuoteDetailResponse, keys: string[]): string {
 
 function resolveTonIndex(vehicleType: unknown): number {
   const normalized = String(vehicleType ?? "").trim().toUpperCase();
-  if (normalized === "TON_2_5") return 1;
-  if (normalized === "TON_5") return 2;
-  return 0;
+  const map: Record<string, number> = {
+    DAMAS: 0,
+    LABO: 1,
+    TON_1: 2,
+    TON_1_4: 3,
+    TON_2_5: 4,
+    TON_3_5: 5,
+    TON_5: 6,
+    TON_5_AXLE: 7,
+    TON_8: 8,
+    TON_11: 9,
+    TON_14: 10,
+    TON_15: 11,
+    TON_18: 12,
+    TON_25: 13,
+  };
+  return map[normalized] ?? 2;
 }
 
 function resolveBodyIndex(vehicleBodyType: unknown): number {
@@ -157,7 +171,10 @@ function mapDetailToDraft(detail: QuoteDetailResponse): QuoteCreateDraft {
     unloadMethod: toDraftUnloadMethod(detail?.unloadMethod),
     date: createdDate,
     time: updatedDate,
-    truckId: Math.max(1, toSafeInt(detail?.truckId, 1)),
+    truckId: (() => {
+      const safeId = toSafeInt(detail?.truckId, 0);
+      return safeId > 0 ? safeId : undefined;
+    })(),
     originLat: toSafeNumber(detail?.originLat, 0),
     originLng: toSafeNumber(detail?.originLng, 0),
     destinationLat: toSafeNumber(detail?.destinationLat, 0),
@@ -360,9 +377,9 @@ function QuoteEditPageInner() {
     }
 
     const payload = buildQuoteCreateRequest(draft);
-    let distanceKm = Number.isFinite(payload?.distanceKm) ? Math.trunc(payload.distanceKm) : 0;
+    let finalDistanceKm = Number.isFinite(payload?.distanceKm) ? Math.trunc(payload.distanceKm as number) : 0;
 
-    if (distanceKm < 1) {
+    if (finalDistanceKm < 1) {
       const points: LatLng[] = [];
 
       if (isValidCoord(payload?.originLat, payload?.originLng)) {
@@ -393,17 +410,23 @@ function QuoteEditPageInner() {
 
       const estimatedKm = Math.round(estimateRouteKm(points));
       if (estimatedKm > 0) {
-        distanceKm = Math.max(1, estimatedKm);
-        payload.distanceKm = distanceKm;
-      } else {
-        Alert.alert("견적 수정 실패", "거리 계산 후 요청해주세요.");
-        return;
+        finalDistanceKm = Math.max(1, estimatedKm);
       }
     }
 
+    const finalPayload = {
+      ...payload,
+      ...(finalDistanceKm > 0 ? { distanceKm: finalDistanceKm } : {}),
+    };
+
+    // undefined 값 제거 (선택적 필드만 API로 전송)
+    const cleanPayload = Object.fromEntries(
+      Object.entries(finalPayload).filter(([, value]) => value !== undefined)
+    ) as Record<string, unknown>;
+
     try {
       setIsSubmitting(true);
-      const updatedDetail = await updateShipperQuote(targetQuoteId, payload);
+      const updatedDetail = await updateShipperQuote(targetQuoteId, cleanPayload as any);
       const nextQuoteId = Math.max(0, toSafeInt(updatedDetail?.quoteId, targetQuoteId));
       const nextIdentifier =
         String(updatedDetail?.quotePublicId ?? resolvedQuoteIdentifier ?? quoteIdentifier ?? "").trim() ||
