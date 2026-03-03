@@ -1,4 +1,6 @@
 import type { QuoteDetailResponse } from "@/entities/quote/model/quote.types";
+import type { LoadPlanResponse } from "@/shared/api/generated/schemas/loadPlanResponse";
+import type { TruckSpecReferenceResponse } from "@/shared/api/generated/schemas/truckSpecReferenceResponse";
 
 import type { DriverMatchItem } from "./shipper-match-api";
 
@@ -38,6 +40,10 @@ export type ParsedDriverOrderSource = {
   createdAt?: string;
   updatedAt?: string;
   quote: ParsedDriverOrderQuote | null;
+  /** 적재 계획 — 매칭 응답에 포함된 경우에만 존재 */
+  loadPlan?: LoadPlanResponse;
+  /** 차량 스펙 — 매칭 응답에 포함된 경우에만 존재 */
+  truckSpec?: TruckSpecReferenceResponse;
 };
 
 export function parseDriverOrderPositiveInt(value: unknown): number {
@@ -101,6 +107,10 @@ export function parseDriverOrderSource(input: {
   const seed = matchId || quoteId || index + 1;
   const rawStatus = typeof match.status === "string" ? match.status.trim() : "";
 
+  // loadPlan / truckSpec은 ParsedMatchResponseItem에 포함된 필드이지만
+  // DriverMatchItem 타입 alias가 아직 그 확장을 모를 수 있으므로 as any로 접근
+  const rawMatch = match as any;
+
   return {
     scope,
     index,
@@ -111,6 +121,8 @@ export function parseDriverOrderSource(input: {
     createdAt: toOptionalText(match.createdAt),
     updatedAt: toOptionalText(match.updatedAt),
     quote: parseDriverOrderQuote(quote),
+    loadPlan: rawMatch.loadPlan as LoadPlanResponse | undefined,
+    truckSpec: rawMatch.truckSpec as TruckSpecReferenceResponse | undefined,
   };
 }
 

@@ -1,4 +1,5 @@
-import { BACKEND_STATUS, normalizeStatus } from "@/shared/lib/policy";
+import type { LoadPlanResponse } from "@/shared/api/generated/schemas/loadPlanResponse";
+import type { TruckSpecReferenceResponse } from "@/shared/api/generated/schemas/truckSpecReferenceResponse";
 
 type AnyObject = Record<string, unknown>;
 
@@ -17,6 +18,14 @@ export type ParsedMatchResponseItem = {
   acceptedAt?: string;
   createdAt?: string;
   updatedAt?: string;
+  /** 적재 계획 데이터 (서버/mock 응답에 포함된 경우 그대로 전달) */
+  loadPlan?: LoadPlanResponse;
+  /** 차량 스펙 데이터 (서버/mock 응답에 포함된 경우 그대로 전달) */
+  truckSpec?: TruckSpecReferenceResponse;
+  /** 상차 사진 URIs */
+  loadingPhotos?: string[];
+  /** 하차 사진 URIs */
+  unloadingPhotos?: string[];
 };
 
 function asObject(value: unknown): AnyObject {
@@ -42,11 +51,23 @@ function toOptionalBoolean(value: unknown): boolean | undefined {
   return value;
 }
 
+function toStatusToken(value: unknown): string {
+  return String(value ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "_")
+    .replace(/-/g, "_");
+}
+
 function toNormalizedMatchStatus(value: unknown): string | undefined {
-  const text = toOptionalText(value);
-  if (!text) return undefined;
-  const normalized = normalizeStatus(text);
-  return normalized === BACKEND_STATUS.UNKNOWN ? undefined : normalized;
+  const token = toStatusToken(value);
+  if (!token) return undefined;
+
+  if (token === "CANCELLED") return "CANCELED";
+  if (token === "MATCHED") return "ASSIGNED";
+  if (token === "IN_TRANSIT" || token === "DRIVING") return "TRANSIT";
+  if (token === "DELIVERED" || token === "COMPLETED") return "DROPOFF";
+  return token;
 }
 
 function unwrapPayload(value: unknown): unknown {
@@ -85,6 +106,11 @@ function parseMatchResponseItem(value: unknown): ParsedMatchResponseItem | null 
     acceptedAt: toOptionalText(source.acceptedAt),
     createdAt: toOptionalText(source.createdAt),
     updatedAt: toOptionalText(source.updatedAt),
+    // 선택적 페이로드 필드 — 서버/mock에서 내려오면 그대로 전달, 없으면 undefined
+    loadPlan: source.loadPlan !== undefined ? (source.loadPlan as LoadPlanResponse) : undefined,
+    truckSpec: source.truckSpec !== undefined ? (source.truckSpec as TruckSpecReferenceResponse) : undefined,
+    loadingPhotos: Array.isArray(source.loadingPhotos) ? (source.loadingPhotos as string[]) : undefined,
+    unloadingPhotos: Array.isArray(source.unloadingPhotos) ? (source.unloadingPhotos as string[]) : undefined,
   };
 }
 

@@ -777,7 +777,10 @@ export function DriverOrdersBoard({
   const filteredRunOrders = useMemo(
     () =>
       overview.runOrders.filter(
-        (item) => item.uiState === DRIVER_UI_STATE.TRANSIT_IN_PROGRESS || item.uiState === DRIVER_UI_STATE.COMPLETED
+        (item) =>
+          item.uiState === DRIVER_UI_STATE.PICKUP_IN_PROGRESS ||
+          item.uiState === DRIVER_UI_STATE.TRANSIT_IN_PROGRESS ||
+          item.uiState === DRIVER_UI_STATE.COMPLETED
       ),
     [overview.runOrders]
   );

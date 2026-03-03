@@ -1,7 +1,10 @@
 import type {
   CounterOfferResponse,
+  LoadPlanResponse,
+  Placement,
   MatchResponse,
   QuoteDetailResponse,
+  TruckSpecReferenceResponse,
 } from "@/shared/api/generated/schemas";
 
 import { createMockFlowSeed } from "./seed";
@@ -54,7 +57,41 @@ export function cloneQuoteDetail(detail: QuoteDetailResponse): QuoteDetailRespon
 }
 
 export function cloneMatch(match: MatchResponse): MatchResponse {
-  return { ...match };
+  const source = match as MatchResponse & {
+    loadPlan?: LoadPlanResponse;
+    truckSpec?: TruckSpecReferenceResponse;
+    loadingPhotos?: string[];
+    unloadingPhotos?: string[];
+  };
+
+  const clonedLoadPlan: LoadPlanResponse | undefined = source.loadPlan
+    ? {
+        ...source.loadPlan,
+        placements: Array.isArray(source.loadPlan.placements)
+          ? source.loadPlan.placements.map((placement) => ({ ...(placement as Placement) }))
+          : source.loadPlan.placements,
+        stats:
+          source.loadPlan.stats && typeof source.loadPlan.stats === "object"
+            ? { ...source.loadPlan.stats }
+            : source.loadPlan.stats,
+      }
+    : undefined;
+
+  const cloned: MatchResponse & {
+    loadPlan?: LoadPlanResponse;
+    truckSpec?: TruckSpecReferenceResponse;
+    loadingPhotos?: string[];
+    unloadingPhotos?: string[];
+  } = {
+    ...source,
+    loadPlan: clonedLoadPlan,
+    truckSpec:
+      source.truckSpec && typeof source.truckSpec === "object" ? { ...source.truckSpec } : source.truckSpec,
+    loadingPhotos: Array.isArray(source.loadingPhotos) ? [...source.loadingPhotos] : source.loadingPhotos,
+    unloadingPhotos: Array.isArray(source.unloadingPhotos) ? [...source.unloadingPhotos] : source.unloadingPhotos,
+  };
+
+  return cloned;
 }
 
 export function cloneCounterOffer(offer: CounterOfferResponse): CounterOfferResponse {

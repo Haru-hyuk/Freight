@@ -19,7 +19,9 @@ import { useQuoteDetail, type QuoteActionsContext } from "@/features/quote/model
 import { formatWorkMethodLabel } from "@/features/quote/model/workMethod";
 import { BottomActionRouter } from "@/features/quote/ui/actions/BottomActionRouter";
 import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
+import { isMockMode } from "@/shared/lib/config/env";
 import { formatDistance, formatKrw } from "@/shared/lib/format/display";
+import { processMockFlowPayment } from "@/shared/lib/mock-flow";
 import {
   BACKEND_STATUS,
   CUSTOMER_UI_STATE,
@@ -45,6 +47,14 @@ type ArchiveRow = { label: string; value: string };
 type ArchiveSection = { key: string; title: string; rows: ArchiveRow[] };
 type PriceSummary = { primaryLabel: string; primaryText: string; secondaryText: string };
 type QuoteDecisionAction = Exclude<DecisionActionId, "cancelRequest">;
+type DeliveryTimelineStep = { key: string; label: string };
+
+const DELIVERY_TIMELINE_STEPS: readonly DeliveryTimelineStep[] = [
+  { key: "ASSIGNED", label: "배차 완료" },
+  { key: "PICKUP", label: "상차 완료" },
+  { key: "TRANSIT", label: "운송 중" },
+  { key: "DROPOFF", label: "배송 완료" },
+];
 
 const POLICY_ACTION_UI_STATES: ReadonlySet<CustomerUiState> = new Set([
   CUSTOMER_UI_STATE.NEGOTIATION_REQUIRED,
@@ -64,6 +74,15 @@ const STATUS_PROMOTION_TARGET_STATES: ReadonlySet<string> = new Set([
   BACKEND_STATUS.READY,
   BACKEND_STATUS.COMPLETED,
   BACKEND_STATUS.CANCELLED,
+]);
+const POST_PAYMENT_STATUS_TOKENS: ReadonlySet<string> = new Set([
+  "PICKUP",
+  "TRANSIT",
+  "DROPOFF",
+  "DRIVING",
+  "IN_TRANSIT",
+  "DELIVERED",
+  "COMPLETED",
 ]);
 const FOCUS_REFETCH_THROTTLE_MS = 1500;
 
@@ -115,6 +134,138 @@ const useStyles = createThemedStyles((theme) => {
       color: c.textMain,
       fontSize: safeNumber(theme.typography.scale.detail.size, 14),
       lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20),
+      fontWeight: "700",
+    },
+    paymentDoneCard: {
+      backgroundColor: c.bgSurface,
+      borderRadius: safeNumber(theme.layout.radii.card, 16),
+      borderWidth: 1,
+      borderColor: tint(c.brandPrimary, 0.2, c.borderDefault),
+      padding: s * 4,
+      gap: s * 2,
+    },
+    paymentDoneHeader: { flexDirection: "row", alignItems: "center", gap: s * 2 },
+    paymentDoneIconWrap: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: tint(c.brandPrimary, 0.12, c.bgSurfaceAlt),
+    },
+    paymentDoneIcon: { color: c.brandPrimary, fontSize: 16 },
+    paymentDoneTitle: {
+      color: c.textMain,
+      fontSize: safeNumber(theme.typography.scale.detail.size, 14),
+      lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20),
+      fontWeight: "900",
+    },
+    paymentDoneDesc: {
+      color: c.textSub,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
+      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
+      fontWeight: "700",
+    },
+    deliveryCard: {
+      backgroundColor: c.bgSurface,
+      borderRadius: safeNumber(theme.layout.radii.card, 16),
+      borderWidth: 1,
+      borderColor: c.borderDefault,
+      padding: s * 4,
+      gap: s * 3,
+    },
+    deliveryTitle: {
+      color: c.textMain,
+      fontSize: safeNumber(theme.typography.scale.detail.size, 14) + 1,
+      lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20) + 1,
+      fontWeight: "900",
+    },
+    deliveryStepRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: s + 2,
+    },
+    deliveryStepNode: {
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      borderWidth: 2,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    deliveryStepNodeActive: {
+      borderColor: c.brandPrimary,
+      backgroundColor: tint(c.brandPrimary, 0.14, c.bgSurface),
+    },
+    deliveryStepNodeDone: {
+      borderColor: c.semanticSuccess,
+      backgroundColor: tint(c.semanticSuccess, 0.14, c.bgSurface),
+    },
+    deliveryStepNodeIdle: {
+      borderColor: c.borderDefault,
+      backgroundColor: c.bgSurface,
+    },
+    deliveryStepConnector: {
+      flex: 1,
+      height: 2,
+      backgroundColor: c.borderDefault,
+    },
+    deliveryStepConnectorDone: {
+      backgroundColor: c.semanticSuccess,
+    },
+    deliveryStepLabel: {
+      color: c.textMuted,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
+      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
+      fontWeight: "700",
+      marginTop: 6,
+      textAlign: "center",
+    },
+    deliveryStepLabelActive: {
+      color: c.brandPrimary,
+      fontWeight: "900",
+    },
+    photoGallerySection: {
+      backgroundColor: c.bgSurface,
+      borderRadius: safeNumber(theme.layout.radii.card, 16),
+      borderWidth: 1,
+      borderColor: c.borderDefault,
+      padding: s * 4,
+      gap: s * 3,
+    },
+    photoGroupWrap: { gap: s * 2 },
+    photoGroupTitle: {
+      color: c.textMain,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12) + 1,
+      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16) + 1,
+      fontWeight: "900",
+    },
+    photoThumbRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: s * 2,
+    },
+    photoThumb: {
+      width: 80,
+      height: 80,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: c.borderDefault,
+      backgroundColor: c.bgSurfaceAlt,
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 4,
+    },
+    photoThumbIndex: {
+      color: c.textSub,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
+      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
+      fontWeight: "800",
+    },
+    photoWaitText: {
+      color: c.textMuted,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12) + 1,
+      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16) + 2,
       fontWeight: "700",
     },
 
@@ -359,6 +510,14 @@ function toDisplayText(value: unknown): string {
   return text || "-";
 }
 
+function toStatusToken(value: unknown): string {
+  return String(value ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "_")
+    .replace(/-/g, "_");
+}
+
 function toPositiveAmount(value: unknown): number {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed <= 0) return 0;
@@ -404,8 +563,51 @@ function normalizeMatchStatus(value: unknown): string {
   return normalized === BACKEND_STATUS.UNKNOWN ? "" : normalized;
 }
 
+function toCanonicalPostPaymentStatus(rawStatus: unknown): string | null {
+  const token = toStatusToken(rawStatus);
+  if (token === "PICKUP") return "PICKUP";
+  if (token === "TRANSIT" || token === "DRIVING" || token === "IN_TRANSIT") return "TRANSIT";
+  if (token === "DROPOFF" || token === "DELIVERED" || token === "COMPLETED") return "DROPOFF";
+  return null;
+}
+
+function isPostPaymentStatus(rawStatus: unknown): boolean {
+  return POST_PAYMENT_STATUS_TOKENS.has(toStatusToken(rawStatus));
+}
+
+function getPostPaymentSummary(status: string): { title: string; description: string } {
+  const token = toStatusToken(status);
+  if (token === "PICKUP") {
+    return {
+      title: "결제 완료",
+      description: "결제가 완료되었고 기사님이 상차를 준비 중입니다.",
+    };
+  }
+  if (token === "TRANSIT" || token === "DRIVING" || token === "IN_TRANSIT") {
+    return {
+      title: "결제 완료",
+      description: "결제가 완료되었고 화물이 운송 중입니다.",
+    };
+  }
+  return {
+    title: "결제 완료",
+    description: "결제가 완료되었고 운송 절차가 마무리되었습니다.",
+  };
+}
+
+function resolveDeliveryTimelineIndex(status: string): number {
+  const token = toStatusToken(status);
+  if (token === "PICKUP") return 1;
+  if (token === "TRANSIT" || token === "DRIVING" || token === "IN_TRANSIT") return 2;
+  if (token === "DROPOFF" || token === "DELIVERED" || token === "COMPLETED") return 3;
+  return 0;
+}
+
 function resolveEffectiveQuoteStatus(quoteStatus: unknown, matchStatus: unknown, matchAccepted?: unknown): string {
   const quoteText = toText(quoteStatus);
+  const postPaymentMatchStatus = toCanonicalPostPaymentStatus(matchStatus);
+  if (postPaymentMatchStatus) return postPaymentMatchStatus;
+
   const quoteNormalized = normalizeStatus(quoteText);
   const normalizedMatchStatus = normalizeMatchStatus(matchStatus);
   if (!normalizedMatchStatus) return quoteText;
@@ -692,6 +894,18 @@ export default function QuoteDetailPage() {
     () => matchSnapshot.cancelableMatch ?? matchSnapshot.nonCanceledMatch ?? null,
     [matchSnapshot.cancelableMatch, matchSnapshot.nonCanceledMatch]
   );
+  const activeMatchWithPhotos = activeQuoteMatch as (ShipperMatchItem & {
+    loadingPhotos?: string[];
+    unloadingPhotos?: string[];
+  }) | null;
+  const loadingPhotos = React.useMemo(
+    () => (Array.isArray(activeMatchWithPhotos?.loadingPhotos) ? activeMatchWithPhotos.loadingPhotos : []),
+    [activeMatchWithPhotos?.loadingPhotos]
+  );
+  const unloadingPhotos = React.useMemo(
+    () => (Array.isArray(activeMatchWithPhotos?.unloadingPhotos) ? activeMatchWithPhotos.unloadingPhotos : []),
+    [activeMatchWithPhotos?.unloadingPhotos]
+  );
   const hasActiveQuoteMatch = Boolean(activeQuoteMatch);
   const cancelTargetMatchId = React.useMemo(() => parsePositiveInt(activeQuoteMatch?.matchId), [activeQuoteMatch?.matchId]);
   const isCancelIdInvalid = hasActiveQuoteMatch && cancelTargetMatchId <= 0;
@@ -713,6 +927,12 @@ export default function QuoteDetailPage() {
   );
   const quoteUiState = React.useMemo(
     () => getCustomerUiStateFromBackendStatus(effectiveQuoteStatus),
+    [effectiveQuoteStatus]
+  );
+  const isPostPaymentFlow = React.useMemo(() => isPostPaymentStatus(effectiveQuoteStatus), [effectiveQuoteStatus]);
+  const postPaymentSummary = React.useMemo(() => getPostPaymentSummary(effectiveQuoteStatus), [effectiveQuoteStatus]);
+  const deliveryTimelineIndex = React.useMemo(
+    () => resolveDeliveryTimelineIndex(effectiveQuoteStatus),
     [effectiveQuoteStatus]
   );
   const palette = resolveTonePalette(theme, effectivePolicy);
@@ -917,10 +1137,39 @@ export default function QuoteDetailPage() {
       }
 
       if (action === "pay") {
-        Alert.alert("결제", "결제 플로우는 다음 단계에서 연결됩니다.");
+        if (cancelTargetMatchId <= 0) {
+          Alert.alert("결제 실패", "결제할 배차 정보를 찾을 수 없습니다.");
+          return;
+        }
+
+        try {
+          setIsMatchSubmitting(true);
+
+          if (isMockMode()) {
+            const updated = processMockFlowPayment(cancelTargetMatchId);
+            if (!updated) {
+              Alert.alert("결제 실패", "결제 처리 가능한 배차 상태가 아닙니다.");
+              return;
+            }
+
+            // 결제 직후에 진행 중인 캐시된 fetch가 있더라도 최신 스토어 상태를
+            // 반드시 반영하도록 in-flight 가드를 초기화하고 새 fetch를 시작한다.
+            refreshInFlightRef.current = null;
+            await refreshQuoteAndMatchData();
+            Alert.alert("결제 완료", "결제가 완료되어 배차 상태가 업데이트되었습니다.");
+            return;
+          }
+
+          Alert.alert("결제", "결제 플로우는 다음 단계에서 연결됩니다.");
+        } catch (error) {
+          Alert.alert("결제 실패", readApiErrorMessage(error));
+        } finally {
+          setIsMatchSubmitting(false);
+        }
+        return;
       }
     },
-    [isMatchSubmitting, refreshQuoteAndMatchData, resolvePendingCounterOfferId, router]
+    [cancelTargetMatchId, isMatchSubmitting, refreshQuoteAndMatchData, resolvePendingCounterOfferId, router]
   );
 
   const handlePolicyCancelRequest = React.useCallback(
@@ -990,20 +1239,24 @@ export default function QuoteDetailPage() {
   const spacing = safeNumber(theme.layout.spacing.base, 4);
   const shouldUsePolicyActionBar = POLICY_ACTION_UI_STATES.has(quoteUiState) && Boolean(effectivePolicy.bottomBar);
   const isDriveInProgress =
-    quoteUiState === CUSTOMER_UI_STATE.PICKUP_IN_PROGRESS || quoteUiState === CUSTOMER_UI_STATE.TRANSIT_IN_PROGRESS;
-  const bottomTitle = hasActiveQuoteMatch ? "배차 요청 취소" : "배차 요청";
+    quoteUiState === CUSTOMER_UI_STATE.PICKUP_IN_PROGRESS ||
+    quoteUiState === CUSTOMER_UI_STATE.TRANSIT_IN_PROGRESS ||
+    isPostPaymentFlow;
+  const bottomTitle = isPostPaymentFlow ? "결제 완료" : hasActiveQuoteMatch ? "배차 요청 취소" : "배차 요청";
   const bottomVariant = React.useMemo(() => {
+    if (isPostPaymentFlow) return "secondary";
     if (hasActiveQuoteMatch) return "destructive";
     if (quoteUiState === CUSTOMER_UI_STATE.UNKNOWN) return "secondary";
     return "primary";
-  }, [hasActiveQuoteMatch, quoteUiState]);
+  }, [hasActiveQuoteMatch, isPostPaymentFlow, quoteUiState]);
   const handlePressBottomAction = React.useCallback(() => {
+    if (isPostPaymentFlow) return;
     if (hasActiveQuoteMatch) {
       void handleCancelMatch();
       return;
     }
     void handleCreateMatch();
-  }, [handleCancelMatch, handleCreateMatch, hasActiveQuoteMatch]);
+  }, [handleCancelMatch, handleCreateMatch, hasActiveQuoteMatch, isPostPaymentFlow]);
 
   const bottomBar = !isBlockedByFetchState ? (
     <View style={[styles.bottomBar, { paddingBottom: insets.bottom + spacing * 2 }]} onLayout={(e) => {
@@ -1026,6 +1279,10 @@ export default function QuoteDetailPage() {
           onCancelRequest={handlePolicyCancelRequest}
           onRunAction={(action, ctx) => runPolicyAction(action, ctx)}
         />
+      ) : isPostPaymentFlow ? (
+        <View style={styles.bottomPlaceholder}>
+          <AppText style={styles.bottomPlaceholderText}>결제 완료 · 운송 진행 상태를 확인하세요</AppText>
+        </View>
       ) : (
         <AppButton
           title={isDriveInProgress ? (quoteUiState === CUSTOMER_UI_STATE.PICKUP_IN_PROGRESS ? "상차 진행 중..." : "운송 진행 중...") : bottomTitle}
@@ -1033,7 +1290,7 @@ export default function QuoteDetailPage() {
           style={styles.bottomButton}
           onPress={handlePressBottomAction}
           loading={isMatchSubmitting}
-          disabled={isDriveInProgress || isMatchSubmitting || (hasActiveQuoteMatch && isCancelIdInvalid) || actionQuoteId <= 0}
+          disabled={isDriveInProgress || isPostPaymentFlow || isMatchSubmitting || (hasActiveQuoteMatch && isCancelIdInvalid) || actionQuoteId <= 0}
         />
       )}
     </View>
@@ -1088,8 +1345,94 @@ export default function QuoteDetailPage() {
                 </View>
               </View>
             ) : null}
+
+            {isPostPaymentFlow ? (
+              <View style={styles.paymentDoneCard}>
+                <View style={styles.paymentDoneHeader}>
+                  <View style={styles.paymentDoneIconWrap}>
+                    <Ionicons name="checkmark-circle" style={styles.paymentDoneIcon} />
+                  </View>
+                  <AppText style={styles.paymentDoneTitle}>{postPaymentSummary.title}</AppText>
+                </View>
+                <AppText style={styles.paymentDoneDesc}>{postPaymentSummary.description}</AppText>
+              </View>
+            ) : null}
           </View>
           {pendingCounterOffer ? <CounterOfferCard offer={pendingCounterOffer} /> : null}
+          {isPostPaymentFlow ? (
+            <View style={styles.deliveryCard}>
+              <AppText style={styles.deliveryTitle}>배송 진행 현황</AppText>
+
+              <View style={styles.deliveryStepRow}>
+                {DELIVERY_TIMELINE_STEPS.map((step, index) => {
+                  const isDone = index < deliveryTimelineIndex;
+                  const isActive = index === deliveryTimelineIndex;
+                  const nodeStyle = isDone
+                    ? styles.deliveryStepNodeDone
+                    : isActive
+                    ? styles.deliveryStepNodeActive
+                    : styles.deliveryStepNodeIdle;
+
+                  return (
+                    <React.Fragment key={step.key}>
+                      <View style={{ flex: 1, alignItems: "center" }}>
+                        <View style={[styles.deliveryStepNode, nodeStyle]}>
+                          {isDone ? (
+                            <Ionicons name="checkmark" size={12} color={theme.colors.semanticSuccess} />
+                          ) : isActive ? (
+                            <Ionicons name="ellipse" size={8} color={theme.colors.brandPrimary} />
+                          ) : null}
+                        </View>
+                        <AppText style={[styles.deliveryStepLabel, isActive ? styles.deliveryStepLabelActive : null]}>
+                          {step.label}
+                        </AppText>
+                      </View>
+                      {index < DELIVERY_TIMELINE_STEPS.length - 1 ? (
+                        <View style={[styles.deliveryStepConnector, isDone ? styles.deliveryStepConnectorDone : null]} />
+                      ) : null}
+                    </React.Fragment>
+                  );
+                })}
+              </View>
+            </View>
+          ) : null}
+          {isPostPaymentFlow ? (
+            <View style={styles.photoGallerySection}>
+              <AppText style={styles.deliveryTitle}>기사 사진</AppText>
+
+              <View style={styles.photoGroupWrap}>
+                <AppText style={styles.photoGroupTitle}>상차 사진</AppText>
+                {loadingPhotos.length > 0 ? (
+                  <View style={styles.photoThumbRow}>
+                    {loadingPhotos.map((uri, index) => (
+                      <View key={`loading-${uri}-${index}`} style={styles.photoThumb}>
+                        <Ionicons name="image-outline" size={20} color={theme.colors.brandPrimary} />
+                        <AppText style={styles.photoThumbIndex}>#{index + 1}</AppText>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <AppText style={styles.photoWaitText}>사진 대기 중</AppText>
+                )}
+              </View>
+
+              <View style={styles.photoGroupWrap}>
+                <AppText style={styles.photoGroupTitle}>하차 사진</AppText>
+                {unloadingPhotos.length > 0 ? (
+                  <View style={styles.photoThumbRow}>
+                    {unloadingPhotos.map((uri, index) => (
+                      <View key={`unloading-${uri}-${index}`} style={styles.photoThumb}>
+                        <Ionicons name="image-outline" size={20} color={theme.colors.brandPrimary} />
+                        <AppText style={styles.photoThumbIndex}>#{index + 1}</AppText>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <AppText style={styles.photoWaitText}>사진 대기 중</AppText>
+                )}
+              </View>
+            </View>
+          ) : null}
           <RouteFlowCard coreSummary={view.coreSummary} />
           <SummaryCard view={view} />
           <SpecificationArchive view={view} />

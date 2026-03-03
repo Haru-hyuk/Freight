@@ -32,6 +32,7 @@ import {
   parseMatchPositiveInt,
   parseSingleMatchResponse,
 } from "./shipper-match-parser";
+import type { LoadPlanResponse, TruckSpecReferenceResponse } from "@/shared/api/generated/schemas";
 
 export type MatchResponseItem = {
   matchId: number;
@@ -42,6 +43,10 @@ export type MatchResponseItem = {
   acceptedAt?: string;
   createdAt?: string;
   updatedAt?: string;
+  loadPlan?: LoadPlanResponse;
+  truckSpec?: TruckSpecReferenceResponse;
+  loadingPhotos?: string[];
+  unloadingPhotos?: string[];
 };
 
 export type ShipperMatchItem = MatchResponseItem & {

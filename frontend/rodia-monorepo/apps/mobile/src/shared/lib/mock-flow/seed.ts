@@ -5,6 +5,8 @@ import type {
   QuoteDetailResponse,
   QuoteStopResponse,
 } from "@/shared/api/generated/schemas";
+import type { LoadPlanResponse } from "@/shared/api/generated/schemas/loadPlanResponse";
+import type { TruckSpecReferenceResponse } from "@/shared/api/generated/schemas/truckSpecReferenceResponse";
 
 import type { MockFlowMatchStatus, MockFlowQuoteStatus, MockFlowSeed } from "./types";
 
@@ -57,6 +59,11 @@ type SeedCounterOfferInput = {
   status: string;
   createdAt: string;
   respondedAt?: string;
+};
+
+type MatchWithLoadData = MatchResponse & {
+  loadPlan?: LoadPlanResponse;
+  truckSpec?: TruckSpecReferenceResponse;
 };
 
 function toPositiveInt(value: unknown): number {
@@ -490,9 +497,9 @@ const MATCH_SEED_INPUTS: SeedMatchInput[] = [
     driverId: 21,
     accepted: true,
     status: "READY",
-    acceptedAt: "2026-02-19T07:35:00.000Z",
+    acceptedAt: new Date().toISOString(),
     createdAt: "2026-02-19T07:25:00.000Z",
-    updatedAt: "2026-02-19T07:35:00.000Z",
+    updatedAt: new Date().toISOString(),
   },
   {
     matchId: 7004,
@@ -556,10 +563,96 @@ const COUNTER_OFFER_SEED_INPUTS: SeedCounterOfferInput[] = [
   },
 ];
 
+// 3D 적재 시뮬레이션 데모용 적재 계획 (match 7003 / 산업 자재 오더)
+const DEMO_TRUCK_SPEC: TruckSpecReferenceResponse = {
+  vehicleType: "TON_5",
+  vehicleTypeKr: "5톤",
+  vehicleBodyType: "CARGO",
+  categoryKr: "카고",
+  cargoLengthCm: 450,
+  cargoWidthCm: 230,
+  cargoHeightCm: 240,
+  maxWeight: 5000,
+};
+
+const DEMO_LOAD_PLAN: LoadPlanResponse = {
+  placements: [
+    // 박스 1: 좌전방 하단 — (x=0, y=0, z=0), 100×100×100 cm
+    {
+      id: "cargo-001",
+      x: 0,
+      y: 0,
+      z: 0,
+      width: 100,
+      height: 100,
+      length: 100,
+      weight: 120,
+      stopOrder: 1,
+      stackable: true,
+      fragile: false,
+    },
+    // 박스 2: 박스1 우측 옆 — (x=110, y=0, z=0), 100×100×100 cm
+    {
+      id: "cargo-002",
+      x: 110,
+      y: 0,
+      z: 0,
+      width: 100,
+      height: 100,
+      length: 100,
+      weight: 115,
+      stopOrder: 2,
+      stackable: true,
+      fragile: false,
+    },
+    // 박스 3: 박스1 뒤쪽 — (x=0, y=0, z=110), 100×100×100 cm
+    {
+      id: "cargo-003",
+      x: 0,
+      y: 0,
+      z: 110,
+      width: 100,
+      height: 100,
+      length: 100,
+      weight: 130,
+      stopOrder: 3,
+      stackable: false,
+      fragile: true,
+    },
+    // 박스 4: 박스1 위에 2단 적재 — (x=0, y=110, z=0), 100×80×100 cm
+    {
+      id: "cargo-004",
+      x: 0,
+      y: 110,
+      z: 0,
+      width: 100,
+      height: 80,
+      length: 100,
+      weight: 90,
+      stopOrder: 1,
+      stackable: false,
+      fragile: false,
+    },
+  ],
+  stats: {
+    placedCount: 4,
+    unplacedCount: 0,
+    utilization: 0.38,
+    totalWeight: 455,
+  },
+};
+
 export function createMockFlowSeed(): MockFlowSeed {
   const quotes = QUOTE_SEED_INPUTS.map((input) => buildSeedQuote(input));
   const matches = MATCH_SEED_INPUTS.map((input) => buildSeedMatch(input));
   const counterOffers = COUNTER_OFFER_SEED_INPUTS.map((input) => buildSeedCounterOffer(input));
+
+  // matches 배열에 담겨 반환되는 동일 인스턴스에 주입해야 mock store에서도 그대로 참조된다.
+  const match7003 = matches.find((m) => m.matchId === 7003) as MatchWithLoadData | undefined;
+  if (match7003) {
+    match7003.loadPlan = DEMO_LOAD_PLAN;
+    match7003.truckSpec = DEMO_TRUCK_SPEC;
+  }
 
   return {
     quotes,
