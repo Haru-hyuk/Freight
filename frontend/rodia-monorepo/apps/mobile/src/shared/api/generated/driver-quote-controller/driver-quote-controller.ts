@@ -4,6 +4,10 @@
  * OpenAPI definition
  * OpenAPI spec version: v0
  */
+import type {
+  DriverQuoteSummaryResponse
+} from '.././schemas';
+
 import { customInstance } from '../../orval/custom-instance';
 
 
@@ -11,9 +15,8 @@ import { customInstance } from '../../orval/custom-instance';
   export const getQuoteSummary = (
     quoteId: number,
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/driver/quotes/${quoteId}/summary`, method: 'GET',
-        responseType: 'blob'
+      return customInstance<DriverQuoteSummaryResponse>(
+      {url: `/api/driver/quotes/${quoteId}/summary`, method: 'GET'
     },
       );
     }

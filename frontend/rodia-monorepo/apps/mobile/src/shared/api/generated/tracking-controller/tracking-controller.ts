@@ -6,6 +6,9 @@
  */
 import type {
   GpsLogUpsertRequest,
+  GpsLogUpsertResponse,
+  TrackingResponse,
+  TrackingShareStateResponse,
   TrackingShareUpdateRequest
 } from '.././schemas';
 
@@ -17,11 +20,10 @@ import { customInstance } from '../../orval/custom-instance';
     matchId: number,
     gpsLogUpsertRequest: GpsLogUpsertRequest,
  ) => {
-      return customInstance<Blob>(
+      return customInstance<GpsLogUpsertResponse>(
       {url: `/api/driver/matches/${matchId}/gps`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
-      data: gpsLogUpsertRequest,
-        responseType: 'blob'
+      data: gpsLogUpsertRequest
     },
       );
     }
@@ -29,20 +31,18 @@ import { customInstance } from '../../orval/custom-instance';
     matchId: number,
     trackingShareUpdateRequest: TrackingShareUpdateRequest,
  ) => {
-      return customInstance<Blob>(
+      return customInstance<TrackingShareStateResponse>(
       {url: `/api/driver/matches/${matchId}/tracking-sharing`, method: 'PATCH',
       headers: {'Content-Type': 'application/json', },
-      data: trackingShareUpdateRequest,
-        responseType: 'blob'
+      data: trackingShareUpdateRequest
     },
       );
     }
   export const getShipperTracking = (
     matchId: number,
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/shipper/matches/${matchId}/tracking`, method: 'GET',
-        responseType: 'blob'
+      return customInstance<TrackingResponse>(
+      {url: `/api/shipper/matches/${matchId}/tracking`, method: 'GET'
     },
       );
     }

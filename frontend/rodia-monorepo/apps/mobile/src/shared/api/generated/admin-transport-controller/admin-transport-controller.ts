@@ -4,6 +4,15 @@
  * OpenAPI definition
  * OpenAPI spec version: v0
  */
+import type {
+  Match200,
+  Matches200Item,
+  Payments200Item,
+  Quote200,
+  Quotes200Item,
+  Settlements200Item
+} from '.././schemas';
+
 import { customInstance } from '../../orval/custom-instance';
 
 
@@ -11,54 +20,48 @@ import { customInstance } from '../../orval/custom-instance';
   export const settlements = (
     
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/admin/settlements`, method: 'GET',
-        responseType: 'blob'
+      return customInstance<Settlements200Item[]>(
+      {url: `/api/admin/settlements`, method: 'GET'
     },
       );
     }
   export const quotes = (
     
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/admin/quotes`, method: 'GET',
-        responseType: 'blob'
+      return customInstance<Quotes200Item[]>(
+      {url: `/api/admin/quotes`, method: 'GET'
     },
       );
     }
   export const quote = (
     quoteId: number,
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/admin/quotes/${quoteId}`, method: 'GET',
-        responseType: 'blob'
+      return customInstance<Quote200>(
+      {url: `/api/admin/quotes/${quoteId}`, method: 'GET'
     },
       );
     }
   export const payments = (
     
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/admin/payments`, method: 'GET',
-        responseType: 'blob'
+      return customInstance<Payments200Item[]>(
+      {url: `/api/admin/payments`, method: 'GET'
     },
       );
     }
   export const matches = (
     
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/admin/matches`, method: 'GET',
-        responseType: 'blob'
+      return customInstance<Matches200Item[]>(
+      {url: `/api/admin/matches`, method: 'GET'
     },
       );
     }
   export const match = (
     matchId: number,
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/admin/matches/${matchId}`, method: 'GET',
-        responseType: 'blob'
+      return customInstance<Match200>(
+      {url: `/api/admin/matches/${matchId}`, method: 'GET'
     },
       );
     }

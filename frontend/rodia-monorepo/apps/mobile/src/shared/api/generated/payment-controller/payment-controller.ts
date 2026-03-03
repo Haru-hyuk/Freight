@@ -7,7 +7,9 @@
 import type {
   GetByMatchIdParams,
   PaymentConfirmRequest,
-  PaymentPrepareRequest
+  PaymentPrepareRequest,
+  PaymentPrepareResponse,
+  PaymentResponse
 } from '.././schemas';
 
 import { customInstance } from '../../orval/custom-instance';
@@ -17,50 +19,45 @@ import { customInstance } from '../../orval/custom-instance';
   export const prepare = (
     paymentPrepareRequest: PaymentPrepareRequest,
  ) => {
-      return customInstance<Blob>(
+      return customInstance<PaymentPrepareResponse>(
       {url: `/api/shipper/payments/prepare`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
-      data: paymentPrepareRequest,
-        responseType: 'blob'
+      data: paymentPrepareRequest
     },
       );
     }
   export const confirm = (
     paymentConfirmRequest: PaymentConfirmRequest,
  ) => {
-      return customInstance<Blob>(
+      return customInstance<PaymentResponse>(
       {url: `/api/shipper/payments/confirm`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
-      data: paymentConfirmRequest,
-        responseType: 'blob'
+      data: paymentConfirmRequest
     },
       );
     }
   export const getByMatchId = (
     params: GetByMatchIdParams,
  ) => {
-      return customInstance<Blob>(
+      return customInstance<PaymentResponse[]>(
       {url: `/api/shipper/payments`, method: 'GET',
-        params,
-        responseType: 'blob'
+        params
     },
       );
     }
   export const getById = (
     paymentId: number,
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/shipper/payments/${paymentId}`, method: 'GET',
-        responseType: 'blob'
+      return customInstance<PaymentResponse>(
+      {url: `/api/shipper/payments/${paymentId}`, method: 'GET'
     },
       );
     }
   export const getMyPayments = (
     
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/shipper/payments/me`, method: 'GET',
-        responseType: 'blob'
+      return customInstance<PaymentResponse[]>(
+      {url: `/api/shipper/payments/me`, method: 'GET'
     },
       );
     }

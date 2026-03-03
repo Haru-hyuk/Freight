@@ -6,10 +6,14 @@
  */
 import type {
   DriverSignupRequest,
+  DriverSignupResponse,
   LoginRequest,
+  MeResponse,
   MeUpdateRequest,
   RefreshTokenRequest,
-  ShipperSignupRequest
+  ShipperSignupRequest,
+  ShipperSignupResponse,
+  TokenResponse
 } from '.././schemas';
 
 import { customInstance } from '../../orval/custom-instance';
@@ -19,64 +23,58 @@ import { customInstance } from '../../orval/custom-instance';
   export const me = (
     
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/auth/me`, method: 'GET',
-        responseType: 'blob'
+      return customInstance<MeResponse>(
+      {url: `/api/auth/me`, method: 'GET'
     },
       );
     }
   export const putMe = (
     meUpdateRequest: MeUpdateRequest,
  ) => {
-      return customInstance<Blob>(
+      return customInstance<MeResponse>(
       {url: `/api/auth/me`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
-      data: meUpdateRequest,
-        responseType: 'blob'
+      data: meUpdateRequest
     },
       );
     }
   export const patchMe = (
     meUpdateRequest: MeUpdateRequest,
  ) => {
-      return customInstance<Blob>(
+      return customInstance<MeResponse>(
       {url: `/api/auth/me`, method: 'PATCH',
       headers: {'Content-Type': 'application/json', },
-      data: meUpdateRequest,
-        responseType: 'blob'
+      data: meUpdateRequest
     },
       );
     }
   export const shipperSignup = (
     shipperSignupRequest: ShipperSignupRequest,
  ) => {
-      return customInstance<Blob>(
+      return customInstance<ShipperSignupResponse>(
       {url: `/api/auth/shipper/signup`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
-      data: shipperSignupRequest,
-        responseType: 'blob'
+      data: shipperSignupRequest
     },
       );
     }
   export const shipperLogin = (
     loginRequest: LoginRequest,
  ) => {
-      return customInstance<Blob>(
+      return customInstance<TokenResponse>(
       {url: `/api/auth/shipper/login`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
-      data: loginRequest,
-        responseType: 'blob'
+      data: loginRequest
     },
       );
     }
   export const refresh = (
     refreshTokenRequest: RefreshTokenRequest,
  ) => {
-      return customInstance<Blob>(
+      return customInstance<TokenResponse>(
       {url: `/api/auth/refresh`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
-      data: refreshTokenRequest,
-        responseType: 'blob'
+      data: refreshTokenRequest
     },
       );
     }
@@ -91,33 +89,30 @@ import { customInstance } from '../../orval/custom-instance';
   export const driverSignup = (
     driverSignupRequest: DriverSignupRequest,
  ) => {
-      return customInstance<Blob>(
+      return customInstance<DriverSignupResponse>(
       {url: `/api/auth/driver/signup`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
-      data: driverSignupRequest,
-        responseType: 'blob'
+      data: driverSignupRequest
     },
       );
     }
   export const driverLogin = (
     loginRequest: LoginRequest,
  ) => {
-      return customInstance<Blob>(
+      return customInstance<TokenResponse>(
       {url: `/api/auth/driver/login`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
-      data: loginRequest,
-        responseType: 'blob'
+      data: loginRequest
     },
       );
     }
   export const adminLogin = (
     loginRequest: LoginRequest,
  ) => {
-      return customInstance<Blob>(
+      return customInstance<TokenResponse>(
       {url: `/api/auth/admin/login`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
-      data: loginRequest,
-        responseType: 'blob'
+      data: loginRequest
     },
       );
     }

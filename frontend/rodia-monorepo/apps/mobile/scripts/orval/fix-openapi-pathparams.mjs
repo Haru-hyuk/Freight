@@ -7,17 +7,12 @@ import { config } from "dotenv";
 config({ path: path.resolve(process.cwd(), ".env.local") });
 config({ path: path.resolve(process.cwd(), ".env") });
 
-// Examples:
-// ORVAL_OPENAPI_SOURCE=http://localhost:8080/api-docs
-// ORVAL_OPENAPI_SOURCE=http://10.0.2.2:8080/api-docs
-// ORVAL_OPENAPI_SOURCE=http://15.x.x.x:8080/api-docs
-
 const DEFAULT_SOURCE =
   process.env.ORVAL_OPENAPI_SOURCE ||
   process.env.OPENAPI_SOURCE ||
   "http://localhost:8080/api-docs";
 
-const CWD = process.cwd(); // expected: apps/mobile
+const CWD = process.cwd();
 const ORVAL_DIR = path.resolve(CWD, ".orval");
 
 const RAW_PATH =
@@ -43,7 +38,6 @@ function safeWriteJson(filePath, json) {
 }
 
 function extractPathParams(openapiPath) {
-  // e.g. "/api/shipper/quotes/{quoteId}/stops/{stopId}" -> ["quoteId","stopId"]
   const matches = openapiPath.matchAll(/\{([^}]+)\}/g);
   const params = [];
   for (const m of matches) {
@@ -54,7 +48,6 @@ function extractPathParams(openapiPath) {
 }
 
 function toParamSchema(existingSchema) {
-  // keep existing schema if provided, else default to string
   if (existingSchema && typeof existingSchema === "object") return existingSchema;
   return { type: "string" };
 }
@@ -114,7 +107,6 @@ function fixOpenApiPathParams(openapiJson) {
     const paramNames = extractPathParams(p);
     if (paramNames.length === 0) continue;
 
-    // If pathItem.parameters already defines a schema for some params, reuse schema when adding to ops.
     const pathLevelParams = normalizeParametersArray(pathItem?.parameters);
     const schemaByName = new Map();
     for (const pp of pathLevelParams) {
@@ -159,7 +151,6 @@ async function main() {
 
   let rawJson = null;
 
-  // 1) Try fetch -> raw
   try {
     rawJson = await fetchJsonWithTimeout(DEFAULT_SOURCE, FETCH_TIMEOUT_MS);
     safeWriteJson(RAW_PATH, rawJson);
@@ -185,11 +176,18 @@ async function main() {
     }
   }
 
-  // 2) raw -> fixed (always attempt)
+  // 1. Path Params Fix
   const { fixed, added } = fixOpenApiPathParams(rawJson ?? {});
-  safeWriteJson(FIXED_PATH, fixed);
+  
+  // 2. [수정 포인트] Blob 버그 원인인 */* Content-Type을 application/json으로 강제 일괄 치환
+  let fixedString = JSON.stringify(fixed);
+  fixedString = fixedString.replace(/"\*\/\*"/g, '"application/json"');
+  const finalFixedJson = JSON.parse(fixedString);
+
+  safeWriteJson(FIXED_PATH, finalFixedJson);
 
   console.log(`[orval:fetch] added Path Params=${added}`);
+  console.log(`[orval:fetch] patched */* to application/json`);
 }
 
 main().catch((e) => {

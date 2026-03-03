@@ -4,6 +4,10 @@
  * OpenAPI definition
  * OpenAPI spec version: v0
  */
+import type {
+  Health2200
+} from '.././schemas';
+
 import { customInstance } from '../../orval/custom-instance';
 
 
@@ -11,9 +15,8 @@ import { customInstance } from '../../orval/custom-instance';
   export const health2 = (
     
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/health`, method: 'GET',
-        responseType: 'blob'
+      return customInstance<Health2200>(
+      {url: `/api/health`, method: 'GET'
     },
       );
     }
