@@ -1,5 +1,5 @@
-﻿(globalThis as any).Buffer ??= require("buffer").Buffer;
-import { registerRootComponent } from 'expo';
-import App from '../App';
+import { Redirect } from "expo-router";
 
-registerRootComponent(App);
+export default function IndexRoute() {
+  return <Redirect href="/(auth)/login" />;
+}
