@@ -177,6 +177,7 @@ export function getDriverUiStateFromRawStatus(rawStatus: string): DriverUiState 
     .replace(/\s+/g, "_")
     .replace(/-/g, "_");
 
+  if (token === "OPEN") return DRIVER_UI_STATE.READY_TO_ACCEPT;
   if (token === "NEGOTIATING") return DRIVER_UI_STATE.NEGOTIATING;
   if (token === "ASSIGNED") return DRIVER_UI_STATE.ASSIGNED;
   if (token === "PICKUP") return DRIVER_UI_STATE.PICKUP_IN_PROGRESS;

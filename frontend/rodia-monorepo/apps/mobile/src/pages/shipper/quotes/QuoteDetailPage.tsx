@@ -1,5 +1,5 @@
 import React from "react";
-import { Alert, InteractionManager, LayoutAnimation, Pressable, StyleSheet, View } from "react-native";
+import { Alert, Image, InteractionManager, LayoutAnimation, Pressable, StyleSheet, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
@@ -22,6 +22,10 @@ import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
 import { isMockMode } from "@/shared/lib/config/env";
 import { formatDistance, formatKrw } from "@/shared/lib/format/display";
 import { processMockFlowPayment } from "@/shared/lib/mock-flow";
+import {
+  confirm as confirmPayment,
+  prepare as preparePayment,
+} from "@/shared/api/generated/payment-controller/payment-controller";
 import {
   BACKEND_STATUS,
   CUSTOMER_UI_STATE,
@@ -864,6 +868,36 @@ function SpecificationArchive({ view }: { view: QuoteDetailView }) {
   );
 }
 
+function PhotoThumbShipper({
+  uri,
+  index,
+  styles,
+  theme,
+}: {
+  uri: string;
+  index: number;
+  styles: ReturnType<typeof useStyles>;
+  theme: ReturnType<typeof useAppTheme>;
+}) {
+  const [failed, setFailed] = React.useState(false);
+  if (!failed && uri.startsWith("http")) {
+    return (
+      <Image
+        source={{ uri }}
+        style={[styles.photoThumb, { overflow: "hidden" }]}
+        resizeMode="cover"
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+  return (
+    <View style={styles.photoThumb}>
+      <Ionicons name="image-outline" size={20} color={theme.colors.brandPrimary} />
+      <AppText style={styles.photoThumbIndex}>#{index + 1}</AppText>
+    </View>
+  );
+}
+
 export default function QuoteDetailPage() {
   const styles = useStyles();
   const theme = useAppTheme();
@@ -1160,7 +1194,37 @@ export default function QuoteDetailPage() {
             return;
           }
 
-          Alert.alert("결제", "결제 플로우는 다음 단계에서 연결됩니다.");
+          // Real server payment: prepare → confirm
+          const paymentAmount = view.actionsContext.finalPrice;
+          if (!(paymentAmount >= 100)) {
+            Alert.alert("결제 실패", "유효한 결제 금액이 없습니다. 견적 정보를 확인해 주세요.");
+            return;
+          }
+
+          // Step 1 — register payment intent, receive orderId
+          const prepared = (await preparePayment({
+            matchId: cancelTargetMatchId,
+            amount: paymentAmount,
+          })) as { orderId?: string; amount?: number };
+
+          const orderId = String(prepared?.orderId ?? "").trim();
+          if (!orderId) {
+            Alert.alert("결제 실패", "결제 준비에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+            return;
+          }
+
+          // Step 2 — confirm; paymentKey from PG SDK in production,
+          //           orderId is used as key in the current integration.
+          await confirmPayment({
+            paymentKey: orderId,
+            orderId,
+            amount: prepared?.amount ?? paymentAmount,
+          });
+
+          // Flush any stale in-flight cache so the next fetch reads the updated PICKUP state.
+          refreshInFlightRef.current = null;
+          await refreshQuoteAndMatchData();
+          Alert.alert("결제 완료", "결제가 완료되어 배차 상태가 업데이트되었습니다.");
         } catch (error) {
           Alert.alert("결제 실패", readApiErrorMessage(error));
         } finally {
@@ -1169,7 +1233,7 @@ export default function QuoteDetailPage() {
         return;
       }
     },
-    [cancelTargetMatchId, isMatchSubmitting, refreshQuoteAndMatchData, resolvePendingCounterOfferId, router]
+    [cancelTargetMatchId, isMatchSubmitting, refreshQuoteAndMatchData, resolvePendingCounterOfferId, router, view.actionsContext.finalPrice]
   );
 
   const handlePolicyCancelRequest = React.useCallback(
@@ -1405,10 +1469,7 @@ export default function QuoteDetailPage() {
                 {loadingPhotos.length > 0 ? (
                   <View style={styles.photoThumbRow}>
                     {loadingPhotos.map((uri, index) => (
-                      <View key={`loading-${uri}-${index}`} style={styles.photoThumb}>
-                        <Ionicons name="image-outline" size={20} color={theme.colors.brandPrimary} />
-                        <AppText style={styles.photoThumbIndex}>#{index + 1}</AppText>
-                      </View>
+                      <PhotoThumbShipper key={`loading-${uri}-${index}`} uri={uri} index={index} styles={styles} theme={theme} />
                     ))}
                   </View>
                 ) : (
@@ -1421,10 +1482,7 @@ export default function QuoteDetailPage() {
                 {unloadingPhotos.length > 0 ? (
                   <View style={styles.photoThumbRow}>
                     {unloadingPhotos.map((uri, index) => (
-                      <View key={`unloading-${uri}-${index}`} style={styles.photoThumb}>
-                        <Ionicons name="image-outline" size={20} color={theme.colors.brandPrimary} />
-                        <AppText style={styles.photoThumbIndex}>#{index + 1}</AppText>
-                      </View>
+                      <PhotoThumbShipper key={`unloading-${uri}-${index}`} uri={uri} index={index} styles={styles} theme={theme} />
                     ))}
                   </View>
                 ) : (

@@ -820,12 +820,23 @@ export function DriverOrdersBoard({
         return;
       }
 
-      const { id } = buildDriverOrderDetailParams(card);
-      const source = resolvedActiveTab === "market" ? "market" : assignedOnly ? "run" : "my";
-      router.push({
-        pathname: assignedOnly ? "/(driver)/(stack)/run/[id]" : "/(driver)/(stack)/order/[id]",
-        params: { id, source },
-      });
+      if (resolvedActiveTab === "market") {
+        router.push({
+          pathname: "/(driver)/(stack)/order/[id]",
+          params: { id: String(card.matchId), source: "market" },
+        });
+      } else {
+        const detailParams = buildDriverOrderDetailParams(card);
+        const source = assignedOnly ? "run" : "my";
+        const pathname = source === "run" ? "/(driver)/(stack)/run/[id]" : "/(driver)/(stack)/order/[id]";
+        router.push({
+          pathname,
+          params: {
+            ...detailParams,
+            source,
+          },
+        });
+      }
 
       setTimeout(() => {
         cardNavLockRef.current = false;

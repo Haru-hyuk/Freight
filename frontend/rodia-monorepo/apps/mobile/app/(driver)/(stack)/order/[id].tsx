@@ -4,13 +4,21 @@ import { Canvas } from "@react-three/fiber/native";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, StyleSheet, View } from "react-native";
+import { ActivityIndicator, Alert, Image, Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as THREE from "three";
 
-import type { LoadPlanResponse, Placement, TruckSpecReferenceResponse } from "@/shared/api/generated/schemas";
+import { DriverOrderActionBar } from "@/features/driver-orders/ui/detail/DriverOrderActionBar";
+import { DriverOrderDetailHeader } from "@/features/driver-orders/ui/detail/DriverOrderDetailHeader";
+import { DriverOrderNegotiatingCard } from "@/features/driver-orders/ui/detail/DriverOrderNegotiatingCard";
+import { DriverOrderPaymentPendingCard } from "@/features/driver-orders/ui/detail/DriverOrderPaymentPendingCard";
+import { acceptDriverMatch, postCounterOffer, uploadImage, type DriverPhotoUploadType } from "@/features/matching/api";
 import type { ParsedMatchResponseItem } from "@/features/matching/api/shipper-match-parser";
 import { useMatchDetail } from "@/features/matching/model/useMatchDetail";
+import CounterOfferModal, { type CounterOfferSubmitPayload } from "@/features/matching/ui/CounterOfferModal";
+import type { QuoteDetailResponse } from "@/entities/quote/model/quote.types";
+import type { LoadPlanResponse, Placement, TruckSpecReferenceResponse } from "@/shared/api/generated/schemas";
+import { confirmLoading, confirmUnloading, startDriving } from "@/shared/lib/mock-flow";
 import {
   DRIVER_CTA_ID,
   DRIVER_UI_STATE,
@@ -18,7 +26,6 @@ import {
   getDriverUiStateFromRawStatus,
   type DriverUiState,
 } from "@/shared/lib/policy";
-import { confirmLoading, confirmUnloading, startDriving } from "@/shared/lib/mock-flow";
 import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppButton } from "@/shared/ui/kit/AppButton";
@@ -26,15 +33,13 @@ import { AppCard } from "@/shared/ui/kit/AppCard";
 import { AppErrorState } from "@/shared/ui/kit/AppErrorState";
 import { AppSpinner } from "@/shared/ui/kit/AppSpinner";
 import { AppText } from "@/shared/ui/kit/AppText";
-import { DriverOrderDetailHeader } from "@/features/driver-orders/ui/detail/DriverOrderDetailHeader";
-import { DriverOrderNegotiatingCard } from "@/features/driver-orders/ui/detail/DriverOrderNegotiatingCard";
-import { DriverOrderPaymentPendingCard } from "@/features/driver-orders/ui/detail/DriverOrderPaymentPendingCard";
 import { PageScaffold } from "@/widgets/layout/PageScaffold";
 
 const SCALE = 0.01;
 
 type DriverOrderRouteParams = {
   id?: string | string[];
+  source?: string | string[];
 };
 
 type MatchWithWorkflowPayload = ParsedMatchResponseItem & {
@@ -55,6 +60,11 @@ function parsePositiveRouteId(rawId: string | string[] | undefined): number {
   const candidate = Array.isArray(rawId) ? rawId[0] : rawId;
   const parsed = Number(candidate);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function parseRouteSource(rawSource: string | string[] | undefined): string {
+  const candidate = Array.isArray(rawSource) ? rawSource[0] : rawSource;
+  return String(candidate ?? "").trim().toLowerCase();
 }
 
 function resolveWorkflowStepIndex(uiState: DriverUiState): number {
@@ -195,29 +205,53 @@ const WorkflowStepper = ({ currentStep }: { currentStep: number }) => {
   );
 };
 
+const PhotoThumb = ({ uri, index }: { uri: string; index: number }) => {
+  const theme = useAppTheme();
+  const [failed, setFailed] = useState(false);
+  if (!failed && uri.startsWith("http")) {
+    return (
+      <Image
+        source={{ uri }}
+        style={wfStyles.photoThumb}
+        resizeMode="cover"
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+  return (
+    <View style={wfStyles.photoThumb}>
+      <Ionicons name="image-outline" size={20} color={theme.colors.brandPrimary} />
+      <AppText variant="caption" color={theme.colors.textMuted}>
+        #{index + 1}
+      </AppText>
+    </View>
+  );
+};
+
 const PhotoGrid = ({
   photos,
   onAdd,
   readOnly = false,
+  isUploading = false,
 }: {
   photos: string[];
   onAdd?: () => void;
   readOnly?: boolean;
+  isUploading?: boolean;
 }) => {
   const theme = useAppTheme();
   return (
     <View style={wfStyles.photoRow}>
-      {photos.map((_, idx) => (
-        <View key={idx} style={wfStyles.photoThumb}>
-          <Ionicons name="image-outline" size={20} color={theme.colors.brandPrimary} />
-          <AppText variant="caption" color={theme.colors.textMuted}>
-            #{idx + 1}
-          </AppText>
-        </View>
+      {photos.map((uri, idx) => (
+        <PhotoThumb key={`${uri}-${idx}`} uri={uri} index={idx} />
       ))}
       {!readOnly ? (
-        <Pressable style={wfStyles.photoAddBtn} onPress={onAdd}>
-          <Ionicons name="add" size={22} color={theme.colors.brandPrimary} />
+        <Pressable style={wfStyles.photoAddBtn} onPress={onAdd} disabled={isUploading}>
+          {isUploading ? (
+            <ActivityIndicator size="small" color={theme.colors.brandPrimary} />
+          ) : (
+            <Ionicons name="add" size={22} color={theme.colors.brandPrimary} />
+          )}
         </Pressable>
       ) : null}
     </View>
@@ -263,6 +297,7 @@ const wfStyles = {
     borderWidth: 1,
     borderColor: "#BFDBFE",
     gap: 2,
+    overflow: "hidden" as const,
   },
   photoAddBtn: {
     width: 64,
@@ -276,6 +311,236 @@ const wfStyles = {
     borderStyle: "dashed" as const,
   },
 } as const;
+
+// ─── Quote mode: Route & LIFO sequence card ──────────────────────────────────
+
+type RouteStop = { seq: number; label: string; address: string };
+
+function buildRouteStops(
+  originAddress: string | undefined,
+  destinationAddress: string | undefined,
+  stops: Array<{ seq: number; address: string }> | undefined
+): RouteStop[] {
+  const result: RouteStop[] = [];
+  if (originAddress) result.push({ seq: 0, label: "상차지", address: originAddress });
+  const sorted = [...(stops ?? [])].sort((a, b) => a.seq - b.seq);
+  sorted.forEach((s, i) => result.push({ seq: s.seq, label: `경유 ${i + 1}`, address: s.address }));
+  if (destinationAddress) result.push({ seq: 9999, label: "하차지", address: destinationAddress });
+  return result;
+}
+
+const qStyles = {
+  card: { padding: 16, gap: 12 } as const,
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: "800" as const,
+    letterSpacing: 0.4,
+    textTransform: "uppercase" as const,
+    color: "#94A3B8",
+    marginBottom: 2,
+  },
+  routeItem: {
+    flexDirection: "row" as const,
+    alignItems: "stretch" as const,
+    gap: 10,
+  },
+  routeRail: {
+    width: 18,
+    alignItems: "center" as const,
+  },
+  routeDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "#FF6A00",
+    marginTop: 5,
+    flexShrink: 0,
+  },
+  routeDotWaypoint: {
+    backgroundColor: "#94A3B8",
+  },
+  routeLine: {
+    width: 2,
+    flex: 1,
+    marginTop: 3,
+    backgroundColor: "#E2E8F0",
+  },
+  routeBody: {
+    flex: 1,
+    paddingBottom: 10,
+    gap: 2,
+  },
+  routeTypeLabel: {
+    fontSize: 11,
+    fontWeight: "800" as const,
+    color: "#94A3B8",
+  },
+  routeAddress: {
+    fontSize: 14,
+    fontWeight: "900" as const,
+    color: "#0F172A",
+  },
+  divider: {
+    height: 1,
+    backgroundColor: "#F1F5F9",
+  },
+  lifoBanner: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 6,
+    backgroundColor: "#FFF7ED",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  lifoBannerText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "700" as const,
+    color: "#C2410C",
+  },
+  seqRow: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 8,
+    paddingVertical: 5,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+  },
+  seqBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "#FF6A00",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    flexShrink: 0,
+  },
+  seqBadgeText: {
+    fontSize: 11,
+    fontWeight: "900" as const,
+    color: "#FFFFFF",
+  },
+  seqInfo: {
+    flex: 1,
+    gap: 1,
+  },
+  seqCargoLabel: {
+    fontSize: 13,
+    fontWeight: "800" as const,
+    color: "#0F172A",
+  },
+  seqDimText: {
+    fontSize: 11,
+    fontWeight: "700" as const,
+    color: "#64748B",
+  },
+  seqUnloadTag: {
+    borderRadius: 4,
+    backgroundColor: "#EFF6FF",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    flexShrink: 0,
+  },
+  seqUnloadTagText: {
+    fontSize: 10,
+    fontWeight: "800" as const,
+    color: "#3B82F6",
+  },
+} as const;
+
+const QuoteModeRouteCard = ({
+  quote,
+  placements,
+}: {
+  quote: QuoteDetailResponse | null;
+  placements: Placement[];
+}) => {
+  const theme = useAppTheme();
+  const routeStops = buildRouteStops(
+    quote?.originAddress,
+    quote?.destinationAddress,
+    quote?.stops
+  );
+
+  // Sort by stopOrder ascending = loading order; LIFO unload = reversed
+  const sortedByLoad = [...placements].sort(
+    (a, b) => (a.stopOrder ?? 0) - (b.stopOrder ?? 0)
+  );
+  const totalCount = sortedByLoad.length;
+
+  return (
+    <AppCard style={qStyles.card}>
+      {/* Route sequence */}
+      {routeStops.length > 0 ? (
+        <>
+          <AppText variant="heading" weight="bold">운송 경로</AppText>
+          {routeStops.map((stop, idx) => {
+            const isLast = idx === routeStops.length - 1;
+            const isWaypoint = stop.label.startsWith("경유");
+            return (
+              <View key={`stop-${idx}`} style={qStyles.routeItem}>
+                <View style={qStyles.routeRail}>
+                  <View style={[qStyles.routeDot, isWaypoint ? qStyles.routeDotWaypoint : null]} />
+                  {!isLast ? <View style={qStyles.routeLine} /> : null}
+                </View>
+                <View style={qStyles.routeBody}>
+                  <AppText style={qStyles.routeTypeLabel}>{stop.label}</AppText>
+                  <AppText style={qStyles.routeAddress}>{stop.address || "-"}</AppText>
+                </View>
+              </View>
+            );
+          })}
+          {sortedByLoad.length > 0 ? <View style={qStyles.divider} /> : null}
+        </>
+      ) : null}
+
+      {/* LIFO loading sequence */}
+      {sortedByLoad.length > 0 ? (
+        <>
+          <AppText variant="heading" weight="bold">적재 순서 (LIFO)</AppText>
+          <View style={qStyles.lifoBanner}>
+            <Ionicons name="information-circle-outline" size={15} color="#C2410C" />
+            <AppText style={qStyles.lifoBannerText}>
+              나중에 적재된 화물이 먼저 하차됩니다 (후입선출)
+            </AppText>
+          </View>
+          {sortedByLoad.map((p, idx) => {
+            // LIFO unload rank: last loaded (idx = totalCount-1) → unloaded 1st
+            const unloadRank = totalCount - idx;
+            return (
+              <View key={p.id ?? idx} style={qStyles.seqRow}>
+                <View style={qStyles.seqBadge}>
+                  <AppText style={qStyles.seqBadgeText}>{idx + 1}</AppText>
+                </View>
+                <View style={qStyles.seqInfo}>
+                  <AppText style={qStyles.seqCargoLabel}>화물 #{idx + 1}</AppText>
+                  <AppText style={qStyles.seqDimText}>
+                    {p.width ?? "-"}×{p.length ?? "-"}×{p.height ?? "-"} cm
+                    {p.x != null ? ` · (${p.x}, ${p.y ?? 0}, ${p.z ?? 0})` : ""}
+                  </AppText>
+                </View>
+                <View style={qStyles.seqUnloadTag}>
+                  <AppText style={qStyles.seqUnloadTagText}>
+                    {unloadRank === 1 ? "최초 하차" : `하차 ${unloadRank}번째`}
+                  </AppText>
+                </View>
+              </View>
+            );
+          })}
+        </>
+      ) : null}
+
+      {routeStops.length === 0 && sortedByLoad.length === 0 ? (
+        <AppText variant="caption" color={theme.colors.textMuted}>
+          경로 및 적재 정보를 불러오는 중입니다.
+        </AppText>
+      ) : null}
+    </AppCard>
+  );
+};
+
+// ─── Themed styles ────────────────────────────────────────────────────────────
 
 const useStyles = createThemedStyles((theme) => {
   const spacing = safeNumber(theme?.layout?.spacing?.base, 4);
@@ -384,6 +649,10 @@ export default function DriverOrderDetailRoute() {
   const [loadingPhotos, setLoadingPhotos] = useState<string[]>([]);
   const [unloadingPhotos, setUnloadingPhotos] = useState<string[]>([]);
   const [isBusy, setIsBusy] = useState(false);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [isOfferModalOpen, setIsOfferModalOpen] = useState(false);
+  const [isSubmittingOffer, setIsSubmittingOffer] = useState(false);
+  const [offerErrorMessage, setOfferErrorMessage] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -412,18 +681,49 @@ export default function DriverOrderDetailRoute() {
     [viewModel.refetch]
   );
 
-  const handleAddPhoto = useCallback(async (setter: React.Dispatch<React.SetStateAction<string[]>>) => {
+  const handleAddPhoto = useCallback(async (
+    photoType: DriverPhotoUploadType,
+    setter: React.Dispatch<React.SetStateAction<string[]>>
+  ) => {
+    if (matchId <= 0) {
+      Alert.alert("업로드 불가", "유효한 오더를 확인한 뒤 다시 시도해 주세요.");
+      return;
+    }
+
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert("권한 필요", "사진 보관함 접근 권한을 허용해 주세요.");
+      return;
+    }
+
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ["images"],
       allowsMultipleSelection: true,
       quality: 0.8,
     });
 
     if (!result.canceled && result.assets) {
-      const uris = result.assets.map((asset: { uri: string }) => asset.uri);
-      setter((prev) => [...prev, ...uris]);
+      setIsUploadingPhoto(true);
+      try {
+        const uploadedUrls: string[] = [];
+        for (const asset of result.assets) {
+          const localUri = typeof asset?.uri === "string" ? asset.uri.trim() : "";
+          if (!localUri) continue;
+          const remoteUrl = await uploadImage(matchId, localUri, photoType);
+          uploadedUrls.push(remoteUrl);
+        }
+        if (uploadedUrls.length > 0) {
+          setter((prev) => [...prev, ...uploadedUrls]);
+          // Background sync so the server reflects the new photos
+          void viewModel.refetch();
+        }
+      } catch {
+        Alert.alert("업로드 실패", "이미지 업로드에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+      } finally {
+        setIsUploadingPhoto(false);
+      }
     }
-  }, []);
+  }, [matchId]);
 
   useEffect(() => {
     const match = (viewModel.match as MatchWithWorkflowPayload | null) ?? null;
@@ -442,19 +742,72 @@ export default function DriverOrderDetailRoute() {
     </Pressable>
   );
 
+  const routeSource = parseRouteSource(params.source);
   const parsedMatch = (viewModel.match as MatchWithWorkflowPayload | null) ?? null;
-  const rawStatus = String(viewModel.quote?.status ?? parsedMatch?.status ?? "");
-  const uiState = getDriverUiStateFromRawStatus(rawStatus);
+  const quoteWithPlan = (viewModel.quote as (QuoteDetailResponse & {
+    loadPlan?: LoadPlanResponse;
+    truckSpec?: TruckSpecReferenceResponse;
+  }) | null) ?? null;
+  const hasAcceptedMatch = parsedMatch?.accepted === true;
+  const rawStatus = routeSource === "market" && !hasAcceptedMatch
+    ? "OPEN"
+    : String(viewModel.quote?.status ?? parsedMatch?.status ?? "");
+  const derivedUiState = getDriverUiStateFromRawStatus(rawStatus);
+  const uiState =
+    routeSource === "market" && !hasAcceptedMatch
+      ? DRIVER_UI_STATE.READY_TO_ACCEPT
+      : derivedUiState;
   const cta = getDriverCta(uiState, true);
-  const isQuoteState =
-    uiState === DRIVER_UI_STATE.READY_TO_ACCEPT || uiState === DRIVER_UI_STATE.NEGOTIATING;
-  const pageTitle = isQuoteState ? "견적 상세" : "오더 상세";
+  const isQuoteMode =
+    routeSource === "market" ||
+    uiState === DRIVER_UI_STATE.READY_TO_ACCEPT ||
+    uiState === DRIVER_UI_STATE.NEGOTIATING;
+  const pageTitle = isQuoteMode ? "견적 상세" : "오더 상세";
 
-  const loadPlan: LoadPlanResponse | undefined = parsedMatch?.loadPlan;
+  const loadPlan: LoadPlanResponse | undefined = parsedMatch?.loadPlan ?? quoteWithPlan?.loadPlan;
   const placements: Placement[] = Array.isArray(loadPlan?.placements) ? loadPlan.placements : [];
   const hasPlacementPayload = Array.isArray(loadPlan?.placements);
-  const truckSpec: TruckSpecReferenceResponse | undefined = parsedMatch?.truckSpec;
+  const truckSpec: TruckSpecReferenceResponse | undefined = parsedMatch?.truckSpec ?? quoteWithPlan?.truckSpec;
   const currentStep = resolveWorkflowStepIndex(uiState);
+
+  const handleAcceptMatch = useCallback(() => {
+    Alert.alert("배차 수락", "이 배차를 수락하시겠습니까?", [
+      { text: "취소", style: "cancel" },
+      {
+        text: "수락",
+        onPress: () => {
+          setIsBusy(true);
+          acceptDriverMatch(matchId)
+            .then(() => viewModel.refetch())
+            .catch(() => Alert.alert("배차 수락 실패", "잠시 후 다시 시도해 주세요."))
+            .finally(() => setIsBusy(false));
+        },
+      },
+    ]);
+  }, [matchId, viewModel.refetch]);
+
+  const handleNegotiate = useCallback(() => {
+    setOfferErrorMessage(null);
+    setIsOfferModalOpen(true);
+  }, []);
+
+  const handleOfferSubmit = useCallback(
+    async (payload: CounterOfferSubmitPayload) => {
+      if (isSubmittingOffer) return;
+      setIsSubmittingOffer(true);
+      setOfferErrorMessage(null);
+      try {
+        await postCounterOffer(matchId, { proposedPrice: payload.amount, message: payload.message });
+        setIsOfferModalOpen(false);
+        await viewModel.refetch();
+      } catch {
+        setOfferErrorMessage("운임 제안에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+      } finally {
+        setIsSubmittingOffer(false);
+      }
+    },
+    [isSubmittingOffer, matchId, viewModel.refetch]
+  );
 
   const handleStartDriving = useCallback(() => {
     Alert.alert("운행 시작", "운행을 시작하시겠습니까?", [
@@ -531,7 +884,11 @@ export default function DriverOrderDetailRoute() {
           <AppText style={themedStyles.workflowBodyText}>
             상차 사진을 등록한 뒤 하단의 상차 완료 버튼으로 다음 단계를 진행해 주세요.
           </AppText>
-          <PhotoGrid photos={loadingPhotos} onAdd={() => void handleAddPhoto(setLoadingPhotos)} />
+          <PhotoGrid
+            photos={loadingPhotos}
+            onAdd={() => void handleAddPhoto("PICKUP", setLoadingPhotos)}
+            isUploading={isUploadingPhoto}
+          />
         </AppCard>
       );
     }
@@ -547,7 +904,8 @@ export default function DriverOrderDetailRoute() {
           </AppText>
           <PhotoGrid
             photos={unloadingPhotos}
-            onAdd={() => void handleAddPhoto(setUnloadingPhotos)}
+            onAdd={() => void handleAddPhoto("DELIVERY", setUnloadingPhotos)}
+            isUploading={isUploadingPhoto}
           />
         </AppCard>
       );
@@ -575,6 +933,7 @@ export default function DriverOrderDetailRoute() {
     return null;
   }, [
     handleAddPhoto,
+    isUploadingPhoto,
     loadingPhotos,
     themedStyles.workflowBodyText,
     themedStyles.workflowCard,
@@ -679,8 +1038,9 @@ export default function DriverOrderDetailRoute() {
               title="상차 사진 등록"
               variant="secondary"
               style={themedStyles.actionBtn}
-              disabled={isBusy}
-              onPress={() => void handleAddPhoto(setLoadingPhotos)}
+              loading={isUploadingPhoto}
+              disabled={isBusy || isUploadingPhoto}
+              onPress={() => void handleAddPhoto("PICKUP", setLoadingPhotos)}
               textStyle={{ fontSize: 16, fontWeight: "900" }}
             />
             <AppButton
@@ -688,7 +1048,7 @@ export default function DriverOrderDetailRoute() {
               variant="primary"
               style={themedStyles.actionBtn}
               loading={isBusy}
-              disabled={isBusy || toPositiveInt(loadingPhotos.length) <= 0}
+              disabled={isBusy || isUploadingPhoto || toPositiveInt(loadingPhotos.length) <= 0}
               onPress={handleConfirmLoading}
               textStyle={{ fontSize: 16, fontWeight: "900" }}
             />
@@ -701,8 +1061,9 @@ export default function DriverOrderDetailRoute() {
               title="하차 사진 등록"
               variant="secondary"
               style={themedStyles.actionBtn}
-              disabled={isBusy}
-              onPress={() => void handleAddPhoto(setUnloadingPhotos)}
+              loading={isUploadingPhoto}
+              disabled={isBusy || isUploadingPhoto}
+              onPress={() => void handleAddPhoto("DELIVERY", setUnloadingPhotos)}
               textStyle={{ fontSize: 16, fontWeight: "900" }}
             />
             <AppButton
@@ -710,7 +1071,7 @@ export default function DriverOrderDetailRoute() {
               variant="primary"
               style={themedStyles.actionBtn}
               loading={isBusy}
-              disabled={isBusy || toPositiveInt(unloadingPhotos.length) <= 0}
+              disabled={isBusy || isUploadingPhoto || toPositiveInt(unloadingPhotos.length) <= 0}
               onPress={handleConfirmUnloading}
               textStyle={{ fontSize: 16, fontWeight: "900" }}
             />
@@ -719,8 +1080,19 @@ export default function DriverOrderDetailRoute() {
       </View>
     );
   };
+  const quotePrimaryCta = {
+    id: DRIVER_CTA_ID.ACCEPT_MATCH,
+    label: "배차 수락",
+    variant: "primary",
+    enabled: !isBusy,
+  } as const;
+  const negotiateSecondary = { label: "운임 제안", onPress: handleNegotiate };
+  const finalBottomBar = isQuoteMode ? (
+    <DriverOrderActionBar cta={quotePrimaryCta} onPress={handleAcceptMatch} secondaryCta={negotiateSecondary} />
+  ) : renderBottomBar();
 
   return (
+  <>
     <PageScaffold
       title={pageTitle}
       subtitle={`오더 #${matchId}`}
@@ -728,10 +1100,15 @@ export default function DriverOrderDetailRoute() {
       padding={20}
       onPressBack={() => router.back()}
       headerRight={headerRight}
-      bottomBar={renderBottomBar()}
+      bottomBar={finalBottomBar}
     >
       <View style={themedStyles.content}>
-        <WorkflowStepper currentStep={currentStep} />
+        {isQuoteMode ? null : <WorkflowStepper currentStep={currentStep} />}
+
+        {/* Quote mode: route + LIFO sequence card always visible before 3D sim */}
+        {isQuoteMode ? (
+          <QuoteModeRouteCard quote={viewModel.quote ?? (viewModel.match as any)} placements={placements} />
+        ) : null}
 
         {hasPlacementPayload ? <DriverOrderLoadSimulation placements={placements} truckSpec={truckSpec} /> : null}
 
@@ -780,9 +1157,18 @@ export default function DriverOrderDetailRoute() {
           </AppCard>
         ) : null}
 
-        {workflowPanel}
+        {isQuoteMode ? null : workflowPanel}
         {staticStatusCard}
       </View>
     </PageScaffold>
+
+    <CounterOfferModal
+      visible={isOfferModalOpen}
+      isSubmitting={isSubmittingOffer}
+      errorMessage={offerErrorMessage}
+      onClose={() => setIsOfferModalOpen(false)}
+      onSubmit={handleOfferSubmit}
+    />
+  </>
   );
 }
