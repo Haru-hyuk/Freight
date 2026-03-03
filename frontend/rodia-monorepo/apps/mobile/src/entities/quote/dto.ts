@@ -106,6 +106,11 @@ export type QuoteCreateRequestDto = {
 export type QuoteCreateResponseDto = {
   quoteId: number;
   quotePublicId?: string;
+  originLat?: number;
+  originLng?: number;
+  destinationLat?: number;
+  destinationLng?: number;
+  stops?: QuoteStopDto[] | null;
   basePrice?: number;
   distancePrice?: number;
   extraPrice?: number;

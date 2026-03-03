@@ -1390,20 +1390,21 @@ export default function QuoteDetailPage() {
 
   const runDelete = React.useCallback(async () => {
     if (isDeleting || isBlockedByFetchState) return;
-    if (actionQuoteId <= 0) {
-      Alert.alert("견적 삭제 실패", "유효한 견적 ID를 찾을 수 없습니다.");
+    const targetIdentifier = toText(view.quote.quotePublicId || quoteIdentifier || (actionQuoteId > 0 ? String(actionQuoteId) : ""));
+    if (!targetIdentifier) {
+      Alert.alert("견적 삭제 실패", "유효한 견적 식별자를 찾을 수 없습니다.");
       return;
     }
     try {
       setIsDeleting(true);
-      await deleteShipperQuote(actionQuoteId);
+      await deleteShipperQuote(targetIdentifier);
       router.replace("/(shipper)/quotes");
     } catch (error) {
       Alert.alert("견적 삭제 실패", readApiErrorMessage(error));
     } finally {
       setIsDeleting(false);
     }
-  }, [actionQuoteId, isBlockedByFetchState, isDeleting, router]);
+  }, [actionQuoteId, isBlockedByFetchState, isDeleting, quoteIdentifier, router, view.quote.quotePublicId]);
 
   const handlePressDelete = React.useCallback(() => {
     if (isBlockedByFetchState || isDeleting) return;

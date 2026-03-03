@@ -75,12 +75,18 @@ export type QuoteCreateRequest = {
   loadMethod: string;
   unloadMethod: string;
   checklistItems: QuoteChecklistItem[];
+  quoteItems?: QuoteItem[];
   stops?: QuoteStop[];
 };
 
 export type QuoteCreateResponse = {
   quoteId: number;
   quotePublicId?: string;
+  originLat?: number;
+  originLng?: number;
+  destinationLat?: number;
+  destinationLng?: number;
+  stops?: QuoteStop[];
   basePrice?: number;
   distancePrice?: number;
   extraPrice?: number;
