@@ -13,6 +13,13 @@ import {
   rejectShipperCounterOffer,
   type CounterOfferItem,
 } from "@/features/counter-offer/api";
+import {
+  confirmShipperPayment,
+  hasCompletedPaymentForMatch,
+  prepareShipperPayment,
+  type PrepareShipperPaymentResult,
+} from "@/features/payment/api/payment-api";
+import { TossPaymentModal } from "@/features/payment/ui/TossPaymentModal";
 import { deleteShipperQuote } from "@/features/quote/api";
 import { getQuoteActionPolicy, resolveTonePalette, type DecisionActionId } from "@/features/quote/model/quoteActionMatrix";
 import { useQuoteDetail, type QuoteActionsContext } from "@/features/quote/model/useQuoteDetail";
@@ -667,10 +674,16 @@ export default function QuoteDetailPage() {
   const theme = useAppTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const params = useLocalSearchParams<{ id?: string | string[]; status?: string | string[] }>();
+  const params = useLocalSearchParams<{ id?: string | string[]; status?: string | string[]; action?: string | string[] }>();
 
   const [isDeleting, setIsDeleting] = React.useState(false);
   const [isMatchSubmitting, setIsMatchSubmitting] = React.useState(false);
+  const [isPaying, setIsPaying] = React.useState(false);
+  const [hasCompletedPayment, setHasCompletedPayment] = React.useState(false);
+  const [paidMatchId, setPaidMatchId] = React.useState(0);
+  const [showPaymentModal, setShowPaymentModal] = React.useState(false);
+  const [pendingPaymentRequest, setPendingPaymentRequest] = React.useState<PrepareShipperPaymentResult | null>(null);
+  const [forcePaymentRequired, setForcePaymentRequired] = React.useState(false);
   const [matchSnapshot, setMatchSnapshot] = React.useState<MatchSnapshot>(EMPTY_MATCH_SNAPSHOT);
   const [matchHydrated, setMatchHydrated] = React.useState(false);
   const [bottomBarHeight, setBottomBarHeight] = React.useState(140);
@@ -696,25 +709,87 @@ export default function QuoteDetailPage() {
   const cancelTargetMatchId = React.useMemo(() => parsePositiveInt(activeQuoteMatch?.matchId), [activeQuoteMatch?.matchId]);
   const isCancelIdInvalid = hasActiveQuoteMatch && cancelTargetMatchId <= 0;
   const routeStatus = readRouteParamText(params.status);
+  const routeAction = readRouteParamText(params.action).toUpperCase();
+  const isRoutePayRequested = routeAction === "PAY";
+  const hasPendingCounterOffer = React.useMemo(
+    () => Boolean(pendingCounterOffer && isCounterOfferPending(pendingCounterOffer.status)),
+    [pendingCounterOffer]
+  );
+  const isAcceptedByMatch = React.useMemo(() => {
+    if (!activeQuoteMatch) return false;
+    if (activeQuoteMatch.accepted === true) return true;
+    return toText(activeQuoteMatch.acceptedAt).length > 0;
+  }, [activeQuoteMatch]);
 
   const effectiveQuoteStatus = React.useMemo(
     () => {
       const base = routeStatus || (matchHydrated ? view.quote.status : BACKEND_STATUS.UNKNOWN);
       const matchStatus = matchHydrated ? activeQuoteMatch?.status : null;
-      const matchAccepted = matchHydrated ? activeQuoteMatch?.accepted : null;
+      const matchAccepted = matchHydrated ? isAcceptedByMatch : null;
       return resolveEffectiveQuoteStatus(base, matchStatus, matchAccepted);
     },
-    [activeQuoteMatch?.accepted, activeQuoteMatch?.status, matchHydrated, routeStatus, view.quote.status]
+    [activeQuoteMatch?.status, isAcceptedByMatch, matchHydrated, routeStatus, view.quote.status]
   );
-  const effectivePolicy = React.useMemo(() => getQuoteActionPolicy(effectiveQuoteStatus), [effectiveQuoteStatus]);
+  const shouldForcePaymentRequired = React.useMemo(() => {
+    if (forcePaymentRequired || isRoutePayRequested) return true;
+    if (hasPendingCounterOffer) return false;
+    if (paidMatchId > 0 && paidMatchId === cancelTargetMatchId) return false;
+    if (hasCompletedPayment) return false;
+    if (!isAcceptedByMatch) return false;
+    const normalized = normalizeStatus(effectiveQuoteStatus);
+    return (
+      normalized === BACKEND_STATUS.OPEN ||
+      normalized === BACKEND_STATUS.UNKNOWN ||
+      normalized === BACKEND_STATUS.MATCHED ||
+      normalized === BACKEND_STATUS.READY
+    );
+  }, [cancelTargetMatchId, effectiveQuoteStatus, forcePaymentRequired, hasCompletedPayment, hasPendingCounterOffer, isAcceptedByMatch, isRoutePayRequested, paidMatchId]);
+  const effectivePolicy = React.useMemo(
+    () =>
+      shouldForcePaymentRequired
+        ? getQuoteActionPolicy("ASSIGNED")
+        : hasPendingCounterOffer
+          ? getQuoteActionPolicy("NEGOTIATING")
+          : getQuoteActionPolicy(effectiveQuoteStatus),
+    [effectiveQuoteStatus, hasPendingCounterOffer, shouldForcePaymentRequired]
+  );
   const effectiveActionsContext = React.useMemo(
     () => ({ ...view.actionsContext, status: effectiveQuoteStatus }),
     [effectiveQuoteStatus, view.actionsContext]
   );
   const quoteUiState = React.useMemo(
-    () => getCustomerUiStateFromBackendStatus(effectiveQuoteStatus),
-    [effectiveQuoteStatus]
+    () =>
+      shouldForcePaymentRequired
+        ? CUSTOMER_UI_STATE.PAYMENT_REQUIRED
+        : hasPendingCounterOffer
+          ? CUSTOMER_UI_STATE.NEGOTIATION_REQUIRED
+          : getCustomerUiStateFromBackendStatus(effectiveQuoteStatus),
+    [effectiveQuoteStatus, hasPendingCounterOffer, shouldForcePaymentRequired]
   );
+
+  React.useEffect(() => {
+    if (isRoutePayRequested) {
+      setForcePaymentRequired(true);
+    }
+  }, [isRoutePayRequested]);
+
+  React.useEffect(() => {
+    if (
+      quoteUiState === CUSTOMER_UI_STATE.TRANSIT_IN_PROGRESS ||
+      quoteUiState === CUSTOMER_UI_STATE.PICKUP_IN_PROGRESS ||
+      quoteUiState === CUSTOMER_UI_STATE.COMPLETED ||
+      quoteUiState === CUSTOMER_UI_STATE.CANCELED
+    ) {
+      setForcePaymentRequired(false);
+    }
+  }, [quoteUiState]);
+
+  React.useEffect(() => {
+    if (actionQuoteId <= 0) {
+      setHasCompletedPayment(false);
+      setPaidMatchId(0);
+    }
+  }, [actionQuoteId]);
   const palette = resolveTonePalette(theme, effectivePolicy);
   const effectiveStatusLabel = effectivePolicy.badgeLabel || view.commandCenter.statusLabel;
 
@@ -750,6 +825,23 @@ export default function QuoteDetailPage() {
     }
   }, []);
 
+  const loadPaymentCompletion = React.useCallback(async (targetMatchId: number) => {
+    const safeMatchId = parsePositiveInt(targetMatchId);
+    if (safeMatchId <= 0) {
+      setHasCompletedPayment(false);
+      return;
+    }
+    try {
+      const completed = await hasCompletedPaymentForMatch(safeMatchId);
+      setHasCompletedPayment(completed);
+      if (completed) {
+        setPaidMatchId(safeMatchId);
+      }
+    } catch {
+      // keep current local state on transient API error
+    }
+  }, []);
+
   const refreshQuoteAndMatchData = React.useCallback(async () => {
     if (refreshInFlightRef.current) {
       await refreshInFlightRef.current;
@@ -761,6 +853,9 @@ export default function QuoteDetailPage() {
       if (actionQuoteId > 0) {
         tasks.push(loadMatchSnapshot(actionQuoteId));
         tasks.push(loadPendingCounterOffer(actionQuoteId));
+        if (cancelTargetMatchId > 0) {
+          tasks.push(loadPaymentCompletion(cancelTargetMatchId));
+        }
       }
       await Promise.all(tasks);
     })();
@@ -773,7 +868,7 @@ export default function QuoteDetailPage() {
         refreshInFlightRef.current = null;
       }
     }
-  }, [actionQuoteId, loadMatchSnapshot, loadPendingCounterOffer, view.refetch]);
+  }, [actionQuoteId, cancelTargetMatchId, loadMatchSnapshot, loadPaymentCompletion, loadPendingCounterOffer, view.refetch]);
 
   React.useEffect(() => {
     if (actionQuoteId > 0) {
@@ -782,6 +877,12 @@ export default function QuoteDetailPage() {
       setPendingCounterOffer(null);
     }
   }, [actionQuoteId, loadPendingCounterOffer]);
+
+  React.useEffect(() => {
+    if (cancelTargetMatchId > 0) {
+      void loadPaymentCompletion(cancelTargetMatchId);
+    }
+  }, [cancelTargetMatchId, loadPaymentCompletion]);
 
   React.useEffect(() => {
     const safeQuoteId = parsePositiveInt(actionQuoteId);
@@ -869,9 +970,95 @@ export default function QuoteDetailPage() {
     return parsePositiveInt(pendingOffer?.counterOfferId);
   }, [actionQuoteId]);
 
+  const executePayment = React.useCallback(async () => {
+    if (isPaying) return;
+    if (cancelTargetMatchId <= 0) {
+      Alert.alert("Payment failed", "No active match found.");
+      return;
+    }
+
+    const finalPrice = toPositiveAmount(view.quote.finalPrice);
+    const desiredPrice = toPositiveAmount(view.quote.desiredPrice);
+    const basePrice = toPositiveAmount(view.quote.basePrice);
+    const resolvedAmount = finalPrice || desiredPrice || basePrice;
+    if (resolvedAmount <= 0) {
+      Alert.alert("Payment failed", "Unable to resolve payment amount.");
+      return;
+    }
+
+    const safeAmount = Math.max(100, resolvedAmount);
+    const origin = toText(view.quote.originAddress) || "Origin";
+    const destination = toText(view.quote.destinationAddress) || "Destination";
+    const orderName = `${origin} -> ${destination}`;
+
+    try {
+      setIsPaying(true);
+      const prepared = await prepareShipperPayment({
+        matchId: cancelTargetMatchId,
+        amount: safeAmount,
+        orderName,
+      });
+      if (!prepared.clientKey) {
+        throw new Error("결제창을 열 수 없습니다. clientKey가 없습니다.");
+      }
+      setPendingPaymentRequest(prepared);
+      setShowPaymentModal(true);
+    } catch (error) {
+      Alert.alert("Payment failed", readApiErrorMessage(error, "Payment could not be completed."));
+    } finally {
+      setIsPaying(false);
+    }
+  }, [cancelTargetMatchId, isPaying, refreshQuoteAndMatchData, view.quote.basePrice, view.quote.desiredPrice, view.quote.destinationAddress, view.quote.finalPrice, view.quote.originAddress]);
+
+  const handleClosePaymentModal = React.useCallback(() => {
+    setShowPaymentModal(false);
+    setPendingPaymentRequest(null);
+  }, []);
+
+  const handlePaymentSuccess = React.useCallback(
+    async (payload: { paymentKey: string; orderId: string; amount: number }) => {
+      if (!pendingPaymentRequest) {
+        Alert.alert("Payment failed", "결제 요청 정보를 찾을 수 없습니다.");
+        return;
+      }
+
+      setShowPaymentModal(false);
+      try {
+        setIsPaying(true);
+        await confirmShipperPayment({
+          paymentKey: payload.paymentKey,
+          orderId: payload.orderId || pendingPaymentRequest.orderId,
+          amount: payload.amount || pendingPaymentRequest.amount,
+          matchIdForMock: cancelTargetMatchId,
+        });
+
+        if (cancelTargetMatchId > 0) {
+          setPaidMatchId(cancelTargetMatchId);
+        }
+        setHasCompletedPayment(true);
+        setForcePaymentRequired(false);
+        await refreshQuoteAndMatchData();
+        Alert.alert("Payment completed", "Your payment has been processed.");
+      } catch (error) {
+        Alert.alert("Payment failed", readApiErrorMessage(error, "Payment could not be completed."));
+      } finally {
+        setIsPaying(false);
+        setPendingPaymentRequest(null);
+      }
+    },
+    [cancelTargetMatchId, pendingPaymentRequest, refreshQuoteAndMatchData]
+  );
+
+  const handlePaymentFail = React.useCallback((payload: { code?: string; message?: string }) => {
+    setShowPaymentModal(false);
+    setPendingPaymentRequest(null);
+    const message = payload?.message ? `결제가 취소/실패했습니다.\n(${payload.message})` : "결제가 취소/실패했습니다.";
+    Alert.alert("Payment failed", message);
+  }, []);
+
   const runPolicyAction = React.useCallback(
     async (action: QuoteDecisionAction, _ctx: QuoteActionsContext) => {
-      if (isMatchSubmitting) return;
+      if (isMatchSubmitting || isPaying) return;
 
       if (action === "acceptOffer") {
         try {
@@ -882,7 +1069,9 @@ export default function QuoteDetailPage() {
             return;
           }
           await acceptShipperCounterOffer(offerId);
+          setPendingCounterOffer(null);
           await refreshQuoteAndMatchData();
+          setForcePaymentRequired(true);
           Alert.alert("협상 제안 수락", "역제안을 수락했습니다.");
         } catch (error) {
           Alert.alert("협상 제안 수락 실패", readApiErrorMessage(error));
@@ -901,6 +1090,7 @@ export default function QuoteDetailPage() {
             return;
           }
           await rejectShipperCounterOffer(offerId);
+          setPendingCounterOffer(null);
           await refreshQuoteAndMatchData();
           Alert.alert("협상 제안 거절", "역제안을 거절했습니다.");
         } catch (error) {
@@ -917,10 +1107,11 @@ export default function QuoteDetailPage() {
       }
 
       if (action === "pay") {
-        Alert.alert("결제", "결제 플로우는 다음 단계에서 연결됩니다.");
+        await executePayment();
+        return;
       }
     },
-    [isMatchSubmitting, refreshQuoteAndMatchData, resolvePendingCounterOfferId, router]
+    [executePayment, isMatchSubmitting, isPaying, refreshQuoteAndMatchData, resolvePendingCounterOfferId, router]
   );
 
   const handlePolicyCancelRequest = React.useCallback(
@@ -1032,8 +1223,8 @@ export default function QuoteDetailPage() {
           variant={isDriveInProgress ? "secondary" : bottomVariant}
           style={styles.bottomButton}
           onPress={handlePressBottomAction}
-          loading={isMatchSubmitting}
-          disabled={isDriveInProgress || isMatchSubmitting || (hasActiveQuoteMatch && isCancelIdInvalid) || actionQuoteId <= 0}
+          loading={isMatchSubmitting || isPaying}
+          disabled={isDriveInProgress || isMatchSubmitting || isPaying || (hasActiveQuoteMatch && isCancelIdInvalid) || actionQuoteId <= 0}
         />
       )}
     </View>
@@ -1095,6 +1286,22 @@ export default function QuoteDetailPage() {
           <SpecificationArchive view={view} />
         </>
       </AppRequestState>
+      <TossPaymentModal
+        visible={showPaymentModal}
+        request={
+          pendingPaymentRequest && pendingPaymentRequest.clientKey
+            ? {
+                clientKey: pendingPaymentRequest.clientKey,
+                orderId: pendingPaymentRequest.orderId,
+                orderName: pendingPaymentRequest.orderName || "Freight payment",
+                amount: pendingPaymentRequest.amount,
+              }
+            : null
+        }
+        onClose={handleClosePaymentModal}
+        onSuccess={handlePaymentSuccess}
+        onFail={handlePaymentFail}
+      />
     </PageScaffold>
   );
 }
