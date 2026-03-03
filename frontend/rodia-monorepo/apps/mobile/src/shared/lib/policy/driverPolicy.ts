@@ -188,3 +188,61 @@ export function getDriverUiStateFromRawStatus(rawStatus: string): DriverUiState 
 
   return getDriverUiStateFromBackendStatus(rawStatus);
 }
+
+type DriverStatusScope = "market" | "my" | "run" | "unknown";
+
+function toStatusText(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function toStatusToken(rawStatus: unknown): string {
+  return toStatusText(rawStatus)
+    .toUpperCase()
+    .replace(/\s+/g, "_")
+    .replace(/-/g, "_");
+}
+
+const MARKET_READY_TOKENS: ReadonlySet<string> = new Set(["OPEN", "READY", "MATCHED", "ASSIGNED"]);
+
+/**
+ * Driver 상태 원천값 선택 정책
+ * - match.status를 우선 사용 (Driver 도메인 상태의 단일 진실원천)
+ * - 비어 있으면 quote.status로 폴백
+ */
+export function resolveDriverRawStatus(input: {
+  matchStatus?: unknown;
+  quoteStatus?: unknown;
+}): string {
+  return toStatusText(input.matchStatus) || toStatusText(input.quoteStatus);
+}
+
+/**
+ * Driver 상태 해석 정책
+ * - scope/accepted와 raw status를 함께 해석해 UI 파편화를 방지한다.
+ * - market + not accepted + READY/OPEN 계열은 항상 `READY_TO_ACCEPT`로 고정한다.
+ */
+export function getDriverUiStateFromStatusPayload(input: {
+  scope?: DriverStatusScope;
+  accepted?: unknown;
+  matchStatus?: unknown;
+  quoteStatus?: unknown;
+}): DriverUiState {
+  const scope = (input.scope ?? "unknown") as DriverStatusScope;
+  const accepted = input.accepted === true;
+  const rawStatus = resolveDriverRawStatus({
+    matchStatus: input.matchStatus,
+    quoteStatus: input.quoteStatus,
+  });
+  const token = toStatusToken(rawStatus);
+
+  if (scope === "market" && !accepted) {
+    if (!token || MARKET_READY_TOKENS.has(token)) {
+      return DRIVER_UI_STATE.READY_TO_ACCEPT;
+    }
+    if (token === "NEGOTIATING") {
+      return DRIVER_UI_STATE.NEGOTIATING;
+    }
+  }
+
+  return getDriverUiStateFromRawStatus(rawStatus);
+}

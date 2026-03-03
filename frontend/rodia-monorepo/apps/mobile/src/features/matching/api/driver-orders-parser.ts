@@ -36,6 +36,7 @@ export type ParsedDriverOrderSource = {
   seed: number;
   matchId: number;
   quoteId?: number;
+  accepted?: boolean;
   status: string;
   createdAt?: string;
   updatedAt?: string;
@@ -117,6 +118,7 @@ export function parseDriverOrderSource(input: {
     seed,
     matchId,
     quoteId: quoteId > 0 ? quoteId : undefined,
+    accepted: typeof match.accepted === "boolean" ? match.accepted : undefined,
     status: rawStatus,
     createdAt: toOptionalText(match.createdAt),
     updatedAt: toOptionalText(match.updatedAt),

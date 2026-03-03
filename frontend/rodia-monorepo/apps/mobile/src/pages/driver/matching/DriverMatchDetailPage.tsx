@@ -15,7 +15,7 @@ import {
   getDriverBadge,
   getDriverCta,
   getDriverStatusTitle,
-  getDriverUiStateFromRawStatus,
+  getDriverUiStateFromStatusPayload,
   type DriverUiState
 } from "@/shared/lib/policy";
 import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
@@ -360,8 +360,13 @@ export function DriverMatchDetailPage({ matchId, routeSnapshot }: DriverMatchDet
   const spacing = safeNumber(theme?.layout?.spacing?.base, 4);
   const primaryColor = safeString(theme?.colors?.brandPrimary, "#FF6A00");
 
-  const rawStatus = String(detail.quote?.status ?? detail.match?.status ?? "");
-  const uiState = getDriverUiStateFromRawStatus(rawStatus);
+  const scope = detail.match?.accepted === true ? "my" : "market";
+  const uiState = getDriverUiStateFromStatusPayload({
+    scope,
+    accepted: detail.match?.accepted,
+    matchStatus: detail.match?.status,
+    quoteStatus: detail.quote?.status,
+  });
   const statusLabel = getDriverBadge(uiState).label;
   const statusTitle = getDriverStatusTitle(uiState);
   const ctaPolicy = getDriverCta(uiState, true);

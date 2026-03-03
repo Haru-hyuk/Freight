@@ -24,7 +24,7 @@ import {
   DRIVER_CTA_ID,
   DRIVER_UI_STATE,
   getDriverCta,
-  getDriverUiStateFromRawStatus,
+  getDriverUiStateFromStatusPayload,
   type DriverUiState,
 } from "@/shared/lib/policy";
 import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
@@ -1130,15 +1130,14 @@ export default function DriverOrderDetailRoute() {
     loadPlan?: LoadPlanResponse;
     truckSpec?: TruckSpecReferenceResponse;
   }) | null) ?? null;
-  const hasAcceptedMatch = parsedMatch?.accepted === true;
-  const rawStatus = routeSource === "market" && !hasAcceptedMatch
-    ? "OPEN"
-    : String(viewModel.quote?.status ?? parsedMatch?.status ?? "");
-  const derivedUiState = getDriverUiStateFromRawStatus(rawStatus);
-  const uiState =
-    routeSource === "market" && !hasAcceptedMatch
-      ? DRIVER_UI_STATE.READY_TO_ACCEPT
-      : derivedUiState;
+  const scope =
+    routeSource === "market" ? "market" : routeSource === "run" ? "run" : routeSource === "my" ? "my" : "unknown";
+  const uiState = getDriverUiStateFromStatusPayload({
+    scope,
+    accepted: parsedMatch?.accepted,
+    matchStatus: parsedMatch?.status,
+    quoteStatus: viewModel.quote?.status,
+  });
   const cta = getDriverCta(uiState, true);
   const isQuoteMode =
     routeSource === "market" ||
