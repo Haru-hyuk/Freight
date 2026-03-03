@@ -149,6 +149,48 @@ function toOptionalBoolean(value: unknown): boolean | undefined {
   return undefined;
 }
 
+function buildQuoteItemsFromSummary(
+  candidates: AnyObject[],
+  cargoName: string,
+  cargoType: string,
+  weightKg: number,
+  volumeCbm: number
+): QuoteDetailResponse["quoteItems"] {
+  const rawItemCount = Math.trunc(
+    pickFirstNumber(candidates, ["itemCount", "item_count", "cargoCount", "cargo_count"]) ?? 0
+  );
+  const itemCount = Math.max(0, Math.min(30, rawItemCount));
+  const normalizedCount = itemCount > 0 ? itemCount : cargoName ? 1 : 0;
+  if (normalizedCount <= 0) return [];
+
+  const safeWeightPerItem = weightKg > 0 ? Number((weightKg / normalizedCount).toFixed(2)) : 0;
+  const safeVolumePerItem = volumeCbm > 0 ? Number((volumeCbm / normalizedCount).toFixed(4)) : 0;
+  const estimatedEdgeCm = safeVolumePerItem > 0 ? Math.max(30, Math.round(Math.cbrt(safeVolumePerItem) * 100)) : 100;
+  const baseName = cargoName.trim() || "화물";
+
+  return Array.from({ length: normalizedCount }, (_, index) => ({
+    quoteItemId: index + 1,
+    itemName: normalizedCount > 1 ? `${baseName} ${index + 1}` : baseName,
+    itemType: cargoType || "GENERAL",
+    itemDescription: normalizedCount > 1 ? `${index + 1}/${normalizedCount}` : baseName,
+    quantity: 1,
+    lengthCm: estimatedEdgeCm,
+    widthCm: estimatedEdgeCm,
+    heightCm: estimatedEdgeCm,
+    unitWeightKg: safeWeightPerItem,
+    unitVolumeCbm: safeVolumePerItem,
+    fragile: false,
+    upright: false,
+    noStack: false,
+    bottomOnly: false,
+    rotatable: true,
+    stackable: true,
+    maxStackWeightKg: safeWeightPerItem > 0 ? Math.round(safeWeightPerItem * 2) : 0,
+    handlingTags: "",
+    sortOrder: index + 1,
+  }));
+}
+
 function normalizeCounterOfferMessage(value: unknown): string | undefined {
   return toOptionalText(value);
 }
@@ -341,6 +383,10 @@ function toQuoteDetailFromDriverSummary(
     "";
   const cargoDesc =
     pickFirstText(candidates, ["cargoDesc", "cargo_desc", "cargoDescription", "description"]) ?? cargoName;
+  const cargoType = pickFirstText(candidates, ["cargoType", "cargo_type"]) ?? "";
+  const weightKg = Math.max(0, pickFirstNumber(candidates, ["weightKg", "weight_kg", "weight"]) ?? 0);
+  const volumeCbm = Math.max(0, pickFirstNumber(candidates, ["volumeCbm", "volume_cbm", "volume"]) ?? 0);
+  const quoteItems = buildQuoteItemsFromSummary(candidates, cargoName, cargoType, weightKg, volumeCbm);
 
   return {
     quoteId: resolvedQuoteId,
@@ -357,13 +403,13 @@ function toQuoteDetailFromDriverSummary(
     destinationLat: pickFirstNumber(candidates, ["destinationLat", "destination_lat", "endLat"]) ?? 0,
     destinationLng: pickFirstNumber(candidates, ["destinationLng", "destination_lng", "endLng"]) ?? 0,
     distanceKm: Math.max(0, pickFirstNumber(candidates, ["distanceKm", "distance_km", "distance"]) ?? 0),
-    weightKg: Math.max(0, pickFirstNumber(candidates, ["weightKg", "weight_kg", "weight"]) ?? 0),
-    volumeCbm: Math.max(0, pickFirstNumber(candidates, ["volumeCbm", "volume_cbm", "volume"]) ?? 0),
+    weightKg,
+    volumeCbm,
     vehicleType: pickFirstText(candidates, ["vehicleType", "vehicle_type", "tonType", "ton_type"]) ?? "",
     vehicleBodyType:
       pickFirstText(candidates, ["vehicleBodyType", "vehicle_body_type", "bodyType", "body_type"]) ?? "",
     cargoName,
-    cargoType: pickFirstText(candidates, ["cargoType", "cargo_type"]) ?? "",
+    cargoType,
     cargoDesc,
     basePrice,
     distancePrice: Math.max(0, pickFirstNumber(candidates, ["distancePrice", "distance_price"]) ?? 0),
@@ -380,6 +426,7 @@ function toQuoteDetailFromDriverSummary(
     senderPhone: undefined,
     receiverName: undefined,
     receiverPhone: undefined,
+    quoteItems,
     checklistItems: [],
     stops: [],
   };

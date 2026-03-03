@@ -2,6 +2,7 @@ import type {
   QuoteCargoType,
   QuoteChecklistItemDto,
   QuoteCreateRequestDto,
+  QuoteItemDto,
   QuoteStopRequestDto,
   QuoteVehicleBodyType,
   QuoteVehicleType,
@@ -116,6 +117,73 @@ function summarizeCargoDesc(draft: QuoteCreateDraft) {
   return names.slice(0, 5).join(", ");
 }
 
+function mapCargoItemType(value: unknown): string {
+  const normalized = String(value ?? "")
+    .trim()
+    .toUpperCase();
+  if (normalized === "PALLET") return "PALLET";
+  if (normalized === "FURNITURE") return "FURNITURE";
+  return "BOX";
+}
+
+function buildQuoteItems(draft: QuoteCreateDraft): QuoteItemDto[] {
+  const selectedOptionIds = new Set((draft?.selectedOpts ?? []).map((optionId) => String(optionId ?? "").trim()));
+  const fragile = selectedOptionIds.has("caution") || selectedOptionIds.has("shock");
+  const upright = selectedOptionIds.has("upright");
+  const noStack = fragile;
+  const bottomOnly = fragile;
+  const stackable = !noStack;
+  const rotatable = !upright;
+  const handlingTags = Array.from(
+    new Set(
+      [
+        fragile ? "FRAGILE" : "",
+        selectedOptionIds.has("waterproof") ? "WATERPROOF" : "",
+        selectedOptionIds.has("shock") ? "SHOCK" : "",
+      ].filter((value) => value.length > 0)
+    )
+  ).join(",");
+
+  return (draft.cargoList ?? [])
+    .map((item, index) => {
+      const quantity = Math.max(toInt(item?.quantity, 1), 1);
+      const lengthCm = Math.max(0, toInt(item?.lengthCm, 0));
+      const widthCm = Math.max(0, toInt(item?.widthCm, 0));
+      const heightCm = Math.max(0, toInt(item?.heightCm, 0));
+      const totalWeightKg = Math.max(0, toNumber(item?.weight, 0));
+      const unitWeightKg = quantity > 0 ? Number((totalWeightKg / quantity).toFixed(3)) : totalWeightKg;
+      const unitVolumeCbm =
+        lengthCm > 0 && widthCm > 0 && heightCm > 0 ? Number((((lengthCm / 100) * (widthCm / 100) * (heightCm / 100))).toFixed(4)) : 0;
+      const maxStackWeightKg = stackable ? Math.max(0, Number((unitWeightKg * quantity).toFixed(3))) : 0;
+      const itemName = resolveCargoItemName(item).trim();
+      const itemType = mapCargoItemType(item?.itemCategory);
+
+      if (!itemName) return null;
+
+      return {
+        itemName,
+        itemType,
+        itemDescription: itemName,
+        quantity,
+        lengthCm,
+        widthCm,
+        heightCm,
+        unitWeightKg,
+        unitVolumeCbm,
+        fragile,
+        upright,
+        noStack,
+        bottomOnly,
+        rotatable,
+        stackable,
+        maxStackWeightKg,
+        handlingTags,
+        sortOrder: index,
+      } as QuoteItemDto;
+    })
+    .filter((item): item is QuoteItemDto => Boolean(item));
+}
+
 function buildStops(draft: QuoteCreateDraft): QuoteStopRequestDto[] {
   const waypoints = Array.isArray(draft?.waypoints) ? draft.waypoints : [];
 
@@ -216,10 +284,11 @@ export function buildQuoteCreateRequest(draft: QuoteCreateDraft): QuoteCreateReq
     loadMethod: toActorOnlyWorkMethod(draft.loadMethod, DEFAULT_LOAD_METHOD),
     unloadMethod: toActorOnlyWorkMethod(draft.unloadMethod, DEFAULT_UNLOAD_METHOD),
     checklistItems: buildChecklistItems(draft),
+    quoteItems: buildQuoteItems(draft),
     stops: buildStops(draft),
   };
 
-if (truckId > 0) {
+  if (truckId > 0) {
     payload.truckId = truckId;
   } else {
     // 확실히 하기 위해 삭제

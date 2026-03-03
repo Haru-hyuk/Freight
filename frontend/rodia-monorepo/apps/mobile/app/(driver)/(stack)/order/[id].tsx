@@ -17,13 +17,14 @@ import type { ParsedMatchResponseItem } from "@/features/matching/api/shipper-ma
 import { useMatchDetail } from "@/features/matching/model/useMatchDetail";
 import CounterOfferModal, { type CounterOfferSubmitPayload } from "@/features/matching/ui/CounterOfferModal";
 import type { QuoteDetailResponse } from "@/entities/quote/model/quote.types";
+import { previewLoadPlan as previewLoadPlanGenerated } from "@/shared/api/generated/driver-optimization-controller/driver-optimization-controller";
 import type { LoadPlanResponse, Placement, TruckSpecReferenceResponse } from "@/shared/api/generated/schemas";
 import { confirmLoading, confirmUnloading, startDriving } from "@/shared/lib/mock-flow";
 import {
   DRIVER_CTA_ID,
   DRIVER_UI_STATE,
   getDriverCta,
-  getDriverUiStateFromRawStatus,
+  getDriverUiStateFromStatusPayload,
   type DriverUiState,
 } from "@/shared/lib/policy";
 import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
@@ -46,6 +47,7 @@ type MatchWithWorkflowPayload = ParsedMatchResponseItem & {
   loadingPhotos?: string[];
   unloadingPhotos?: string[];
 };
+type LoadPlanDataSource = "match" | "preview" | "quote_fallback" | "none";
 
 type WorkflowStep = { key: string; label: string };
 
@@ -77,6 +79,376 @@ function resolveWorkflowStepIndex(uiState: DriverUiState): number {
 function toPositiveInt(value: unknown): number {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
+}
+
+type AnyObject = Record<string, unknown>;
+type ResolvedLoadPlanPreview = {
+  loadPlan: LoadPlanResponse | null;
+  truckSpec: TruckSpecReferenceResponse | null;
+};
+
+function asObject(value: unknown): AnyObject {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as AnyObject) : {};
+}
+
+function toOptionalText(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const text = value.trim();
+  return text || undefined;
+}
+
+function toOptionalBoolean(value: unknown): boolean | undefined {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value === 1 ? true : value === 0 ? false : undefined;
+  if (typeof value !== "string") return undefined;
+  const text = value.trim().toLowerCase();
+  if (text === "true" || text === "1" || text === "yes" || text === "y") return true;
+  if (text === "false" || text === "0" || text === "no" || text === "n") return false;
+  return undefined;
+}
+
+function toFiniteNumber(value: unknown, fallback = 0): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function toPositiveNumber(value: unknown, fallback = 0): number {
+  const parsed = toFiniteNumber(value, fallback);
+  return parsed > 0 ? parsed : fallback;
+}
+
+function normalizePlacementItem(value: unknown, fallbackOrder: number): Placement | null {
+  const source = asObject(value);
+  const width = toPositiveNumber(source.width ?? source.w ?? source.cargoWidthCm, 0);
+  const length = toPositiveNumber(source.length ?? source.l ?? source.depth ?? source.cargoLengthCm, 0);
+  const height = toPositiveNumber(source.height ?? source.h ?? source.cargoHeightCm, 0);
+  if (width <= 0 && length <= 0 && height <= 0) return null;
+
+  const orientationRaw = Array.isArray(source.orientation) ? source.orientation : undefined;
+  const orientation = orientationRaw
+    ? orientationRaw.map((entry) => Number(entry)).filter((entry) => Number.isFinite(entry))
+    : undefined;
+
+  const stopOrder = toPositiveInt(source.stopOrder ?? source.seq ?? source.sortOrder) || fallbackOrder;
+
+  return {
+    id: toOptionalText(source.id) ?? `cargo-${fallbackOrder}`,
+    x: Math.max(0, toFiniteNumber(source.x, 0)),
+    y: Math.max(0, toFiniteNumber(source.y, 0)),
+    z: Math.max(0, toFiniteNumber(source.z, 0)),
+    length: Math.max(20, length || 100),
+    width: Math.max(20, width || 100),
+    height: Math.max(20, height || 100),
+    weight: Math.max(0, toFiniteNumber(source.weight ?? source.unitWeightKg, 0)),
+    stopOrder,
+    stackable: toOptionalBoolean(source.stackable),
+    fragile: toOptionalBoolean(source.fragile),
+    noStack: toOptionalBoolean(source.noStack),
+    bottomOnly: toOptionalBoolean(source.bottomOnly),
+    maxStackWeight: Math.max(0, toFiniteNumber(source.maxStackWeight ?? source.maxStackWeightKg, 0)),
+    orientation: orientation && orientation.length > 0 ? orientation : undefined,
+  };
+}
+
+function normalizePlacementList(value: unknown): Placement[] {
+  if (!Array.isArray(value)) return [];
+
+  const normalized = value
+    .map((item, index) => normalizePlacementItem(item, index + 1))
+    .filter((item): item is Placement => item !== null);
+
+  return normalized.sort((a, b) => {
+    const byStopOrder = toPositiveInt(a.stopOrder) - toPositiveInt(b.stopOrder);
+    if (byStopOrder !== 0) return byStopOrder;
+    const aId = toOptionalText(a.id) ?? "";
+    const bId = toOptionalText(b.id) ?? "";
+    return aId.localeCompare(bId);
+  });
+}
+
+function normalizeTruckSpec(value: unknown): TruckSpecReferenceResponse | null {
+  const source = asObject(value);
+  if (Object.keys(source).length <= 0) return null;
+
+  const vehicleType = toOptionalText(source.vehicleType ?? source.type);
+  const vehicleBodyType = toOptionalText(source.vehicleBodyType ?? source.bodyType ?? source.category);
+  const cargoLengthCm = toPositiveNumber(source.cargoLengthCm ?? source.cargoLength ?? source.lengthCm, 0);
+  const cargoWidthCm = toPositiveNumber(source.cargoWidthCm ?? source.cargoWidth ?? source.widthCm, 0);
+  const cargoHeightCm = toPositiveNumber(source.cargoHeightCm ?? source.cargoHeight ?? source.heightCm, 0);
+  const maxWeight = toPositiveNumber(source.maxWeight ?? source.weightLimit ?? source.max_weight, 0);
+  const tonnage = toPositiveNumber(source.tonnage, 0);
+
+  if (!vehicleType && !vehicleBodyType && cargoLengthCm <= 0 && cargoWidthCm <= 0 && cargoHeightCm <= 0 && maxWeight <= 0) {
+    return null;
+  }
+
+  return {
+    vehicleType: vehicleType || undefined,
+    vehicleTypeKr: toOptionalText(source.vehicleTypeKr ?? source.vehicleTypeName ?? source.tonName),
+    vehicleBodyType: vehicleBodyType || undefined,
+    categoryKr: toOptionalText(source.categoryKr ?? source.categoryName),
+    tonnage: tonnage > 0 ? tonnage : undefined,
+    maxWeight: maxWeight > 0 ? maxWeight : undefined,
+    cargoLengthCm: cargoLengthCm > 0 ? cargoLengthCm : undefined,
+    cargoWidthCm: cargoWidthCm > 0 ? cargoWidthCm : undefined,
+    cargoHeightCm: cargoHeightCm > 0 ? cargoHeightCm : undefined,
+    maxVolume: toPositiveNumber(source.maxVolume, 0) || undefined,
+    palletCount: toPositiveInt(source.palletCount) || undefined,
+    doorPosition: toOptionalText(source.doorPosition),
+    sourceName: toOptionalText(source.sourceName),
+  };
+}
+
+function resolveLoadPlanPreview(payload: unknown): ResolvedLoadPlanPreview {
+  const queue: unknown[] = [payload];
+  const visited = new Set<AnyObject>();
+
+  let resolvedLoadPlan: LoadPlanResponse | null = null;
+  let resolvedTruckSpec: TruckSpecReferenceResponse | null = null;
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (Array.isArray(current)) {
+      current.forEach((item) => queue.push(item));
+      continue;
+    }
+
+    const source = asObject(current);
+    if (Object.keys(source).length <= 0) continue;
+    if (visited.has(source)) continue;
+    visited.add(source);
+
+    if (!resolvedLoadPlan) {
+      const placements = normalizePlacementList(source.placements);
+      if (Array.isArray(source.placements) || placements.length > 0) {
+        const statsSource = asObject(source.stats);
+        const utilization = toFiniteNumber(statsSource.utilization, NaN);
+        const totalWeight = toFiniteNumber(statsSource.totalWeight, NaN);
+        const placedCount = toFiniteNumber(statsSource.placedCount, NaN);
+        const unplacedCount = toFiniteNumber(statsSource.unplacedCount, NaN);
+
+        resolvedLoadPlan = {
+          placements,
+          stats:
+            Object.keys(statsSource).length > 0
+              ? {
+                  ...(Number.isFinite(utilization) ? { utilization } : {}),
+                  ...(Number.isFinite(totalWeight) ? { totalWeight } : {}),
+                  ...(Number.isFinite(placedCount) ? { placedCount: Math.max(0, Math.trunc(placedCount)) } : {}),
+                  ...(Number.isFinite(unplacedCount) ? { unplacedCount: Math.max(0, Math.trunc(unplacedCount)) } : {}),
+                }
+              : undefined,
+          unplaced: Array.isArray(source.unplaced) ? source.unplaced : undefined,
+        };
+      }
+    }
+
+    if (!resolvedTruckSpec) {
+      resolvedTruckSpec =
+        normalizeTruckSpec(source.truckSpec) ??
+        normalizeTruckSpec(source.truck) ??
+        normalizeTruckSpec(source.spec) ??
+        null;
+    }
+
+    const nestedKeys = [
+      "data",
+      "result",
+      "payload",
+      "response",
+      "content",
+      "item",
+      "summary",
+      "loadPlan",
+      "plan",
+      "preview",
+      "truckSpec",
+      "truck",
+      "spec",
+    ];
+    nestedKeys.forEach((key) => {
+      const nested = source[key];
+      if (typeof nested !== "undefined" && nested !== null) {
+        queue.push(nested);
+      }
+    });
+  }
+
+  return {
+    loadPlan: resolvedLoadPlan,
+    truckSpec: resolvedTruckSpec,
+  };
+}
+
+function inferTruckSpecFromQuote(quote: QuoteDetailResponse | null | undefined): TruckSpecReferenceResponse | null {
+  if (!quote) return null;
+  const vehicleType = String(quote.vehicleType ?? "").trim().toUpperCase();
+  const vehicleBodyType = String(quote.vehicleBodyType ?? "").trim().toUpperCase();
+  const presets: Record<string, { lengthCm: number; widthCm: number; heightCm: number; maxWeight: number }> = {
+    DAMAS: { lengthCm: 160, widthCm: 130, heightCm: 120, maxWeight: 300 },
+    LABO: { lengthCm: 220, widthCm: 140, heightCm: 140, maxWeight: 500 },
+    TON_1: { lengthCm: 320, widthCm: 170, heightCm: 170, maxWeight: 1000 },
+    TON_1_4: { lengthCm: 360, widthCm: 180, heightCm: 180, maxWeight: 1400 },
+    TON_2_5: { lengthCm: 430, widthCm: 210, heightCm: 210, maxWeight: 2500 },
+    TON_3_5: { lengthCm: 490, widthCm: 220, heightCm: 220, maxWeight: 3500 },
+    TON_5: { lengthCm: 620, widthCm: 230, heightCm: 240, maxWeight: 5000 },
+    TON_5_AXLE: { lengthCm: 740, widthCm: 230, heightCm: 240, maxWeight: 5500 },
+    TON_8: { lengthCm: 780, widthCm: 240, heightCm: 250, maxWeight: 8000 },
+    TON_11: { lengthCm: 900, widthCm: 245, heightCm: 260, maxWeight: 11000 },
+    TON_14: { lengthCm: 980, widthCm: 245, heightCm: 260, maxWeight: 14000 },
+    TON_15: { lengthCm: 1020, widthCm: 245, heightCm: 260, maxWeight: 15000 },
+    TON_18: { lengthCm: 1080, widthCm: 250, heightCm: 265, maxWeight: 18000 },
+    TON_25: { lengthCm: 1160, widthCm: 250, heightCm: 270, maxWeight: 25000 },
+  };
+  const preset = presets[vehicleType] ?? presets.TON_5;
+
+  return {
+    vehicleType: vehicleType || undefined,
+    vehicleBodyType: vehicleBodyType || undefined,
+    cargoLengthCm: preset.lengthCm,
+    cargoWidthCm: preset.widthCm,
+    cargoHeightCm: preset.heightCm,
+    maxWeight: Math.max(preset.maxWeight, toPositiveNumber(quote.weightKg, 0)),
+    tonnage: toPositiveNumber((quote.weightKg ?? 0) / 1000, 0) || undefined,
+    sourceName: "QUOTE_FALLBACK",
+  };
+}
+
+function buildSyntheticLoadPlanFromQuote(
+  quote: QuoteDetailResponse | null | undefined,
+  truckSpec: TruckSpecReferenceResponse | null | undefined
+): LoadPlanResponse | null {
+  if (!quote) return null;
+  const items = Array.isArray(quote.quoteItems) ? quote.quoteItems : [];
+  const hasTotals = toPositiveNumber(quote.weightKg, 0) > 0 || toPositiveNumber(quote.volumeCbm, 0) > 0;
+  if (items.length <= 0 && !hasTotals) return null;
+
+  const dimensions = resolveTruckDimensions(truckSpec);
+  const safeTruckLength = Math.max(200, toPositiveNumber(dimensions.lengthCm, 450));
+  const safeTruckWidth = Math.max(120, toPositiveNumber(dimensions.widthCm, 230));
+  const safeTruckHeight = Math.max(120, toPositiveNumber(dimensions.heightCm, 240));
+  const gap = 6;
+
+  const sortedItems = [...items].sort((a, b) => toPositiveInt(a.sortOrder) - toPositiveInt(b.sortOrder));
+  const expanded: Array<{
+    id: string;
+    lengthCm: number;
+    widthCm: number;
+    heightCm: number;
+    weightKg: number;
+    stopOrder: number;
+    stackable: boolean;
+    fragile: boolean;
+    noStack: boolean;
+    bottomOnly: boolean;
+    maxStackWeight: number;
+  }> = [];
+
+  sortedItems.forEach((item, itemIndex) => {
+    const quantity = Math.max(1, Math.min(20, toPositiveInt(item.quantity) || 1));
+    const unitLength = Math.max(30, toPositiveNumber(item.lengthCm, 100));
+    const unitWidth = Math.max(30, toPositiveNumber(item.widthCm, 100));
+    const unitHeight = Math.max(30, toPositiveNumber(item.heightCm, 100));
+    const unitWeightKg = Math.max(0, toPositiveNumber(item.unitWeightKg, 0));
+    const stopOrder = toPositiveInt(item.sortOrder) || itemIndex + 1;
+
+    for (let i = 0; i < quantity; i += 1) {
+      expanded.push({
+        id: `q-${toPositiveInt(item.quoteItemId) || itemIndex + 1}-${i + 1}`,
+        lengthCm: Math.min(unitLength, safeTruckLength),
+        widthCm: Math.min(unitWidth, safeTruckWidth),
+        heightCm: Math.min(unitHeight, safeTruckHeight),
+        weightKg: unitWeightKg,
+        stopOrder,
+        stackable: item.stackable !== false,
+        fragile: item.fragile === true,
+        noStack: item.noStack === true,
+        bottomOnly: item.bottomOnly === true,
+        maxStackWeight: Math.max(0, toPositiveNumber(item.maxStackWeightKg, 0)),
+      });
+    }
+  });
+
+  if (expanded.length <= 0) {
+    const totalWeight = Math.max(0, toPositiveNumber(quote.weightKg, 0));
+    const totalVolume = Math.max(0, toPositiveNumber(quote.volumeCbm, 0));
+    const estimatedEdge = totalVolume > 0 ? Math.max(30, Math.round(Math.cbrt(totalVolume) * 100)) : 120;
+    expanded.push({
+      id: `q-${toPositiveInt(quote.quoteId) || 1}-1`,
+      lengthCm: Math.min(estimatedEdge, safeTruckLength),
+      widthCm: Math.min(estimatedEdge, safeTruckWidth),
+      heightCm: Math.min(estimatedEdge, safeTruckHeight),
+      weightKg: totalWeight,
+      stopOrder: 1,
+      stackable: true,
+      fragile: false,
+      noStack: false,
+      bottomOnly: false,
+      maxStackWeight: 0,
+    });
+  }
+
+  const placements: Placement[] = [];
+  let cursorX = 0;
+  let cursorZ = 0;
+  let currentRowDepth = 0;
+
+  expanded.slice(0, 120).forEach((item, index) => {
+    const nextWidth = item.widthCm;
+    const nextLength = item.lengthCm;
+
+    if (cursorX + nextWidth > safeTruckWidth) {
+      cursorX = 0;
+      cursorZ += currentRowDepth + gap;
+      currentRowDepth = 0;
+    }
+    if (cursorZ + nextLength > safeTruckLength) {
+      cursorZ = 0;
+    }
+
+    placements.push({
+      id: item.id,
+      x: cursorX,
+      y: 0,
+      z: cursorZ,
+      width: nextWidth,
+      length: nextLength,
+      height: item.heightCm,
+      weight: item.weightKg,
+      stopOrder: item.stopOrder || index + 1,
+      stackable: item.stackable,
+      fragile: item.fragile,
+      noStack: item.noStack,
+      bottomOnly: item.bottomOnly,
+      maxStackWeight: item.maxStackWeight,
+    });
+
+    cursorX += nextWidth + gap;
+    currentRowDepth = Math.max(currentRowDepth, nextLength);
+  });
+
+  if (placements.length <= 0) return null;
+
+  const totalCargoVolume = placements.reduce(
+    (sum, placement) =>
+      sum +
+      Math.max(0, toPositiveNumber(placement.width, 0)) *
+        Math.max(0, toPositiveNumber(placement.length, 0)) *
+        Math.max(0, toPositiveNumber(placement.height, 0)),
+    0
+  );
+  const truckVolume = safeTruckWidth * safeTruckLength * safeTruckHeight;
+  const totalWeight = placements.reduce((sum, placement) => sum + Math.max(0, toPositiveNumber(placement.weight, 0)), 0);
+
+  return {
+    placements,
+    stats: {
+      placedCount: placements.length,
+      unplacedCount: 0,
+      totalWeight,
+      utilization: truckVolume > 0 ? Math.max(0, Math.min(1, totalCargoVolume / truckVolume)) : 0,
+    },
+  };
 }
 
 const CargoBox = ({ placement }: { placement: Placement }) => {
@@ -115,14 +487,22 @@ function resolveTruckDimensions(spec: TruckSpecReferenceResponse | null | undefi
 const DriverOrderLoadSimulation = ({
   placements,
   truckSpec,
+  source,
 }: {
   placements: Placement[];
   truckSpec: TruckSpecReferenceResponse | null | undefined;
+  source: LoadPlanDataSource;
 }) => {
   const theme = useAppTheme();
   const { lengthCm, widthCm, heightCm } = resolveTruckDimensions(truckSpec);
   const truckPos: [number, number, number] = [(widthCm / 2) * SCALE, (heightCm / 2) * SCALE, (lengthCm / 2) * SCALE];
   const truckArgs: [number, number, number] = [widthCm * SCALE, heightCm * SCALE, lengthCm * SCALE];
+  const subtitle =
+    source === "match"
+      ? "매칭 응답의 적재 계획 데이터"
+      : source === "preview"
+      ? "서버 프리뷰 기반 적재 계획"
+      : "견적 화물 스키마 기반 자동 배치 (Fallback)";
 
   return (
     <AppCard style={simStyles.card}>
@@ -132,7 +512,7 @@ const DriverOrderLoadSimulation = ({
             3D 적재 시뮬레이션
           </AppText>
           <AppText variant="caption" color={theme.colors.textMuted}>
-            적재 계획 기준 실시간 검토 뷰
+            {subtitle}
           </AppText>
         </View>
         <View style={simStyles.specTag}>
@@ -653,6 +1033,8 @@ export default function DriverOrderDetailRoute() {
   const [isOfferModalOpen, setIsOfferModalOpen] = useState(false);
   const [isSubmittingOffer, setIsSubmittingOffer] = useState(false);
   const [offerErrorMessage, setOfferErrorMessage] = useState<string | null>(null);
+  const [previewPlan, setPreviewPlan] = useState<LoadPlanResponse | null>(null);
+  const [previewTruckSpec, setPreviewTruckSpec] = useState<TruckSpecReferenceResponse | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -748,15 +1130,14 @@ export default function DriverOrderDetailRoute() {
     loadPlan?: LoadPlanResponse;
     truckSpec?: TruckSpecReferenceResponse;
   }) | null) ?? null;
-  const hasAcceptedMatch = parsedMatch?.accepted === true;
-  const rawStatus = routeSource === "market" && !hasAcceptedMatch
-    ? "OPEN"
-    : String(viewModel.quote?.status ?? parsedMatch?.status ?? "");
-  const derivedUiState = getDriverUiStateFromRawStatus(rawStatus);
-  const uiState =
-    routeSource === "market" && !hasAcceptedMatch
-      ? DRIVER_UI_STATE.READY_TO_ACCEPT
-      : derivedUiState;
+  const scope =
+    routeSource === "market" ? "market" : routeSource === "run" ? "run" : routeSource === "my" ? "my" : "unknown";
+  const uiState = getDriverUiStateFromStatusPayload({
+    scope,
+    accepted: parsedMatch?.accepted,
+    matchStatus: parsedMatch?.status,
+    quoteStatus: viewModel.quote?.status,
+  });
   const cta = getDriverCta(uiState, true);
   const isQuoteMode =
     routeSource === "market" ||
@@ -764,10 +1145,96 @@ export default function DriverOrderDetailRoute() {
     uiState === DRIVER_UI_STATE.NEGOTIATING;
   const pageTitle = isQuoteMode ? "견적 상세" : "오더 상세";
 
-  const loadPlan: LoadPlanResponse | undefined = parsedMatch?.loadPlan ?? quoteWithPlan?.loadPlan;
-  const placements: Placement[] = Array.isArray(loadPlan?.placements) ? loadPlan.placements : [];
-  const hasPlacementPayload = Array.isArray(loadPlan?.placements);
-  const truckSpec: TruckSpecReferenceResponse | undefined = parsedMatch?.truckSpec ?? quoteWithPlan?.truckSpec;
+  const directPlan: LoadPlanResponse | undefined = parsedMatch?.loadPlan ?? quoteWithPlan?.loadPlan;
+  const directPlacements = useMemo(() => normalizePlacementList(directPlan?.placements), [directPlan?.placements]);
+  const hasDirectPlacements = directPlacements.length > 0;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (hasDirectPlacements) {
+      setPreviewPlan(null);
+      setPreviewTruckSpec(null);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const safeQuoteId = toPositiveInt(viewModel.quote?.quoteId ?? parsedMatch?.quoteId ?? viewModel.quoteId);
+    if (safeQuoteId <= 0) {
+      setPreviewPlan(null);
+      setPreviewTruckSpec(null);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const safeTruckId = toPositiveInt(viewModel.quote?.truckId);
+    (async () => {
+      try {
+        const payload = await previewLoadPlanGenerated({
+          quoteIds: [safeQuoteId],
+          ...(safeTruckId > 0 ? { truckId: safeTruckId } : {}),
+        });
+        if (cancelled) return;
+
+        const resolved = resolveLoadPlanPreview(payload);
+        setPreviewPlan(resolved.loadPlan);
+        setPreviewTruckSpec(resolved.truckSpec);
+      } catch {
+        if (cancelled) return;
+        setPreviewPlan(null);
+        setPreviewTruckSpec(null);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    hasDirectPlacements,
+    parsedMatch?.quoteId,
+    viewModel.quote?.quoteId,
+    viewModel.quote?.truckId,
+    viewModel.quote?.updatedAt,
+    viewModel.quoteId,
+  ]);
+
+  const inferredTruckSpec = useMemo(() => inferTruckSpecFromQuote(viewModel.quote), [viewModel.quote]);
+  const syntheticPlan = useMemo(
+    () => buildSyntheticLoadPlanFromQuote(viewModel.quote, inferredTruckSpec),
+    [inferredTruckSpec, viewModel.quote]
+  );
+  const previewPlacements = useMemo(() => normalizePlacementList(previewPlan?.placements), [previewPlan?.placements]);
+  const syntheticPlacements = useMemo(
+    () => normalizePlacementList(syntheticPlan?.placements),
+    [syntheticPlan?.placements]
+  );
+
+  const resolvedPlan = useMemo(() => {
+    if (directPlacements.length > 0) {
+      return { source: "match" as LoadPlanDataSource, placements: directPlacements };
+    }
+    if (previewPlacements.length > 0) {
+      return { source: "preview" as LoadPlanDataSource, placements: previewPlacements };
+    }
+    if (syntheticPlacements.length > 0) {
+      return { source: "quote_fallback" as LoadPlanDataSource, placements: syntheticPlacements };
+    }
+    return { source: "none" as LoadPlanDataSource, placements: [] as Placement[] };
+  }, [directPlacements, previewPlacements, syntheticPlacements]);
+
+  const placements: Placement[] = resolvedPlan.placements;
+  const hasPlacementPayload = placements.length > 0;
+  const orderedPlacements = useMemo(
+    () =>
+      [...placements].sort(
+        (a, b) => (toPositiveInt(a.stopOrder) || 9999) - (toPositiveInt(b.stopOrder) || 9999)
+      ),
+    [placements]
+  );
+  const truckSpec: TruckSpecReferenceResponse | undefined =
+    parsedMatch?.truckSpec ?? quoteWithPlan?.truckSpec ?? previewTruckSpec ?? inferredTruckSpec ?? undefined;
   const currentStep = resolveWorkflowStepIndex(uiState);
 
   const handleAcceptMatch = useCallback(() => {
@@ -1107,10 +1574,12 @@ export default function DriverOrderDetailRoute() {
 
         {/* Quote mode: route + LIFO sequence card always visible before 3D sim */}
         {isQuoteMode ? (
-          <QuoteModeRouteCard quote={viewModel.quote ?? (viewModel.match as any)} placements={placements} />
+          <QuoteModeRouteCard quote={viewModel.quote ?? (viewModel.match as any)} placements={orderedPlacements} />
         ) : null}
 
-        {hasPlacementPayload ? <DriverOrderLoadSimulation placements={placements} truckSpec={truckSpec} /> : null}
+        {hasPlacementPayload ? (
+          <DriverOrderLoadSimulation placements={orderedPlacements} truckSpec={truckSpec} source={resolvedPlan.source} />
+        ) : null}
 
         {hasPlacementPayload ? (
           <AppCard style={{ padding: 16 }}>
@@ -1123,8 +1592,8 @@ export default function DriverOrderDetailRoute() {
               </AppText>
             </View>
 
-            {placements.length > 0 ? (
-              placements.map((p, idx) => (
+            {orderedPlacements.length > 0 ? (
+              orderedPlacements.map((p, idx) => (
                 <View key={p.id ?? idx} style={themedStyles.orderItem}>
                   <View style={themedStyles.badge}>
                     <AppText variant="caption" color="white" weight="bold">

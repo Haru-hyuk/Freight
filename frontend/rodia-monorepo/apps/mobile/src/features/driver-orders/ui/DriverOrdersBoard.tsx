@@ -855,7 +855,11 @@ export function DriverOrdersBoard({
           showToast("오더 정보를 불러올 수 없습니다.");
           return;
         }
-        setActiveOrder(detail);
+        const fallbackStatus = typeof card.status === "string" ? card.status.trim() : "";
+        setActiveOrder({
+          ...detail,
+          status: (typeof detail.status === "string" && detail.status.trim()) || fallbackStatus || "READY",
+        });
         void loadOrders("refresh").then(() => {
           router.push("/(driver)/run");
         });
