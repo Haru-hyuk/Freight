@@ -12,10 +12,12 @@ import { DriverOrderActionBar } from "@/features/driver-orders/ui/detail/DriverO
 import { DriverOrderDetailHeader } from "@/features/driver-orders/ui/detail/DriverOrderDetailHeader";
 import { DriverOrderNegotiatingCard } from "@/features/driver-orders/ui/detail/DriverOrderNegotiatingCard";
 import { DriverOrderPaymentPendingCard } from "@/features/driver-orders/ui/detail/DriverOrderPaymentPendingCard";
+import { getDriverMarketRecommendationSelection } from "@/features/driver-orders/model/marketRecommendationSelection";
 import { acceptDriverMatch, postCounterOffer, uploadImage, type DriverPhotoUploadType } from "@/features/matching/api";
 import type { ParsedMatchResponseItem } from "@/features/matching/api/shipper-match-parser";
 import { useMatchDetail } from "@/features/matching/model/useMatchDetail";
 import CounterOfferModal, { type CounterOfferSubmitPayload } from "@/features/matching/ui/CounterOfferModal";
+import DriverMarketRecommendationPage from "@/pages/driver/matching/DriverMarketRecommendationPage";
 import type { QuoteDetailResponse } from "@/entities/quote/model/quote.types";
 import { previewLoadPlan as previewLoadPlanGenerated } from "@/shared/api/generated/driver-optimization-controller/driver-optimization-controller";
 import type { LoadPlanResponse, Placement, TruckSpecReferenceResponse } from "@/shared/api/generated/schemas";
@@ -41,6 +43,7 @@ const SCALE = 0.01;
 type DriverOrderRouteParams = {
   id?: string | string[];
   source?: string | string[];
+  recommendKey?: string | string[];
 };
 
 type MatchWithWorkflowPayload = ParsedMatchResponseItem & {
@@ -67,6 +70,11 @@ function parsePositiveRouteId(rawId: string | string[] | undefined): number {
 function parseRouteSource(rawSource: string | string[] | undefined): string {
   const candidate = Array.isArray(rawSource) ? rawSource[0] : rawSource;
   return String(candidate ?? "").trim().toLowerCase();
+}
+
+function parseRecommendKey(rawKey: string | string[] | undefined): string {
+  const candidate = Array.isArray(rawKey) ? rawKey[0] : rawKey;
+  return String(candidate ?? "").trim();
 }
 
 function resolveWorkflowStepIndex(uiState: DriverUiState): number {
@@ -1016,8 +1024,7 @@ const useStyles = createThemedStyles((theme) => {
   });
 });
 
-export default function DriverOrderDetailRoute() {
-  const params = useLocalSearchParams<DriverOrderRouteParams>();
+function DriverOrderDetailContent({ params }: { params: DriverOrderRouteParams }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const themedStyles = useStyles();
@@ -1640,4 +1647,19 @@ export default function DriverOrderDetailRoute() {
     />
   </>
   );
+}
+
+export default function DriverOrderDetailRoute() {
+  const params = useLocalSearchParams<DriverOrderRouteParams>();
+  const recommendKey = parseRecommendKey(params.recommendKey);
+  const recommendationSelection = useMemo(
+    () => (recommendKey ? getDriverMarketRecommendationSelection(recommendKey) : null),
+    [recommendKey]
+  );
+
+  if (recommendationSelection) {
+    return <DriverMarketRecommendationPage forcedKey={recommendKey} />;
+  }
+
+  return <DriverOrderDetailContent params={params} />;
 }

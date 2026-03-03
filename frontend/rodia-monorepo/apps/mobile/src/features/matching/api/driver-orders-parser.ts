@@ -17,7 +17,14 @@ export type ParsedDriverOrderQuote = {
   status?: string;
   originAddress?: string;
   destinationAddress?: string;
+  originLat?: number;
+  originLng?: number;
+  destinationLat?: number;
+  destinationLng?: number;
   distanceKm?: number;
+  weightKg?: number;
+  volumeCbm?: number;
+  allowCombine?: boolean;
   vehicleType?: string;
   vehicleBodyType?: string;
   loadMethod?: string;
@@ -80,7 +87,14 @@ function parseDriverOrderQuote(quote: QuoteDetailResponse | null): ParsedDriverO
     status: toOptionalText(quote.status),
     originAddress: toOptionalText(quote.originAddress),
     destinationAddress: toOptionalText(quote.destinationAddress),
+    originLat: toOptionalNumber(quote.originLat),
+    originLng: toOptionalNumber(quote.originLng),
+    destinationLat: toOptionalNumber(quote.destinationLat),
+    destinationLng: toOptionalNumber(quote.destinationLng),
     distanceKm: toOptionalDistance(quote.distanceKm),
+    weightKg: toOptionalNumber(quote.weightKg),
+    volumeCbm: toOptionalNumber(quote.volumeCbm),
+    allowCombine: typeof quote.allowCombine === "boolean" ? quote.allowCombine : undefined,
     vehicleType: toOptionalText(quote.vehicleType),
     vehicleBodyType: toOptionalText(quote.vehicleBodyType),
     loadMethod: toOptionalText(quote.loadMethod),
