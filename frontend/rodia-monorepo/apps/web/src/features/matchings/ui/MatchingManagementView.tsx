@@ -12,31 +12,59 @@ import {
 } from "@/features/matchings/api/matchingsApi";
 import { useMockMode } from "@/shared/lib/hooks/useMockMode";
 import { useRefreshCooldown } from "@/shared/lib/hooks/useRefreshCooldown";
+import { getMatchingProgressBadgeVariant, getMatchingProgressLabel } from "@/shared/lib/matching-progress";
 import { Badge } from "@/shared/ui/shadcn/badge";
 import { Button } from "@/shared/ui/shadcn/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/shadcn/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/shared/ui/shadcn/dialog";
 import { Input } from "@/shared/ui/shadcn/input";
+import { Label } from "@/shared/ui/shadcn/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/shared/ui/shadcn/table";
+import { Textarea } from "@/shared/ui/shadcn/textarea";
 
 type Notice = {
   tone: "info" | "error";
   message: string;
 };
 
-const STATUS_LABELS: Record<MatchingStatus, string> = {
-  [MatchingStatus.READY]: "대기",
-  [MatchingStatus.IN_TRANSIT]: "운송 중",
-  [MatchingStatus.COMPLETED]: "완료",
-  [MatchingStatus.CANCELLED]: "취소",
+type CancelDialogState = {
+  open: boolean;
+  row: MatchingItem | null;
+  reason: string;
+  error: string | null;
 };
 
+const STATUS_FILTER_OPTIONS: Array<{ label: string; value: "ALL" | MatchingStatus }> = [
+  { label: "전체 상태", value: "ALL" },
+  { label: "매칭중", value: MatchingStatus.READY },
+  { label: "배차중", value: MatchingStatus.IN_TRANSIT },
+  { label: "배차완료", value: MatchingStatus.COMPLETED },
+  { label: "취소", value: MatchingStatus.CANCELLED },
+];
+
 const SOURCE_LABELS: Record<MatchingSource, string> = {
-  [MatchingSource.ADMIN]: "관리 집계",
-  [MatchingSource.SHIPPER]: "화주 매칭",
-  [MatchingSource.DRIVER]: "차주 매칭",
-  [MatchingSource.OPEN_POOL]: "오픈 풀",
-  [MatchingSource.NOTIFICATION]: "알림 신호",
+  [MatchingSource.ADMIN]: "관리자",
+  [MatchingSource.SHIPPER]: "화주",
+  [MatchingSource.DRIVER]: "기사",
+  [MatchingSource.OPEN_POOL]: "공개 풀",
+  [MatchingSource.NOTIFICATION]: "알림 연동",
 };
+
+const SOURCE_FILTER_OPTIONS: Array<{ label: string; value: "ALL" | MatchingSource }> = [
+  { label: "전체 출처", value: "ALL" },
+  { label: "관리자", value: MatchingSource.ADMIN },
+  { label: "화주", value: MatchingSource.SHIPPER },
+  { label: "기사", value: MatchingSource.DRIVER },
+  { label: "공개 풀", value: MatchingSource.OPEN_POOL },
+  { label: "알림 연동", value: MatchingSource.NOTIFICATION },
+];
 
 function formatDateTime(value: string): string {
   const parsed = Date.parse(value);
@@ -44,40 +72,45 @@ function formatDateTime(value: string): string {
   return new Date(parsed).toLocaleString("ko-KR", { hour12: false });
 }
 
-function getStatusBadgeVariant(status: MatchingStatus): "default" | "secondary" | "destructive" | "outline" {
-  if (status === MatchingStatus.CANCELLED) return "destructive";
-  if (status === MatchingStatus.READY) return "secondary";
-  if (status === MatchingStatus.COMPLETED) return "default";
-  return "outline";
-}
-
-function getActionMessage(result: MatchingActionResult): Notice {
+function toNotice(result: MatchingActionResult, matchLabel: string, reason: string): Notice {
   if (!result.success) {
     return {
       tone: "error",
-      message: result.message ?? "매칭 상태 변경에 실패했습니다.",
+      message: result.message ?? "취소 처리에 실패했습니다.",
     };
   }
 
+  const reasonText = reason.trim().length > 0 ? ` (사유: ${reason.trim()})` : "";
   if (result.mode === "LOCAL_SESSION") {
     return {
       tone: "info",
-      message: result.message ?? "서버 반영 경로가 없어 현재 세션 화면에만 반영했습니다.",
+      message: `${matchLabel} 취소 요청을 화면에 반영했습니다.${reasonText} 서버 API 연동은 확인이 필요합니다.`,
     };
   }
 
   return {
     tone: "info",
-    message: "매칭 취소 요청을 처리했습니다.",
+    message: `${matchLabel} 취소 처리가 완료되었습니다.${reasonText}`,
   };
+}
+
+function SummaryCard({ label, value }: { label: string; value: number }) {
+  return (
+    <Card className="rounded-lg border border-border bg-background">
+      <CardContent className="space-y-1 p-4">
+        <p className="text-sm text-foreground">{label}</p>
+        <p className="text-2xl font-semibold text-foreground">{value}</p>
+      </CardContent>
+    </Card>
+  );
 }
 
 function useMatchingData() {
   const { enabled: mockModeEnabled } = useMockMode();
-
-  const [query, setQuery] = React.useState("");
-  const [status, setStatus] = React.useState<MatchingStatus | "ALL">("ALL");
-  const [source, setSource] = React.useState<MatchingSource | "ALL">("ALL");
+  const [searchInput, setSearchInput] = React.useState("");
+  const [search, setSearch] = React.useState("");
+  const [statusFilter, setStatusFilter] = React.useState<MatchingStatus | "ALL">("ALL");
+  const [sourceFilter, setSourceFilter] = React.useState<MatchingSource | "ALL">("ALL");
   const [page, setPage] = React.useState(1);
   const size = 20;
 
@@ -99,7 +132,6 @@ function useMatchingData() {
       unassigned: 0,
     },
   });
-  const [selectedId, setSelectedId] = React.useState<string | null>(null);
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -107,53 +139,41 @@ function useMatchingData() {
 
     try {
       const response = await fetchMatchings({
-        search: query.trim() || undefined,
-        status: status === "ALL" ? undefined : status,
-        source: source === "ALL" ? undefined : source,
+        search: search.trim() ? search.trim() : undefined,
+        status: statusFilter === "ALL" ? undefined : statusFilter,
+        source: sourceFilter === "ALL" ? undefined : sourceFilter,
         page,
         size,
       });
       setData(response);
     } catch {
       setData((prev) => ({ ...prev, items: [], total: 0 }));
-      setError("매칭 데이터를 불러오지 못했습니다.");
+      setError("매칭 목록을 불러오지 못했습니다.");
     } finally {
       setLoading(false);
     }
-  }, [page, query, size, source, status]);
+  }, [page, search, size, sourceFilter, statusFilter]);
 
   React.useEffect(() => {
     void load();
   }, [load, mockModeEnabled]);
 
-  React.useEffect(() => {
-    if (data.items.length === 0) {
-      setSelectedId(null);
-      return;
-    }
-
-    if (!selectedId || !data.items.some((item) => item.id === selectedId)) {
-      setSelectedId(data.items[0].id);
-    }
-  }, [data.items, selectedId]);
-
-  const selected = React.useMemo(
-    () => data.items.find((item) => item.id === selectedId) ?? null,
-    [data.items, selectedId],
-  );
-
   const totalPages = Math.max(1, Math.ceil(data.total / size));
 
+  const submitSearch = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setPage(1);
+    setSearch(searchInput);
+  };
+
   const runCancel = React.useCallback(
-    async (item: MatchingItem) => {
-      if (!item.canCancel || item.matchId === null) return;
-
-      setActioningId(item.id);
+    async (row: MatchingItem, reason: string) => {
+      if (!row.canCancel || row.matchId === null) return;
+      setActioningId(row.id);
       setNotice(null);
-
       try {
-        const result = await cancelMatching(item.matchId);
-        setNotice(getActionMessage(result));
+        const result = await cancelMatching(row.matchId);
+        setNotice(toNotice(result, row.id, reason));
       } finally {
         setActioningId(null);
         await load();
@@ -169,30 +189,138 @@ function useMatchingData() {
     setNotice,
     actioningId,
     data,
-    query,
-    setQuery,
-    status,
-    setStatus,
-    source,
-    setSource,
+    searchInput,
+    setSearchInput,
+    submitSearch,
+    statusFilter,
+    setStatusFilter,
+    sourceFilter,
+    setSourceFilter,
     page,
     setPage,
-    size,
     totalPages,
-    selected,
-    selectedId,
-    setSelectedId,
     load,
     runCancel,
   };
 }
 
-function InfoRow({ label, value }: { label: string; value: string }) {
+function MatchingDetailDialog({
+  row,
+  open,
+  onOpenChange,
+  onOpenCancel,
+}: {
+  row: MatchingItem | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onOpenCancel: (row: MatchingItem) => void;
+}) {
   return (
-    <div className="flex items-start justify-between gap-4 rounded-lg border border-border bg-background px-3 py-2 text-sm">
-      <span className="text-foreground/70">{label}</span>
-      <span className="text-right font-medium">{value}</span>
-    </div>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="rounded-lg border border-border bg-background">
+        <DialogHeader>
+          <DialogTitle>매칭 상세</DialogTitle>
+          <DialogDescription>목록에서 선택한 매칭 건의 상태와 운영 신호를 확인합니다.</DialogDescription>
+        </DialogHeader>
+
+        {row ? (
+          <div className="space-y-3">
+            <div className="rounded-lg border border-border bg-muted p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-lg font-semibold text-foreground">{row.id}</div>
+                <Badge variant={getMatchingProgressBadgeVariant(row.status)}>
+                  {getMatchingProgressLabel(row.status, row.accepted)}
+                </Badge>
+              </div>
+              <p className="mt-2 text-sm text-foreground">출처: {SOURCE_LABELS[row.source]}</p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2 text-sm">
+              <div className="rounded-lg border border-border bg-background px-3 py-2">견적 ID: {row.quoteId ? `Q-${row.quoteId}` : "-"}</div>
+              <div className="rounded-lg border border-border bg-background px-3 py-2">기사 ID: {row.driverId ? `D-${row.driverId}` : "미배정"}</div>
+              <div className="rounded-lg border border-border bg-background px-3 py-2">생성: {formatDateTime(row.createdAt)}</div>
+              <div className="rounded-lg border border-border bg-background px-3 py-2">갱신: {formatDateTime(row.updatedAt)}</div>
+              <div className="rounded-lg border border-border bg-background px-3 py-2">
+                운영 신호: {row.signal || "-"}
+              </div>
+              <div className="rounded-lg border border-border bg-background px-3 py-2">
+                연관 알림: {row.relatedNotificationIds.length > 0 ? row.relatedNotificationIds.join(", ") : "-"}
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        <DialogFooter className="gap-2">
+          <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
+            닫기
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={() => row && onOpenCancel(row)}
+            disabled={!row?.canCancel}
+          >
+            취소 요청 처리
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function MatchingCancelDialog({
+  state,
+  submitting,
+  onOpenChange,
+  onReasonChange,
+  onSubmit,
+}: {
+  state: CancelDialogState;
+  submitting: boolean;
+  onOpenChange: (open: boolean) => void;
+  onReasonChange: (value: string) => void;
+  onSubmit: () => void;
+}) {
+  return (
+    <Dialog open={state.open} onOpenChange={onOpenChange}>
+      <DialogContent className="rounded-lg border border-border bg-background">
+        <DialogHeader>
+          <DialogTitle>매칭 취소 검토</DialogTitle>
+          <DialogDescription>운영 기록을 위해 취소 사유를 입력한 뒤 취소 처리하세요.</DialogDescription>
+        </DialogHeader>
+
+        {state.row ? (
+          <div className="space-y-3">
+            <div className="rounded-lg border border-border bg-muted p-3 text-sm text-foreground">
+              대상: {state.row.id} / {state.row.quoteId ? `Q-${state.row.quoteId}` : "-"}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="matching-cancel-reason" className="text-sm font-semibold text-foreground">
+                취소 사유
+              </Label>
+              <Textarea
+                id="matching-cancel-reason"
+                value={state.reason}
+                onChange={(event) => onReasonChange(event.target.value)}
+                placeholder="취소 사유를 5자 이상 입력하세요."
+                className="border border-border bg-background text-foreground focus-visible:ring-2 focus-visible:ring-primary"
+              />
+              {state.error ? <p className="text-sm text-foreground">{state.error}</p> : null}
+            </div>
+          </div>
+        ) : null}
+
+        <DialogFooter className="gap-2">
+          <Button type="button" variant="secondary" onClick={() => onOpenChange(false)} disabled={submitting}>
+            닫기
+          </Button>
+          <Button type="button" variant="destructive" onClick={onSubmit} disabled={submitting || !state.row}>
+            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            취소 확정
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -205,30 +333,65 @@ export function MatchingManagementView() {
     setNotice,
     actioningId,
     data,
-    query,
-    setQuery,
-    status,
-    setStatus,
-    source,
-    setSource,
+    searchInput,
+    setSearchInput,
+    submitSearch,
+    statusFilter,
+    setStatusFilter,
+    sourceFilter,
+    setSourceFilter,
     page,
     setPage,
     totalPages,
-    selected,
-    selectedId,
-    setSelectedId,
     load,
     runCancel,
   } = useMatchingData();
+
+  const [selectedRow, setSelectedRow] = React.useState<MatchingItem | null>(null);
+  const [cancelState, setCancelState] = React.useState<CancelDialogState>({
+    open: false,
+    row: null,
+    reason: "",
+    error: null,
+  });
+
+  const openCancelDialog = (row: MatchingItem) => {
+    setCancelState({
+      open: true,
+      row,
+      reason: "",
+      error: null,
+    });
+  };
+
+  const closeCancelDialog = () => {
+    setCancelState({
+      open: false,
+      row: null,
+      reason: "",
+      error: null,
+    });
+  };
+
+  const submitCancel = async () => {
+    const row = cancelState.row;
+    if (!row) return;
+    const reason = cancelState.reason.trim();
+    if (reason.length < 5) {
+      setCancelState((prev) => ({ ...prev, error: "취소 사유를 5자 이상 입력하세요." }));
+      return;
+    }
+    await runCancel(row, reason);
+    closeCancelDialog();
+    setSelectedRow(null);
+  };
 
   return (
     <div className="min-h-screen space-y-6 bg-background text-foreground">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-semibold">매칭 관리</h1>
-          <p className="mt-1 text-sm text-foreground/70">
-            화주/차주 앱에서 생성된 매칭을 통합 조회하고 상태를 검토합니다.
-          </p>
+          <h1 className="text-3xl font-semibold text-foreground">매칭 관리</h1>
+          <p className="mt-1 text-sm text-foreground">매칭 목록을 조회하고 상세/취소 요청을 관리합니다.</p>
         </div>
         <Button
           type="button"
@@ -236,7 +399,6 @@ export function MatchingManagementView() {
           onClick={() => {
             if (!startCooldown()) return;
             setNotice(null);
-            setSelectedId(null);
             if (page !== 1) {
               setPage(1);
               return;
@@ -246,66 +408,28 @@ export function MatchingManagementView() {
           disabled={loading || isCoolingDown}
         >
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-          {isCoolingDown ? ` ${remainingSeconds}s` : null}
+          {isCoolingDown ? ` ${remainingSeconds}s` : ""}
           새로고침
         </Button>
       </div>
 
       {notice ? (
-        <div
-          className={
-            notice.tone === "error"
-              ? "rounded-lg border border-border bg-muted px-3 py-2 text-sm"
-              : "rounded-lg border border-border bg-muted px-3 py-2 text-sm"
-          }
-        >
-          {notice.message}
-        </div>
+        <div className="rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground">{notice.message}</div>
       ) : null}
-
       {error ? (
-        <div className="rounded-lg border border-border bg-muted px-3 py-2 text-sm">
-          {error}
-        </div>
+        <div className="rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground">{error}</div>
       ) : null}
 
       <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <Card className="rounded-lg border border-border bg-background">
-          <CardContent className="space-y-1 p-4">
-            <p className="text-sm text-foreground/70">총 매칭</p>
-            <p className="text-2xl font-semibold">{data.summary.total}</p>
-          </CardContent>
-        </Card>
-        <Card className="rounded-lg border border-border bg-background">
-          <CardContent className="space-y-1 p-4">
-            <p className="text-sm text-foreground/70">대기</p>
-            <p className="text-2xl font-semibold">{data.summary.ready}</p>
-          </CardContent>
-        </Card>
-        <Card className="rounded-lg border border-border bg-background">
-          <CardContent className="space-y-1 p-4">
-            <p className="text-sm text-foreground/70">운송 중</p>
-            <p className="text-2xl font-semibold">{data.summary.inTransit}</p>
-          </CardContent>
-        </Card>
-        <Card className="rounded-lg border border-border bg-background">
-          <CardContent className="space-y-1 p-4">
-            <p className="text-sm text-foreground/70">완료</p>
-            <p className="text-2xl font-semibold">{data.summary.completed}</p>
-          </CardContent>
-        </Card>
-        <Card className="rounded-lg border border-border bg-background">
-          <CardContent className="space-y-1 p-4">
-            <p className="text-sm text-foreground/70">취소</p>
-            <p className="text-2xl font-semibold">{data.summary.cancelled}</p>
-          </CardContent>
-        </Card>
-        <Card className="rounded-lg border border-border bg-background">
-          <CardContent className="space-y-1 p-4">
-            <p className="text-sm text-foreground/70">미배정</p>
-            <p className="text-2xl font-semibold">{data.summary.unassigned}</p>
-          </CardContent>
-        </Card>
+        <SummaryCard label="총 매칭" value={data.summary.total} />
+        <SummaryCard label="매칭중" value={data.summary.unassigned} />
+        <SummaryCard
+          label="배차중"
+          value={data.summary.inTransit + Math.max(0, data.summary.ready - data.summary.unassigned)}
+        />
+        <SummaryCard label="배차완료" value={data.summary.completed} />
+        <SummaryCard label="취소" value={data.summary.cancelled} />
+        <SummaryCard label="운행중" value={data.summary.inTransit} />
       </div>
 
       <Card className="rounded-lg border border-border bg-background">
@@ -313,50 +437,61 @@ export function MatchingManagementView() {
           <CardTitle className="text-base">검색 및 필터</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground/60" />
+          <form className="relative" onSubmit={submitSearch}>
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground" />
             <Input
-              value={query}
-              onChange={(event) => {
-                setQuery(event.target.value);
-                setPage(1);
-              }}
-              placeholder="매칭 ID, 견적 ID, 기사 ID, 이벤트 키워드"
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
+              placeholder="매칭 ID, 견적 ID, 기사 ID, 신호 텍스트 검색"
               className="border border-border bg-background pl-10 text-foreground focus-visible:ring-2 focus-visible:ring-primary"
             />
-          </div>
+          </form>
+
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             <select
-              value={status}
+              value={statusFilter}
               onChange={(event) => {
-                setStatus(event.target.value as MatchingStatus | "ALL");
                 setPage(1);
+                setStatusFilter(event.target.value as MatchingStatus | "ALL");
               }}
               className="h-10 rounded-md border border-border bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             >
-              <option value="ALL">상태 전체</option>
-              <option value={MatchingStatus.READY}>대기</option>
-              <option value={MatchingStatus.IN_TRANSIT}>운송 중</option>
-              <option value={MatchingStatus.COMPLETED}>완료</option>
-              <option value={MatchingStatus.CANCELLED}>취소</option>
+              {STATUS_FILTER_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
+
             <select
-              value={source}
+              value={sourceFilter}
               onChange={(event) => {
-                setSource(event.target.value as MatchingSource | "ALL");
                 setPage(1);
+                setSourceFilter(event.target.value as MatchingSource | "ALL");
               }}
               className="h-10 rounded-md border border-border bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             >
-              <option value="ALL">출처 전체</option>
-              <option value={MatchingSource.ADMIN}>관리 집계</option>
-              <option value={MatchingSource.SHIPPER}>화주 매칭</option>
-              <option value={MatchingSource.DRIVER}>차주 매칭</option>
-              <option value={MatchingSource.OPEN_POOL}>오픈 풀</option>
-              <option value={MatchingSource.NOTIFICATION}>알림 신호</option>
+              {SOURCE_FILTER_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
-            <div className="flex justify-end">
-              <Button type="button" variant="secondary" onClick={() => void load()} disabled={loading}>
+
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setSearchInput("");
+                  setStatusFilter("ALL");
+                  setSourceFilter("ALL");
+                  setPage(1);
+                }}
+              >
+                초기화
+              </Button>
+              <Button type="button" onClick={() => void load()}>
                 적용
               </Button>
             </div>
@@ -364,186 +499,122 @@ export function MatchingManagementView() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
-        <Card className="rounded-lg border border-border bg-background">
-          <CardHeader>
-            <CardTitle className="text-base">매칭 목록</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto rounded-lg border border-border bg-background">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted">
-                    <TableHead>매칭</TableHead>
-                    <TableHead>상태</TableHead>
-                    <TableHead>연관 정보</TableHead>
-                    <TableHead>출처</TableHead>
-                    <TableHead>갱신 시각</TableHead>
-                    <TableHead className="text-right">조치</TableHead>
+      <Card className="rounded-lg border border-border bg-background">
+        <CardHeader>
+          <CardTitle className="text-base">매칭 목록</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto rounded-lg border border-border bg-background">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted">
+                  <TableHead>매칭</TableHead>
+                  <TableHead>진행 상태</TableHead>
+                  <TableHead>배차 정보</TableHead>
+                  <TableHead>출처</TableHead>
+                  <TableHead>갱신 시각</TableHead>
+                  <TableHead className="text-right">조치</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="py-10 text-center text-foreground">
+                      로딩 중입니다.
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loading ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="py-10 text-center text-foreground/70">
-                        로딩 중...
+                ) : data.items.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="py-10 text-center text-foreground">
+                      조회 결과가 없습니다.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  data.items.map((item) => (
+                    <TableRow key={item.id} className="cursor-pointer hover:bg-muted" onClick={() => setSelectedRow(item)}>
+                      <TableCell>
+                        <div className="font-semibold text-foreground">{item.id}</div>
+                        <div className="text-xs text-foreground">{item.quoteId ? `Q-${item.quoteId}` : "-"}</div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={getMatchingProgressBadgeVariant(item.status)}>
+                          {getMatchingProgressLabel(item.status, item.accepted)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm text-foreground">{item.driverId ? `D-${item.driverId}` : "미배정"}</div>
+                        <div className="text-xs text-foreground">{item.signal}</div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{SOURCE_LABELS[item.source]}</Badge>
+                      </TableCell>
+                      <TableCell className="text-sm text-foreground">{formatDateTime(item.updatedAt)}</TableCell>
+                      <TableCell className="text-right">
+                        {item.canCancel ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="destructive"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              openCancelDialog(item);
+                            }}
+                            disabled={actioningId === item.id}
+                          >
+                            취소 검토
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-foreground">처리 완료</span>
+                        )}
                       </TableCell>
                     </TableRow>
-                  ) : data.items.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="py-10 text-center text-foreground/70">
-                        조회 결과가 없습니다.
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    data.items.map((item) => (
-                      <TableRow
-                        key={item.id}
-                        className={item.id === selectedId ? "cursor-pointer bg-muted" : "cursor-pointer hover:bg-muted"}
-                        onClick={() => setSelectedId(item.id)}
-                      >
-                        <TableCell>
-                          <div className="font-semibold">{item.id}</div>
-                          <div className="text-xs text-foreground/70">Q-{item.quoteId ?? "-"}</div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={getStatusBadgeVariant(item.status)}>
-                            {STATUS_LABELS[item.status]}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="text-sm">기사: {item.driverId !== null ? `D-${item.driverId}` : "미배정"}</div>
-                          <div className="text-xs text-foreground/70">{item.signal}</div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{SOURCE_LABELS[item.source]}</Badge>
-                        </TableCell>
-                        <TableCell className="text-sm">{formatDateTime(item.updatedAt)}</TableCell>
-                        <TableCell className="text-right">
-                          {item.canCancel ? (
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="destructive"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                void runCancel(item);
-                              }}
-                              disabled={actioningId === item.id}
-                            >
-                              {actioningId === item.id ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
-                              취소
-                            </Button>
-                          ) : (
-                            <span className="text-xs text-foreground/70">-</span>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-            <div className="flex items-center justify-between px-4 py-3">
-              <span className="text-sm text-foreground/70">
-                총 {data.total}건
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+
+          <div className="flex items-center justify-between px-4 py-3">
+            <span className="text-sm text-foreground">총 {data.total}건</span>
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((prev) => prev - 1)}>
+                이전
+              </Button>
+              <span className="text-sm text-foreground">
+                {page}/{totalPages}
               </span>
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  disabled={page <= 1}
-                  onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-                >
-                  이전
-                </Button>
-                <span className="text-sm text-foreground/70">
-                  {page}/{totalPages}
-                </span>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  disabled={page >= totalPages}
-                  onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
-                >
-                  다음
-                </Button>
-              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={page >= totalPages}
+                onClick={() => setPage((prev) => prev + 1)}
+              >
+                다음
+              </Button>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </CardContent>
+      </Card>
 
-        <Card className="rounded-lg border border-border bg-background">
-          <CardHeader>
-            <CardTitle className="text-base">매칭 상세</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {selected ? (
-              <>
-                <div className="rounded-lg border border-border bg-muted p-3">
-                  <div className="flex items-center justify-between">
-                    <div className="text-base font-semibold">{selected.id}</div>
-                    <Badge variant={getStatusBadgeVariant(selected.status)}>
-                      {STATUS_LABELS[selected.status]}
-                    </Badge>
-                  </div>
-                  <p className="mt-1 text-xs text-foreground/70">{SOURCE_LABELS[selected.source]}</p>
-                </div>
+      <MatchingDetailDialog
+        row={selectedRow}
+        open={Boolean(selectedRow)}
+        onOpenChange={(open) => {
+          if (!open) setSelectedRow(null);
+        }}
+        onOpenCancel={openCancelDialog}
+      />
 
-                <InfoRow label="견적 ID" value={selected.quoteId !== null ? `Q-${selected.quoteId}` : "-"} />
-                <InfoRow label="기사 ID" value={selected.driverId !== null ? `D-${selected.driverId}` : "미배정"} />
-                <InfoRow label="생성 시각" value={formatDateTime(selected.createdAt)} />
-                <InfoRow label="수락 시각" value={selected.acceptedAt ? formatDateTime(selected.acceptedAt) : "-"} />
-                <InfoRow label="최종 갱신" value={formatDateTime(selected.updatedAt)} />
-                <InfoRow
-                  label="알림 연결"
-                  value={
-                    selected.relatedNotificationIds.length > 0
-                      ? selected.relatedNotificationIds.map((id) => `#${id}`).join(", ")
-                      : "없음"
-                  }
-                />
-
-                <div className="rounded-lg border border-border bg-background p-3">
-                  <div className="text-sm font-semibold">운영 메모</div>
-                  <p className="mt-1 text-sm text-foreground/70">{selected.signal}</p>
-                </div>
-
-                {selected.syncMode === "LOCAL_SESSION" ? (
-                  <div className="rounded-lg border border-border bg-muted px-3 py-2 text-xs text-foreground/70">
-                    현재 상태는 세션 반영 결과이며 서버 반영 여부를 추가 확인해야 합니다.
-                  </div>
-                ) : null}
-
-                <div className="flex gap-2">
-                  {selected.canCancel ? (
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      className="flex-1"
-                      onClick={() => void runCancel(selected)}
-                      disabled={actioningId === selected.id}
-                    >
-                      {actioningId === selected.id ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                      취소 요청
-                    </Button>
-                  ) : (
-                    <Button type="button" variant="secondary" className="flex-1" disabled>
-                      처리 완료
-                    </Button>
-                  )}
-                </div>
-              </>
-            ) : (
-              <div className="rounded-lg border border-border bg-muted p-6 text-center text-sm text-foreground/70">
-                목록에서 매칭 건을 선택하면 상세 정보가 표시됩니다.
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+      <MatchingCancelDialog
+        state={cancelState}
+        submitting={Boolean(cancelState.row && actioningId === cancelState.row.id)}
+        onOpenChange={(open) => {
+          if (!open) closeCancelDialog();
+        }}
+        onReasonChange={(value) => setCancelState((prev) => ({ ...prev, reason: value, error: null }))}
+        onSubmit={() => void submitCancel()}
+      />
     </div>
   );
 }

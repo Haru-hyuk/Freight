@@ -22,6 +22,8 @@ import QuoteDetailPage from "@/pages/quotes/QuoteDetailPage";
 import MatchingListPage from "@/pages/matchings/MatchingListPage";
 import MatchingDetailPage from "@/pages/matchings/MatchingDetailPage";
 import OrdersMonitoringPage from "@/pages/orders/OrdersMonitoringPage";
+import OrderCancellationRequestsPage from "@/pages/orders/OrderCancellationRequestsPage";
+import OrderCancellationRequestDetailPage from "@/pages/orders/OrderCancellationRequestDetailPage";
 
 import UserListPage from "@/pages/users/UserListPage";
 import ShipperListPage from "@/pages/users/ShipperListPage";
@@ -31,6 +33,7 @@ import UserDetailPage from "@/pages/users/UserDetailPage";
 import SanctionsLogPage from "@/pages/sanctions/SanctionsLogPage";
 import PricingManagementPage from "@/pages/ops/PricingManagementPage";
 import DeviationManagementPage from "@/pages/ops/DeviationManagementPage";
+import MatchingAnomalyManagementPage from "@/pages/ops/MatchingAnomalyManagementPage";
 import ActivityLogPage from "@/pages/ops/ActivityLogPage";
 import SettingsPage from "@/pages/ops/SettingsPage";
 import NotFoundPage from "@/pages/not-found/NotFoundPage";
@@ -58,6 +61,8 @@ export const router = createBrowserRouter([
               { path: "/delivery/history", element: <DeliveryHistoryPage /> },
               { path: "/dispatch", element: <DispatchManagementPage /> },
               { path: "/orders/monitoring", element: <OrdersMonitoringPage /> },
+              { path: "/orders/cancellations", element: <OrderCancellationRequestsPage /> },
+              { path: "/orders/cancellations/:requestId", element: <OrderCancellationRequestDetailPage /> },
 
               { path: "/drivers/approvals", element: <DriverApprovalPage /> },
               { path: "/trucks/approvals", element: <TruckApprovalPage /> },
@@ -81,6 +86,8 @@ export const router = createBrowserRouter([
 
               { path: "/ops/pricing", element: <PricingManagementPage /> },
               { path: "/ops/deviations", element: <DeviationManagementPage /> },
+              { path: "/ops/matching-anomalies", element: <MatchingAnomalyManagementPage /> },
+              { path: "/ops/matching-anomalies/:requestId", element: <OrderCancellationRequestDetailPage /> },
               { path: "/ops/sanctions/logs", element: <SanctionsLogPage /> },
               { path: "/ops/activity-logs", element: <ActivityLogPage /> },
               { path: "/settings", element: <SettingsPage /> },

@@ -1,5 +1,5 @@
-import { LiveMonitoringView } from "@/features/delivery/ui/LiveMonitoringView";
+import { OrdersMonitoringView } from "@/features/orders/ui/OrdersMonitoringView";
 
 export default function OrdersMonitoringPage() {
-  return <LiveMonitoringView />; // MODIFIED: 기존 경로 호환용
+  return <OrdersMonitoringView initialTab="monitoring" />;
 }

@@ -40,11 +40,11 @@ export function DispatchManagementView() {
   }, [load]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 text-slate-900">
+    <div className="min-h-screen bg-background text-foreground">
       <div className="space-y-6">
         <div>
-          <h2 className="text-3xl font-semibold text-slate-900">배차 관리</h2>
-          <p className="mt-1 text-base text-slate-600">
+          <h2 className="text-3xl font-semibold text-foreground">배차 관리</h2>
+          <p className="mt-1 text-base text-foreground">
             ERD 기준 관리자 운영 항목(매칭, 견적, 경로, 결제, 정산, 알림, 이탈) 정보를 확인합니다.
           </p>
         </div>

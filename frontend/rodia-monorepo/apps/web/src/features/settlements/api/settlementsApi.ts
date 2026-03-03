@@ -218,7 +218,7 @@ export async function reviewSettlement(payload: SettlementReviewPayload): Promis
       action: "SETTLEMENT_REVIEWED",
       targetId: payload.settlementId,
       mode: "MOCK",
-      message: `Settlement ${payload.settlementId} review ${payload.action === "APPROVE" ? "approved" : "rejected"}`,
+      message: `\uC815\uC0B0 ${payload.settlementId} \uAC80\uD1A0 ${payload.action === "APPROVE" ? "\uC2B9\uC778" : "\uBC18\uB824"}`,
     });
     return;
   }
@@ -254,6 +254,6 @@ export async function reviewSettlement(payload: SettlementReviewPayload): Promis
     action: "SETTLEMENT_REVIEWED",
     targetId: payload.settlementId,
     mode: "REAL",
-    message: `Settlement ${payload.settlementId} review ${payload.action === "APPROVE" ? "approved" : "rejected"}`,
+    message: `\uC815\uC0B0 ${payload.settlementId} \uAC80\uD1A0 ${payload.action === "APPROVE" ? "\uC2B9\uC778" : "\uBC18\uB824"}`,
   });
 }
