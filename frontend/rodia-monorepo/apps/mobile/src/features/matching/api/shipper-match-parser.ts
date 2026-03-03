@@ -91,21 +91,21 @@ function unwrapListPayload(value: unknown): unknown[] {
 
 function parseMatchResponseItem(value: unknown): ParsedMatchResponseItem | null {
   const source = asObject(value);
-  const matchId = parseMatchPositiveInt(source.matchId);
+  const matchId = parseMatchPositiveInt(source.matchId ?? source.id ?? source.match_id);
   if (matchId <= 0) return null;
 
-  const quoteId = parseMatchPositiveInt(source.quoteId);
-  const driverId = parseMatchPositiveInt(source.driverId);
+  const quoteId = parseMatchPositiveInt(source.quoteId ?? source.quote_id);
+  const driverId = parseMatchPositiveInt(source.driverId ?? source.driver_id);
 
   return {
     matchId,
     quoteId: quoteId > 0 ? quoteId : undefined,
     driverId: driverId > 0 ? driverId : undefined,
-    accepted: toOptionalBoolean(source.accepted),
-    status: toNormalizedMatchStatus(source.status),
-    acceptedAt: toOptionalText(source.acceptedAt),
-    createdAt: toOptionalText(source.createdAt),
-    updatedAt: toOptionalText(source.updatedAt),
+    accepted: toOptionalBoolean(source.accepted ?? source.isAccepted ?? source.is_accepted),
+    status: toNormalizedMatchStatus(source.status ?? source.matchStatus ?? source.match_status),
+    acceptedAt: toOptionalText(source.acceptedAt ?? source.accepted_at),
+    createdAt: toOptionalText(source.createdAt ?? source.created_at),
+    updatedAt: toOptionalText(source.updatedAt ?? source.updated_at),
     // 선택적 페이로드 필드 — 서버/mock에서 내려오면 그대로 전달, 없으면 undefined
     loadPlan: source.loadPlan !== undefined ? (source.loadPlan as LoadPlanResponse) : undefined,
     truckSpec: source.truckSpec !== undefined ? (source.truckSpec as TruckSpecReferenceResponse) : undefined,

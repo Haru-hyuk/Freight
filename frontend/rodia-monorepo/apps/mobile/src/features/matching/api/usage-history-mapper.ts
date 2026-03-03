@@ -148,7 +148,7 @@ export function mapBackendStatusToCustomerUiState(status: BackendStatus): Custom
     case "OPEN":
       return "REQUESTED";
     case "MATCHED":
-      return "PICKUP_IN_PROGRESS";
+      return "PAYMENT_REQUIRED";
     case "READY":
       return "PAYMENT_REQUIRED";
     case "IN_TRANSIT":
@@ -278,6 +278,28 @@ function extractCounterOfferId(match: any): number | undefined {
   return undefined;
 }
 
+function hasPendingCounterOffer(match: any): boolean {
+  const statuses = [
+    match?.counterOfferStatus,
+    match?.counterOffer?.status,
+    match?.offer?.status,
+    match?.counter_offer_status,
+  ]
+    .map((v) => String(v ?? "").trim().toUpperCase())
+    .filter(Boolean);
+
+  if (statuses.some((s) => s.includes("PENDING") || s.includes("PROPOS"))) return true;
+  if (extractCounterOfferId(match)) return true;
+
+  const proposedPriceCandidates = [
+    match?.counterOfferProposedPrice,
+    match?.counterOffer?.proposedPrice,
+    match?.offer?.proposedPrice,
+    match?.suggestedPrice,
+  ];
+  return proposedPriceCandidates.some((v) => Number.isFinite(Number(v)) && Number(v) > 0);
+}
+
 // ---------------------------------------------------------------------------
 // Main mapper
 // ---------------------------------------------------------------------------
@@ -291,6 +313,7 @@ export function mapToUsageHistoryItem(match: any, quote?: any): ParsedUsageHisto
   const isProposed =
     match?.isProposal === true ||
     match?.isCounterOffer === true ||
+    hasPendingCounterOffer(match) ||
     (typeof match?.suggestedPrice === "number" && match.suggestedPrice > 0) ||
     String(match?.status ?? "").toUpperCase().includes("PROPOS") ||
     String(quote?.status ?? "").toUpperCase().includes("PROPOS");
