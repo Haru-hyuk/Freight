@@ -1,4 +1,4 @@
-﻿type ApiPathEnv = {
+type ApiPathEnv = {
   VITE_API_AUTH_ADMIN_LOGIN_PATH?: string;
   VITE_API_AUTH_LOGOUT_PATH?: string;
   VITE_API_ADMIN_ANNOUNCEMENTS_PATH?: string;
@@ -10,6 +10,7 @@
   VITE_API_DRIVER_TRUCKS_PATH?: string;
   VITE_API_ADMIN_SHIPPERS_PATH?: string;
   VITE_API_ADMIN_DRIVERS_PATH?: string;
+  VITE_API_ADMIN_USERS_PATH?: string;
   VITE_API_ADMIN_DEVIATIONS_PATH?: string;
   VITE_API_ADMIN_SANCTIONS_LOGS_PATH?: string;
   VITE_API_ADMIN_ACTIVITY_LOGS_PATH?: string;
@@ -19,6 +20,12 @@
   VITE_API_SHIPPER_SETTLEMENTS_PATH?: string;
   VITE_API_DRIVER_SETTLEMENTS_PATH?: string;
   VITE_API_SHIPPER_SETTLEMENT_CONFIRM_PATH?: string;
+  VITE_API_ADMIN_TRANSPORT_QUOTES_PATH?: string;
+  VITE_API_ADMIN_TRANSPORT_MATCHES_PATH?: string;
+  VITE_API_ADMIN_TRANSPORT_PAYMENTS_PATH?: string;
+  VITE_API_ADMIN_TRANSPORT_SETTLEMENTS_PATH?: string;
+  VITE_API_ADMIN_ORDER_CANCELLATION_REQUESTS_PATH?: string;
+  VITE_API_ADMIN_ORDER_CANCELLATION_REVIEW_PATH?: string;
 };
 
 function resolvePath(value: string | undefined, fallback: string): string {
@@ -51,6 +58,10 @@ const shipperSettlementConfirmTemplate = resolvePath(
   env.VITE_API_SHIPPER_SETTLEMENT_CONFIRM_PATH,
   "/api/shipper/settlements/:matchId/confirm",
 );
+const adminOrderCancellationReviewTemplate = resolvePath(
+  env.VITE_API_ADMIN_ORDER_CANCELLATION_REVIEW_PATH,
+  "/api/admin/orders/cancellations/:requestId/review",
+);
 
 export const apiPaths = {
   authAdminLogin: resolvePath(env.VITE_API_AUTH_ADMIN_LOGIN_PATH, "/api/auth/admin/login"),
@@ -67,6 +78,7 @@ export const apiPaths = {
 
   adminShippers: resolvePath(env.VITE_API_ADMIN_SHIPPERS_PATH, "/api/admin/users/shippers"),
   adminDrivers: resolvePath(env.VITE_API_ADMIN_DRIVERS_PATH, "/api/admin/users/drivers"),
+  adminUsers: resolvePath(env.VITE_API_ADMIN_USERS_PATH, "/api/admin/users"),
   adminDeviations: resolvePath(env.VITE_API_ADMIN_DEVIATIONS_PATH, "/api/admin/ops/deviations"),
   adminSanctionsLogs: resolvePath(env.VITE_API_ADMIN_SANCTIONS_LOGS_PATH, "/api/admin/ops/sanctions/logs"),
   adminActivityLogs: resolvePath(env.VITE_API_ADMIN_ACTIVITY_LOGS_PATH, "/api/admin/ops/activity-logs"),
@@ -87,5 +99,19 @@ export const apiPaths = {
       shipperSettlementConfirmTemplate,
       "/api/shipper/settlements/:matchId/confirm",
       { matchId },
+    ),
+  adminTransportQuotes: resolvePath(env.VITE_API_ADMIN_TRANSPORT_QUOTES_PATH, "/api/admin/quotes"),
+  adminTransportMatches: resolvePath(env.VITE_API_ADMIN_TRANSPORT_MATCHES_PATH, "/api/admin/matches"),
+  adminTransportPayments: resolvePath(env.VITE_API_ADMIN_TRANSPORT_PAYMENTS_PATH, "/api/admin/payments"),
+  adminTransportSettlements: resolvePath(env.VITE_API_ADMIN_TRANSPORT_SETTLEMENTS_PATH, "/api/admin/settlements"),
+  adminOrderCancellationRequests: resolvePath(
+    env.VITE_API_ADMIN_ORDER_CANCELLATION_REQUESTS_PATH,
+    "/api/admin/orders/cancellations",
+  ),
+  adminOrderCancellationReview: (requestId: string) =>
+    resolveTemplate(
+      adminOrderCancellationReviewTemplate,
+      "/api/admin/orders/cancellations/:requestId/review",
+      { requestId },
     ),
 } as const;

@@ -6,6 +6,7 @@ import { Badge } from "@/shared/ui/shadcn/badge";
 import { Button } from "@/shared/ui/shadcn/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/shadcn/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/shared/ui/shadcn/dialog";
+import { getMatchingProgressBadgeVariant, getMatchingProgressLabel } from "@/shared/lib/matching-progress";
 import { Skeleton } from "@/shared/ui/shadcn/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/shared/ui/shadcn/table";
 
@@ -21,10 +22,7 @@ function formatCurrency(value: number) {
 }
 
 function MatchStatusBadge({ status }: { status: DispatchRow["matchStatus"] }) {
-  if (status === "COMPLETED") return <Badge variant="secondary">완료</Badge>;
-  if (status === "CANCELLED") return <Badge variant="destructive">취소</Badge>;
-  if (status === "IN_TRANSIT") return <Badge variant="outline">운송 중</Badge>;
-  return <Badge variant="outline">준비</Badge>;
+  return <Badge variant={getMatchingProgressBadgeVariant(status)}>{getMatchingProgressLabel(status)}</Badge>;
 }
 
 function PaymentStatusBadge({ status }: { status: DispatchRow["paymentStatus"] }) {

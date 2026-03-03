@@ -17,73 +17,73 @@ export type NavGroup = {
 
 export const ADMIN_NAV_GROUPS: NavGroup[] = [
   {
-    title: "메인",
-    description: "운영 현황 요약",
+    title: "\uBA54\uC778",
+    description: "\uC6B4\uC601 \uD604\uD669 \uC694\uC57D",
     items: [
       {
-        label: "운영 대시보드",
+        label: "\uC6B4\uC601 \uB300\uC2DC\uBCF4\uB4DC",
         to: "/dashboard",
         icon: "layout-dashboard",
       },
     ],
   },
   {
-    title: "운송 관리",
-    description: "견적, 배차, 매칭, 배송",
+    title: "\uC6B4\uC1A1 \uAD00\uB9AC",
+    description: "\uACAC\uC801, \uBC30\uCC28, \uB9E4\uCE6D, \uBC30\uC1A1",
     items: [
       {
-        label: "배송 실시간 모니터링",
+        label: "\uBC30\uC1A1 \uC2E4\uC2DC\uAC04 \uBAA8\uB2C8\uD130\uB9C1",
         to: "/delivery/live",
         icon: "map-pin",
       },
       {
-        label: "배송 이력",
+        label: "\uBC30\uC1A1 \uC774\uB825",
         to: "/delivery/history",
         icon: "history",
       },
       {
-        label: "견적 관리",
+        label: "\uACAC\uC801 \uAD00\uB9AC",
         to: "/quotes",
         icon: "file-text",
       },
       {
-        label: "배차 관리",
+        label: "\uBC30\uCC28 \uAD00\uB9AC",
         to: "/dispatch",
         icon: "truck",
       },
       {
-        label: "매칭 관리",
+        label: "\uB9E4\uCE6D \uAD00\uB9AC",
         to: "/matchings",
         icon: "link-2",
       },
     ],
   },
   {
-    title: "회원 관리",
-    description: "전체 회원, 화주, 차주",
+    title: "\uD68C\uC6D0 \uAD00\uB9AC",
+    description: "\uC804\uCCB4 \uD68C\uC6D0, \uD654\uC8FC, \uCC28\uC8FC",
     items: [
       {
-        label: "전체 회원",
+        label: "\uC804\uCCB4 \uD68C\uC6D0",
         to: "/users",
         icon: "users",
       },
       {
-        label: "화주 관리",
+        label: "\uD654\uC8FC \uAD00\uB9AC",
         to: "/users/shippers",
         icon: "briefcase",
       },
       {
-        label: "차주 관리",
+        label: "\uCC28\uC8FC \uAD00\uB9AC",
         to: "/users/drivers",
         icon: "user-check",
       },
       {
-        label: "차주 승인",
+        label: "\uCC28\uC8FC \uC2B9\uC778",
         to: "/drivers/approvals",
         icon: "check-circle",
       },
       {
-        label: "차량 승인",
+        label: "\uCC28\uB7C9 \uC2B9\uC778",
         to: "/trucks/approvals",
         icon: "truck-check",
         badge: { count: 12, variant: "warning" },
@@ -91,11 +91,11 @@ export const ADMIN_NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    title: "정산 관리",
-    description: "정산 승인, 출금 요청, 정산 이력",
+    title: "\uC815\uC0B0 \uAD00\uB9AC",
+    description: "\uC815\uC0B0 \uC2B9\uC778, \uCD9C\uAE08 \uC694\uCCAD, \uC815\uC0B0 \uC774\uB825",
     items: [
       {
-        label: "정산 관리",
+        label: "\uC815\uC0B0 \uAD00\uB9AC",
         to: "/settlement",
         icon: "wallet",
         badge: { count: 8, variant: "info" },
@@ -103,32 +103,37 @@ export const ADMIN_NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    title: "운영 관리",
-    description: "요율, 이탈, 제재, 로그",
+    title: "\uC6B4\uC601 \uAD00\uB9AC",
+    description: "\uC694\uC728, \uC774\uC0C1\uC9D5\uD6C4, \uC81C\uC7AC, \uB85C\uADF8",
     items: [
       {
-        label: "배송 요율표",
+        label: "\uBC30\uC1A1 \uC694\uC728\uD45C",
         to: "/ops/pricing",
         icon: "tag",
       },
       {
-        label: "이상 징후",
+        label: "\uC774\uC0C1 \uC9D5\uD6C4",
         to: "/ops/deviations",
         icon: "alert-circle",
         badge: { count: 7, variant: "danger" },
       },
       {
-        label: "제재 로그",
+        label: "\uB9E4\uCE6D \uCDE8\uC18C \uC694\uCCAD",
+        to: "/ops/matching-anomalies",
+        icon: "alert-circle",
+      },
+      {
+        label: "\uC81C\uC7AC \uB85C\uADF8",
         to: "/ops/sanctions/logs",
         icon: "ban",
       },
       {
-        label: "활동 로그",
+        label: "\uD65C\uB3D9 \uB85C\uADF8",
         to: "/ops/activity-logs",
         icon: "log",
       },
       {
-        label: "설정",
+        label: "\uC124\uC815",
         to: "/settings",
         icon: "settings",
       },
@@ -145,5 +150,5 @@ export function getPageName(pathname: string): string {
     }
   }
 
-  return "운영";
+  return "\uC6B4\uC601";
 }

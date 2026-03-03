@@ -63,6 +63,8 @@ type NavItemLinkProps = {
   isChild?: boolean;
 };
 
+const OPERATIONS_GROUP_TITLE = "\uC6B4\uC601 \uAD00\uB9AC";
+
 function NavItemLink({ item, isChild = false }: NavItemLinkProps) {
   if (item.disabled) {
     return (
@@ -108,11 +110,16 @@ export default function AdminLayout() {
   const pageName = React.useMemo(() => getPageName(location.pathname), [location.pathname]);
   const { enabled: mockModeEnabled, setEnabled: setMockModeEnabled } = useMockMode();
 
-  const [expandedGroups, setExpandedGroups] = React.useState<Record<string, boolean>>({
-    "운송 관리": true,
-    "회원 관리": true,
-    "정산 관리": true,
-    "운영 관리": false,
+  const [expandedGroups, setExpandedGroups] = React.useState<Record<string, boolean>>(() => {
+    const initialState: Record<string, boolean> = {};
+
+    for (let index = 1; index < ADMIN_NAV_GROUPS.length; index += 1) {
+      const group = ADMIN_NAV_GROUPS[index];
+      if (!group) continue;
+      initialState[group.title] = group.title !== OPERATIONS_GROUP_TITLE;
+    }
+
+    return initialState;
   });
 
   const toggleGroup = (groupTitle: string) => {
@@ -143,7 +150,7 @@ export default function AdminLayout() {
           <div className="flex h-16 items-center px-4">
             <div className="flex items-center gap-2">
               <span className="inline-flex h-3 w-3 rounded-full bg-primary" />
-              <span className="text-base font-bold">Rodia Admin</span>
+              <span className="text-base font-bold">Rodia \uAD00\uB9AC\uC790</span>
             </div>
           </div>
 
@@ -193,7 +200,7 @@ export default function AdminLayout() {
 
           <div className="px-3 pb-4 pt-2">
             <Button type="button" className="w-full text-base" onClick={handleLogout}>
-              로그아웃
+              \uB85C\uADF8\uC544\uC6C3
             </Button>
           </div>
         </aside>
@@ -205,14 +212,20 @@ export default function AdminLayout() {
             <div className="flex items-center gap-4">
               <div className="rounded-lg border border-border bg-muted/70 px-3 py-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-medium text-foreground/70">Mock</span>
-                  <Switch checked={mockModeEnabled} onCheckedChange={setMockModeEnabled} aria-label="Mock mode switch" />
+                  <span className="text-xs font-medium text-foreground/70">\uBAA9\uC5C5</span>
+                  <Switch
+                    checked={mockModeEnabled}
+                    onCheckedChange={setMockModeEnabled}
+                    aria-label="\uBAA9\uC5C5 \uBAA8\uB4DC \uC804\uD658"
+                  />
                 </div>
               </div>
               <div className="h-6 w-px bg-border" />
               <div className="pr-2 text-right">
-                <div className="text-sm font-semibold">Admin</div>
-                <div className="text-xs text-foreground/70">{mockModeEnabled ? "Mock" : "Live"}</div>
+                <div className="text-sm font-semibold">\uAD00\uB9AC\uC790</div>
+                <div className="text-xs text-foreground/70">
+                  {mockModeEnabled ? "\uBAA9\uC5C5" : "\uC2E4\uC11C\uBE44\uC2A4"}
+                </div>
               </div>
               <div className="h-10 w-10 rounded-full border border-border bg-secondary" />
             </div>
