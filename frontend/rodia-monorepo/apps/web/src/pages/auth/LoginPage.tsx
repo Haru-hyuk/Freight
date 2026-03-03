@@ -24,8 +24,8 @@ export default function LoginPage() {
   const location = useLocation();
   const state = (location.state ?? {}) as LocationState;
 
-  const [email, setEmail] = React.useState("admin@rodia.com");
-  const [password, setPassword] = React.useState("password");
+  const [email, setEmail] = React.useState("admin@test.com");
+  const [password, setPassword] = React.useState("123456");
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -87,7 +87,7 @@ export default function LoginPage() {
           <Label htmlFor="email" className="text-base">
             Email
           </Label>
-          <Input id="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="admin@rodia.com" />
+          <Input id="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="admin@test.com" />
         </div>
 
         <div className="space-y-2">

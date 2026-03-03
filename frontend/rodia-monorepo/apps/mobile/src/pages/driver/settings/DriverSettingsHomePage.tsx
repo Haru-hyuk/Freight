@@ -104,12 +104,12 @@ export default function DriverSettingsHomePage() {
         {
           id: "group-truck",
           title: "차량",
-          description: "차량 심사/승인 상태 확인",
+          description: "차량 목록 및 등록 관리",
           items: [
             {
               id: "menu-trucks",
-              title: "차량 승인 상태",
-              subtitle: "내 차량 심사/승인 진행상태",
+              title: "차량 정보 관리",
+              subtitle: "내 차량 목록/승인 상태 확인",
               path: "/(driver)/settings/trucks",
               trailingText: truckTrailing,
             },
