@@ -1,9 +1,11 @@
-﻿import React, { useMemo, useState } from "react";
+﻿import React, { useCallback, useMemo, useState } from "react";
 import { Platform, Pressable, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
 
 import { useAuth } from "@/features/auth/model/useAuth";
+import { listDriverTrucks } from "@/features/driver-profile/api/driver-profile-api";
 import { safeNumber, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppButton } from "@/shared/ui/kit/AppButton";
@@ -174,6 +176,28 @@ const useStyles = createThemedStyles((theme) => {
     heroLockBtn: {
       minWidth: 160,
     },
+    noTruckCard: {
+      borderRadius: 16,
+      marginTop: -8,
+      marginBottom: spacing * 5,
+      padding: spacing * 4,
+      borderWidth: 1,
+      borderColor: tint(cWarn, 0.22, cBorder),
+      backgroundColor: tint(cWarn, 0.08, cSurface),
+      gap: spacing * 3,
+    },
+    noTruckRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing * 2,
+    },
+    noTruckTextWrap: {
+      flex: 1,
+      gap: 2,
+    },
+    noTruckBtn: {
+      alignSelf: "flex-start",
+    },
 
     sectionHeader: {
       flexDirection: "row",
@@ -267,6 +291,7 @@ export function DriverHomePage() {
 
   const [isOnDuty, setIsOnDuty] = useState(true);
   const isVerificationBlocked = auth.pendingVerificationRole === "driver";
+  const [truckCount, setTruckCount] = useState<number | null>(null);
 
   const cBrand = theme.colors.brandPrimary;
   const cText = theme.colors.textMain;
@@ -294,6 +319,26 @@ export function DriverHomePage() {
   }, [isVerificationBlocked]);
 
   const restrictionLevel: RestrictionLevel = restrictionInfo?.level ?? "danger";
+
+  const loadTruckCount = useCallback(async () => {
+    if (auth.status !== "authenticated") {
+      setTruckCount(null);
+      return;
+    }
+    try {
+      const trucks = await listDriverTrucks();
+      setTruckCount(Array.isArray(trucks) ? trucks.length : 0);
+    } catch {
+      setTruckCount(null);
+    }
+  }, [auth.status]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadTruckCount();
+      return undefined;
+    }, [loadTruckCount])
+  );
 
   return (
     <PageScaffold
@@ -385,6 +430,27 @@ export function DriverHomePage() {
           </View>
         ) : null}
       </View>
+      {truckCount === 0 ? (
+        <AppCard outlined style={styles.noTruckCard}>
+          <View style={styles.noTruckRow}>
+            <Ionicons name="alert-circle-outline" size={18} color={cWarn} />
+            <View style={styles.noTruckTextWrap}>
+              <AppText variant="detail" weight="800" color={cText}>
+                등록된 차량이 없네요
+              </AppText>
+              <AppText variant="caption" weight="600" color={cSub}>
+                우선 차량을 등록해보세요.
+              </AppText>
+            </View>
+          </View>
+          <AppButton
+            title="차량 등록하러 가기"
+            size="sm"
+            onPress={() => router.push("/(driver)/settings/truck-create" as never)}
+            style={styles.noTruckBtn}
+          />
+        </AppCard>
+      ) : null}
 
       <View style={styles.sectionHeader}>
         <AppText variant="heading" weight="800" color={cText}>
@@ -524,3 +590,8 @@ export function DriverHomePage() {
 }
 
 export default DriverHomePage;
+
+
+
+
+

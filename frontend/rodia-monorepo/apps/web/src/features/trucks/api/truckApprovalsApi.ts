@@ -52,9 +52,25 @@ function toNumberValue(value: unknown): number | null {
 function pickListPayload(payload: unknown): unknown[] {
   if (Array.isArray(payload)) return payload;
   const row = toRecord(payload);
-  const candidates = [row.items, row.data, row.content, row.list, row.result];
+  const candidates = [
+    row.items,
+    row.data,
+    row.content,
+    row.list,
+    row.result,
+    row.trucks,
+    row.pending,
+    row.pendingTrucks,
+  ];
   for (const candidate of candidates) {
     if (Array.isArray(candidate)) return candidate;
+    const nested = toRecord(candidate);
+    if (Array.isArray(nested.items)) return nested.items;
+    if (Array.isArray(nested.content)) return nested.content;
+    if (Array.isArray(nested.list)) return nested.list;
+    if (Array.isArray(nested.trucks)) return nested.trucks;
+    if (Array.isArray(nested.pending)) return nested.pending;
+    if (Array.isArray(nested.pendingTrucks)) return nested.pendingTrucks;
   }
   return [];
 }
@@ -119,26 +135,31 @@ function toTruckRow(truck: BackendTruck): TruckApprovalRow | null {
 
 async function fetchBackendTrucks(): Promise<BackendTruck[]> {
   try {
-    const response = await apiClient.get<unknown>(apiPaths.driverTrucks);
-    return pickListPayload(response.data).map(mapBackendTruck);
+    const response = await apiClient.get<unknown>(apiPaths.adminTrucksPending);
+    const pending = pickListPayload(response.data).map(mapBackendTruck);
+    if (pending.length > 0) return pending;
+
+    // Fallback: some environments do not expose pending endpoint yet.
+    const allResponse = await apiClient.get<unknown>(apiPaths.driverTrucks);
+    return pickListPayload(allResponse.data)
+      .map(mapBackendTruck)
+      .filter((truck) => truck.approved !== true);
   } catch {
-    return [];
+    try {
+      const allResponse = await apiClient.get<unknown>(apiPaths.driverTrucks);
+      return pickListPayload(allResponse.data)
+        .map(mapBackendTruck)
+        .filter((truck) => truck.approved !== true);
+    } catch {
+      return [];
+    }
   }
 }
 
 async function tryUpdateTruckApproval(truckId: number, approved: boolean): Promise<boolean> {
   try {
-    const currentResponse = await apiClient.get<unknown>(`${apiPaths.driverTrucks.replace(/\/$/, "")}/${truckId}`);
-    const current = mapBackendTruck(currentResponse.data);
-    await apiClient.put(`${apiPaths.driverTrucks.replace(/\/$/, "")}/${truckId}`, {
-      vehicleType: current.vehicleType,
-      vehicleBodyType: current.vehicleBodyType,
-      tonnage: current.tonnage,
-      maxWeight: current.maxWeight,
-      maxVolume: current.maxVolume,
-      name: current.name,
+    await apiClient.patch(apiPaths.adminTruckApproval(String(truckId)), {
       approved,
-      insurance: current.insurance,
     });
     return true;
   } catch {
@@ -192,6 +213,6 @@ export async function reviewTruckApproval(payload: TruckApprovalReviewPayload): 
     mode: "REAL",
     message: remoteApplied
       ? `차량 ${payload.truckId} 승인 상태 반영 완료`
-      : `차량 ${payload.truckId} 승인 처리 - 서버 전용 심사 API 미지원으로 세션 상태로 반영`,
+      : `차량 ${payload.truckId} 승인 처리 실패`,
   });
 }

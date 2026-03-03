@@ -336,7 +336,7 @@ export function DriverProfilePage() {
           <View style={styles.menuDivider} />
 
           <Pressable style={styles.menuItem} onPress={() => router.push("/(driver)/settings/trucks" as never)}>
-            <Text style={styles.menuText}>차량 승인 상태</Text>
+            <Text style={styles.menuText}>차량 정보 관리</Text>
             <Text style={styles.menuRightText}>보기</Text>
           </Pressable>
           <View style={styles.menuDivider} />
