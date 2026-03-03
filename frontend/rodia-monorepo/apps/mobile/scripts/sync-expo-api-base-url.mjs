@@ -38,33 +38,49 @@ function scorePrivateIpv4(ip) {
   return 0;
 }
 
+function isExcludedInterfaceName(name) {
+  if (typeof name !== "string") return false;
+  return /\b(vethernet|wsl)\b/i.test(name);
+}
+
+function scoreInterfaceName(name) {
+  if (typeof name !== "string") return 0;
+  const normalized = name.toLowerCase();
+  if (/(wi-?fi|wlan|wireless)/i.test(normalized)) return 3;
+  if (/(ethernet|lan)/i.test(normalized)) return 2;
+  return 1;
+}
+
 function pickBestLocalIpv4() {
   const nets = os.networkInterfaces();
   const candidates = [];
 
   for (const name of Object.keys(nets)) {
+    if (isExcludedInterfaceName(name)) continue;
     const addrs = nets[name] || [];
     for (const addr of addrs) {
       if (!addr || addr.family !== "IPv4" || addr.internal) continue;
       if (!addr.address) continue;
-      candidates.push(addr.address);
+      candidates.push({ address: addr.address, interfaceName: name });
     }
   }
 
   if (candidates.length === 0) return null;
 
   let best = candidates[0];
-  let bestScore = scorePrivateIpv4(best);
+  let bestScore = scorePrivateIpv4(best.address) * 10 + scoreInterfaceName(best.interfaceName);
 
-  for (const ip of candidates.slice(1)) {
-    const s = scorePrivateIpv4(ip);
+  for (const candidate of candidates.slice(1)) {
+    const s =
+      scorePrivateIpv4(candidate.address) * 10 +
+      scoreInterfaceName(candidate.interfaceName);
     if (s > bestScore) {
-      best = ip;
+      best = candidate;
       bestScore = s;
     }
   }
 
-  return best;
+  return best.address;
 }
 
 function escapeRegExp(s) {

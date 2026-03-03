@@ -4,6 +4,10 @@
  * OpenAPI definition
  * OpenAPI spec version: v0
  */
+import type {
+  AnnouncementResponse
+} from '.././schemas';
+
 import { customInstance } from '../../orval/custom-instance';
 
 
@@ -11,18 +15,16 @@ import { customInstance } from '../../orval/custom-instance';
   export const listPublished = (
     
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/announcements`, method: 'GET',
-        responseType: 'blob'
+      return customInstance<AnnouncementResponse[]>(
+      {url: `/api/announcements`, method: 'GET'
     },
       );
     }
   export const get = (
     announcementId: number,
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/announcements/${announcementId}`, method: 'GET',
-        responseType: 'blob'
+      return customInstance<AnnouncementResponse>(
+      {url: `/api/announcements/${announcementId}`, method: 'GET'
     },
       );
     }

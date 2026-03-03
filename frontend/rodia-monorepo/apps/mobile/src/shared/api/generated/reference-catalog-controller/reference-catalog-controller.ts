@@ -7,7 +7,9 @@
 import type {
   GetPricingRateParams,
   GetPricingRatesParams,
-  GetTruckSpecsParams
+  GetTruckSpecsParams,
+  PricingRateReferenceResponse,
+  TruckSpecReferenceResponse
 } from '.././schemas';
 
 import { customInstance } from '../../orval/custom-instance';
@@ -17,30 +19,27 @@ import { customInstance } from '../../orval/custom-instance';
   export const getTruckSpecs = (
     params?: GetTruckSpecsParams,
  ) => {
-      return customInstance<Blob>(
+      return customInstance<TruckSpecReferenceResponse[]>(
       {url: `/api/reference/truck-specs`, method: 'GET',
-        params,
-        responseType: 'blob'
+        params
     },
       );
     }
   export const getPricingRates = (
     params?: GetPricingRatesParams,
  ) => {
-      return customInstance<Blob>(
+      return customInstance<PricingRateReferenceResponse[]>(
       {url: `/api/reference/pricing-rates`, method: 'GET',
-        params,
-        responseType: 'blob'
+        params
     },
       );
     }
   export const getPricingRate = (
     params: GetPricingRateParams,
  ) => {
-      return customInstance<Blob>(
+      return customInstance<PricingRateReferenceResponse>(
       {url: `/api/reference/pricing-rate`, method: 'GET',
-        params,
-        responseType: 'blob'
+        params
     },
       );
     }

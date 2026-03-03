@@ -4,6 +4,11 @@
  * OpenAPI definition
  * OpenAPI spec version: v0
  */
+import type {
+  NotificationResponse,
+  UnreadCountResponse
+} from '.././schemas';
+
 import { customInstance } from '../../orval/custom-instance';
 
 
@@ -19,18 +24,16 @@ import { customInstance } from '../../orval/custom-instance';
   export const getMyNotifications = (
     
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/notifications/me`, method: 'GET',
-        responseType: 'blob'
+      return customInstance<NotificationResponse[]>(
+      {url: `/api/notifications/me`, method: 'GET'
     },
       );
     }
   export const getUnreadCount = (
     
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/notifications/me/unread-count`, method: 'GET',
-        responseType: 'blob'
+      return customInstance<UnreadCountResponse>(
+      {url: `/api/notifications/me/unread-count`, method: 'GET'
     },
       );
     }

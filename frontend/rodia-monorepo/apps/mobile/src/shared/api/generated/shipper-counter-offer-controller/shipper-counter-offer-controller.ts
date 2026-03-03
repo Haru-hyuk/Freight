@@ -4,6 +4,11 @@
  * OpenAPI definition
  * OpenAPI spec version: v0
  */
+import type {
+  CounterOfferAcceptResponse,
+  CounterOfferResponse
+} from '.././schemas';
+
 import { customInstance } from '../../orval/custom-instance';
 
 
@@ -19,7 +24,7 @@ import { customInstance } from '../../orval/custom-instance';
   export const acceptCounterOffer = (
     offerId: number,
  ) => {
-      return customInstance<void>(
+      return customInstance<CounterOfferAcceptResponse>(
       {url: `/api/shipper/counter-offers/${offerId}/accept`, method: 'PATCH'
     },
       );
@@ -27,9 +32,8 @@ import { customInstance } from '../../orval/custom-instance';
   export const getCounterOffers = (
     quoteId: number,
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/shipper/quotes/${quoteId}/counter-offers`, method: 'GET',
-        responseType: 'blob'
+      return customInstance<CounterOfferResponse[]>(
+      {url: `/api/shipper/quotes/${quoteId}/counter-offers`, method: 'GET'
     },
       );
     }

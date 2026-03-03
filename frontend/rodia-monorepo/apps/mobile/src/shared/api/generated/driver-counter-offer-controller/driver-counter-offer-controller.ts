@@ -5,7 +5,8 @@
  * OpenAPI spec version: v0
  */
 import type {
-  CounterOfferCreateRequest
+  CounterOfferCreateRequest,
+  CounterOfferResponse
 } from '.././schemas';
 
 import { customInstance } from '../../orval/custom-instance';
@@ -16,20 +17,18 @@ import { customInstance } from '../../orval/custom-instance';
     quoteId: number,
     counterOfferCreateRequest: CounterOfferCreateRequest,
  ) => {
-      return customInstance<Blob>(
+      return customInstance<CounterOfferResponse>(
       {url: `/api/driver/quotes/${quoteId}/counter-offers`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
-      data: counterOfferCreateRequest,
-        responseType: 'blob'
+      data: counterOfferCreateRequest
     },
       );
     }
   export const getMyCounterOffers = (
     
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/driver/counter-offers/me`, method: 'GET',
-        responseType: 'blob'
+      return customInstance<CounterOfferResponse[]>(
+      {url: `/api/driver/counter-offers/me`, method: 'GET'
     },
       );
     }

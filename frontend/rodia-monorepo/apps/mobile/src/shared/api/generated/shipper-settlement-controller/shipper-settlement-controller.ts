@@ -5,7 +5,8 @@
  * OpenAPI spec version: v0
  */
 import type {
-  GetByMatchParams
+  GetByMatchParams,
+  SettlementResponse
 } from '.././schemas';
 
 import { customInstance } from '../../orval/custom-instance';
@@ -15,28 +16,25 @@ import { customInstance } from '../../orval/custom-instance';
   export const confirmSettlement = (
     matchId: number,
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/shipper/settlements/${matchId}/confirm`, method: 'POST',
-        responseType: 'blob'
+      return customInstance<SettlementResponse>(
+      {url: `/api/shipper/settlements/${matchId}/confirm`, method: 'POST'
     },
       );
     }
   export const getByMatch = (
     params: GetByMatchParams,
  ) => {
-      return customInstance<Blob>(
+      return customInstance<SettlementResponse>(
       {url: `/api/shipper/settlements`, method: 'GET',
-        params,
-        responseType: 'blob'
+        params
     },
       );
     }
   export const getMySettlements = (
     
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/shipper/settlements/me`, method: 'GET',
-        responseType: 'blob'
+      return customInstance<SettlementResponse[]>(
+      {url: `/api/shipper/settlements/me`, method: 'GET'
     },
       );
     }

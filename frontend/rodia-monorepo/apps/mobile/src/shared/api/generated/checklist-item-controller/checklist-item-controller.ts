@@ -4,6 +4,10 @@
  * OpenAPI definition
  * OpenAPI spec version: v0
  */
+import type {
+  ChecklistItemResponse
+} from '.././schemas';
+
 import { customInstance } from '../../orval/custom-instance';
 
 
@@ -11,9 +15,8 @@ import { customInstance } from '../../orval/custom-instance';
   export const listChecklistItems = (
     
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/checklist-items`, method: 'GET',
-        responseType: 'blob'
+      return customInstance<ChecklistItemResponse[]>(
+      {url: `/api/checklist-items`, method: 'GET'
     },
       );
     }

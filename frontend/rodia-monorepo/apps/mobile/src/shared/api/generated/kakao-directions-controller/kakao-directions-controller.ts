@@ -6,6 +6,8 @@
  */
 import type {
   BatchDistanceRequest,
+  BatchDistanceResponse,
+  CachedDistanceResponse,
   GetCachedDistanceParams,
   GetDirectionsParams,
   MultiDirectionsRequest
@@ -18,51 +20,46 @@ import { customInstance } from '../../orval/custom-instance';
   export const getMultiDirections = (
     multiDirectionsRequest: MultiDirectionsRequest,
  ) => {
-      return customInstance<Blob>(
+      return customInstance<string>(
       {url: `/api/route/multi-directions`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
-      data: multiDirectionsRequest,
-        responseType: 'blob'
+      data: multiDirectionsRequest
     },
       );
     }
   export const getCachedDistances = (
     batchDistanceRequest: BatchDistanceRequest,
  ) => {
-      return customInstance<Blob>(
+      return customInstance<BatchDistanceResponse>(
       {url: `/api/route/cached-distances`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
-      data: batchDistanceRequest,
-        responseType: 'blob'
+      data: batchDistanceRequest
     },
       );
     }
   export const health = (
     
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/route/health`, method: 'GET',
-        responseType: 'blob'
+      return customInstance<string>(
+      {url: `/api/route/health`, method: 'GET'
     },
       );
     }
   export const getDirections = (
     params: GetDirectionsParams,
  ) => {
-      return customInstance<Blob>(
+      return customInstance<string>(
       {url: `/api/route/directions`, method: 'GET',
-        params,
-        responseType: 'blob'
+        params
     },
       );
     }
   export const getCachedDistance = (
     params: GetCachedDistanceParams,
  ) => {
-      return customInstance<Blob>(
+      return customInstance<CachedDistanceResponse>(
       {url: `/api/route/cached-distance`, method: 'GET',
-        params,
-        responseType: 'blob'
+        params
     },
       );
     }

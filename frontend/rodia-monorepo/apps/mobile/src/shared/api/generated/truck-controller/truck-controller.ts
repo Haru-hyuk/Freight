@@ -6,6 +6,8 @@
  */
 import type {
   TruckCreateRequest,
+  TruckCreateResponse,
+  TruckResponse,
   TruckUpdateRequest
 } from '.././schemas';
 
@@ -16,9 +18,8 @@ import { customInstance } from '../../orval/custom-instance';
   export const getTruck = (
     truckId: number,
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/driver/trucks/${truckId}`, method: 'GET',
-        responseType: 'blob'
+      return customInstance<TruckResponse>(
+      {url: `/api/driver/trucks/${truckId}`, method: 'GET'
     },
       );
     }
@@ -26,11 +27,10 @@ import { customInstance } from '../../orval/custom-instance';
     truckId: number,
     truckUpdateRequest: TruckUpdateRequest,
  ) => {
-      return customInstance<Blob>(
+      return customInstance<TruckResponse>(
       {url: `/api/driver/trucks/${truckId}`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
-      data: truckUpdateRequest,
-        responseType: 'blob'
+      data: truckUpdateRequest
     },
       );
     }
@@ -45,20 +45,18 @@ import { customInstance } from '../../orval/custom-instance';
   export const listTrucks = (
     
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/driver/trucks`, method: 'GET',
-        responseType: 'blob'
+      return customInstance<TruckResponse[]>(
+      {url: `/api/driver/trucks`, method: 'GET'
     },
       );
     }
   export const createTruck = (
     truckCreateRequest: TruckCreateRequest,
  ) => {
-      return customInstance<Blob>(
+      return customInstance<TruckCreateResponse>(
       {url: `/api/driver/trucks`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
-      data: truckCreateRequest,
-        responseType: 'blob'
+      data: truckCreateRequest
     },
       );
     }

@@ -5,7 +5,8 @@
  * OpenAPI spec version: v0
  */
 import type {
-  TruckApprovalUpdateRequest
+  TruckApprovalUpdateRequest,
+  TruckResponse
 } from '.././schemas';
 
 import { customInstance } from '../../orval/custom-instance';
@@ -16,20 +17,18 @@ import { customInstance } from '../../orval/custom-instance';
     truckId: number,
     truckApprovalUpdateRequest: TruckApprovalUpdateRequest,
  ) => {
-      return customInstance<Blob>(
+      return customInstance<TruckResponse>(
       {url: `/api/admin/trucks/${truckId}/approval`, method: 'PATCH',
       headers: {'Content-Type': 'application/json', },
-      data: truckApprovalUpdateRequest,
-        responseType: 'blob'
+      data: truckApprovalUpdateRequest
     },
       );
     }
   export const listPending = (
     
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/admin/trucks/pending`, method: 'GET',
-        responseType: 'blob'
+      return customInstance<TruckResponse[]>(
+      {url: `/api/admin/trucks/pending`, method: 'GET'
     },
       );
     }

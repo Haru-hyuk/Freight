@@ -6,7 +6,11 @@
  */
 import type {
   AdminUserStatusUpdateRequest,
+  Dashboard200,
   DashboardParams,
+  UpdateUserStatus200,
+  UserDetail200,
+  Users200,
   UsersParams
 } from '.././schemas';
 
@@ -18,40 +22,36 @@ import { customInstance } from '../../orval/custom-instance';
     userId: string,
     adminUserStatusUpdateRequest: AdminUserStatusUpdateRequest,
  ) => {
-      return customInstance<Blob>(
+      return customInstance<UpdateUserStatus200>(
       {url: `/api/admin/users/${userId}/status`, method: 'PATCH',
       headers: {'Content-Type': 'application/json', },
-      data: adminUserStatusUpdateRequest,
-        responseType: 'blob'
+      data: adminUserStatusUpdateRequest
     },
       );
     }
   export const users = (
     params?: UsersParams,
  ) => {
-      return customInstance<Blob>(
+      return customInstance<Users200>(
       {url: `/api/admin/users`, method: 'GET',
-        params,
-        responseType: 'blob'
+        params
     },
       );
     }
   export const userDetail = (
     userId: string,
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/admin/users/${userId}`, method: 'GET',
-        responseType: 'blob'
+      return customInstance<UserDetail200>(
+      {url: `/api/admin/users/${userId}`, method: 'GET'
     },
       );
     }
   export const dashboard = (
     params?: DashboardParams,
  ) => {
-      return customInstance<Blob>(
+      return customInstance<Dashboard200>(
       {url: `/api/admin/dashboard`, method: 'GET',
-        params,
-        responseType: 'blob'
+        params
     },
       );
     }
