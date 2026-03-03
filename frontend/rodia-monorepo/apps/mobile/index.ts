@@ -1,3 +1,7 @@
+// Three.js(및 관련 라이브러리)가 전역 Buffer를 요구하는 경우 대비
+// eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-require-imports
+(globalThis as any).Buffer ??= require("buffer").Buffer;
+
 import { registerRootComponent } from 'expo';
 
 import App from './App';

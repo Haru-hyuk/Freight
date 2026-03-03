@@ -40,7 +40,7 @@ const DRIVER_UI_STATE_BY_BACKEND_STATUS: Readonly<Record<BackendStatus, DriverUi
 const DRIVER_STATUS_TITLE_MAP: Readonly<Record<DriverUiState, string>> = {
   [DRIVER_UI_STATE.READY_TO_ACCEPT]: "배차 요청이 도착했습니다",
   [DRIVER_UI_STATE.NEGOTIATING]: "운임 협의가 진행 중입니다",
-  [DRIVER_UI_STATE.ASSIGNED]: "결제 대기 중입니다",
+  [DRIVER_UI_STATE.ASSIGNED]: "배차가 확정되었습니다",
   [DRIVER_UI_STATE.PICKUP_IN_PROGRESS]: "운행 준비 중입니다",
   [DRIVER_UI_STATE.TRANSIT_IN_PROGRESS]: "운송 중 상태를 확인해주세요",
   [DRIVER_UI_STATE.COMPLETED]: "운송이 완료되었습니다",
@@ -62,14 +62,16 @@ const DRIVER_DEFAULT_CTA_MAP: Readonly<Record<DriverUiState, DriverCtaConfig>> =
     enabled: true,
   },
   [DRIVER_UI_STATE.ASSIGNED]: {
-    id: DRIVER_CTA_ID.PAYMENT_PENDING,
-    label: "결제 대기",
-    variant: CTA_VARIANT.SECONDARY,
-    enabled: false,
+    // DriverOrderActionBar returns null for START_DRIVE — the workflow card body handles this action
+    id: DRIVER_CTA_ID.START_DRIVE,
+    label: "운행 시작",
+    variant: CTA_VARIANT.PRIMARY,
+    enabled: true,
   },
   [DRIVER_UI_STATE.PICKUP_IN_PROGRESS]: {
-    id: DRIVER_CTA_ID.PAYMENT_PENDING,
-    label: "운행 준비 중",
+    // 상차 중 — 하단 바 숨김, 워크플로우 카드 본문에서 "상차 완료" 처리
+    id: DRIVER_CTA_ID.START_DRIVE,
+    label: "상차 진행 중",
     variant: CTA_VARIANT.SECONDARY,
     enabled: false,
   },
@@ -175,10 +177,14 @@ export function getDriverUiStateFromRawStatus(rawStatus: string): DriverUiState 
     .replace(/\s+/g, "_")
     .replace(/-/g, "_");
 
+  if (token === "OPEN") return DRIVER_UI_STATE.READY_TO_ACCEPT;
   if (token === "NEGOTIATING") return DRIVER_UI_STATE.NEGOTIATING;
+  if (token === "ASSIGNED") return DRIVER_UI_STATE.ASSIGNED;
   if (token === "PICKUP") return DRIVER_UI_STATE.PICKUP_IN_PROGRESS;
   if (token === "PREPARING") return DRIVER_UI_STATE.PICKUP_IN_PROGRESS;
   if (token === "DRIVING") return DRIVER_UI_STATE.TRANSIT_IN_PROGRESS;
+  if (token === "TRANSIT") return DRIVER_UI_STATE.TRANSIT_IN_PROGRESS;
+  if (token === "DROPOFF") return DRIVER_UI_STATE.COMPLETED;
 
   return getDriverUiStateFromBackendStatus(rawStatus);
 }

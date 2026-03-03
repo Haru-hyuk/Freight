@@ -294,6 +294,45 @@ export function acceptMockFlowDriverMatch(matchId: number): MatchResponse | null
   return cloneMatch(next);
 }
 
+export function processMockFlowPayment(matchId: number): MatchResponse | null {
+  const state = getMockFlowState();
+  const safeMatchId = toPositiveInt(matchId);
+  if (safeMatchId <= 0) return null;
+
+  const current = state.matchesById.get(safeMatchId);
+  if (!current) return null;
+
+  const currentStatus = normalizeStatus(current.status);
+  if (currentStatus === "CANCELED") return null;
+
+  // 결제 완료 후 기사는 즉시 상차 단계(PICKUP)로 진입한다.
+  // ASSIGNED 상태를 거치지 않아 "결제 대기" 화면에 머무는 혼란을 방지한다.
+  const nextStatus: MockFlowMatchStatus =
+    currentStatus === "READY" || currentStatus === "OPEN" || currentStatus === "NEGOTIATING"
+      ? "PICKUP"
+      : MATCH_ACCEPTED_STATUSES.has(currentStatus as MockFlowMatchStatus)
+      ? (currentStatus as MockFlowMatchStatus)
+      : "PICKUP";
+
+  const now = nowIso();
+  const next: MatchResponse = {
+    ...current,
+    accepted: true,
+    status: nextStatus,
+    driverId: toPositiveInt(current.driverId) || 21,
+    acceptedAt: toText(current.acceptedAt) || now,
+    updatedAt: now,
+  };
+  updateMatch(next);
+
+  const quoteId = toPositiveInt(next.quoteId);
+  if (quoteId > 0) {
+    updateQuoteStatus(quoteId, toQuoteStatusFromMatchStatus(nextStatus), now);
+  }
+
+  return cloneMatch(next);
+}
+
 export function cancelMockFlowMatch(matchId: number): MatchResponse | null {
   const state = getMockFlowState();
   const safeMatchId = toPositiveInt(matchId);
@@ -508,6 +547,85 @@ export function advanceMockFlowMatchStatus(matchId: number): MatchResponse | nul
   }
 
   return cloneMatch(nextMatch);
+}
+
+type MatchWithPhotos = MatchResponse & {
+  loadingPhotos?: string[];
+  unloadingPhotos?: string[];
+};
+
+export function startDriving(matchId: number): MatchResponse | null {
+  const state = getMockFlowState();
+  const safeMatchId = toPositiveInt(matchId);
+  if (safeMatchId <= 0) return null;
+
+  const current = state.matchesById.get(safeMatchId);
+  if (!current) return null;
+
+  const now = nowIso();
+  const next: MatchResponse = {
+    ...current,
+    status: "PICKUP",
+    accepted: true,
+    acceptedAt: toText(current.acceptedAt) || now,
+    updatedAt: now,
+  };
+  updateMatch(next);
+
+  const quoteId = toPositiveInt(next.quoteId);
+  if (quoteId > 0) updateQuoteStatus(quoteId, "PICKUP", now);
+
+  return cloneMatch(next);
+}
+
+export function confirmLoading(matchId: number, photos: string[]): MatchResponse | null {
+  const state = getMockFlowState();
+  const safeMatchId = toPositiveInt(matchId);
+  if (safeMatchId <= 0) return null;
+
+  const current = state.matchesById.get(safeMatchId) as MatchWithPhotos | undefined;
+  if (!current) return null;
+
+  const now = nowIso();
+  const next: MatchWithPhotos = {
+    ...current,
+    status: "TRANSIT",
+    accepted: true,
+    acceptedAt: toText(current.acceptedAt) || now,
+    updatedAt: now,
+    loadingPhotos: photos.length > 0 ? [...photos] : current.loadingPhotos,
+  };
+  updateMatch(next);
+
+  const quoteId = toPositiveInt(next.quoteId);
+  if (quoteId > 0) updateQuoteStatus(quoteId, "TRANSIT", now);
+
+  return cloneMatch(next);
+}
+
+export function confirmUnloading(matchId: number, photos: string[]): MatchResponse | null {
+  const state = getMockFlowState();
+  const safeMatchId = toPositiveInt(matchId);
+  if (safeMatchId <= 0) return null;
+
+  const current = state.matchesById.get(safeMatchId) as MatchWithPhotos | undefined;
+  if (!current) return null;
+
+  const now = nowIso();
+  const next: MatchWithPhotos = {
+    ...current,
+    status: "DROPOFF",
+    accepted: true,
+    acceptedAt: toText(current.acceptedAt) || now,
+    updatedAt: now,
+    unloadingPhotos: photos.length > 0 ? [...photos] : current.unloadingPhotos,
+  };
+  updateMatch(next);
+
+  const quoteId = toPositiveInt(next.quoteId);
+  if (quoteId > 0) updateQuoteStatus(quoteId, "DROPOFF", now);
+
+  return cloneMatch(next);
 }
 
 export function removeMockFlowCounterOffer(offerId: number): CounterOfferResponse | null {

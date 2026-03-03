@@ -103,11 +103,29 @@ const FILTER_LABELS: Record<DriverOrderFilterKey, string> = {
 
 type AnyObject = Record<string, unknown>;
 
+const RUN_MATCH_STATUS_TOKENS: ReadonlySet<string> = new Set([
+  "READY",
+  "PICKUP",
+  "TRANSIT",
+  "DROPOFF",
+  "IN_TRANSIT",
+  "DELIVERED",
+  "COMPLETED",
+]);
+
 function asObject(value: unknown): AnyObject {
   if (value && typeof value === "object" && !Array.isArray(value)) {
     return value as AnyObject;
   }
   return {};
+}
+
+function toStatusToken(value: unknown): string {
+  return String(value ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "_")
+    .replace(/-/g, "_");
 }
 
 function toOptionalText(value: unknown): string | undefined {
@@ -487,14 +505,12 @@ export async function loadDriverOrdersOverview(): Promise<DriverOrdersOverview> 
   });
   const runMatches = myMatches.filter((match) => {
     if (match.accepted === true) return true;
-    const status = normalizeStatus(match.status ?? "");
-    // READY는 Match 상태 (배차 확정), runMatches에 포함
-    return (
-      status === BACKEND_STATUS.READY ||
-      status === BACKEND_STATUS.IN_TRANSIT ||
-      status === BACKEND_STATUS.DELIVERED ||
-      status === BACKEND_STATUS.COMPLETED
-    );
+    // run 탭은 결제 이후 상태(PICKUP/TRANSIT/DROPOFF)를 반드시 포함한다.
+    const statusToken = toStatusToken(match.status);
+    if (RUN_MATCH_STATUS_TOKENS.has(statusToken)) return true;
+
+    const normalized = normalizeStatus(match.status ?? "");
+    return normalized === BACKEND_STATUS.READY || normalized === BACKEND_STATUS.IN_TRANSIT;
   });
   const myPendingMatches = myMatches.filter((match) => !runMatches.includes(match));
   const negotiatingMarketMatches = openMatches.filter((match) => {

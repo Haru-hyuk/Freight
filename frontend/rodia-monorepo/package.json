@@ -11,6 +11,7 @@
     "dev:all": "pnpm tokens:build && concurrently \"pnpm -C apps/web dev\" \"pnpm -C apps/mobile start\" --names \"WEB,MOBILE\" --prefix-colors \"blue,magenta\""
   },
   "devDependencies": {
-    "concurrently": "^9.2.1"
+    "concurrently": "^9.2.1",
+    "expo-module-scripts": "^55.0.2"
   }
 }
