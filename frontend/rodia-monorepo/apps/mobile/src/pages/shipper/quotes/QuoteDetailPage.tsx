@@ -599,6 +599,44 @@ function isCanceledMatchStatus(value: unknown): boolean {
   return token === "CANCELLED" || token === "CANCELED" || token === "CANCEL";
 }
 
+function shouldRequirePaymentAfterCounterOfferAccept(
+  value:
+    | {
+        paymentRequired?: unknown;
+        nextAction?: unknown;
+        quoteStatus?: unknown;
+        matchStatus?: unknown;
+      }
+    | null
+    | undefined
+): boolean {
+  if (value?.paymentRequired === true) return true;
+
+  const nextAction = toStatusToken(value?.nextAction);
+  if (nextAction === "PAY" || nextAction === "PAYMENT_REQUIRED") return true;
+
+  const status = toStatusToken(value?.matchStatus ?? value?.quoteStatus);
+  return status === "ASSIGNED" || status === "ACCEPTED" || status === "READY" || status === "MATCHED";
+}
+
+function buildOptimisticAcceptedMatch(matchId: number, quoteId: number, statusSource: unknown): ShipperMatchItem {
+  const safeMatchId = parsePositiveInt(matchId);
+  const safeQuoteId = parsePositiveInt(quoteId);
+  const status = toStatusToken(statusSource) || "ASSIGNED";
+  const nowIso = new Date().toISOString();
+
+  return {
+    matchId: safeMatchId,
+    ...(safeQuoteId > 0 ? { quoteId: safeQuoteId } : {}),
+    accepted: true,
+    acceptedAt: nowIso,
+    status,
+    state: status,
+    updatedAt: nowIso,
+    cancelable: !isCanceledMatchStatus(status),
+  };
+}
+
 function toUpdatedAtTime(value: unknown): number {
   const raw = toText(value);
   if (!raw) return 0;
@@ -929,23 +967,26 @@ export default function QuoteDetailPage() {
     if (activeQuoteMatch.accepted === true) return true;
     return toText(activeQuoteMatch.acceptedAt).length > 0;
   }, [activeQuoteMatch]);
+  const hasLocallyCompletedPaymentForActiveMatch = React.useMemo(
+    () => paidMatchId > 0 && cancelTargetMatchId > 0 && paidMatchId === cancelTargetMatchId,
+    [cancelTargetMatchId, paidMatchId]
+  );
 
   const effectiveQuoteStatus = React.useMemo(() => {
     const matchStatus = matchHydrated ? activeQuoteMatch?.status ?? activeQuoteMatch?.state : null;
     const matchAccepted = matchHydrated ? isAcceptedByMatch : null;
-    const paymentStatusForResolver = hasCompletedPayment ? "COMPLETED" : latestPaymentStatus;
+    const paymentStatusForResolver = hasCompletedPayment || hasLocallyCompletedPaymentForActiveMatch ? "COMPLETED" : latestPaymentStatus;
     return resolveEffectiveQuoteStatus({
       quoteStatus: view.quote.status,
       matchStatus,
       matchAccepted,
       paymentStatus: paymentStatusForResolver,
     });
-  }, [activeQuoteMatch?.state, activeQuoteMatch?.status, hasCompletedPayment, isAcceptedByMatch, latestPaymentStatus, matchHydrated, view.quote.status]);
+  }, [activeQuoteMatch?.state, activeQuoteMatch?.status, hasCompletedPayment, hasLocallyCompletedPaymentForActiveMatch, isAcceptedByMatch, latestPaymentStatus, matchHydrated, view.quote.status]);
 
   const shouldForcePaymentRequired = React.useMemo(() => {
     if (hasPendingCounterOffer) return false;
-    if (paidMatchId > 0 && paidMatchId === cancelTargetMatchId) return false;
-    if (hasCompletedPayment || latestPaymentStatus === "COMPLETED") return false;
+    if (hasLocallyCompletedPaymentForActiveMatch || hasCompletedPayment || latestPaymentStatus === "COMPLETED") return false;
     if (!isAcceptedByMatch) return false;
 
     const hasExplicitPayIntent = forcePaymentRequired || isRoutePayRequested;
@@ -953,7 +994,7 @@ export default function QuoteDetailPage() {
 
     const uiState = getCustomerUiStateFromBackendStatus(effectiveQuoteStatus);
     return uiState === CUSTOMER_UI_STATE.PAYMENT_REQUIRED || uiState === CUSTOMER_UI_STATE.REQUESTED || uiState === CUSTOMER_UI_STATE.UNKNOWN;
-  }, [cancelTargetMatchId, effectiveQuoteStatus, forcePaymentRequired, hasCompletedPayment, hasPendingCounterOffer, isAcceptedByMatch, isRoutePayRequested, latestPaymentStatus, paidMatchId]);
+  }, [effectiveQuoteStatus, forcePaymentRequired, hasCompletedPayment, hasLocallyCompletedPaymentForActiveMatch, hasPendingCounterOffer, isAcceptedByMatch, isRoutePayRequested, latestPaymentStatus]);
   const statusUiState = React.useMemo(() => getCustomerUiStateFromBackendStatus(effectiveQuoteStatus), [effectiveQuoteStatus]);
   const actionUiState = React.useMemo(
     () =>
@@ -964,8 +1005,8 @@ export default function QuoteDetailPage() {
           : statusUiState,
     [hasPendingCounterOffer, shouldForcePaymentRequired, statusUiState]
   );
-  const statusPolicy = React.useMemo(() => getQuoteActionPolicyByUiState(statusUiState), [statusUiState]);
-  const actionPolicy = React.useMemo(() => getQuoteActionPolicyByUiState(actionUiState), [actionUiState]);
+  const statusPolicy = React.useMemo(() => getQuoteActionPolicyByUiState(actionUiState), [actionUiState]);
+  const actionPolicy = statusPolicy;
   const effectiveActionsContext = React.useMemo(
     () => ({ ...view.actionsContext, status: effectiveQuoteStatus }),
     [effectiveQuoteStatus, view.actionsContext]
@@ -1115,6 +1156,13 @@ export default function QuoteDetailPage() {
       setMatchHydrated(true);
       return;
     }
+    // quote 전환 시 이전 상세 상태가 잠깐 노출되지 않도록 로컬 상태를 먼저 초기화한다.
+    setMatchSnapshot(EMPTY_MATCH_SNAPSHOT);
+    setPendingCounterOffer(null);
+    setHasCompletedPayment(false);
+    setLatestPaymentStatus(null);
+    setLatestPaymentMethod(null);
+    setPaidMatchId(0);
     setMatchHydrated(false);
     const task = InteractionManager.runAfterInteractions(() => {
       if (canceled || matchLoadTokenRef.current !== token) return;
@@ -1202,11 +1250,18 @@ export default function QuoteDetailPage() {
   }, [cancelTargetMatchId, isMatchSubmitting, refreshQuoteAndMatchData]);
 
   const resolvePendingCounterOfferId = React.useCallback(async () => {
+    const localOfferId = parsePositiveInt(pendingCounterOffer?.counterOfferId);
+    if (localOfferId > 0 && isCounterOfferPending(pendingCounterOffer?.status ?? "")) {
+      return localOfferId;
+    }
     if (actionQuoteId <= 0) return 0;
     const offers = await listShipperCounterOffers(actionQuoteId);
     const pendingOffer = offers.find((offer) => isCounterOfferPending(offer.status));
+    if (pendingOffer) {
+      setPendingCounterOffer(pendingOffer);
+    }
     return parsePositiveInt(pendingOffer?.counterOfferId);
-  }, [actionQuoteId]);
+  }, [actionQuoteId, pendingCounterOffer]);
 
   const executePayment = React.useCallback(async () => {
     if (isPaying) return;
@@ -1314,10 +1369,41 @@ export default function QuoteDetailPage() {
             Alert.alert("협상 제안 수락", "대기 중인 역제안을 찾을 수 없습니다.");
             return;
           }
-          await acceptShipperCounterOffer(offerId);
+          const accepted = await acceptShipperCounterOffer(offerId);
+          const acceptedMatchId = parsePositiveInt(accepted?.matchId);
+          const shouldRequirePayment = shouldRequirePaymentAfterCounterOfferAccept(accepted);
+
           setPendingCounterOffer(null);
+          if (acceptedMatchId > 0) {
+            const optimisticMatch = buildOptimisticAcceptedMatch(
+              acceptedMatchId,
+              actionQuoteId,
+              accepted?.matchStatus ?? accepted?.quoteStatus
+            );
+            setMatchSnapshot({
+              cancelableMatch: optimisticMatch.cancelable ? optimisticMatch : null,
+              nonCanceledMatch: optimisticMatch,
+            });
+          }
+          if (shouldRequirePayment) {
+            setForcePaymentRequired(true);
+          }
           await refreshQuoteAndMatchData();
-          setForcePaymentRequired(true);
+          if (acceptedMatchId > 0) {
+            setMatchSnapshot((prev) => {
+              const currentMatchId = parsePositiveInt((prev.cancelableMatch ?? prev.nonCanceledMatch)?.matchId);
+              if (currentMatchId > 0) return prev;
+              const optimisticMatch = buildOptimisticAcceptedMatch(
+                acceptedMatchId,
+                actionQuoteId,
+                accepted?.matchStatus ?? accepted?.quoteStatus
+              );
+              return {
+                cancelableMatch: optimisticMatch.cancelable ? optimisticMatch : null,
+                nonCanceledMatch: optimisticMatch,
+              };
+            });
+          }
           Alert.alert("협상 제안 수락", "역제안을 수락했습니다.");
         } catch (error) {
           Alert.alert("협상 제안 수락 실패", readApiErrorMessage(error));
@@ -1357,7 +1443,7 @@ export default function QuoteDetailPage() {
         return;
       }
     },
-    [executePayment, isMatchSubmitting, isPaying, refreshQuoteAndMatchData, resolvePendingCounterOfferId, router]
+    [actionQuoteId, executePayment, isMatchSubmitting, isPaying, refreshQuoteAndMatchData, resolvePendingCounterOfferId, router]
   );
 
   const handlePolicyCancelRequest = React.useCallback(
