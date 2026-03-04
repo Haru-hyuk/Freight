@@ -43,6 +43,7 @@ import {
   type DriverRunGroupCardModel,
 } from "@/features/driver-orders/ui/cards/DriverRunGroupCard";
 import CounterOfferModal, { type CounterOfferSubmitPayload } from "@/features/matching/ui/CounterOfferModal";
+import { DRIVER_ROUTE_PATH } from "@/features/matching/model/driverRunUiApiGrounding";
 import { formatKrw } from "@/shared/lib/format/display";
 import {
   BADGE_TONE,
@@ -1183,13 +1184,13 @@ export function DriverOrdersBoard({
 
       if (resolvedActiveTab === "market") {
         router.push({
-          pathname: "/(driver)/(stack)/order/[id]",
+          pathname: DRIVER_ROUTE_PATH.ORDER_DETAIL,
           params: { id: String(card.matchId), source: "market" },
         });
       } else {
         const detailParams = buildDriverOrderDetailParams(card);
         const source = assignedOnly ? "run" : "my";
-        const pathname = source === "run" ? "/(driver)/(stack)/run/[id]" : "/(driver)/(stack)/order/[id]";
+        const pathname = source === "run" ? DRIVER_ROUTE_PATH.RUN_DETAIL : DRIVER_ROUTE_PATH.ORDER_DETAIL;
         router.push({
           pathname,
           params: {
@@ -1222,7 +1223,7 @@ export function DriverOrdersBoard({
           status: (typeof detail.status === "string" && detail.status.trim()) || fallbackStatus || "READY",
         });
         void loadOrders("refresh").then(() => {
-          router.push("/(driver)/run");
+          router.push(DRIVER_ROUTE_PATH.RUN_TAB);
         });
       } catch {
         showToast(NETWORK_ERROR_TEXT);
@@ -1250,7 +1251,7 @@ export function DriverOrdersBoard({
         }
 
         await loadOrders("refresh");
-        router.replace("/(driver)/run");
+        router.replace(DRIVER_ROUTE_PATH.RUN_TAB);
         showToast("오더를 수락했습니다.");
       } catch {
         showToast(NETWORK_ERROR_TEXT);
@@ -1393,7 +1394,7 @@ export function DriverOrdersBoard({
         analyzedAt: Date.now(),
       });
       router.push({
-        pathname: "/(driver)/(stack)/order/[id]",
+        pathname: DRIVER_ROUTE_PATH.ORDER_DETAIL,
         params: { id: String(primaryMatchId), source: "market", recommendKey: route.key },
       });
     },

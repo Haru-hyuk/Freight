@@ -18,6 +18,7 @@ import {
   getDriverMarketRecommendationSelection,
   clearDriverMarketRecommendationSelection,
 } from "@/features/driver-orders/model/marketRecommendationSelection";
+import { DRIVER_ROUTE_PATH } from "@/features/matching/model/driverRunUiApiGrounding";
 import { addDriverAcceptedRunGroup } from "@/features/driver-orders/model/acceptedRunGroups";
 import { previewLoadPlan as previewLoadPlanGenerated } from "@/shared/api/generated/driver-optimization-controller/driver-optimization-controller";
 import type { LoadPlanResponse, Placement, TruckSpecReferenceResponse } from "@/shared/api/generated/schemas";
@@ -754,12 +755,12 @@ export default function DriverMarketRecommendationPage({
             clearDriverMarketRecommendationSelection();
             if (failureCount > 0 && nextMatchId > 0) {
               router.replace({
-                pathname: "/(driver)/(stack)/order/[id]",
+                pathname: DRIVER_ROUTE_PATH.ORDER_DETAIL,
                 params: { id: String(nextMatchId), source: "market" },
               });
               return;
             }
-            router.replace("/(driver)/run");
+            router.replace(DRIVER_ROUTE_PATH.RUN_TAB);
           },
         },
       ]);
@@ -834,7 +835,7 @@ export default function DriverMarketRecommendationPage({
             title="추천 정보를 찾지 못했습니다."
             description="오더 마켓에서 추천 항목을 다시 선택해 주세요."
             retryLabel="오더 마켓으로"
-            onRetry={() => router.replace("/(driver)/quotes")}
+            onRetry={() => router.replace(DRIVER_ROUTE_PATH.MARKET_TAB)}
             fullScreen={false}
           />
         </View>
