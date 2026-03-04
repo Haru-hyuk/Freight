@@ -218,6 +218,8 @@ function DriverOrderUnifiedCardBase({
     item.uiState === DRIVER_UI_STATE.ASSIGNED &&
     item.cta?.id !== DRIVER_CTA_ID.START_DRIVE;
   const showNegotiatingMeta = scope !== "market" && item.uiState === DRIVER_UI_STATE.NEGOTIATING;
+  const isAcceptingCurrent = acceptingMatchId === item.matchId;
+  const isMarketActionBusy = isSubmittingOffer || isAcceptingCurrent;
 
   return (
     <Pressable onPress={() => onPress(item)} style={({ pressed }) => [styles.pressable, pressed ? styles.pressed : null]}>
@@ -333,15 +335,15 @@ function DriverOrderUnifiedCardBase({
               onPress={() => onOfferClick(item)}
               variant="secondary"
               style={styles.dualCtaButton}
-              disabled={isSubmittingOffer || acceptingMatchId === item.matchId}
+              disabled={isMarketActionBusy}
               title="운임 제안"
               textStyle={{ fontWeight: "900" }}
             />
             <AppButton
               onPress={ctaPolicy.enabled ? () => onAcceptClick(item) : undefined}
               variant={ctaPolicy.enabled ? ctaVariant : "secondary"}
-              disabled={!ctaPolicy.enabled}
-              loading={acceptingMatchId === item.matchId}
+              disabled={!ctaPolicy.enabled || isMarketActionBusy}
+              loading={isAcceptingCurrent}
               style={styles.dualCtaButton}
               title={ctaPolicy.label}
               textStyle={{ fontWeight: "900" }}

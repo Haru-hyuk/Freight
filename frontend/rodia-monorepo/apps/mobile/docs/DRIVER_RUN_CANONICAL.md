@@ -33,3 +33,33 @@
   - 시나리오 1: 운행 탭 진입 -> 목록 로딩 -> 상세 진입/복귀
   - 시나리오 2: legacy alias URL(`/(driver)/drive`, `/(driver)/matches/me`) 직접 진입 -> run으로 리다이렉트 확인
   - 시나리오 3: 잘못된 id(`/(driver)/run/invalid`) 진입 -> fallback 경로/에러 처리 확인
+
+## Driver Run UI-API grounding (2026-03-04)
+
+### Entrypoints (code-grounded)
+- 오더 보드(마켓): `app/(driver)/quotes/index.tsx` -> `DriverOrdersBoard`
+- 운행 탭 목록: `app/(driver)/run/index.tsx` -> `DriverRunPage` -> `DriverOrdersBoard assignedOnly`
+- 추천 오더 상세: `app/(driver)/(stack)/order/[id].tsx` with `recommendKey` -> `DriverMarketRecommendationPage`
+- 일반 오더 상세: `app/(driver)/(stack)/order/[id].tsx` -> `DriverOrderDetailContent` + `useMatchDetail`
+
+### Action source of truth
+- 배차 수락: `POST /api/driver/matches/{matchId}/accept` (`acceptDriverMatch`)
+- 다건 배차 수락(서버 스펙 존재): `POST /api/driver/matches/accept-batch` (`acceptMatches`)
+- 운임 제안: `POST /api/driver/quotes/{quoteId}/counter-offers` (`createDriverCounterOffer` via `postCounterOffer`)
+
+### Status transition map (server -> parser/policy -> UI/CTA)
+| Server raw | Parser normalization | Driver UI state | Primary CTA |
+| --- | --- | --- | --- |
+| `OPEN` | `OPEN` | `READY_TO_ACCEPT` | `배차 수락` |
+| `MATCHED` | `ASSIGNED` | `ASSIGNED` | `운행 시작` |
+| `READY` | `READY` | `ASSIGNED` | `운행 시작` |
+| `PICKUP` | `PICKUP` | `PICKUP_IN_PROGRESS` | `상차 완료`(워크플로우) |
+| `IN_TRANSIT` / `TRANSIT` / `DRIVING` | `TRANSIT` | `TRANSIT_IN_PROGRESS` | `하차 완료` |
+| `DELIVERED` / `COMPLETED` / `DROPOFF` | `DROPOFF` | `COMPLETED` | `운행 결과 확인` |
+| `NEGOTIATING` | `NEGOTIATING` | `NEGOTIATING` | `운임 제안` |
+
+### Bottom CTA rendering gates (detail)
+- `isQuoteMode = source===market || uiState in [READY_TO_ACCEPT, NEGOTIATING]`일 때:
+  - 하단 액션바: `운임 제안` + `배차 수락`
+- `uiState in [ASSIGNED, PICKUP_IN_PROGRESS, TRANSIT_IN_PROGRESS]`일 때:
+  - 운행 워크플로우 하단 버튼(운행 시작/상차 완료/하차 완료)

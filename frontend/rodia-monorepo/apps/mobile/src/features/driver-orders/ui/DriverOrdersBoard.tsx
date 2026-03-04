@@ -3,6 +3,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Alert,
   FlatList,
   Platform,
   Pressable,
@@ -43,11 +44,20 @@ import {
   type DriverRunGroupCardModel,
 } from "@/features/driver-orders/ui/cards/DriverRunGroupCard";
 import CounterOfferModal, { type CounterOfferSubmitPayload } from "@/features/matching/ui/CounterOfferModal";
-import { formatKrw } from "@/shared/lib/format/display";
+import { DRIVER_ROUTE_PATH } from "@/features/matching/model/driverRunUiApiGrounding";
 import {
+  DRIVER_RUN_SYNC_EVENT,
+  publishDriverRunSyncEvent,
+  subscribeDriverRunSyncEvent,
+} from "@/features/matching/model/driverRunSyncEvents";
+import { formatKrw } from "@/shared/lib/format/display";
+import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
+import {
+  API_ERROR_CODE,
   BADGE_TONE,
   DRIVER_CTA_ID,
   DRIVER_UI_STATE,
+  getApiErrorCode,
   type BadgeTone,
   type DriverUiState,
 } from "@/shared/lib/policy";
@@ -998,6 +1008,18 @@ export function DriverOrdersBoard({
     setRunStatusFilter("ALL");
   }, [assignedOnly]);
 
+  useEffect(() => {
+    return subscribeDriverRunSyncEvent((event) => {
+      if (
+        event.type !== DRIVER_RUN_SYNC_EVENT.COUNTER_OFFER_SUBMITTED &&
+        event.type !== DRIVER_RUN_SYNC_EVENT.MATCH_ACCEPTED
+      ) {
+        return;
+      }
+      void loadOrders("refresh");
+    });
+  }, [loadOrders]);
+
   useFocusEffect(
     useCallback(() => {
       const meta = focusRefetchMetaRef.current;
@@ -1034,7 +1056,6 @@ export function DriverOrdersBoard({
   const runOrderPool = useMemo(() => {
     const runStates = new Set<DriverUiState>([
       DRIVER_UI_STATE.ASSIGNED,
-      DRIVER_UI_STATE.NEGOTIATING,
       DRIVER_UI_STATE.PICKUP_IN_PROGRESS,
       DRIVER_UI_STATE.TRANSIT_IN_PROGRESS,
       DRIVER_UI_STATE.COMPLETED,
@@ -1183,13 +1204,13 @@ export function DriverOrdersBoard({
 
       if (resolvedActiveTab === "market") {
         router.push({
-          pathname: "/(driver)/(stack)/order/[id]",
+          pathname: DRIVER_ROUTE_PATH.ORDER_DETAIL,
           params: { id: String(card.matchId), source: "market" },
         });
       } else {
         const detailParams = buildDriverOrderDetailParams(card);
         const source = assignedOnly ? "run" : "my";
-        const pathname = source === "run" ? "/(driver)/(stack)/run/[id]" : "/(driver)/(stack)/order/[id]";
+        const pathname = source === "run" ? DRIVER_ROUTE_PATH.RUN_DETAIL : DRIVER_ROUTE_PATH.ORDER_DETAIL;
         router.push({
           pathname,
           params: {
@@ -1222,7 +1243,7 @@ export function DriverOrdersBoard({
           status: (typeof detail.status === "string" && detail.status.trim()) || fallbackStatus || "READY",
         });
         void loadOrders("refresh").then(() => {
-          router.push("/(driver)/run");
+          router.push(DRIVER_ROUTE_PATH.RUN_TAB);
         });
       } catch {
         showToast(NETWORK_ERROR_TEXT);
@@ -1233,7 +1254,7 @@ export function DriverOrdersBoard({
 
   const handleAcceptFromMarket = useCallback(
     async (card: DriverOrderCard) => {
-      if (acceptingMatchId !== null) return;
+      if (acceptingMatchId !== null || isSubmittingOffer) return;
 
       const safeMatchId = Number(card.matchId);
       if (!Number.isInteger(safeMatchId) || safeMatchId <= 0) {
@@ -1245,20 +1266,38 @@ export function DriverOrdersBoard({
       try {
         const result = await acceptDriverMatch(safeMatchId);
         if (!result) {
-          showToast(NETWORK_ERROR_TEXT);
+          Alert.alert("배차 수락 실패", NETWORK_ERROR_TEXT, [
+            { text: "취소", style: "cancel" },
+            { text: "다시 시도", onPress: () => void handleAcceptFromMarket(card) },
+          ]);
           return;
         }
 
+        publishDriverRunSyncEvent({
+          type: DRIVER_RUN_SYNC_EVENT.MATCH_ACCEPTED,
+          matchIds: [safeMatchId],
+          quoteIds: Number.isInteger(Number(card.quoteId)) && Number(card.quoteId) > 0 ? [Number(card.quoteId)] : [],
+          source: "order_board",
+        });
         await loadOrders("refresh");
-        router.replace("/(driver)/run");
+        router.replace(DRIVER_ROUTE_PATH.RUN_TAB);
         showToast("오더를 수락했습니다.");
-      } catch {
-        showToast(NETWORK_ERROR_TEXT);
+      } catch (error) {
+        const code = getApiErrorCode(error);
+        if (code === API_ERROR_CODE.CONFLICT) {
+          showToast("이미 배차 처리된 오더입니다.");
+          return;
+        }
+        const message = readApiErrorMessage(error, NETWORK_ERROR_TEXT);
+        Alert.alert("배차 수락 실패", message, [
+          { text: "취소", style: "cancel" },
+          { text: "다시 시도", onPress: () => void handleAcceptFromMarket(card) },
+        ]);
       } finally {
         setAcceptingMatchId(null);
       }
     },
-    [acceptingMatchId, loadOrders, router, showToast]
+    [acceptingMatchId, isSubmittingOffer, loadOrders, router, showToast]
   );
 
   const handleOpenCounterOffer = useCallback((card: DriverOrderCard) => {
@@ -1300,12 +1339,19 @@ export function DriverOrdersBoard({
           return;
         }
 
+        const safeQuoteId = Number(target.quoteId);
+        publishDriverRunSyncEvent({
+          type: DRIVER_RUN_SYNC_EVENT.COUNTER_OFFER_SUBMITTED,
+          matchIds: [safeMatchId],
+          quoteIds: Number.isInteger(safeQuoteId) && safeQuoteId > 0 ? [safeQuoteId] : [],
+          source: "order_board",
+        });
         setIsOfferOpen(false);
         setOfferTargetCard(null);
         showToast("역제안을 전송했습니다.");
         await loadOrders("refresh");
-      } catch {
-        setOfferErrorMessage(NETWORK_ERROR_TEXT);
+      } catch (error) {
+        setOfferErrorMessage(readApiErrorMessage(error, NETWORK_ERROR_TEXT));
       } finally {
         setIsSubmittingOffer(false);
       }
@@ -1393,7 +1439,7 @@ export function DriverOrdersBoard({
         analyzedAt: Date.now(),
       });
       router.push({
-        pathname: "/(driver)/(stack)/order/[id]",
+        pathname: DRIVER_ROUTE_PATH.ORDER_DETAIL,
         params: { id: String(primaryMatchId), source: "market", recommendKey: route.key },
       });
     },

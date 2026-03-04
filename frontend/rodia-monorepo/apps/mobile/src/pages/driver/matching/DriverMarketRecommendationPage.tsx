@@ -9,6 +9,7 @@ import * as THREE from "three";
 import type { QuoteDetailResponse } from "@/entities/quote/model/quote.types";
 import {
   acceptDriverMatch,
+  acceptDriverMatchesBatch,
   getDriverQuoteSummaryDetail,
   postCounterOffer,
   type DriverOrderCard,
@@ -18,10 +19,17 @@ import {
   getDriverMarketRecommendationSelection,
   clearDriverMarketRecommendationSelection,
 } from "@/features/driver-orders/model/marketRecommendationSelection";
+import { DRIVER_ROUTE_PATH } from "@/features/matching/model/driverRunUiApiGrounding";
+import {
+  DRIVER_RUN_SYNC_EVENT,
+  publishDriverRunSyncEvent,
+} from "@/features/matching/model/driverRunSyncEvents";
 import { addDriverAcceptedRunGroup } from "@/features/driver-orders/model/acceptedRunGroups";
 import { previewLoadPlan as previewLoadPlanGenerated } from "@/shared/api/generated/driver-optimization-controller/driver-optimization-controller";
 import type { LoadPlanResponse, Placement, TruckSpecReferenceResponse } from "@/shared/api/generated/schemas";
+import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
 import { formatKrw } from "@/shared/lib/format/display";
+import { API_ERROR_CODE, getApiErrorCode } from "@/shared/lib/policy";
 import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppButton } from "@/shared/ui/kit/AppButton";
@@ -702,6 +710,7 @@ export default function DriverMarketRecommendationPage({
   }, [orderedPlacements]);
 
   const handleAccept = useCallback(async () => {
+    if (isBusy || isSubmittingOffer) return;
     if (groupedMatchIds.length <= 0) {
       Alert.alert("안내", "수락 가능한 매칭 정보가 없습니다.");
       return;
@@ -709,24 +718,36 @@ export default function DriverMarketRecommendationPage({
 
     setIsBusy(true);
     try {
-      let successCount = 0;
-      let failureCount = 0;
-      const successMatchIds: number[] = [];
-      for (const matchId of groupedMatchIds) {
-        try {
-          const result = await acceptDriverMatch(matchId);
-          if (result) {
-            successCount += 1;
-            successMatchIds.push(matchId);
-          }
-          else failureCount += 1;
-        } catch {
-          failureCount += 1;
+      let acceptedMatches: Awaited<ReturnType<typeof acceptDriverMatchesBatch>> = [];
+      if (groupedMatchIds.length > 1) {
+        acceptedMatches = await acceptDriverMatchesBatch({
+          matchIds: groupedMatchIds,
+          routeType: selection?.mode,
+          orderedQuoteIds: selection?.recommendation.quoteIds,
+        });
+      } else {
+        const singleMatchId = groupedMatchIds[0];
+        if (singleMatchId) {
+          const single = await acceptDriverMatch(singleMatchId);
+          acceptedMatches = single ? [single] : [];
         }
       }
 
+      const successMatchIds = Array.from(
+        new Set(
+          acceptedMatches
+            .map((item) => toPositiveInt(item.matchId))
+            .filter((matchId) => matchId > 0)
+        )
+      );
+      const successCount = successMatchIds.length;
+      const failureCount = Math.max(0, groupedMatchIds.length - successCount);
+
       if (successCount <= 0) {
-        Alert.alert("오류", "배차 수락에 실패했습니다.");
+        Alert.alert("배차 수락 실패", "배차 수락에 실패했습니다.", [
+          { text: "취소", style: "cancel" },
+          { text: "다시 시도", onPress: () => void handleAccept() },
+        ]);
         return;
       }
 
@@ -746,6 +767,12 @@ export default function DriverMarketRecommendationPage({
           acceptedAt: Date.now(),
         });
       }
+      publishDriverRunSyncEvent({
+        type: DRIVER_RUN_SYNC_EVENT.MATCH_ACCEPTED,
+        matchIds: successMatchIds,
+        quoteIds: selection?.recommendation.quoteIds ?? [],
+        source: "market_recommendation",
+      });
       const nextMatchId = groupedMatchIds[0];
       Alert.alert("배차 수락 완료", message, [
         {
@@ -754,21 +781,30 @@ export default function DriverMarketRecommendationPage({
             clearDriverMarketRecommendationSelection();
             if (failureCount > 0 && nextMatchId > 0) {
               router.replace({
-                pathname: "/(driver)/(stack)/order/[id]",
+                pathname: DRIVER_ROUTE_PATH.ORDER_DETAIL,
                 params: { id: String(nextMatchId), source: "market" },
               });
               return;
             }
-            router.replace("/(driver)/run");
+            router.replace(DRIVER_ROUTE_PATH.RUN_TAB);
           },
         },
       ]);
-    } catch {
-      Alert.alert("오류", "배차 수락에 실패했습니다.");
+    } catch (error) {
+      const code = getApiErrorCode(error);
+      if (code === API_ERROR_CODE.CONFLICT) {
+        Alert.alert("배차 수락 실패", "이미 배차 처리된 오더가 포함되어 있습니다. 목록을 새로고침해 주세요.");
+        return;
+      }
+      const message = readApiErrorMessage(error, "잠시 후 다시 시도해 주세요.");
+      Alert.alert("배차 수락 실패", message, [
+        { text: "취소", style: "cancel" },
+        { text: "다시 시도", onPress: () => void handleAccept() },
+      ]);
     } finally {
       setIsBusy(false);
     }
-  }, [groupedMatchIds, isGroupedRecommendation, router, selection]);
+  }, [groupedMatchIds, isBusy, isGroupedRecommendation, isSubmittingOffer, router, selection]);
 
   const handleSubmitOffer = useCallback(
     async (payload: CounterOfferSubmitPayload) => {
@@ -792,10 +828,16 @@ export default function DriverMarketRecommendationPage({
           setOfferErrorMessage("운임 제안 처리에 실패했습니다.");
           return;
         }
+        publishDriverRunSyncEvent({
+          type: DRIVER_RUN_SYNC_EVENT.COUNTER_OFFER_SUBMITTED,
+          matchIds: [safeMatchId],
+          quoteIds: [safeQuoteId],
+          source: "market_recommendation",
+        });
         setIsOfferOpen(false);
         Alert.alert("완료", "운임 제안을 전송했습니다.");
-      } catch {
-        setOfferErrorMessage("운임 제안 처리에 실패했습니다.");
+      } catch (error) {
+        setOfferErrorMessage(readApiErrorMessage(error, "운임 제안 처리에 실패했습니다."));
       } finally {
         setIsSubmittingOffer(false);
       }
@@ -809,7 +851,8 @@ export default function DriverMarketRecommendationPage({
         title={isGroupedRecommendation ? "운임 제안(대표 1건)" : "운임 제안"}
         variant="secondary"
         style={styles.bottomBtn}
-        disabled={!primaryOrder || isBusy}
+        loading={isSubmittingOffer}
+        disabled={!primaryOrder || isBusy || isSubmittingOffer}
         onPress={() => {
           setOfferErrorMessage(null);
           setIsOfferOpen(true);
@@ -820,7 +863,7 @@ export default function DriverMarketRecommendationPage({
         variant="primary"
         style={styles.bottomBtn}
         loading={isBusy}
-        disabled={groupedMatchIds.length <= 0 || isBusy}
+        disabled={groupedMatchIds.length <= 0 || isBusy || isSubmittingOffer}
         onPress={() => void handleAccept()}
       />
     </View>
@@ -834,7 +877,7 @@ export default function DriverMarketRecommendationPage({
             title="추천 정보를 찾지 못했습니다."
             description="오더 마켓에서 추천 항목을 다시 선택해 주세요."
             retryLabel="오더 마켓으로"
-            onRetry={() => router.replace("/(driver)/quotes")}
+            onRetry={() => router.replace(DRIVER_ROUTE_PATH.MARKET_TAB)}
             fullScreen={false}
           />
         </View>

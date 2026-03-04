@@ -10,11 +10,14 @@ import { AppButton, type AppButtonVariant } from "@/shared/ui/kit/AppButton";
 type SecondaryCta = {
   label: string;
   onPress: () => void;
+  disabled?: boolean;
+  loading?: boolean;
 };
 
 type Props = {
   cta?: Partial<DriverCtaConfig> | null;
   onPress?: () => void;
+  primaryLoading?: boolean;
   /** Optional secondary CTA rendered beside the primary (e.g. 운임 제안). */
   secondaryCta?: SecondaryCta;
 };
@@ -52,7 +55,7 @@ function toButtonVariant(variant: string): AppButtonVariant {
   return "secondary";
 }
 
-export function DriverOrderActionBar({ cta, onPress, secondaryCta }: Props) {
+export function DriverOrderActionBar({ cta, onPress, primaryLoading = false, secondaryCta }: Props) {
   const styles = useStyles();
   const insets = useSafeAreaInsets();
   const safeCta: DriverCtaConfig = {
@@ -71,7 +74,10 @@ export function DriverOrderActionBar({ cta, onPress, secondaryCta }: Props) {
     typeof secondaryCta?.label === "string" &&
     secondaryCta.label.trim().length > 0 &&
     typeof secondaryCta?.onPress === "function";
-  const primaryOnPress = safeCta.enabled ? onPress : undefined;
+  const isPrimaryDisabled = !safeCta.enabled || primaryLoading;
+  const isSecondaryDisabled =
+    secondaryCta?.disabled === true || secondaryCta?.loading === true || primaryLoading;
+  const primaryOnPress = isPrimaryDisabled ? undefined : onPress;
 
   return (
     <View style={[styles.container, { paddingBottom: insets.bottom + 8 }]}>
@@ -82,14 +88,17 @@ export function DriverOrderActionBar({ cta, onPress, secondaryCta }: Props) {
             title={secondaryCta!.label}
             variant="secondary"
             style={styles.button}
+            loading={secondaryCta?.loading === true}
+            disabled={isSecondaryDisabled}
             textStyle={{ fontSize: 15, fontWeight: "800" }}
-            onPress={secondaryCta!.onPress}
+            onPress={isSecondaryDisabled ? undefined : secondaryCta!.onPress}
           />
           {/* Primary action (배차 수락) on the right */}
           <AppButton
             title={safeCta.label}
             variant={buttonVariant}
-            disabled={!safeCta.enabled}
+            loading={primaryLoading}
+            disabled={isPrimaryDisabled}
             style={styles.button}
             textStyle={{ fontSize: 15, fontWeight: "900" }}
             onPress={primaryOnPress}
@@ -99,7 +108,8 @@ export function DriverOrderActionBar({ cta, onPress, secondaryCta }: Props) {
         <AppButton
           title={safeCta.label}
           variant={buttonVariant}
-          disabled={!safeCta.enabled}
+          loading={primaryLoading}
+          disabled={isPrimaryDisabled}
           style={styles.buttonSingle}
           textStyle={{ fontSize: 16, fontWeight: "900" }}
           onPress={primaryOnPress}

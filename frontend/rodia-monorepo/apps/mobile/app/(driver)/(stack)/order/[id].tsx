@@ -16,15 +16,23 @@ import { getDriverMarketRecommendationSelection } from "@/features/driver-orders
 import { acceptDriverMatch, postCounterOffer, uploadImage, type DriverPhotoUploadType } from "@/features/matching/api";
 import type { ParsedMatchResponseItem } from "@/features/matching/api/shipper-match-parser";
 import { useMatchDetail } from "@/features/matching/model/useMatchDetail";
+import {
+  DRIVER_RUN_SYNC_EVENT,
+  publishDriverRunSyncEvent,
+} from "@/features/matching/model/driverRunSyncEvents";
+import { DRIVER_ROUTE_PATH } from "@/features/matching/model/driverRunUiApiGrounding";
 import CounterOfferModal, { type CounterOfferSubmitPayload } from "@/features/matching/ui/CounterOfferModal";
 import DriverMarketRecommendationPage from "@/pages/driver/matching/DriverMarketRecommendationPage";
 import type { QuoteDetailResponse } from "@/entities/quote/model/quote.types";
 import { previewLoadPlan as previewLoadPlanGenerated } from "@/shared/api/generated/driver-optimization-controller/driver-optimization-controller";
 import type { LoadPlanResponse, Placement, TruckSpecReferenceResponse } from "@/shared/api/generated/schemas";
 import { confirmLoading, confirmUnloading, startDriving } from "@/shared/lib/mock-flow";
+import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
 import {
+  API_ERROR_CODE,
   DRIVER_CTA_ID,
   DRIVER_UI_STATE,
+  getApiErrorCode,
   getDriverCta,
   getDriverUiStateFromStatusPayload,
   type DriverUiState,
@@ -1245,20 +1253,54 @@ function DriverOrderDetailContent({ params }: { params: DriverOrderRouteParams }
   const currentStep = resolveWorkflowStepIndex(uiState);
 
   const handleAcceptMatch = useCallback(() => {
+    if (isBusy || isSubmittingOffer) return;
     Alert.alert("배차 수락", "이 배차를 수락하시겠습니까?", [
       { text: "취소", style: "cancel" },
       {
         text: "수락",
-        onPress: () => {
+        onPress: async () => {
           setIsBusy(true);
-          acceptDriverMatch(matchId)
-            .then(() => viewModel.refetch())
-            .catch(() => Alert.alert("배차 수락 실패", "잠시 후 다시 시도해 주세요."))
-            .finally(() => setIsBusy(false));
+          try {
+            const result = await acceptDriverMatch(matchId);
+            if (!result) {
+              Alert.alert("배차 수락 실패", "잠시 후 다시 시도해 주세요.", [
+                { text: "취소", style: "cancel" },
+                { text: "다시 시도", onPress: handleAcceptMatch },
+              ]);
+              return;
+            }
+
+            const safeQuoteId = toPositiveInt(viewModel.quoteId ?? result.quoteId);
+            publishDriverRunSyncEvent({
+              type: DRIVER_RUN_SYNC_EVENT.MATCH_ACCEPTED,
+              matchIds: [matchId],
+              quoteIds: safeQuoteId > 0 ? [safeQuoteId] : [],
+              source: "order_detail",
+            });
+
+            await viewModel.refetch();
+            if (routeSource === "market" || isQuoteMode) {
+              router.replace(DRIVER_ROUTE_PATH.RUN_TAB);
+              return;
+            }
+          } catch (error) {
+            const code = getApiErrorCode(error);
+            if (code === API_ERROR_CODE.CONFLICT) {
+              Alert.alert("배차 수락 실패", "이미 다른 기사에게 배차된 오더입니다.");
+              return;
+            }
+            const message = readApiErrorMessage(error, "잠시 후 다시 시도해 주세요.");
+            Alert.alert("배차 수락 실패", message, [
+              { text: "취소", style: "cancel" },
+              { text: "다시 시도", onPress: handleAcceptMatch },
+            ]);
+          } finally {
+            setIsBusy(false);
+          }
         },
       },
     ]);
-  }, [matchId, viewModel.refetch]);
+  }, [isBusy, isQuoteMode, isSubmittingOffer, matchId, routeSource, router, viewModel.quoteId, viewModel.refetch]);
 
   const handleNegotiate = useCallback(() => {
     setOfferErrorMessage(null);
@@ -1271,16 +1313,31 @@ function DriverOrderDetailContent({ params }: { params: DriverOrderRouteParams }
       setIsSubmittingOffer(true);
       setOfferErrorMessage(null);
       try {
-        await postCounterOffer(matchId, { proposedPrice: payload.amount, message: payload.message });
+        const safeQuoteId = toPositiveInt(viewModel.quoteId);
+        const result = await postCounterOffer(
+          matchId,
+          { proposedPrice: payload.amount, message: payload.message },
+          safeQuoteId > 0 ? safeQuoteId : undefined
+        );
+        if (!result) {
+          setOfferErrorMessage("운임 제안에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+          return;
+        }
+        publishDriverRunSyncEvent({
+          type: DRIVER_RUN_SYNC_EVENT.COUNTER_OFFER_SUBMITTED,
+          matchIds: [matchId],
+          quoteIds: safeQuoteId > 0 ? [safeQuoteId] : [],
+          source: "order_detail",
+        });
         setIsOfferModalOpen(false);
         await viewModel.refetch();
-      } catch {
-        setOfferErrorMessage("운임 제안에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+      } catch (error) {
+        setOfferErrorMessage(readApiErrorMessage(error, "운임 제안에 실패했습니다. 잠시 후 다시 시도해 주세요."));
       } finally {
         setIsSubmittingOffer(false);
       }
     },
-    [isSubmittingOffer, matchId, viewModel.refetch]
+    [isSubmittingOffer, matchId, viewModel.quoteId, viewModel.refetch]
   );
 
   const handleStartDriving = useCallback(() => {
@@ -1558,11 +1615,21 @@ function DriverOrderDetailContent({ params }: { params: DriverOrderRouteParams }
     id: DRIVER_CTA_ID.ACCEPT_MATCH,
     label: "배차 수락",
     variant: "primary",
-    enabled: !isBusy,
+    enabled: !isBusy && !isSubmittingOffer,
   } as const;
-  const negotiateSecondary = { label: "운임 제안", onPress: handleNegotiate };
+  const negotiateSecondary = {
+    label: "운임 제안",
+    onPress: handleNegotiate,
+    disabled: isBusy || isSubmittingOffer,
+    loading: isSubmittingOffer,
+  };
   const finalBottomBar = isQuoteMode ? (
-    <DriverOrderActionBar cta={quotePrimaryCta} onPress={handleAcceptMatch} secondaryCta={negotiateSecondary} />
+    <DriverOrderActionBar
+      cta={quotePrimaryCta}
+      onPress={handleAcceptMatch}
+      primaryLoading={isBusy}
+      secondaryCta={negotiateSecondary}
+    />
   ) : renderBottomBar();
 
   return (
@@ -1642,7 +1709,11 @@ function DriverOrderDetailContent({ params }: { params: DriverOrderRouteParams }
       visible={isOfferModalOpen}
       isSubmitting={isSubmittingOffer}
       errorMessage={offerErrorMessage}
-      onClose={() => setIsOfferModalOpen(false)}
+      onClose={() => {
+        if (isSubmittingOffer) return;
+        setIsOfferModalOpen(false);
+        setOfferErrorMessage(null);
+      }}
       onSubmit={handleOfferSubmit}
     />
   </>
