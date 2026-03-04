@@ -1,5 +1,6 @@
 import {
   acceptMatch as acceptDriverMatchGenerated,
+  acceptMatches as acceptDriverMatchesGenerated,
   cancelMatch1 as cancelDriverMatchGenerated,
   getMatch1 as getDriverMatchGenerated,
   getMyMatches1 as getMyDriverMatchesGenerated,
@@ -32,6 +33,7 @@ import {
   parseMatchPositiveInt,
   parseSingleMatchResponse,
 } from "./shipper-match-parser";
+import type { LoadPlanResponse, TruckSpecReferenceResponse } from "@/shared/api/generated/schemas";
 
 export type MatchResponseItem = {
   matchId: number;
@@ -42,6 +44,10 @@ export type MatchResponseItem = {
   acceptedAt?: string;
   createdAt?: string;
   updatedAt?: string;
+  loadPlan?: LoadPlanResponse;
+  truckSpec?: TruckSpecReferenceResponse;
+  loadingPhotos?: string[];
+  unloadingPhotos?: string[];
 };
 
 export type ShipperMatchItem = MatchResponseItem & {
@@ -60,6 +66,12 @@ export type DriverMatchDetailBadge = {
 export type DriverMatchActionGuard = {
   enabled: boolean;
   reason?: string;
+};
+
+export type DriverBatchAcceptInput = {
+  matchIds: number[];
+  routeType?: string;
+  orderedQuoteIds?: number[];
 };
 
 const DRIVER_ACTION_GUARD_SERVER: DriverMatchActionGuard = {
@@ -87,6 +99,20 @@ function toShipperMatchList(value: unknown): ShipperMatchItem[] {
 
 function toSingleDriverMatch(value: unknown): DriverMatchItem | null {
   return parseSingleMatchResponse(value);
+}
+
+function asObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function toBatchAcceptedMatches(value: unknown): DriverMatchItem[] {
+  const payload = asObject(value);
+  if (Array.isArray(payload.matches)) {
+    return parseMatchListResponse(payload.matches);
+  }
+  return parseMatchListResponse(value);
 }
 
 export function getDriverMatchActionGuard(): DriverMatchActionGuard {
@@ -222,6 +248,45 @@ export async function acceptDriverMatch(matchId: number): Promise<DriverMatchIte
 
   const data = await acceptDriverMatchGenerated(safeMatchId);
   return toSingleDriverMatch(data);
+}
+
+export async function acceptDriverMatchesBatch(input: DriverBatchAcceptInput): Promise<DriverMatchItem[]> {
+  const safeMatchIds = Array.from(
+    new Set(
+      (Array.isArray(input.matchIds) ? input.matchIds : [])
+        .map((matchId) => parseMatchPositiveInt(matchId))
+        .filter((matchId) => matchId > 0)
+    )
+  );
+  if (safeMatchIds.length <= 0) return [];
+
+  if (safeMatchIds.length === 1) {
+    const single = await acceptDriverMatch(safeMatchIds[0]);
+    return single ? [single] : [];
+  }
+
+  if (isMockMode()) {
+    await waitRandom();
+    return safeMatchIds
+      .map((matchId) => toSingleDriverMatch(acceptMockFlowDriverMatch(matchId)))
+      .filter((item): item is DriverMatchItem => Boolean(item));
+  }
+
+  const safeOrderedQuoteIds = Array.from(
+    new Set(
+      (Array.isArray(input.orderedQuoteIds) ? input.orderedQuoteIds : [])
+        .map((quoteId) => parseMatchPositiveInt(quoteId))
+        .filter((quoteId) => quoteId > 0)
+    )
+  );
+  const payload = {
+    matchIds: safeMatchIds,
+    ...(typeof input.routeType === "string" && input.routeType.trim() ? { routeType: input.routeType.trim() } : {}),
+    ...(safeOrderedQuoteIds.length > 0 ? { orderedQuoteIds: safeOrderedQuoteIds } : {}),
+  };
+
+  const data = await acceptDriverMatchesGenerated(payload as any);
+  return toBatchAcceptedMatches(data);
 }
 
 export async function postCounterOffer(

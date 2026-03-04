@@ -5,7 +5,8 @@
  * OpenAPI spec version: v0
  */
 import type {
-  MatchCreateRequest
+  MatchCreateRequest,
+  MatchResponse
 } from '.././schemas';
 
 import { customInstance } from '../../orval/custom-instance';
@@ -15,20 +16,18 @@ import { customInstance } from '../../orval/custom-instance';
   export const createMatch = (
     matchCreateRequest: MatchCreateRequest,
  ) => {
-      return customInstance<Blob>(
+      return customInstance<MatchResponse>(
       {url: `/api/shipper/matches`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
-      data: matchCreateRequest,
-        responseType: 'blob'
+      data: matchCreateRequest
     },
       );
     }
   export const getMatch = (
     matchId: number,
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/shipper/matches/${matchId}`, method: 'GET',
-        responseType: 'blob'
+      return customInstance<MatchResponse>(
+      {url: `/api/shipper/matches/${matchId}`, method: 'GET'
     },
       );
     }
@@ -43,9 +42,8 @@ import { customInstance } from '../../orval/custom-instance';
   export const getMyMatches = (
     
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/shipper/matches/me`, method: 'GET',
-        responseType: 'blob'
+      return customInstance<MatchResponse[]>(
+      {url: `/api/shipper/matches/me`, method: 'GET'
     },
       );
     }

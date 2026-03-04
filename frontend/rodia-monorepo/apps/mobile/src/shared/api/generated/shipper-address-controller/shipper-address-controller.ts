@@ -5,6 +5,7 @@
  * OpenAPI spec version: v0
  */
 import type {
+  ShipperAddressItemResponse,
   ShipperAddressUpsertRequest
 } from '.././schemas';
 
@@ -16,11 +17,10 @@ import { customInstance } from '../../orval/custom-instance';
     addressId: string,
     shipperAddressUpsertRequest: ShipperAddressUpsertRequest,
  ) => {
-      return customInstance<Blob>(
+      return customInstance<ShipperAddressItemResponse>(
       {url: `/api/shipper/addresses/${addressId}`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
-      data: shipperAddressUpsertRequest,
-        responseType: 'blob'
+      data: shipperAddressUpsertRequest
     },
       );
     }
@@ -35,20 +35,18 @@ import { customInstance } from '../../orval/custom-instance';
   export const list = (
     
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/shipper/addresses`, method: 'GET',
-        responseType: 'blob'
+      return customInstance<ShipperAddressItemResponse[]>(
+      {url: `/api/shipper/addresses`, method: 'GET'
     },
       );
     }
   export const create1 = (
     shipperAddressUpsertRequest: ShipperAddressUpsertRequest,
  ) => {
-      return customInstance<Blob>(
+      return customInstance<ShipperAddressItemResponse>(
       {url: `/api/shipper/addresses`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
-      data: shipperAddressUpsertRequest,
-        responseType: 'blob'
+      data: shipperAddressUpsertRequest
     },
       );
     }

@@ -6,6 +6,8 @@
  */
 import type {
   LoadPlanPreviewRequest,
+  PreviewLoadPlan200,
+  RecommendRoutes200,
   RouteRecommendRequest
 } from '.././schemas';
 
@@ -16,22 +18,20 @@ import { customInstance } from '../../orval/custom-instance';
   export const recommendRoutes = (
     routeRecommendRequest: RouteRecommendRequest,
  ) => {
-      return customInstance<Blob>(
+      return customInstance<RecommendRoutes200>(
       {url: `/api/driver/optimization/route-recommendations`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
-      data: routeRecommendRequest,
-        responseType: 'blob'
+      data: routeRecommendRequest
     },
       );
     }
   export const previewLoadPlan = (
     loadPlanPreviewRequest: LoadPlanPreviewRequest,
  ) => {
-      return customInstance<Blob>(
+      return customInstance<PreviewLoadPlan200>(
       {url: `/api/driver/optimization/load-plan-preview`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
-      data: loadPlanPreviewRequest,
-        responseType: 'blob'
+      data: loadPlanPreviewRequest
     },
       );
     }

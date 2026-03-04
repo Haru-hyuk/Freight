@@ -59,6 +59,29 @@ config.resolver.disableHierarchicalLookup = true;
 // pnpm/yarn workspaces 심링크 대응(환경에 따라 필요)
 config.resolver.unstable_enableSymlinks = true;
 
+// three.js는 .mjs / .cjs 확장자를 사용 — Metro가 인식할 수 있도록 추가
+const defaultSourceExts = config.resolver.sourceExts ?? ["js", "jsx", "ts", "tsx", "json"];
+config.resolver.sourceExts = ["mjs", "cjs", ...defaultSourceExts];
+
+// package.json "exports" 필드 지원 (three.js ESM 엔트리 해석에 필요)
+config.resolver.unstable_enablePackageExports = true;
+
+// three.js 단일 인스턴스 보장
+// unstable_enablePackageExports 활성 시 일부 임포트가 three.module.js(ESM),
+// 다른 임포트가 three.cjs(CJS)로 분리 해석돼 R3F "multiple Three.js instances" 경고가 발생.
+// resolveRequest로 모든 'three' 임포트를 CJS 빌드 하나로 고정한다.
+const THREE_CJS = path.resolve(workspaceRoot, "node_modules/three/build/three.cjs");
+const _defaultResolveRequest = config.resolver.resolveRequest;
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (moduleName === "three") {
+    return { filePath: THREE_CJS, type: "sourceFile" };
+  }
+  if (_defaultResolveRequest) {
+    return _defaultResolveRequest(context, moduleName, platform);
+  }
+  return context.resolveRequest(context, moduleName, platform);
+};
+
 module.exports = config;
 
 /**

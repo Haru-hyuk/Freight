@@ -188,6 +188,30 @@ function toSafeQuote(quoteId: QuoteId, source?: QuoteDetailResponse | null): Quo
       }))
     : [];
 
+  const quoteItems = Array.isArray(raw.quoteItems)
+    ? raw.quoteItems.map((item, index) => ({
+        quoteItemId: Math.max(0, toSafeInteger(item?.quoteItemId)),
+        itemName: String(item?.itemName ?? ""),
+        itemType: String(item?.itemType ?? ""),
+        itemDescription: String(item?.itemDescription ?? ""),
+        quantity: Math.max(1, toSafeInteger(item?.quantity, 1)),
+        lengthCm: Math.max(0, toSafeNumber(item?.lengthCm)),
+        widthCm: Math.max(0, toSafeNumber(item?.widthCm)),
+        heightCm: Math.max(0, toSafeNumber(item?.heightCm)),
+        unitWeightKg: Math.max(0, toSafeNumber(item?.unitWeightKg)),
+        unitVolumeCbm: Math.max(0, toSafeNumber(item?.unitVolumeCbm)),
+        fragile: typeof item?.fragile === "boolean" ? item.fragile : false,
+        upright: typeof item?.upright === "boolean" ? item.upright : false,
+        noStack: typeof item?.noStack === "boolean" ? item.noStack : false,
+        bottomOnly: typeof item?.bottomOnly === "boolean" ? item.bottomOnly : false,
+        rotatable: typeof item?.rotatable === "boolean" ? item.rotatable : false,
+        stackable: typeof item?.stackable === "boolean" ? item.stackable : false,
+        maxStackWeightKg: Math.max(0, toSafeNumber(item?.maxStackWeightKg)),
+        handlingTags: String(item?.handlingTags ?? ""),
+        sortOrder: Math.max(0, toSafeInteger(item?.sortOrder, index)),
+      }))
+    : [];
+
   return {
     quoteId: normalizedQuoteId,
     quotePublicId: String(raw.quotePublicId ?? "").trim() || undefined,
@@ -224,6 +248,7 @@ function toSafeQuote(quoteId: QuoteId, source?: QuoteDetailResponse | null): Quo
     senderPhone: String(raw.senderPhone ?? "").trim() || undefined,
     receiverName: String(raw.receiverName ?? "").trim() || undefined,
     receiverPhone: String(raw.receiverPhone ?? "").trim() || undefined,
+    quoteItems,
     checklistItems,
     stops: toSafeStops((raw as unknown as { stops?: unknown })?.stops),
   };

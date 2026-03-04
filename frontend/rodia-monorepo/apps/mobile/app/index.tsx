@@ -1,34 +1,5 @@
-import React from "react";
 import { Redirect } from "expo-router";
-import { View, ActivityIndicator, StyleSheet } from "react-native";
-import { useAuth } from "@/features/auth/model/useAuth";
 
-export default function Index() {
-  const auth = useAuth();
-
-  if (auth.status === "checking") {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator />
-      </View>
-    );
-  }
-
-  if (auth.status !== "authenticated") {
-    return <Redirect href="/(auth)/login" />;
-  }
-
-  if (!auth.user?.role) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator />
-      </View>
-    );
-  }
-
-  return <Redirect href={auth.user.role === "driver" ? "/(driver)/home" : "/(shipper)/home"} />;
+export default function IndexRoute() {
+  return <Redirect href="/(auth)/login" />;
 }
-
-const styles = StyleSheet.create({
-  center: { flex: 1, alignItems: "center", justifyContent: "center" },
-});

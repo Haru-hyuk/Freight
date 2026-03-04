@@ -5,7 +5,10 @@
  * OpenAPI spec version: v0
  */
 import type {
-  AdminSanctionCreateRequest
+  AdminSanctionCreateRequest,
+  Create2200,
+  List1200Item,
+  Release200
 } from '.././schemas';
 
 import { customInstance } from '../../orval/custom-instance';
@@ -15,29 +18,26 @@ import { customInstance } from '../../orval/custom-instance';
   export const list1 = (
     
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/admin/sanctions`, method: 'GET',
-        responseType: 'blob'
+      return customInstance<List1200Item[]>(
+      {url: `/api/admin/sanctions`, method: 'GET'
     },
       );
     }
   export const create2 = (
     adminSanctionCreateRequest: AdminSanctionCreateRequest,
  ) => {
-      return customInstance<Blob>(
+      return customInstance<Create2200>(
       {url: `/api/admin/sanctions`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
-      data: adminSanctionCreateRequest,
-        responseType: 'blob'
+      data: adminSanctionCreateRequest
     },
       );
     }
   export const release = (
     sanctionId: number,
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/admin/sanctions/${sanctionId}/release`, method: 'PATCH',
-        responseType: 'blob'
+      return customInstance<Release200>(
+      {url: `/api/admin/sanctions/${sanctionId}/release`, method: 'PATCH'
     },
       );
     }

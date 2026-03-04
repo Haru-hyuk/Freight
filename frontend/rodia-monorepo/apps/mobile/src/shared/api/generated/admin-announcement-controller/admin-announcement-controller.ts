@@ -6,6 +6,7 @@
  */
 import type {
   AnnouncementCreateRequest,
+  AnnouncementResponse,
   AnnouncementUpdateRequest
 } from '.././schemas';
 
@@ -16,9 +17,8 @@ import { customInstance } from '../../orval/custom-instance';
   export const get1 = (
     announcementId: number,
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/admin/announcements/${announcementId}`, method: 'GET',
-        responseType: 'blob'
+      return customInstance<AnnouncementResponse>(
+      {url: `/api/admin/announcements/${announcementId}`, method: 'GET'
     },
       );
     }
@@ -26,11 +26,10 @@ import { customInstance } from '../../orval/custom-instance';
     announcementId: number,
     announcementUpdateRequest: AnnouncementUpdateRequest,
  ) => {
-      return customInstance<Blob>(
+      return customInstance<AnnouncementResponse>(
       {url: `/api/admin/announcements/${announcementId}`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
-      data: announcementUpdateRequest,
-        responseType: 'blob'
+      data: announcementUpdateRequest
     },
       );
     }
@@ -45,20 +44,18 @@ import { customInstance } from '../../orval/custom-instance';
   export const listAll = (
     
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/admin/announcements`, method: 'GET',
-        responseType: 'blob'
+      return customInstance<AnnouncementResponse[]>(
+      {url: `/api/admin/announcements`, method: 'GET'
     },
       );
     }
   export const create3 = (
     announcementCreateRequest: AnnouncementCreateRequest,
  ) => {
-      return customInstance<Blob>(
+      return customInstance<AnnouncementResponse>(
       {url: `/api/admin/announcements`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
-      data: announcementCreateRequest,
-        responseType: 'blob'
+      data: announcementCreateRequest
     },
       );
     }

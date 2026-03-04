@@ -6,7 +6,11 @@
  */
 import type {
   QuoteCreateRequest,
-  QuoteUpdateRequest
+  QuoteCreateResponse,
+  QuoteDetailResponse,
+  QuoteListResponse,
+  QuoteUpdateRequest,
+  QuoteValidationResponse
 } from '.././schemas';
 
 import { customInstance } from '../../orval/custom-instance';
@@ -16,9 +20,8 @@ import { customInstance } from '../../orval/custom-instance';
   export const getQuote = (
     quoteIdentifier: string,
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/shipper/quotes/${quoteIdentifier}`, method: 'GET',
-        responseType: 'blob'
+      return customInstance<QuoteDetailResponse>(
+      {url: `/api/shipper/quotes/${quoteIdentifier}`, method: 'GET'
     },
       );
     }
@@ -26,11 +29,10 @@ import { customInstance } from '../../orval/custom-instance';
     quoteIdentifier: string,
     quoteUpdateRequest: QuoteUpdateRequest,
  ) => {
-      return customInstance<Blob>(
+      return customInstance<QuoteDetailResponse>(
       {url: `/api/shipper/quotes/${quoteIdentifier}`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
-      data: quoteUpdateRequest,
-        responseType: 'blob'
+      data: quoteUpdateRequest
     },
       );
     }
@@ -45,31 +47,28 @@ import { customInstance } from '../../orval/custom-instance';
   export const listQuotes = (
     
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/shipper/quotes`, method: 'GET',
-        responseType: 'blob'
+      return customInstance<QuoteListResponse[]>(
+      {url: `/api/shipper/quotes`, method: 'GET'
     },
       );
     }
   export const createQuote = (
     quoteCreateRequest: QuoteCreateRequest,
  ) => {
-      return customInstance<Blob>(
+      return customInstance<QuoteCreateResponse>(
       {url: `/api/shipper/quotes`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
-      data: quoteCreateRequest,
-        responseType: 'blob'
+      data: quoteCreateRequest
     },
       );
     }
   export const validateQuote = (
     quoteCreateRequest: QuoteCreateRequest,
  ) => {
-      return customInstance<Blob>(
+      return customInstance<QuoteValidationResponse>(
       {url: `/api/shipper/quotes/validate`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
-      data: quoteCreateRequest,
-        responseType: 'blob'
+      data: quoteCreateRequest
     },
       );
     }

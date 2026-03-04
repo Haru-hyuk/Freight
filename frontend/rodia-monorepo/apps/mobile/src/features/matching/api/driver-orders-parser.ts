@@ -1,4 +1,6 @@
 import type { QuoteDetailResponse } from "@/entities/quote/model/quote.types";
+import type { LoadPlanResponse } from "@/shared/api/generated/schemas/loadPlanResponse";
+import type { TruckSpecReferenceResponse } from "@/shared/api/generated/schemas/truckSpecReferenceResponse";
 
 import type { DriverMatchItem } from "./shipper-match-api";
 
@@ -15,7 +17,14 @@ export type ParsedDriverOrderQuote = {
   status?: string;
   originAddress?: string;
   destinationAddress?: string;
+  originLat?: number;
+  originLng?: number;
+  destinationLat?: number;
+  destinationLng?: number;
   distanceKm?: number;
+  weightKg?: number;
+  volumeCbm?: number;
+  allowCombine?: boolean;
   vehicleType?: string;
   vehicleBodyType?: string;
   loadMethod?: string;
@@ -34,10 +43,15 @@ export type ParsedDriverOrderSource = {
   seed: number;
   matchId: number;
   quoteId?: number;
+  accepted?: boolean;
   status: string;
   createdAt?: string;
   updatedAt?: string;
   quote: ParsedDriverOrderQuote | null;
+  /** 적재 계획 — 매칭 응답에 포함된 경우에만 존재 */
+  loadPlan?: LoadPlanResponse;
+  /** 차량 스펙 — 매칭 응답에 포함된 경우에만 존재 */
+  truckSpec?: TruckSpecReferenceResponse;
 };
 
 export function parseDriverOrderPositiveInt(value: unknown): number {
@@ -73,7 +87,14 @@ function parseDriverOrderQuote(quote: QuoteDetailResponse | null): ParsedDriverO
     status: toOptionalText(quote.status),
     originAddress: toOptionalText(quote.originAddress),
     destinationAddress: toOptionalText(quote.destinationAddress),
+    originLat: toOptionalNumber(quote.originLat),
+    originLng: toOptionalNumber(quote.originLng),
+    destinationLat: toOptionalNumber(quote.destinationLat),
+    destinationLng: toOptionalNumber(quote.destinationLng),
     distanceKm: toOptionalDistance(quote.distanceKm),
+    weightKg: toOptionalNumber(quote.weightKg),
+    volumeCbm: toOptionalNumber(quote.volumeCbm),
+    allowCombine: typeof quote.allowCombine === "boolean" ? quote.allowCombine : undefined,
     vehicleType: toOptionalText(quote.vehicleType),
     vehicleBodyType: toOptionalText(quote.vehicleBodyType),
     loadMethod: toOptionalText(quote.loadMethod),
@@ -101,16 +122,23 @@ export function parseDriverOrderSource(input: {
   const seed = matchId || quoteId || index + 1;
   const rawStatus = typeof match.status === "string" ? match.status.trim() : "";
 
+  // loadPlan / truckSpec은 ParsedMatchResponseItem에 포함된 필드이지만
+  // DriverMatchItem 타입 alias가 아직 그 확장을 모를 수 있으므로 as any로 접근
+  const rawMatch = match as any;
+
   return {
     scope,
     index,
     seed,
     matchId,
     quoteId: quoteId > 0 ? quoteId : undefined,
+    accepted: typeof match.accepted === "boolean" ? match.accepted : undefined,
     status: rawStatus,
     createdAt: toOptionalText(match.createdAt),
     updatedAt: toOptionalText(match.updatedAt),
     quote: parseDriverOrderQuote(quote),
+    loadPlan: rawMatch.loadPlan as LoadPlanResponse | undefined,
+    truckSpec: rawMatch.truckSpec as TruckSpecReferenceResponse | undefined,
   };
 }
 

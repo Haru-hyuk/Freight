@@ -5,7 +5,9 @@
  * OpenAPI spec version: v0
  */
 import type {
-  BatchAcceptMatchRequest
+  BatchAcceptMatchRequest,
+  BatchAcceptMatchResponse,
+  MatchResponse
 } from '.././schemas';
 
 import { customInstance } from '../../orval/custom-instance';
@@ -15,56 +17,50 @@ import { customInstance } from '../../orval/custom-instance';
   export const startTransit = (
     matchId: number,
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/driver/matches/${matchId}/start`, method: 'POST',
-        responseType: 'blob'
+      return customInstance<MatchResponse>(
+      {url: `/api/driver/matches/${matchId}/start`, method: 'POST'
     },
       );
     }
   export const completeTransit = (
     matchId: number,
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/driver/matches/${matchId}/complete`, method: 'POST',
-        responseType: 'blob'
+      return customInstance<MatchResponse>(
+      {url: `/api/driver/matches/${matchId}/complete`, method: 'POST'
     },
       );
     }
   export const acceptMatch = (
     matchId: number,
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/driver/matches/${matchId}/accept`, method: 'POST',
-        responseType: 'blob'
+      return customInstance<MatchResponse>(
+      {url: `/api/driver/matches/${matchId}/accept`, method: 'POST'
     },
       );
     }
   export const acceptMatches = (
     batchAcceptMatchRequest: BatchAcceptMatchRequest,
  ) => {
-      return customInstance<Blob>(
+      return customInstance<BatchAcceptMatchResponse>(
       {url: `/api/driver/matches/accept-batch`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
-      data: batchAcceptMatchRequest,
-        responseType: 'blob'
+      data: batchAcceptMatchRequest
     },
       );
     }
   export const getOpenMatches = (
     
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/driver/matches`, method: 'GET',
-        responseType: 'blob'
+      return customInstance<MatchResponse[]>(
+      {url: `/api/driver/matches`, method: 'GET'
     },
       );
     }
   export const getMatch1 = (
     matchId: number,
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/driver/matches/${matchId}`, method: 'GET',
-        responseType: 'blob'
+      return customInstance<MatchResponse>(
+      {url: `/api/driver/matches/${matchId}`, method: 'GET'
     },
       );
     }
@@ -79,9 +75,8 @@ import { customInstance } from '../../orval/custom-instance';
   export const getMyMatches1 = (
     
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/driver/matches/me`, method: 'GET',
-        responseType: 'blob'
+      return customInstance<MatchResponse[]>(
+      {url: `/api/driver/matches/me`, method: 'GET'
     },
       );
     }

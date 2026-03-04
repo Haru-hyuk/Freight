@@ -12,6 +12,7 @@ import { toDraftLoadMethod, toDraftUnloadMethod } from "@/features/quote/model/w
 import {
   computeQuotePricing,
   createInitialQuoteCreateDraft,
+  EXTRA_OPTIONS,
   formatKrw,
   QuoteCreateDraftProvider,
   type QuoteCreateDraft,
@@ -100,7 +101,76 @@ function toDraftDate(raw: unknown): Date {
   return new Date();
 }
 
+function toCargoItemCategory(value: unknown): QuoteCreateDraft["cargoList"][number]["itemCategory"] {
+  const normalized = String(value ?? "").trim().toUpperCase();
+  if (normalized === "PALLET") return "PALLET";
+  if (normalized === "FURNITURE") return "FURNITURE";
+  return "BOX";
+}
+
+function normalizeOptionText(value: unknown): string {
+  return String(value ?? "")
+    .trim()
+    .replace(/\s+/g, "")
+    .toLowerCase();
+}
+
+function mapSelectedOptionIds(detail: QuoteDetailResponse): string[] {
+  const checklistItems = Array.isArray(detail?.checklistItems) ? detail.checklistItems : [];
+  const optionIdByLabel = new Map(
+    EXTRA_OPTIONS.map((option) => [normalizeOptionText(option.title), String(option.id ?? "").trim()])
+  );
+  const selectedIdsFromChecklist = checklistItems
+    .map((item) => {
+      const key = normalizeOptionText(item?.extraInput);
+      if (!key) return "";
+      return optionIdByLabel.get(key) ?? "";
+    })
+    .filter((id): id is string => id.length > 0);
+
+  const quoteItems = Array.isArray(detail?.quoteItems) ? detail.quoteItems : [];
+  const hasFragileItem = quoteItems.some((item) => item?.fragile === true);
+  const hasUprightItem = quoteItems.some((item) => item?.upright === true);
+  const hasWaterproofTag = quoteItems.some((item) => String(item?.handlingTags ?? "").toUpperCase().includes("WATERPROOF"));
+  const hasShockTag = quoteItems.some((item) => String(item?.handlingTags ?? "").toUpperCase().includes("SHOCK"));
+
+  const selectedIdsFromItems = [
+    hasFragileItem ? "caution" : "",
+    hasUprightItem ? "upright" : "",
+    hasWaterproofTag ? "waterproof" : "",
+    hasShockTag ? "shock" : "",
+  ].filter((id): id is string => id.length > 0);
+
+  return Array.from(new Set([...selectedIdsFromChecklist, ...selectedIdsFromItems]));
+}
+
 function buildCargoFromDetail(detail: QuoteDetailResponse): QuoteCreateDraft["cargoList"] {
+  const rawItems = Array.isArray(detail?.quoteItems) ? detail.quoteItems : [];
+  const mappedItems = rawItems
+    .slice()
+    .sort((a, b) => toSafeInt(a?.sortOrder, 0) - toSafeInt(b?.sortOrder, 0))
+    .map((item, index) => {
+      const quantity = Math.max(1, toSafeInt(item?.quantity, 1));
+      const unitWeightKg = Math.max(0, toSafeNumber(item?.unitWeightKg, 0));
+      const totalWeightKg = unitWeightKg > 0 ? Math.max(0, Math.round(unitWeightKg * quantity)) : 0;
+
+      return {
+        id: Math.max(1, toSafeInt(item?.quoteItemId, index + 1)),
+        itemCategory: toCargoItemCategory(item?.itemType),
+        type: String(item?.itemName ?? "").trim() || String(detail?.cargoName ?? "").trim() || "일반 화물",
+        quantity: String(quantity),
+        lengthCm: Math.max(0, toSafeInt(item?.lengthCm, 0)) > 0 ? String(Math.max(0, toSafeInt(item?.lengthCm, 0))) : "",
+        widthCm: Math.max(0, toSafeInt(item?.widthCm, 0)) > 0 ? String(Math.max(0, toSafeInt(item?.widthCm, 0))) : "",
+        heightCm: Math.max(0, toSafeInt(item?.heightCm, 0)) > 0 ? String(Math.max(0, toSafeInt(item?.heightCm, 0))) : "",
+        weight: totalWeightKg > 0 ? String(totalWeightKg) : "",
+        dropOffKey: "END" as const,
+      };
+    });
+
+  if (mappedItems.length > 0) {
+    return mappedItems;
+  }
+
   const safeWeight = Math.max(0, Math.round(toSafeNumber(detail?.weightKg, 0)));
   const safeVolume = Math.max(0, toSafeNumber(detail?.volumeCbm, 0));
   const approxHeightCm = safeVolume > 0 ? Math.max(1, Math.round((safeVolume / 4) * 100)) : 0;
@@ -185,7 +255,7 @@ function mapDetailToDraft(detail: QuoteDetailResponse): QuoteCreateDraft {
     typeIdx: resolveBodyIndex(detail?.vehicleBodyType),
     isFrozen: String(detail?.cargoType ?? "").trim().toUpperCase() === "FROZEN",
     isPool: Boolean(detail?.allowCombine),
-    selectedOpts: [],
+    selectedOpts: mapSelectedOptionIds(detail),
     budget: Math.max(0, toSafeInt(detail?.desiredPrice, 0)) > 0 ? String(Math.max(0, toSafeInt(detail?.desiredPrice, 0))) : "",
     noteToDriver: String(detail?.cargoDesc ?? ""),
   };
@@ -370,9 +440,12 @@ function QuoteEditPageInner() {
   const submitQuoteUpdate = useCallback(async () => {
     if (isSubmitting) return;
 
-    const targetQuoteId = resolvedQuoteId > 0 ? resolvedQuoteId : quoteId;
-    if (!Number.isInteger(targetQuoteId) || targetQuoteId <= 0) {
-      Alert.alert("견적 수정 실패", "유효한 견적 ID를 찾을 수 없습니다.");
+    const targetQuoteIdentifier =
+      resolvedQuoteIdentifier ||
+      quoteIdentifier ||
+      (resolvedQuoteId > 0 ? String(resolvedQuoteId) : quoteId > 0 ? String(quoteId) : "");
+    if (!targetQuoteIdentifier) {
+      Alert.alert("견적 수정 실패", "유효한 견적 식별자를 찾을 수 없습니다.");
       return;
     }
 
@@ -426,13 +499,18 @@ function QuoteEditPageInner() {
 
     try {
       setIsSubmitting(true);
-      const updatedDetail = await updateShipperQuote(targetQuoteId, cleanPayload as any);
-      const nextQuoteId = Math.max(0, toSafeInt(updatedDetail?.quoteId, targetQuoteId));
+      const updatedDetail = await updateShipperQuote(targetQuoteIdentifier, cleanPayload as any);
+      const nextQuoteId = Math.max(
+        0,
+        toSafeInt(
+          updatedDetail?.quoteId,
+          resolvedQuoteId > 0 ? resolvedQuoteId : quoteId > 0 ? quoteId : toSafeInt(targetQuoteIdentifier, 0)
+        )
+      );
       const nextIdentifier =
-        String(updatedDetail?.quotePublicId ?? resolvedQuoteIdentifier ?? quoteIdentifier ?? "").trim() ||
-        String(nextQuoteId > 0 ? nextQuoteId : targetQuoteId);
+        String(updatedDetail?.quotePublicId ?? targetQuoteIdentifier).trim() || String(nextQuoteId > 0 ? nextQuoteId : "");
 
-      setResolvedQuoteId(nextQuoteId > 0 ? nextQuoteId : targetQuoteId);
+      setResolvedQuoteId(nextQuoteId);
       setResolvedQuoteIdentifier(nextIdentifier);
 
       Alert.alert("견적 수정 완료", "견적 정보가 업데이트되었습니다.", [

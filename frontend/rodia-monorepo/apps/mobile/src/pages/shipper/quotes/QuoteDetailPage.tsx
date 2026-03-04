@@ -1,5 +1,5 @@
 import React from "react";
-import { Alert, InteractionManager, LayoutAnimation, Pressable, StyleSheet, View } from "react-native";
+import { Alert, Image, InteractionManager, LayoutAnimation, Pressable, StyleSheet, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
@@ -13,13 +13,26 @@ import {
   rejectShipperCounterOffer,
   type CounterOfferItem,
 } from "@/features/counter-offer/api";
+import {
+  confirmShipperPayment,
+  hasCompletedPaymentForMatch,
+  prepareShipperPayment,
+  type PrepareShipperPaymentResult,
+} from "@/features/payment/api/payment-api";
+import { TossPaymentModal } from "@/features/payment/ui/TossPaymentModal";
 import { deleteShipperQuote } from "@/features/quote/api";
 import { getQuoteActionPolicy, resolveTonePalette, type DecisionActionId } from "@/features/quote/model/quoteActionMatrix";
 import { useQuoteDetail, type QuoteActionsContext } from "@/features/quote/model/useQuoteDetail";
 import { formatWorkMethodLabel } from "@/features/quote/model/workMethod";
 import { BottomActionRouter } from "@/features/quote/ui/actions/BottomActionRouter";
 import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
+import { isMockMode } from "@/shared/lib/config/env";
 import { formatDistance, formatKrw } from "@/shared/lib/format/display";
+import { processMockFlowPayment } from "@/shared/lib/mock-flow";
+import {
+  confirm as confirmPayment,
+  prepare as preparePayment,
+} from "@/shared/api/generated/payment-controller/payment-controller";
 import {
   BACKEND_STATUS,
   CUSTOMER_UI_STATE,
@@ -45,6 +58,14 @@ type ArchiveRow = { label: string; value: string };
 type ArchiveSection = { key: string; title: string; rows: ArchiveRow[] };
 type PriceSummary = { primaryLabel: string; primaryText: string; secondaryText: string };
 type QuoteDecisionAction = Exclude<DecisionActionId, "cancelRequest">;
+type DeliveryTimelineStep = { key: string; label: string };
+
+const DELIVERY_TIMELINE_STEPS: readonly DeliveryTimelineStep[] = [
+  { key: "ASSIGNED", label: "배차 완료" },
+  { key: "PICKUP", label: "상차 완료" },
+  { key: "TRANSIT", label: "운송 중" },
+  { key: "DROPOFF", label: "배송 완료" },
+];
 
 const POLICY_ACTION_UI_STATES: ReadonlySet<CustomerUiState> = new Set([
   CUSTOMER_UI_STATE.NEGOTIATION_REQUIRED,
@@ -64,6 +85,15 @@ const STATUS_PROMOTION_TARGET_STATES: ReadonlySet<string> = new Set([
   BACKEND_STATUS.READY,
   BACKEND_STATUS.COMPLETED,
   BACKEND_STATUS.CANCELLED,
+]);
+const POST_PAYMENT_STATUS_TOKENS: ReadonlySet<string> = new Set([
+  "PICKUP",
+  "TRANSIT",
+  "DROPOFF",
+  "DRIVING",
+  "IN_TRANSIT",
+  "DELIVERED",
+  "COMPLETED",
 ]);
 const FOCUS_REFETCH_THROTTLE_MS = 1500;
 
@@ -115,6 +145,138 @@ const useStyles = createThemedStyles((theme) => {
       color: c.textMain,
       fontSize: safeNumber(theme.typography.scale.detail.size, 14),
       lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20),
+      fontWeight: "700",
+    },
+    paymentDoneCard: {
+      backgroundColor: c.bgSurface,
+      borderRadius: safeNumber(theme.layout.radii.card, 16),
+      borderWidth: 1,
+      borderColor: tint(c.brandPrimary, 0.2, c.borderDefault),
+      padding: s * 4,
+      gap: s * 2,
+    },
+    paymentDoneHeader: { flexDirection: "row", alignItems: "center", gap: s * 2 },
+    paymentDoneIconWrap: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: tint(c.brandPrimary, 0.12, c.bgSurfaceAlt),
+    },
+    paymentDoneIcon: { color: c.brandPrimary, fontSize: 16 },
+    paymentDoneTitle: {
+      color: c.textMain,
+      fontSize: safeNumber(theme.typography.scale.detail.size, 14),
+      lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20),
+      fontWeight: "900",
+    },
+    paymentDoneDesc: {
+      color: c.textSub,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
+      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
+      fontWeight: "700",
+    },
+    deliveryCard: {
+      backgroundColor: c.bgSurface,
+      borderRadius: safeNumber(theme.layout.radii.card, 16),
+      borderWidth: 1,
+      borderColor: c.borderDefault,
+      padding: s * 4,
+      gap: s * 3,
+    },
+    deliveryTitle: {
+      color: c.textMain,
+      fontSize: safeNumber(theme.typography.scale.detail.size, 14) + 1,
+      lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20) + 1,
+      fontWeight: "900",
+    },
+    deliveryStepRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: s + 2,
+    },
+    deliveryStepNode: {
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      borderWidth: 2,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    deliveryStepNodeActive: {
+      borderColor: c.brandPrimary,
+      backgroundColor: tint(c.brandPrimary, 0.14, c.bgSurface),
+    },
+    deliveryStepNodeDone: {
+      borderColor: c.semanticSuccess,
+      backgroundColor: tint(c.semanticSuccess, 0.14, c.bgSurface),
+    },
+    deliveryStepNodeIdle: {
+      borderColor: c.borderDefault,
+      backgroundColor: c.bgSurface,
+    },
+    deliveryStepConnector: {
+      flex: 1,
+      height: 2,
+      backgroundColor: c.borderDefault,
+    },
+    deliveryStepConnectorDone: {
+      backgroundColor: c.semanticSuccess,
+    },
+    deliveryStepLabel: {
+      color: c.textMuted,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
+      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
+      fontWeight: "700",
+      marginTop: 6,
+      textAlign: "center",
+    },
+    deliveryStepLabelActive: {
+      color: c.brandPrimary,
+      fontWeight: "900",
+    },
+    photoGallerySection: {
+      backgroundColor: c.bgSurface,
+      borderRadius: safeNumber(theme.layout.radii.card, 16),
+      borderWidth: 1,
+      borderColor: c.borderDefault,
+      padding: s * 4,
+      gap: s * 3,
+    },
+    photoGroupWrap: { gap: s * 2 },
+    photoGroupTitle: {
+      color: c.textMain,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12) + 1,
+      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16) + 1,
+      fontWeight: "900",
+    },
+    photoThumbRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: s * 2,
+    },
+    photoThumb: {
+      width: 80,
+      height: 80,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: c.borderDefault,
+      backgroundColor: c.bgSurfaceAlt,
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 4,
+    },
+    photoThumbIndex: {
+      color: c.textSub,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
+      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
+      fontWeight: "800",
+    },
+    photoWaitText: {
+      color: c.textMuted,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12) + 1,
+      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16) + 2,
       fontWeight: "700",
     },
 
@@ -359,6 +521,14 @@ function toDisplayText(value: unknown): string {
   return text || "-";
 }
 
+function toStatusToken(value: unknown): string {
+  return String(value ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "_")
+    .replace(/-/g, "_");
+}
+
 function toPositiveAmount(value: unknown): number {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed <= 0) return 0;
@@ -404,8 +574,51 @@ function normalizeMatchStatus(value: unknown): string {
   return normalized === BACKEND_STATUS.UNKNOWN ? "" : normalized;
 }
 
+function toCanonicalPostPaymentStatus(rawStatus: unknown): string | null {
+  const token = toStatusToken(rawStatus);
+  if (token === "PICKUP") return "PICKUP";
+  if (token === "TRANSIT" || token === "DRIVING" || token === "IN_TRANSIT") return "TRANSIT";
+  if (token === "DROPOFF" || token === "DELIVERED" || token === "COMPLETED") return "DROPOFF";
+  return null;
+}
+
+function isPostPaymentStatus(rawStatus: unknown): boolean {
+  return POST_PAYMENT_STATUS_TOKENS.has(toStatusToken(rawStatus));
+}
+
+function getPostPaymentSummary(status: string): { title: string; description: string } {
+  const token = toStatusToken(status);
+  if (token === "PICKUP") {
+    return {
+      title: "결제 완료",
+      description: "결제가 완료되었고 기사님이 상차를 준비 중입니다.",
+    };
+  }
+  if (token === "TRANSIT" || token === "DRIVING" || token === "IN_TRANSIT") {
+    return {
+      title: "결제 완료",
+      description: "결제가 완료되었고 화물이 운송 중입니다.",
+    };
+  }
+  return {
+    title: "결제 완료",
+    description: "결제가 완료되었고 운송 절차가 마무리되었습니다.",
+  };
+}
+
+function resolveDeliveryTimelineIndex(status: string): number {
+  const token = toStatusToken(status);
+  if (token === "PICKUP") return 1;
+  if (token === "TRANSIT" || token === "DRIVING" || token === "IN_TRANSIT") return 2;
+  if (token === "DROPOFF" || token === "DELIVERED" || token === "COMPLETED") return 3;
+  return 0;
+}
+
 function resolveEffectiveQuoteStatus(quoteStatus: unknown, matchStatus: unknown, matchAccepted?: unknown): string {
   const quoteText = toText(quoteStatus);
+  const postPaymentMatchStatus = toCanonicalPostPaymentStatus(matchStatus);
+  if (postPaymentMatchStatus) return postPaymentMatchStatus;
+
   const quoteNormalized = normalizeStatus(quoteText);
   const normalizedMatchStatus = normalizeMatchStatus(matchStatus);
   if (!normalizedMatchStatus) return quoteText;
@@ -662,15 +875,51 @@ function SpecificationArchive({ view }: { view: QuoteDetailView }) {
   );
 }
 
+function PhotoThumbShipper({
+  uri,
+  index,
+  styles,
+  theme,
+}: {
+  uri: string;
+  index: number;
+  styles: ReturnType<typeof useStyles>;
+  theme: ReturnType<typeof useAppTheme>;
+}) {
+  const [failed, setFailed] = React.useState(false);
+  if (!failed && uri.startsWith("http")) {
+    return (
+      <Image
+        source={{ uri }}
+        style={[styles.photoThumb, { overflow: "hidden" }]}
+        resizeMode="cover"
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+  return (
+    <View style={styles.photoThumb}>
+      <Ionicons name="image-outline" size={20} color={theme.colors.brandPrimary} />
+      <AppText style={styles.photoThumbIndex}>#{index + 1}</AppText>
+    </View>
+  );
+}
+
 export default function QuoteDetailPage() {
   const styles = useStyles();
   const theme = useAppTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const params = useLocalSearchParams<{ id?: string | string[]; status?: string | string[] }>();
+  const params = useLocalSearchParams<{ id?: string | string[]; status?: string | string[]; action?: string | string[] }>();
 
   const [isDeleting, setIsDeleting] = React.useState(false);
   const [isMatchSubmitting, setIsMatchSubmitting] = React.useState(false);
+  const [isPaying, setIsPaying] = React.useState(false);
+  const [hasCompletedPayment, setHasCompletedPayment] = React.useState(false);
+  const [paidMatchId, setPaidMatchId] = React.useState(0);
+  const [showPaymentModal, setShowPaymentModal] = React.useState(false);
+  const [pendingPaymentRequest, setPendingPaymentRequest] = React.useState<PrepareShipperPaymentResult | null>(null);
+  const [forcePaymentRequired, setForcePaymentRequired] = React.useState(false);
   const [matchSnapshot, setMatchSnapshot] = React.useState<MatchSnapshot>(EMPTY_MATCH_SNAPSHOT);
   const [matchHydrated, setMatchHydrated] = React.useState(false);
   const [bottomBarHeight, setBottomBarHeight] = React.useState(140);
@@ -692,29 +941,111 @@ export default function QuoteDetailPage() {
     () => matchSnapshot.cancelableMatch ?? matchSnapshot.nonCanceledMatch ?? null,
     [matchSnapshot.cancelableMatch, matchSnapshot.nonCanceledMatch]
   );
+  const activeMatchWithPhotos = activeQuoteMatch as (ShipperMatchItem & {
+    loadingPhotos?: string[];
+    unloadingPhotos?: string[];
+  }) | null;
+  const loadingPhotos = React.useMemo(
+    () => (Array.isArray(activeMatchWithPhotos?.loadingPhotos) ? activeMatchWithPhotos.loadingPhotos : []),
+    [activeMatchWithPhotos?.loadingPhotos]
+  );
+  const unloadingPhotos = React.useMemo(
+    () => (Array.isArray(activeMatchWithPhotos?.unloadingPhotos) ? activeMatchWithPhotos.unloadingPhotos : []),
+    [activeMatchWithPhotos?.unloadingPhotos]
+  );
   const hasActiveQuoteMatch = Boolean(activeQuoteMatch);
   const cancelTargetMatchId = React.useMemo(() => parsePositiveInt(activeQuoteMatch?.matchId), [activeQuoteMatch?.matchId]);
   const isCancelIdInvalid = hasActiveQuoteMatch && cancelTargetMatchId <= 0;
   const routeStatus = readRouteParamText(params.status);
+  const routeAction = readRouteParamText(params.action).toUpperCase();
+  const isRoutePayRequested = routeAction === "PAY";
+  const hasPendingCounterOffer = React.useMemo(
+    () => Boolean(pendingCounterOffer && isCounterOfferPending(pendingCounterOffer.status)),
+    [pendingCounterOffer]
+  );
+  const isAcceptedByMatch = React.useMemo(() => {
+    if (!activeQuoteMatch) return false;
+    if (activeQuoteMatch.accepted === true) return true;
+    return toText(activeQuoteMatch.acceptedAt).length > 0;
+  }, [activeQuoteMatch]);
 
   const effectiveQuoteStatus = React.useMemo(
     () => {
       const base = routeStatus || (matchHydrated ? view.quote.status : BACKEND_STATUS.UNKNOWN);
       const matchStatus = matchHydrated ? activeQuoteMatch?.status : null;
-      const matchAccepted = matchHydrated ? activeQuoteMatch?.accepted : null;
+      const matchAccepted = matchHydrated ? isAcceptedByMatch : null;
       return resolveEffectiveQuoteStatus(base, matchStatus, matchAccepted);
     },
-    [activeQuoteMatch?.accepted, activeQuoteMatch?.status, matchHydrated, routeStatus, view.quote.status]
+    [activeQuoteMatch?.status, isAcceptedByMatch, matchHydrated, routeStatus, view.quote.status]
   );
-  const effectivePolicy = React.useMemo(() => getQuoteActionPolicy(effectiveQuoteStatus), [effectiveQuoteStatus]);
+  const shouldForcePaymentRequired = React.useMemo(() => {
+    if (forcePaymentRequired || isRoutePayRequested) return true;
+    if (hasPendingCounterOffer) return false;
+    if (paidMatchId > 0 && paidMatchId === cancelTargetMatchId) return false;
+    if (hasCompletedPayment) return false;
+    if (!isAcceptedByMatch) return false;
+    const normalized = normalizeStatus(effectiveQuoteStatus);
+    return (
+      normalized === BACKEND_STATUS.OPEN ||
+      normalized === BACKEND_STATUS.UNKNOWN ||
+      normalized === BACKEND_STATUS.MATCHED ||
+      normalized === BACKEND_STATUS.READY
+    );
+  }, [cancelTargetMatchId, effectiveQuoteStatus, forcePaymentRequired, hasCompletedPayment, hasPendingCounterOffer, isAcceptedByMatch, isRoutePayRequested, paidMatchId]);
+  const effectivePolicy = React.useMemo(
+    () =>
+      shouldForcePaymentRequired
+        ? getQuoteActionPolicy("ASSIGNED")
+        : hasPendingCounterOffer
+          ? getQuoteActionPolicy("NEGOTIATING")
+          : getQuoteActionPolicy(effectiveQuoteStatus),
+    [effectiveQuoteStatus, hasPendingCounterOffer, shouldForcePaymentRequired]
+  );
   const effectiveActionsContext = React.useMemo(
     () => ({ ...view.actionsContext, status: effectiveQuoteStatus }),
     [effectiveQuoteStatus, view.actionsContext]
   );
   const quoteUiState = React.useMemo(
-    () => getCustomerUiStateFromBackendStatus(effectiveQuoteStatus),
+    () =>
+      shouldForcePaymentRequired
+        ? CUSTOMER_UI_STATE.PAYMENT_REQUIRED
+        : hasPendingCounterOffer
+          ? CUSTOMER_UI_STATE.NEGOTIATION_REQUIRED
+          : getCustomerUiStateFromBackendStatus(effectiveQuoteStatus),
+    [effectiveQuoteStatus, hasPendingCounterOffer, shouldForcePaymentRequired]
+  );
+
+  const isPostPaymentFlow = React.useMemo(() => isPostPaymentStatus(effectiveQuoteStatus), [effectiveQuoteStatus]);
+  const postPaymentSummary = React.useMemo(() => getPostPaymentSummary(effectiveQuoteStatus), [effectiveQuoteStatus]);
+  const deliveryTimelineIndex = React.useMemo(
+    () => resolveDeliveryTimelineIndex(effectiveQuoteStatus),
     [effectiveQuoteStatus]
   );
+
+  React.useEffect(() => {
+    if (isRoutePayRequested) {
+      setForcePaymentRequired(true);
+    }
+  }, [isRoutePayRequested]);
+
+  React.useEffect(() => {
+    if (
+      quoteUiState === CUSTOMER_UI_STATE.TRANSIT_IN_PROGRESS ||
+      quoteUiState === CUSTOMER_UI_STATE.PICKUP_IN_PROGRESS ||
+      quoteUiState === CUSTOMER_UI_STATE.COMPLETED ||
+      quoteUiState === CUSTOMER_UI_STATE.CANCELED
+    ) {
+      setForcePaymentRequired(false);
+    }
+  }, [quoteUiState]);
+
+  React.useEffect(() => {
+    if (actionQuoteId <= 0) {
+      setHasCompletedPayment(false);
+      setPaidMatchId(0);
+    }
+  }, [actionQuoteId]);
+
   const palette = resolveTonePalette(theme, effectivePolicy);
   const effectiveStatusLabel = effectivePolicy.badgeLabel || view.commandCenter.statusLabel;
 
@@ -750,6 +1081,23 @@ export default function QuoteDetailPage() {
     }
   }, []);
 
+  const loadPaymentCompletion = React.useCallback(async (targetMatchId: number) => {
+    const safeMatchId = parsePositiveInt(targetMatchId);
+    if (safeMatchId <= 0) {
+      setHasCompletedPayment(false);
+      return;
+    }
+    try {
+      const completed = await hasCompletedPaymentForMatch(safeMatchId);
+      setHasCompletedPayment(completed);
+      if (completed) {
+        setPaidMatchId(safeMatchId);
+      }
+    } catch {
+      // keep current local state on transient API error
+    }
+  }, []);
+
   const refreshQuoteAndMatchData = React.useCallback(async () => {
     if (refreshInFlightRef.current) {
       await refreshInFlightRef.current;
@@ -761,6 +1109,9 @@ export default function QuoteDetailPage() {
       if (actionQuoteId > 0) {
         tasks.push(loadMatchSnapshot(actionQuoteId));
         tasks.push(loadPendingCounterOffer(actionQuoteId));
+        if (cancelTargetMatchId > 0) {
+          tasks.push(loadPaymentCompletion(cancelTargetMatchId));
+        }
       }
       await Promise.all(tasks);
     })();
@@ -773,7 +1124,7 @@ export default function QuoteDetailPage() {
         refreshInFlightRef.current = null;
       }
     }
-  }, [actionQuoteId, loadMatchSnapshot, loadPendingCounterOffer, view.refetch]);
+  }, [actionQuoteId, cancelTargetMatchId, loadMatchSnapshot, loadPaymentCompletion, loadPendingCounterOffer, view.refetch]);
 
   React.useEffect(() => {
     if (actionQuoteId > 0) {
@@ -782,6 +1133,12 @@ export default function QuoteDetailPage() {
       setPendingCounterOffer(null);
     }
   }, [actionQuoteId, loadPendingCounterOffer]);
+
+  React.useEffect(() => {
+    if (cancelTargetMatchId > 0) {
+      void loadPaymentCompletion(cancelTargetMatchId);
+    }
+  }, [cancelTargetMatchId, loadPaymentCompletion]);
 
   React.useEffect(() => {
     const safeQuoteId = parsePositiveInt(actionQuoteId);
@@ -869,9 +1226,95 @@ export default function QuoteDetailPage() {
     return parsePositiveInt(pendingOffer?.counterOfferId);
   }, [actionQuoteId]);
 
+  const executePayment = React.useCallback(async () => {
+    if (isPaying) return;
+    if (cancelTargetMatchId <= 0) {
+      Alert.alert("Payment failed", "No active match found.");
+      return;
+    }
+
+    const finalPrice = toPositiveAmount(view.quote.finalPrice);
+    const desiredPrice = toPositiveAmount(view.quote.desiredPrice);
+    const basePrice = toPositiveAmount(view.quote.basePrice);
+    const resolvedAmount = finalPrice || desiredPrice || basePrice;
+    if (resolvedAmount <= 0) {
+      Alert.alert("Payment failed", "Unable to resolve payment amount.");
+      return;
+    }
+
+    const safeAmount = Math.max(100, resolvedAmount);
+    const origin = toText(view.quote.originAddress) || "Origin";
+    const destination = toText(view.quote.destinationAddress) || "Destination";
+    const orderName = `${origin} -> ${destination}`;
+
+    try {
+      setIsPaying(true);
+      const prepared = await prepareShipperPayment({
+        matchId: cancelTargetMatchId,
+        amount: safeAmount,
+        orderName,
+      });
+      if (!prepared.clientKey) {
+        throw new Error("결제창을 열 수 없습니다. clientKey가 없습니다.");
+      }
+      setPendingPaymentRequest(prepared);
+      setShowPaymentModal(true);
+    } catch (error) {
+      Alert.alert("Payment failed", readApiErrorMessage(error, "Payment could not be completed."));
+    } finally {
+      setIsPaying(false);
+    }
+  }, [cancelTargetMatchId, isPaying, refreshQuoteAndMatchData, view.quote.basePrice, view.quote.desiredPrice, view.quote.destinationAddress, view.quote.finalPrice, view.quote.originAddress]);
+
+  const handleClosePaymentModal = React.useCallback(() => {
+    setShowPaymentModal(false);
+    setPendingPaymentRequest(null);
+  }, []);
+
+  const handlePaymentSuccess = React.useCallback(
+    async (payload: { paymentKey: string; orderId: string; amount: number }) => {
+      if (!pendingPaymentRequest) {
+        Alert.alert("Payment failed", "결제 요청 정보를 찾을 수 없습니다.");
+        return;
+      }
+
+      setShowPaymentModal(false);
+      try {
+        setIsPaying(true);
+        await confirmShipperPayment({
+          paymentKey: payload.paymentKey,
+          orderId: payload.orderId || pendingPaymentRequest.orderId,
+          amount: payload.amount || pendingPaymentRequest.amount,
+          matchIdForMock: cancelTargetMatchId,
+        });
+
+        if (cancelTargetMatchId > 0) {
+          setPaidMatchId(cancelTargetMatchId);
+        }
+        setHasCompletedPayment(true);
+        setForcePaymentRequired(false);
+        await refreshQuoteAndMatchData();
+        Alert.alert("Payment completed", "Your payment has been processed.");
+      } catch (error) {
+        Alert.alert("Payment failed", readApiErrorMessage(error, "Payment could not be completed."));
+      } finally {
+        setIsPaying(false);
+        setPendingPaymentRequest(null);
+      }
+    },
+    [cancelTargetMatchId, pendingPaymentRequest, refreshQuoteAndMatchData]
+  );
+
+  const handlePaymentFail = React.useCallback((payload: { code?: string; message?: string }) => {
+    setShowPaymentModal(false);
+    setPendingPaymentRequest(null);
+    const message = payload?.message ? `결제가 취소/실패했습니다.\n(${payload.message})` : "결제가 취소/실패했습니다.";
+    Alert.alert("Payment failed", message);
+  }, []);
+
   const runPolicyAction = React.useCallback(
     async (action: QuoteDecisionAction, _ctx: QuoteActionsContext) => {
-      if (isMatchSubmitting) return;
+      if (isMatchSubmitting || isPaying) return;
 
       if (action === "acceptOffer") {
         try {
@@ -882,7 +1325,9 @@ export default function QuoteDetailPage() {
             return;
           }
           await acceptShipperCounterOffer(offerId);
+          setPendingCounterOffer(null);
           await refreshQuoteAndMatchData();
+          setForcePaymentRequired(true);
           Alert.alert("협상 제안 수락", "역제안을 수락했습니다.");
         } catch (error) {
           Alert.alert("협상 제안 수락 실패", readApiErrorMessage(error));
@@ -901,6 +1346,7 @@ export default function QuoteDetailPage() {
             return;
           }
           await rejectShipperCounterOffer(offerId);
+          setPendingCounterOffer(null);
           await refreshQuoteAndMatchData();
           Alert.alert("협상 제안 거절", "역제안을 거절했습니다.");
         } catch (error) {
@@ -917,10 +1363,11 @@ export default function QuoteDetailPage() {
       }
 
       if (action === "pay") {
-        Alert.alert("결제", "결제 플로우는 다음 단계에서 연결됩니다.");
+        await executePayment();
+        return;
       }
     },
-    [isMatchSubmitting, refreshQuoteAndMatchData, resolvePendingCounterOfferId, router]
+    [executePayment, isMatchSubmitting, isPaying, refreshQuoteAndMatchData, resolvePendingCounterOfferId, router]
   );
 
   const handlePolicyCancelRequest = React.useCallback(
@@ -943,20 +1390,21 @@ export default function QuoteDetailPage() {
 
   const runDelete = React.useCallback(async () => {
     if (isDeleting || isBlockedByFetchState) return;
-    if (actionQuoteId <= 0) {
-      Alert.alert("견적 삭제 실패", "유효한 견적 ID를 찾을 수 없습니다.");
+    const targetIdentifier = toText(view.quote.quotePublicId || quoteIdentifier || (actionQuoteId > 0 ? String(actionQuoteId) : ""));
+    if (!targetIdentifier) {
+      Alert.alert("견적 삭제 실패", "유효한 견적 식별자를 찾을 수 없습니다.");
       return;
     }
     try {
       setIsDeleting(true);
-      await deleteShipperQuote(actionQuoteId);
+      await deleteShipperQuote(targetIdentifier);
       router.replace("/(shipper)/quotes");
     } catch (error) {
       Alert.alert("견적 삭제 실패", readApiErrorMessage(error));
     } finally {
       setIsDeleting(false);
     }
-  }, [actionQuoteId, isBlockedByFetchState, isDeleting, router]);
+  }, [actionQuoteId, isBlockedByFetchState, isDeleting, quoteIdentifier, router, view.quote.quotePublicId]);
 
   const handlePressDelete = React.useCallback(() => {
     if (isBlockedByFetchState || isDeleting) return;
@@ -990,20 +1438,24 @@ export default function QuoteDetailPage() {
   const spacing = safeNumber(theme.layout.spacing.base, 4);
   const shouldUsePolicyActionBar = POLICY_ACTION_UI_STATES.has(quoteUiState) && Boolean(effectivePolicy.bottomBar);
   const isDriveInProgress =
-    quoteUiState === CUSTOMER_UI_STATE.PICKUP_IN_PROGRESS || quoteUiState === CUSTOMER_UI_STATE.TRANSIT_IN_PROGRESS;
-  const bottomTitle = hasActiveQuoteMatch ? "배차 요청 취소" : "배차 요청";
+    quoteUiState === CUSTOMER_UI_STATE.PICKUP_IN_PROGRESS ||
+    quoteUiState === CUSTOMER_UI_STATE.TRANSIT_IN_PROGRESS ||
+    isPostPaymentFlow;
+  const bottomTitle = isPostPaymentFlow ? "결제 완료" : hasActiveQuoteMatch ? "배차 요청 취소" : "배차 요청";
   const bottomVariant = React.useMemo(() => {
+    if (isPostPaymentFlow) return "secondary";
     if (hasActiveQuoteMatch) return "destructive";
     if (quoteUiState === CUSTOMER_UI_STATE.UNKNOWN) return "secondary";
     return "primary";
-  }, [hasActiveQuoteMatch, quoteUiState]);
+  }, [hasActiveQuoteMatch, isPostPaymentFlow, quoteUiState]);
   const handlePressBottomAction = React.useCallback(() => {
+    if (isPostPaymentFlow) return;
     if (hasActiveQuoteMatch) {
       void handleCancelMatch();
       return;
     }
     void handleCreateMatch();
-  }, [handleCancelMatch, handleCreateMatch, hasActiveQuoteMatch]);
+  }, [handleCancelMatch, handleCreateMatch, hasActiveQuoteMatch, isPostPaymentFlow]);
 
   const bottomBar = !isBlockedByFetchState ? (
     <View style={[styles.bottomBar, { paddingBottom: insets.bottom + spacing * 2 }]} onLayout={(e) => {
@@ -1026,14 +1478,18 @@ export default function QuoteDetailPage() {
           onCancelRequest={handlePolicyCancelRequest}
           onRunAction={(action, ctx) => runPolicyAction(action, ctx)}
         />
+      ) : isPostPaymentFlow ? (
+        <View style={styles.bottomPlaceholder}>
+          <AppText style={styles.bottomPlaceholderText}>결제 완료 · 운송 진행 상태를 확인하세요</AppText>
+        </View>
       ) : (
         <AppButton
           title={isDriveInProgress ? (quoteUiState === CUSTOMER_UI_STATE.PICKUP_IN_PROGRESS ? "상차 진행 중..." : "운송 진행 중...") : bottomTitle}
           variant={isDriveInProgress ? "secondary" : bottomVariant}
           style={styles.bottomButton}
           onPress={handlePressBottomAction}
-          loading={isMatchSubmitting}
-          disabled={isDriveInProgress || isMatchSubmitting || (hasActiveQuoteMatch && isCancelIdInvalid) || actionQuoteId <= 0}
+          loading={isMatchSubmitting || isPaying}
+          disabled={isDriveInProgress || isMatchSubmitting || isPaying || (hasActiveQuoteMatch && isCancelIdInvalid) || actionQuoteId <= 0}
         />
       )}
     </View>
@@ -1088,13 +1544,109 @@ export default function QuoteDetailPage() {
                 </View>
               </View>
             ) : null}
+
+            {isPostPaymentFlow ? (
+              <View style={styles.paymentDoneCard}>
+                <View style={styles.paymentDoneHeader}>
+                  <View style={styles.paymentDoneIconWrap}>
+                    <Ionicons name="checkmark-circle" style={styles.paymentDoneIcon} />
+                  </View>
+                  <AppText style={styles.paymentDoneTitle}>{postPaymentSummary.title}</AppText>
+                </View>
+                <AppText style={styles.paymentDoneDesc}>{postPaymentSummary.description}</AppText>
+              </View>
+            ) : null}
           </View>
           {pendingCounterOffer ? <CounterOfferCard offer={pendingCounterOffer} /> : null}
+          {isPostPaymentFlow ? (
+            <View style={styles.deliveryCard}>
+              <AppText style={styles.deliveryTitle}>배송 진행 현황</AppText>
+
+              <View style={styles.deliveryStepRow}>
+                {DELIVERY_TIMELINE_STEPS.map((step, index) => {
+                  const isDone = index < deliveryTimelineIndex;
+                  const isActive = index === deliveryTimelineIndex;
+                  const nodeStyle = isDone
+                    ? styles.deliveryStepNodeDone
+                    : isActive
+                    ? styles.deliveryStepNodeActive
+                    : styles.deliveryStepNodeIdle;
+
+                  return (
+                    <React.Fragment key={step.key}>
+                      <View style={{ flex: 1, alignItems: "center" }}>
+                        <View style={[styles.deliveryStepNode, nodeStyle]}>
+                          {isDone ? (
+                            <Ionicons name="checkmark" size={12} color={theme.colors.semanticSuccess} />
+                          ) : isActive ? (
+                            <Ionicons name="ellipse" size={8} color={theme.colors.brandPrimary} />
+                          ) : null}
+                        </View>
+                        <AppText style={[styles.deliveryStepLabel, isActive ? styles.deliveryStepLabelActive : null]}>
+                          {step.label}
+                        </AppText>
+                      </View>
+                      {index < DELIVERY_TIMELINE_STEPS.length - 1 ? (
+                        <View style={[styles.deliveryStepConnector, isDone ? styles.deliveryStepConnectorDone : null]} />
+                      ) : null}
+                    </React.Fragment>
+                  );
+                })}
+              </View>
+            </View>
+          ) : null}
+          {isPostPaymentFlow ? (
+            <View style={styles.photoGallerySection}>
+              <AppText style={styles.deliveryTitle}>기사 사진</AppText>
+
+              <View style={styles.photoGroupWrap}>
+                <AppText style={styles.photoGroupTitle}>상차 사진</AppText>
+                {loadingPhotos.length > 0 ? (
+                  <View style={styles.photoThumbRow}>
+                    {loadingPhotos.map((uri, index) => (
+                      <PhotoThumbShipper key={`loading-${uri}-${index}`} uri={uri} index={index} styles={styles} theme={theme} />
+                    ))}
+                  </View>
+                ) : (
+                  <AppText style={styles.photoWaitText}>사진 대기 중</AppText>
+                )}
+              </View>
+
+              <View style={styles.photoGroupWrap}>
+                <AppText style={styles.photoGroupTitle}>하차 사진</AppText>
+                {unloadingPhotos.length > 0 ? (
+                  <View style={styles.photoThumbRow}>
+                    {unloadingPhotos.map((uri, index) => (
+                      <PhotoThumbShipper key={`unloading-${uri}-${index}`} uri={uri} index={index} styles={styles} theme={theme} />
+                    ))}
+                  </View>
+                ) : (
+                  <AppText style={styles.photoWaitText}>사진 대기 중</AppText>
+                )}
+              </View>
+            </View>
+          ) : null}
           <RouteFlowCard coreSummary={view.coreSummary} />
           <SummaryCard view={view} />
           <SpecificationArchive view={view} />
         </>
       </AppRequestState>
+      <TossPaymentModal
+        visible={showPaymentModal}
+        request={
+          pendingPaymentRequest && pendingPaymentRequest.clientKey
+            ? {
+                clientKey: pendingPaymentRequest.clientKey,
+                orderId: pendingPaymentRequest.orderId,
+                orderName: pendingPaymentRequest.orderName || "Freight payment",
+                amount: pendingPaymentRequest.amount,
+              }
+            : null
+        }
+        onClose={handleClosePaymentModal}
+        onSuccess={handlePaymentSuccess}
+        onFail={handlePaymentFail}
+      />
     </PageScaffold>
   );
 }

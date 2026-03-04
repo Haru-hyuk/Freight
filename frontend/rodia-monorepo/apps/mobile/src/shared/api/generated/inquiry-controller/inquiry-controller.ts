@@ -6,7 +6,8 @@
  */
 import type {
   InquiryAnswerRequest,
-  InquiryCreateRequest
+  InquiryCreateRequest,
+  InquiryResponse
 } from '.././schemas';
 
 import { customInstance } from '../../orval/custom-instance';
@@ -16,22 +17,20 @@ import { customInstance } from '../../orval/custom-instance';
   export const create = (
     inquiryCreateRequest: InquiryCreateRequest,
  ) => {
-      return customInstance<Blob>(
+      return customInstance<InquiryResponse>(
       {url: `/api/shipper/inquiries`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
-      data: inquiryCreateRequest,
-        responseType: 'blob'
+      data: inquiryCreateRequest
     },
       );
     }
   export const createByDriver = (
     inquiryCreateRequest: InquiryCreateRequest,
  ) => {
-      return customInstance<Blob>(
+      return customInstance<InquiryResponse>(
       {url: `/api/driver/inquiries`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
-      data: inquiryCreateRequest,
-        responseType: 'blob'
+      data: inquiryCreateRequest
     },
       );
     }
@@ -39,38 +38,34 @@ import { customInstance } from '../../orval/custom-instance';
     inquiryId: number,
     inquiryAnswerRequest: InquiryAnswerRequest,
  ) => {
-      return customInstance<Blob>(
+      return customInstance<InquiryResponse>(
       {url: `/api/admin/inquiries/${inquiryId}/answer`, method: 'PATCH',
       headers: {'Content-Type': 'application/json', },
-      data: inquiryAnswerRequest,
-        responseType: 'blob'
+      data: inquiryAnswerRequest
     },
       );
     }
   export const myInquiries = (
     
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/shipper/inquiries/me`, method: 'GET',
-        responseType: 'blob'
+      return customInstance<InquiryResponse[]>(
+      {url: `/api/shipper/inquiries/me`, method: 'GET'
     },
       );
     }
   export const myDriverInquiries = (
     
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/driver/inquiries/me`, method: 'GET',
-        responseType: 'blob'
+      return customInstance<InquiryResponse[]>(
+      {url: `/api/driver/inquiries/me`, method: 'GET'
     },
       );
     }
   export const allInquiries = (
     
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/admin/inquiries`, method: 'GET',
-        responseType: 'blob'
+      return customInstance<InquiryResponse[]>(
+      {url: `/api/admin/inquiries`, method: 'GET'
     },
       );
     }

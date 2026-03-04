@@ -1846,7 +1846,14 @@
         ],
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CounterOfferAcceptResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -6394,6 +6401,42 @@
           },
           "publish": {
             "type": "boolean"
+          }
+        }
+      },
+      "CounterOfferAcceptResponse": {
+        "type": "object",
+        "properties": {
+          "counterOfferId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "quoteId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "matchId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "driverId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "counterOfferStatus": {
+            "type": "string"
+          },
+          "quoteStatus": {
+            "type": "string"
+          },
+          "matchStatus": {
+            "type": "string"
+          },
+          "paymentRequired": {
+            "type": "boolean"
+          },
+          "nextAction": {
+            "type": "string"
           }
         }
       },

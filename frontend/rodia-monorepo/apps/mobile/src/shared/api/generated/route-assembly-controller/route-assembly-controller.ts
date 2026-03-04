@@ -69,9 +69,8 @@ import { customInstance } from '../../orval/custom-instance';
   export const health1 = (
     
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/route-assembly/health`, method: 'GET',
-        responseType: 'blob'
+      return customInstance<string>(
+      {url: `/api/route-assembly/health`, method: 'GET'
     },
       );
     }

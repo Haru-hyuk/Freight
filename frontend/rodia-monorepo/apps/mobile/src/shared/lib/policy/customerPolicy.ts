@@ -103,6 +103,14 @@ const CUSTOMER_UI_STATE_BY_BACKEND_STATUS: Readonly<Record<BackendStatus, Custom
   [BACKEND_STATUS.UNKNOWN]: CUSTOMER_UI_STATE.UNKNOWN,
 };
 
+function toStatusToken(rawStatus: string | null | undefined): string {
+  return String(rawStatus ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "_")
+    .replace(/-/g, "_");
+}
+
 function formatKrw(amount: number): string {
   return `${Math.trunc(amount).toLocaleString("ko-KR")}원`;
 }
@@ -130,6 +138,11 @@ export function canCustomerViewLocation(uiState: CustomerUiState): boolean {
  * 백엔드 계약이 준비되면 화면 계층은 변환 없이 `uiState`를 직접 사용해야 합니다.
  */
 export function getCustomerUiStateFromBackendStatus(rawStatus: string): CustomerUiState {
+  const token = toStatusToken(rawStatus);
+  if (token === "PICKUP" || token === "PREPARING") return CUSTOMER_UI_STATE.PICKUP_IN_PROGRESS;
+  if (token === "TRANSIT" || token === "DRIVING" || token === "IN_TRANSIT") return CUSTOMER_UI_STATE.TRANSIT_IN_PROGRESS;
+  if (token === "DROPOFF" || token === "DELIVERED" || token === "COMPLETED") return CUSTOMER_UI_STATE.COMPLETED;
+
   const backendStatus = normalizeStatus(rawStatus);
   return CUSTOMER_UI_STATE_BY_BACKEND_STATUS[backendStatus] ?? CUSTOMER_UI_STATE.UNKNOWN;
 }

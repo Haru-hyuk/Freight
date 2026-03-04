@@ -138,7 +138,8 @@ const UI_STATE_BEHAVIOR_MAP: Readonly<Record<CustomerUiState, QuotePolicyBehavio
       subtitle: "인수증을 확인할 수 있습니다.",
     },
     highlightCard: { type: "proof", quickActions: ["viewPOD"] },
-    bottomBar: { primary: "reRequestRoute" },
+    // 완료(DROPOFF) 이후에는 취소/재요청 CTA를 숨기고 상태 확인 중심으로 유지한다.
+    bottomBar: null,
   },
   [CUSTOMER_UI_STATE.CANCELED]: {
     category: "closed",

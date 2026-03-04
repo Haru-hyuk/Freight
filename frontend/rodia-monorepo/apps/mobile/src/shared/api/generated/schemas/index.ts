@@ -21,6 +21,7 @@ export * from './cargoItemHandlingItem';
 export * from './cargoVisit';
 export * from './cargoVisitType';
 export * from './checklistItemResponse';
+export * from './counterOfferAcceptResponse';
 export * from './counterOfferCreateRequest';
 export * from './counterOfferResponse';
 export * from './create1200';

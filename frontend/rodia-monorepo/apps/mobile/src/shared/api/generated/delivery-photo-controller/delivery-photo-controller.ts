@@ -5,6 +5,7 @@
  * OpenAPI spec version: v0
  */
 import type {
+  DeliveryPhotoResponse,
   UploadDriverPhotoBody,
   UploadDriverPhotoParams
 } from '.././schemas';
@@ -16,9 +17,8 @@ import { customInstance } from '../../orval/custom-instance';
   export const getDriverMatchPhotos = (
     matchId: number,
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/driver/matches/${matchId}/photos`, method: 'GET',
-        responseType: 'blob'
+      return customInstance<DeliveryPhotoResponse[]>(
+      {url: `/api/driver/matches/${matchId}/photos`, method: 'GET'
     },
       );
     }
@@ -29,29 +29,26 @@ import { customInstance } from '../../orval/custom-instance';
  ) => {const formData = new FormData();
 formData.append(`file`, uploadDriverPhotoBody.file);
 
-      return customInstance<Blob>(
+      return customInstance<DeliveryPhotoResponse>(
       {url: `/api/driver/matches/${matchId}/photos`, method: 'POST',
        data: formData,
-        params,
-        responseType: 'blob'
+        params
     },
       );
     }
   export const getShipperMatchPhotos = (
     matchId: number,
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/shipper/matches/${matchId}/photos`, method: 'GET',
-        responseType: 'blob'
+      return customInstance<DeliveryPhotoResponse[]>(
+      {url: `/api/shipper/matches/${matchId}/photos`, method: 'GET'
     },
       );
     }
   export const downloadPhoto = (
     photoId: number,
  ) => {
-      return customInstance<Blob>(
-      {url: `/api/delivery-photos/${photoId}/file`, method: 'GET',
-        responseType: 'blob'
+      return customInstance<string>(
+      {url: `/api/delivery-photos/${photoId}/file`, method: 'GET'
     },
       );
     }
