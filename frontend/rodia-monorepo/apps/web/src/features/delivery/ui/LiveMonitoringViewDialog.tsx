@@ -41,7 +41,6 @@ export function LiveMonitoringViewDialog({ detail, open, onOpenChange }: Props) 
                   label="현재 위치"
                   value={`${toKmText(calculateCurrentKm(detail.totalRouteKm, detail.routeProgressPercent))} / ${toKmText(detail.totalRouteKm)}`}
                 />
-                <InfoCard label="기사 이탈 사유" value={detail.deviationReason ?? "입력 없음"} />
               </div>
             </div>
 

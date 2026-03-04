@@ -1,20 +1,20 @@
-import type { CancellationRequestRow, OrderMonitoringRow } from "@/features/orders/model/types";
+﻿import type { CancellationRequestRow, OrderMonitoringRow } from "@/features/orders/model/types";
 
-export const ORDER_CANCELLATION_REQUEST_MOCK_ROWS: CancellationRequestRow[] = [
+const BASE_ORDER_CANCELLATION_REQUEST_MOCK_ROWS: CancellationRequestRow[] = [
   {
     requestId: "CR-20260302-001",
     quoteId: "Q-5104",
     matchId: "M-8801",
     requestedByRole: "SHIPPER",
-    requestedByName: "\uBE14\uB8E8 \uB9AC\uD14C\uC77C",
+    requestedByName: "블루 리테일",
     shipperId: "S-120",
-    shipperName: "\uBE14\uB8E8 \uB9AC\uD14C\uC77C",
+    shipperName: "블루 리테일",
     driverId: "D-778",
-    driverName: "\uAE30\uC0AC 778",
-    originAddress: "\uC778\uCC9C \uD5C8\uBE0C A",
-    destinationAddress: "\uC11C\uC6B8 \uB0C9\uB3D9\uCC3D\uACE0 5",
-    cargoName: "\uB0C9\uB3D9 \uC218\uC0B0\uBB3C",
-    cancelReason: "\uAE30\uC0AC \uC218\uB77D \uD6C4 \uD558\uCC28\uC9C0 \uC77C\uC815\uC774 \uBCC0\uACBD\uB418\uC5C8\uC2B5\uB2C8\uB2E4.",
+    driverName: "기사 778",
+    originAddress: "인천 허브 A",
+    destinationAddress: "서울 냉동창고 5",
+    cargoName: "냉동 수산물",
+    cancelReason: "기사 수락 후 하차지 일정이 변경되었습니다.",
     requestedAt: "2026-03-02 09:15",
     approvalStatus: "PENDING",
   },
@@ -23,15 +23,15 @@ export const ORDER_CANCELLATION_REQUEST_MOCK_ROWS: CancellationRequestRow[] = [
     quoteId: "Q-5097",
     matchId: "M-8792",
     requestedByRole: "DRIVER",
-    requestedByName: "\uAE30\uC0AC 701",
+    requestedByName: "기사 701",
     shipperId: "S-211",
-    shipperName: "\uC5D0\uCF54\uB9C8\uD2B8 \uB85C\uC9C0\uC2A4\uD2F1\uC2A4",
+    shipperName: "에코마트 로지스틱스",
     driverId: "D-701",
-    driverName: "\uAE30\uC0AC 701",
-    originAddress: "\uCCAD\uC8FC \uD06C\uB85C\uC2A4\uB3C4\uD06C",
-    destinationAddress: "\uC6A9\uC778 \uBB3C\uB958\uC13C\uD130",
-    cargoName: "\uD3EC\uC7A5\uC7AC",
-    cancelReason: "\uC0C1\uCC28\uC9C0 \uC548\uC804 \uC774\uC288\uB85C \uC9C4\uC785\uC774 \uC77C\uC2DC \uC81C\uD55C\uB418\uC5C8\uC2B5\uB2C8\uB2E4.",
+    driverName: "기사 701",
+    originAddress: "청주 크로스도크",
+    destinationAddress: "용인 물류센터",
+    cargoName: "포장재",
+    cancelReason: "상차지 안전 이슈로 진입이 일시 제한되었습니다.",
     requestedAt: "2026-03-02 11:40",
     approvalStatus: "PENDING",
   },
@@ -40,42 +40,167 @@ export const ORDER_CANCELLATION_REQUEST_MOCK_ROWS: CancellationRequestRow[] = [
     quoteId: "Q-5072",
     matchId: "M-8748",
     requestedByRole: "SHIPPER",
-    requestedByName: "\uB2E4\uB9BC\uD478\uB4DC",
+    requestedByName: "다림푸드",
     shipperId: "S-118",
-    shipperName: "\uB2E4\uB9BC\uD478\uB4DC",
+    shipperName: "다림푸드",
     driverId: "D-644",
-    driverName: "\uAE30\uC0AC 644",
-    originAddress: "\uAE40\uD3EC \uACF5\uC7A5",
-    destinationAddress: "\uBD80\uC0B0 \uD504\uB808\uC2DC \uD130\uBBF8\uB110",
-    cargoName: "\uAC00\uACF5 \uC2DD\uD488",
-    cancelReason: "\uCD5C\uC885 \uBC1C\uC8FC \uCDE8\uC18C\uB85C \uC6B4\uC1A1\uC744 \uC9C4\uD589\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+    driverName: "기사 644",
+    originAddress: "김포 공장",
+    destinationAddress: "부산 프레시 터미널",
+    cargoName: "가공 식품",
+    cancelReason: "최종 발주 취소로 운송을 진행할 수 없습니다.",
     requestedAt: "2026-03-01 08:05",
     approvalStatus: "APPROVED",
     reviewedAt: "2026-03-01 08:45",
     reviewedBy: "admin.ops",
-    reviewMemo: "\uC0C1\uCC28 \uC9C4\uD589 \uC804\uC73C\uB85C \uC6B4\uC1A1 \uB9AC\uC2A4\uD06C\uAC00 \uC5C6\uC5B4 \uC2B9\uC778\uD569\uB2C8\uB2E4.",
+    reviewMemo: "상차 진행 전으로 운송 리스크가 없어 승인합니다.",
   },
   {
     requestId: "CR-20260301-007",
     quoteId: "Q-5068",
     matchId: "M-8739",
     requestedByRole: "DRIVER",
-    requestedByName: "\uAE30\uC0AC 632",
+    requestedByName: "기사 632",
     shipperId: "S-406",
-    shipperName: "\uCF54\uC5B4 \uC81C\uC870",
+    shipperName: "코어 제조",
     driverId: "D-632",
-    driverName: "\uAE30\uC0AC 632",
-    originAddress: "\uB300\uC804 \uACF5\uC7A5",
-    destinationAddress: "\uB300\uAD6C \uC870\uB9BD \uD604\uC7A5",
-    cargoName: "\uAE30\uACC4 \uBD80\uD488",
-    cancelReason: "\uC0C1\uCC28 \uD655\uC778 \uD6C4 \uD654\uC8FC \uC694\uCCAD\uC73C\uB85C \uCDE8\uC18C\uB97C \uC694\uCCAD\uD569\uB2C8\uB2E4.",
+    driverName: "기사 632",
+    originAddress: "대전 공장",
+    destinationAddress: "대구 조립 현장",
+    cargoName: "기계 부품",
+    cancelReason: "상차 확인 후 화주 요청으로 취소를 요청합니다.",
     requestedAt: "2026-03-01 10:15",
     approvalStatus: "REJECTED",
     reviewedAt: "2026-03-01 10:55",
     reviewedBy: "admin.risk",
     reviewMemo:
-      "\uD53D\uC5C5 \uD655\uC815 \uD6C4 \uCDE8\uC18C \uC694\uCCAD\uC774\uBBC0\uB85C \uC81C\uC7AC \uAC80\uD1A0\uAC00 \uC120\uD589\uB418\uC5B4\uC57C \uD569\uB2C8\uB2E4.",
+      "픽업 확정 후 취소 요청이므로 제재 검토가 선행되어야 합니다.",
   },
+];
+
+const GENERATED_CANCELLATION_REASONS = [
+  "화주 납품 시간이 변경되어 상차를 보류했습니다.",
+  "기사 차량 정비 이슈로 운행 시작이 불가합니다.",
+  "상차지 안전 통제로 출입이 제한되어 취소 요청합니다.",
+  "최종 발주 수량 감소로 운송 계약을 재조정합니다.",
+  "하차지 야간 반입 제한으로 배차 취소가 필요합니다.",
+  "화물 포장 상태 미비로 재출고가 필요합니다.",
+  "운송 경로 기상 악화로 배차 취소를 요청합니다.",
+  "기사 교체가 필요하여 기존 매칭을 취소합니다.",
+];
+
+const GENERATED_SHIPPER_NAMES = [
+  "동부 콜드체인",
+  "한빛 물류",
+  "에버그린 트레이딩",
+  "온누리 유통",
+  "프라임 패키징",
+  "메가푸드 코리아",
+  "중앙 물산",
+  "세림 로지스",
+];
+
+const GENERATED_CARGO_NAMES = [
+  "냉장 식자재",
+  "전자 부품",
+  "포장 자재",
+  "의류 완제품",
+  "생활용품",
+  "공업용 자재",
+  "수출 화물",
+  "의약품",
+];
+
+const GENERATED_ORIGINS = [
+  "인천 남항 물류단지",
+  "평택 통합 터미널",
+  "김포 냉동창고",
+  "청주 크로스도크",
+  "천안 산업단지",
+  "대전 중앙 허브",
+  "울산 공업 물류센터",
+  "광주 복합 야드",
+];
+
+const GENERATED_DESTINATIONS = [
+  "서울 동북권 센터",
+  "성남 스마트 물류센터",
+  "수원 디스트리뷰션 센터",
+  "용인 통합 창고",
+  "대구 서부 터미널",
+  "부산 신항 배후단지",
+  "창원 공단 물류센터",
+  "전주 내륙 컨테이너기지",
+];
+
+const GENERATED_ORDER_CANCELLATION_REQUEST_MOCK_ROWS: CancellationRequestRow[] = Array.from(
+  { length: 18 },
+  (_, index) => {
+    const seq = index + 10;
+    const requestNo = String(seq).padStart(3, "0");
+    const quoteNo = 5200 + index;
+    const matchNo = 8900 + index;
+    const shipperNo = 300 + (index % 70);
+    const driverNo = 600 + (index % 90);
+    const requestedByRole = index % 2 === 0 ? "SHIPPER" : "DRIVER";
+    const requestedByName =
+      requestedByRole === "SHIPPER"
+        ? GENERATED_SHIPPER_NAMES[index % GENERATED_SHIPPER_NAMES.length]
+        : `기사 ${driverNo}`;
+    const requestedDay = 3 + Math.floor(index / 6);
+    const requestedHour = 8 + (index % 10);
+    const requestedMinute = (index * 7) % 60;
+
+    const approvalStatus =
+      index % 6 === 0 ? "REJECTED" : index % 5 === 0 ? "APPROVED" : "PENDING";
+    const reviewedAt =
+      approvalStatus === "PENDING"
+        ? undefined
+        : `2026-03-${String(requestedDay).padStart(2, "0")} ${String(
+            Math.min(requestedHour + 1, 23),
+          ).padStart(2, "0")}:${String((requestedMinute + 20) % 60).padStart(2, "0")}`;
+    const reviewedBy =
+      approvalStatus === "PENDING"
+        ? undefined
+        : approvalStatus === "APPROVED"
+          ? "admin.ops"
+          : "admin.risk";
+    const reviewMemo =
+      approvalStatus === "PENDING"
+        ? undefined
+        : approvalStatus === "APPROVED"
+          ? "상차 전 취소 요청으로 운영 리스크가 낮아 승인합니다."
+          : "매칭 확정 이후 취소 요청으로 패널티 검토가 필요합니다.";
+
+    return {
+      requestId: `CR-202603${String(requestedDay).padStart(2, "0")}-${requestNo}`,
+      quoteId: `Q-${quoteNo}`,
+      matchId: `M-${matchNo}`,
+      requestedByRole,
+      requestedByName,
+      shipperId: `S-${shipperNo}`,
+      shipperName: GENERATED_SHIPPER_NAMES[index % GENERATED_SHIPPER_NAMES.length],
+      driverId: `D-${driverNo}`,
+      driverName: `기사 ${driverNo}`,
+      originAddress: GENERATED_ORIGINS[index % GENERATED_ORIGINS.length],
+      destinationAddress: GENERATED_DESTINATIONS[index % GENERATED_DESTINATIONS.length],
+      cargoName: GENERATED_CARGO_NAMES[index % GENERATED_CARGO_NAMES.length],
+      cancelReason:
+        GENERATED_CANCELLATION_REASONS[index % GENERATED_CANCELLATION_REASONS.length],
+      requestedAt: `2026-03-${String(requestedDay).padStart(2, "0")} ${String(
+        requestedHour,
+      ).padStart(2, "0")}:${String(requestedMinute).padStart(2, "0")}`,
+      approvalStatus,
+      reviewedAt,
+      reviewedBy,
+      reviewMemo,
+    } satisfies CancellationRequestRow;
+  },
+);
+
+export const ORDER_CANCELLATION_REQUEST_MOCK_ROWS: CancellationRequestRow[] = [
+  ...BASE_ORDER_CANCELLATION_REQUEST_MOCK_ROWS,
+  ...GENERATED_ORDER_CANCELLATION_REQUEST_MOCK_ROWS,
 ];
 
 export const ORDER_MONITORING_MOCK_ROWS: OrderMonitoringRow[] = [
@@ -86,11 +211,11 @@ export const ORDER_MONITORING_MOCK_ROWS: OrderMonitoringRow[] = [
     matchStatus: "READY",
     paymentStatus: "PENDING",
     settlementStatus: "PENDING",
-    shipperName: "\uBE14\uB8E8 \uB9AC\uD14C\uC77C",
-    driverName: "\uAE30\uC0AC 778",
-    originAddress: "\uC778\uCC9C \uD5C8\uBE0C A",
-    destinationAddress: "\uC11C\uC6B8 \uB0C9\uB3D9\uCC3D\uACE0 5",
-    cargoName: "\uB0C9\uB3D9 \uC218\uC0B0\uBB3C",
+    shipperName: "블루 리테일",
+    driverName: "기사 778",
+    originAddress: "인천 허브 A",
+    destinationAddress: "서울 냉동창고 5",
+    cargoName: "냉동 수산물",
     requestedAt: "2026-03-02 09:15",
     totalFare: 620000,
     riskState: "WATCH",
@@ -102,11 +227,11 @@ export const ORDER_MONITORING_MOCK_ROWS: OrderMonitoringRow[] = [
     matchStatus: "IN_TRANSIT",
     paymentStatus: "COMPLETED",
     settlementStatus: "PROCESSING",
-    shipperName: "\uC5D0\uCF54\uB9C8\uD2B8 \uB85C\uC9C0\uC2A4\uD2F1\uC2A4",
-    driverName: "\uAE30\uC0AC 701",
-    originAddress: "\uCCAD\uC8FC \uD06C\uB85C\uC2A4\uB3C4\uD06C",
-    destinationAddress: "\uC6A9\uC778 \uBB3C\uB958\uC13C\uD130",
-    cargoName: "\uD3EC\uC7A5\uC7AC",
+    shipperName: "에코마트 로지스틱스",
+    driverName: "기사 701",
+    originAddress: "청주 크로스도크",
+    destinationAddress: "용인 물류센터",
+    cargoName: "포장재",
     requestedAt: "2026-03-02 11:40",
     totalFare: 480000,
     riskState: "NORMAL",
@@ -118,11 +243,11 @@ export const ORDER_MONITORING_MOCK_ROWS: OrderMonitoringRow[] = [
     matchStatus: "UNMATCHED",
     paymentStatus: "UNKNOWN",
     settlementStatus: "UNKNOWN",
-    shipperName: "\uCE74\uD30C \uD2B8\uB808\uC774\uB529",
+    shipperName: "카파 트레이딩",
     driverName: "-",
-    originAddress: "\uAD11\uC8FC \uC57C\uB4DC",
-    destinationAddress: "\uC218\uC6D0 \uB514\uD3EC",
-    cargoName: "\uC0AC\uBB34 \uC6A9\uD488",
+    originAddress: "광주 야드",
+    destinationAddress: "수원 디포",
+    cargoName: "사무 용품",
     requestedAt: "2026-03-01 14:20",
     totalFare: 330000,
     riskState: "WATCH",
@@ -134,11 +259,11 @@ export const ORDER_MONITORING_MOCK_ROWS: OrderMonitoringRow[] = [
     matchStatus: "CANCELLED",
     paymentStatus: "FAILED",
     settlementStatus: "FAILED",
-    shipperName: "\uB2E4\uB9BC\uD478\uB4DC",
-    driverName: "\uAE30\uC0AC 644",
-    originAddress: "\uAE40\uD3EC \uACF5\uC7A5",
-    destinationAddress: "\uBD80\uC0B0 \uD504\uB808\uC2DC \uD130\uBBF8\uB110",
-    cargoName: "\uAC00\uACF5 \uC2DD\uD488",
+    shipperName: "다림푸드",
+    driverName: "기사 644",
+    originAddress: "김포 공장",
+    destinationAddress: "부산 프레시 터미널",
+    cargoName: "가공 식품",
     requestedAt: "2026-03-01 08:05",
     totalFare: 590000,
     riskState: "NORMAL",
@@ -150,13 +275,14 @@ export const ORDER_MONITORING_MOCK_ROWS: OrderMonitoringRow[] = [
     matchStatus: "READY",
     paymentStatus: "PENDING",
     settlementStatus: "PENDING",
-    shipperName: "\uCF54\uC5B4 \uC81C\uC870",
-    driverName: "\uAE30\uC0AC 632",
-    originAddress: "\uB300\uC804 \uACF5\uC7A5",
-    destinationAddress: "\uB300\uAD6C \uC870\uB9BD \uD604\uC7A5",
-    cargoName: "\uAE30\uACC4 \uBD80\uD488",
+    shipperName: "코어 제조",
+    driverName: "기사 632",
+    originAddress: "대전 공장",
+    destinationAddress: "대구 조립 현장",
+    cargoName: "기계 부품",
     requestedAt: "2026-03-01 10:15",
     totalFare: 710000,
     riskState: "ACTION_REQUIRED",
   },
 ];
+

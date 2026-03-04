@@ -1,21 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { Search } from "lucide-react";
 
-import { Driver, DriverFilter, DriverRating, DriverStatus, fetchDrivers } from "@/features/users/api/driverApi";
-import { DriverDetailModal } from "@/features/users/ui/DriverDetailModal";
+import { Driver, DriverFilter, DriverStatus, fetchDrivers } from "@/features/users/api/driverApi";
+import { DriverDetailDialog } from "@/features/users/ui/DriverDetailDialog";
 import { useMockMode } from "@/shared/lib/hooks/useMockMode";
 import { Badge } from "@/shared/ui/shadcn/badge";
 import { Button } from "@/shared/ui/shadcn/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/shadcn/card";
 import { Input } from "@/shared/ui/shadcn/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/shared/ui/shadcn/table";
-
-const RATING_ORDER: Record<DriverRating, number> = {
-  [DriverRating.EXCELLENT]: 0,
-  [DriverRating.GOOD]: 1,
-  [DriverRating.FAIR]: 2,
-  [DriverRating.POOR]: 3,
-};
 
 function DriverStatusBadge({ status }: { status: DriverStatus }) {
   if (status === DriverStatus.ACTIVE) return <Badge variant="secondary">활성</Badge>;
@@ -24,23 +17,15 @@ function DriverStatusBadge({ status }: { status: DriverStatus }) {
   return <Badge variant="outline">비활성</Badge>;
 }
 
-function DriverRatingBadge({ rating }: { rating: DriverRating }) {
-  if (rating === DriverRating.EXCELLENT) return <Badge variant="secondary">최우수</Badge>;
-  if (rating === DriverRating.GOOD) return <Badge variant="outline">우수</Badge>;
-  if (rating === DriverRating.FAIR) return <Badge variant="outline">보통</Badge>;
-  return <Badge variant="destructive">주의</Badge>;
-}
-
 export default function DriverListPage() {
   const { enabled: mockModeEnabled } = useMockMode();
   const [rows, setRows] = useState<Driver[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);
+  const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<DriverStatus | "ALL">("ALL");
-  const [selectedRating, setSelectedRating] = useState<DriverRating | "ALL">("ALL");
   const [page, setPage] = useState(1);
   const pageSize = 10;
 
@@ -51,7 +36,6 @@ export default function DriverListPage() {
         setError(null);
         const filter: DriverFilter = {
           status: selectedStatus === "ALL" ? undefined : selectedStatus,
-          rating: selectedRating === "ALL" ? undefined : selectedRating,
         };
         const response = await fetchDrivers(filter);
         setRows(response.items);
@@ -64,16 +48,14 @@ export default function DriverListPage() {
     };
 
     void loadDrivers();
-  }, [selectedStatus, selectedRating, mockModeEnabled]);
+  }, [selectedStatus, mockModeEnabled]);
 
   const filteredRows = useMemo(() => {
     const keyword = searchQuery.trim().toLowerCase();
-    const filtered = rows.filter((driver) => {
+    return rows.filter((driver) => {
       if (!keyword) return true;
       return `${driver.name} ${driver.id} ${driver.phone} ${driver.vehicle.plateNumber}`.toLowerCase().includes(keyword);
     });
-
-    return [...filtered].sort((a, b) => RATING_ORDER[a.rating] - RATING_ORDER[b.rating]);
   }, [rows, searchQuery]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
@@ -84,7 +66,7 @@ export default function DriverListPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [searchQuery, selectedStatus, selectedRating]);
+  }, [searchQuery, selectedStatus]);
 
   return (
     <div className="min-h-screen space-y-6 bg-background text-foreground">
@@ -108,7 +90,7 @@ export default function DriverListPage() {
             />
           </div>
 
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-1">
             <select
               value={selectedStatus}
               onChange={(event) => setSelectedStatus(event.target.value as DriverStatus | "ALL")}
@@ -119,18 +101,6 @@ export default function DriverListPage() {
               <option value={DriverStatus.PENDING_APPROVAL}>승인 대기</option>
               <option value={DriverStatus.SUSPENDED}>정지</option>
               <option value={DriverStatus.INACTIVE}>비활성</option>
-            </select>
-
-            <select
-              value={selectedRating}
-              onChange={(event) => setSelectedRating(event.target.value as DriverRating | "ALL")}
-              className="h-10 rounded-md border border-border bg-background px-3 text-sm text-foreground"
-            >
-              <option value="ALL">등급 전체</option>
-              <option value={DriverRating.EXCELLENT}>최우수</option>
-              <option value={DriverRating.GOOD}>우수</option>
-              <option value={DriverRating.FAIR}>보통</option>
-              <option value={DriverRating.POOR}>주의</option>
             </select>
           </div>
         </CardContent>
@@ -148,7 +118,6 @@ export default function DriverListPage() {
                 <TableRow className="bg-muted">
                   <TableHead>이름</TableHead>
                   <TableHead>차량</TableHead>
-                  <TableHead>등급</TableHead>
                   <TableHead>월 수익</TableHead>
                   <TableHead>완료율</TableHead>
                   <TableHead>위반 건수</TableHead>
@@ -158,34 +127,35 @@ export default function DriverListPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="py-10 text-center text-foreground/70">
+                    <TableCell colSpan={6} className="py-10 text-center text-foreground/70">
                       로딩 중...
                     </TableCell>
                   </TableRow>
                 ) : error ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="py-10 text-center text-destructive">
+                    <TableCell colSpan={6} className="py-10 text-center text-destructive">
                       {error}
                     </TableCell>
                   </TableRow>
                 ) : pagedRows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="py-10 text-center text-foreground/70">
+                    <TableCell colSpan={6} className="py-10 text-center text-foreground/70">
                       검색 결과가 없습니다.
                     </TableCell>
                   </TableRow>
                 ) : (
                   pagedRows.map((driver) => (
-                    <TableRow key={driver.id} className="cursor-pointer" onClick={() => setSelectedDriver(driver)}>
+                    <TableRow
+                      key={driver.id}
+                      className="cursor-pointer hover:bg-muted"
+                      onClick={() => setSelectedDriverId(driver.id)}
+                    >
                       <TableCell className="font-medium">{driver.name}</TableCell>
                       <TableCell>
                         <div className="space-y-1">
                           <div>{driver.vehicle.type}</div>
                           <div className="text-xs text-foreground/70">{driver.vehicle.plateNumber}</div>
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        <DriverRatingBadge rating={driver.rating} />
                       </TableCell>
                       <TableCell>{Math.round(driver.stats.monthlyEarnings).toLocaleString()}원</TableCell>
                       <TableCell>{driver.stats.completionRate.toFixed(1)}%</TableCell>
@@ -214,7 +184,13 @@ export default function DriverListPage() {
         </Button>
       </div>
 
-      {selectedDriver ? <DriverDetailModal driver={selectedDriver} onClose={() => setSelectedDriver(null)} /> : null}
+      <DriverDetailDialog
+        driverId={selectedDriverId}
+        open={Boolean(selectedDriverId)}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) setSelectedDriverId(null);
+        }}
+      />
     </div>
   );
 }

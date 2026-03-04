@@ -230,7 +230,9 @@ export function SanctionsLogView() {
               <div className="flex flex-wrap gap-2">
                 <Badge variant="outline">{roleLabel(selected.targetRole)}</Badge>
                 <Badge variant="outline">{typeLabel(selected.type)}</Badge>
-                <Badge variant={selected.status === "APPLIED" ? "secondary" : "outline"}>{statusLabel(selected.status)}</Badge>
+                <Badge variant={selected.status === "APPLIED" ? "secondary" : "outline"}>
+                  {statusLabel(selected.status)}
+                </Badge>
               </div>
 
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">

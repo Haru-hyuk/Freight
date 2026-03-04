@@ -19,6 +19,10 @@ function StatusBadge({ status }: { status: LiveDeliveryRow["liveStatus"] }) {
   return <Badge variant="destructive">이탈</Badge>;
 }
 
+function toRoundedKmText(value: number): string {
+  return (Math.round(value * 100) / 100).toFixed(2);
+}
+
 export function LiveMonitoringTable({ rows, loading, onOpenDetail, onOpenView, onSendKakaoAlert }: Props) {
   return (
     <Card className="rounded-lg border border-border bg-background">
@@ -35,7 +39,6 @@ export function LiveMonitoringTable({ rows, loading, onOpenDetail, onOpenView, o
                 <TableHead className="text-base font-semibold text-foreground">화주 / 기사</TableHead>
                 <TableHead className="text-base font-semibold text-foreground">현재 위치</TableHead>
                 <TableHead className="text-base font-semibold text-foreground">진행률</TableHead>
-                <TableHead className="text-base font-semibold text-foreground">이탈 거리</TableHead>
                 <TableHead className="text-base font-semibold text-foreground">상태</TableHead>
                 <TableHead className="text-right text-base font-semibold text-foreground">동작</TableHead>
               </TableRow>
@@ -43,7 +46,7 @@ export function LiveMonitoringTable({ rows, loading, onOpenDetail, onOpenView, o
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={7}>
+                  <TableCell colSpan={6}>
                     <div className="space-y-2 p-2">
                       <Skeleton className="h-8 w-full" />
                       <Skeleton className="h-8 w-full" />
@@ -52,7 +55,7 @@ export function LiveMonitoringTable({ rows, loading, onOpenDetail, onOpenView, o
                 </TableRow>
               ) : rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-10 text-center text-base text-foreground/70">
+                  <TableCell colSpan={6} className="py-10 text-center text-base text-foreground/70">
                     실시간 배송 데이터가 없습니다.
                   </TableCell>
                 </TableRow>
@@ -73,14 +76,11 @@ export function LiveMonitoringTable({ rows, loading, onOpenDetail, onOpenView, o
                     </TableCell>
                     <TableCell className="text-base">
                       <div className="space-y-1">
-                        <div>
-                          {row.currentLat}, {row.currentLng}
-                        </div>
+                        <div>{toRoundedKmText(row.currentLat)}km / {toRoundedKmText(row.currentLng)} km</div>
                         <div className="text-sm text-foreground/70">{row.speedKmh} km/h</div>
                       </div>
                     </TableCell>
                     <TableCell className="text-base">{row.progressPercent}%</TableCell>
-                    <TableCell className="text-base">{row.deviationDistanceKm} km</TableCell>
                     <TableCell>
                       <StatusBadge status={row.liveStatus} />
                     </TableCell>
