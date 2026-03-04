@@ -11,6 +11,7 @@ export type DriverMarketRecommendationSelection = {
   mode: DriverRouteRecommendationMode;
   maxQuotesPerRoute: number;
   analyzedAt: number;
+  selectedTruckId?: number | null;
 };
 
 let currentSelection: DriverMarketRecommendationSelection | null = null;
@@ -35,4 +36,3 @@ export function getDriverMarketRecommendationSelection(
 export function clearDriverMarketRecommendationSelection(): void {
   currentSelection = null;
 }
-

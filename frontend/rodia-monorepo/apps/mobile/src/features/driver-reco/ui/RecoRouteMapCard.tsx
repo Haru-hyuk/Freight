@@ -137,7 +137,11 @@ export function RecoRouteMapCard({
           </AppText>
         ) : null}
 
-        <RecoRouteWebView url={kakaoRouteLink.url} loading={false} />
+        <RecoRouteWebView
+          stops={effectiveStops}
+          loading={false}
+          externalUrl={kakaoRouteLink.url}
+        />
 
         {displayStops.map((stop, index) => {
           const hasLat = typeof stop.lat === "number" && Number.isFinite(stop.lat);
