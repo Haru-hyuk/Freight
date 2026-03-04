@@ -1,4 +1,17 @@
-// rodia-monorepo/apps/mobile/src/entities/quote/dto.ts
+import type {
+  QuoteChecklistItemRequest,
+  QuoteChecklistItemResponse,
+  QuoteCreateRequest,
+  QuoteCreateResponse,
+  QuoteDetailResponse,
+  QuoteItemRequest,
+  QuoteItemResponse,
+  QuoteListResponse,
+  QuoteStopRequest,
+  QuoteStopResponse,
+  QuoteUpdateRequest,
+} from "@/shared/api/generated/schemas";
+
 export type QuoteVehicleType =
   | "DAMAS"
   | "LABO"
@@ -25,156 +38,52 @@ export type QuoteWorkMethod =
   | "DRIVER:LADDER"
   | "DRIVER:WAIST_BEAR";
 
-export type QuoteChecklistItemDto = {
-  checklistItemId: number;
-  extraInput?: string;
-  extraFee?: number;
-};
+type NumberLike = number | string;
 
-export type QuoteItemDto = {
-  quoteItemId?: number | string;
-  itemName?: string;
-  itemType?: string;
-  itemDescription?: string;
-  quantity?: number | string;
-  lengthCm?: number | string;
-  widthCm?: number | string;
-  heightCm?: number | string;
-  unitWeightKg?: number | string;
-  unitVolumeCbm?: number | string;
-  fragile?: boolean;
-  upright?: boolean;
-  noStack?: boolean;
-  bottomOnly?: boolean;
-  rotatable?: boolean;
-  stackable?: boolean;
-  maxStackWeightKg?: number | string;
-  handlingTags?: string;
-  sortOrder?: number | string;
-};
+/**
+ * Raw DTO for tolerant parse/sanitize path.
+ * API 송수신 타입 자체는 generated schema type alias(아래)로 고정한다.
+ */
+export type QuoteChecklistItemDto = QuoteChecklistItemRequest &
+  QuoteChecklistItemResponse & {
+    checklistItemId?: NumberLike;
+    extraFee?: NumberLike;
+  };
 
-export type QuoteStopDto = {
-  quoteStopId?: number | string;
-  seq?: number | string;
-  address?: string;
-  lat?: number | string;
-  lng?: number | string;
-  contactName?: string;
-  contactPhone?: string;
-  deptName?: string;
-  managerName?: string;
-};
+export type QuoteItemDto = QuoteItemRequest &
+  QuoteItemResponse & {
+    quoteItemId?: NumberLike;
+    quantity?: NumberLike;
+    lengthCm?: NumberLike;
+    widthCm?: NumberLike;
+    heightCm?: NumberLike;
+    unitWeightKg?: NumberLike;
+    unitVolumeCbm?: NumberLike;
+    maxStackWeightKg?: NumberLike;
+    sortOrder?: NumberLike;
+  };
+
+export type QuoteStopDto = QuoteStopRequest &
+  QuoteStopResponse & {
+    quoteStopId?: NumberLike;
+    seq?: NumberLike;
+    lat?: NumberLike;
+    lng?: NumberLike;
+  };
 
 export type QuoteStopResponseDto = QuoteStopDto;
+export type QuoteStopRequestDto = QuoteStopRequest &
+  QuoteStopResponse & {
+    seq?: NumberLike;
+    lat?: NumberLike;
+    lng?: NumberLike;
+  };
 
-export type QuoteStopRequestDto = {
-  seq?: number | string;
-  address?: string;
-  lat?: number | string;
-  lng?: number | string;
-  contactName?: string;
-  contactPhone?: string;
-  deptName?: string;
-  managerName?: string;
-};
-
-export type QuoteCreateRequestDto = {
-  truckId?: number;
-  originAddress: string;
-  destinationAddress: string;
-  originLat: number;
-  originLng: number;
-  destinationLat: number;
-  destinationLng: number;
-  distanceKm?: number;
-  weightKg: number;
-  volumeCbm: number;
-  vehicleType: QuoteVehicleType;
-  vehicleBodyType: QuoteVehicleBodyType;
-  cargoName: string;
-  cargoType: QuoteCargoType;
-  cargoDesc: string;
-  desiredPrice: number;
-  allowCombine: boolean;
-  loadMethod: QuoteWorkMethod;
-  unloadMethod: QuoteWorkMethod;
-  checklistItems: QuoteChecklistItemDto[];
-  quoteItems?: QuoteItemDto[] | null;
-  stops?: QuoteStopRequestDto[] | null;
-};
-
-export type QuoteCreateResponseDto = {
-  quoteId: number;
-  quotePublicId?: string;
-  originLat?: number;
-  originLng?: number;
-  destinationLat?: number;
-  destinationLng?: number;
-  stops?: QuoteStopDto[] | null;
-  basePrice?: number;
-  distancePrice?: number;
-  extraPrice?: number;
-  desiredPrice?: number;
-  finalPrice?: number;
-};
-
-export type QuoteListItemDto = {
-  quoteId?: number | string;
-  truckId?: number | string;
-  originAddress?: string;
-  destinationAddress?: string;
-  distanceKm?: number | string;
-  vehicleType?: string;
-  vehicleBodyType?: string;
-  cargoName?: string;
-  desiredPrice?: number | string;
-  finalPrice?: number | string;
-  status?: string;
-  createdAt?: string;
-};
-
-export type QuoteDetailResponseDto = {
-  quoteId?: number | string;
-  quotePublicId?: string;
-  shipperId?: number | string;
-  truckId?: number | string;
-  originAddress?: string;
-  originAddressDetail?: string;
-  destinationAddress?: string;
-  destinationAddressDetail?: string;
-  originLat?: number | string;
-  originLng?: number | string;
-  destinationLat?: number | string;
-  destinationLng?: number | string;
-  distanceKm?: number | string;
-  weightKg?: number | string;
-  volumeCbm?: number | string;
-  vehicleType?: string;
-  vehicleBodyType?: string;
-  cargoName?: string;
-  cargoType?: string;
-  cargoDesc?: string;
-  basePrice?: number | string;
-  distancePrice?: number | string;
-  extraPrice?: number | string;
-  desiredPrice?: number | string;
-  finalPrice?: number | string;
-  allowCombine?: boolean;
-  loadMethod?: string;
-  unloadMethod?: string;
-  status?: string;
-  createdAt?: string;
-  updatedAt?: string;
-  senderName?: string;
-  senderPhone?: string;
-  receiverName?: string;
-  receiverPhone?: string;
-  quoteItems?: QuoteItemDto[] | null;
-  checklistItems?: QuoteChecklistItemDto[] | null;
-  stops?: QuoteStopDto[] | null;
-};
-
-export type QuoteUpdateRequestDto = QuoteCreateRequestDto;
+export type QuoteCreateRequestDto = QuoteCreateRequest;
+export type QuoteCreateResponseDto = QuoteCreateResponse;
+export type QuoteListItemDto = QuoteListResponse;
+export type QuoteDetailResponseDto = QuoteDetailResponse;
+export type QuoteUpdateRequestDto = QuoteUpdateRequest;
 export type QuoteUpdateResponseDto = QuoteDetailResponseDto;
 
 export type QuoteListEnvelopeDto = {

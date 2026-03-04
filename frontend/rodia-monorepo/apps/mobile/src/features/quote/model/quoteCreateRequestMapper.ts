@@ -1,12 +1,12 @@
 import type {
   QuoteCargoType,
   QuoteChecklistItemDto,
-  QuoteCreateRequestDto,
   QuoteItemDto,
   QuoteStopRequestDto,
   QuoteVehicleBodyType,
   QuoteVehicleType,
 } from "@/entities/quote/dto";
+import type { QuoteCreateRequest } from "@/shared/api/generated/schemas";
 import { EXTRA_OPTIONS, type QuoteCreateDraft } from "@/features/quote/model/quoteCreateDraft";
 import { DEFAULT_LOAD_METHOD, DEFAULT_UNLOAD_METHOD, toActorOnlyWorkMethod } from "@/features/quote/model/workMethod";
 
@@ -27,7 +27,7 @@ const VEHICLE_TYPE_BY_TON_INDEX: QuoteVehicleType[] = [
   "TON_25",
 ];
 const VEHICLE_BODY_BY_TYPE_INDEX: QuoteVehicleBodyType[] = ["CARGO", "WING_BODY", "TOP_CAR"];
-type QuoteCreateRequestPayload = Omit<QuoteCreateRequestDto, "basePrice"> & { basePrice?: number };
+type QuoteCreateRequestPayload = QuoteCreateRequest;
 const CARGO_CATEGORY_LABELS: Readonly<Record<string, string>> = {
   BOX: "박스",
   PALLET: "파렛트",
@@ -235,6 +235,13 @@ function resolveBasePrice(draft: QuoteCreateDraft) {
   return Math.max(0, toInt(safeRaw, 0));
 }
 
+function resolveDistancePrice(draft: QuoteCreateDraft) {
+  const extendedDraft = draft as QuoteCreateDraft & { distancePrice?: unknown };
+  const raw = extendedDraft.distancePrice ?? 0;
+  const safeRaw = typeof raw === "string" || typeof raw === "number" ? raw : 0;
+  return Math.max(0, toInt(safeRaw, 0));
+}
+
 function buildChecklistItems(draft: QuoteCreateDraft): QuoteChecklistItemDto[] {
   const selected = Array.isArray(draft?.selectedOpts) ? draft.selectedOpts : [];
   if (!selected.length) return [];
@@ -264,6 +271,13 @@ export function buildQuoteCreateRequest(draft: QuoteCreateDraft): QuoteCreateReq
   const truckId = toInt(draft.truckId, 0);
   const distanceKm = readFirstFiniteNumber(extendedDraft, ["distanceKm", "distance"], 0);
   const basePrice = resolveBasePrice(draft);
+  const distancePrice = resolveDistancePrice(draft);
+  const desiredPrice = resolveDesiredPrice(draft);
+  const volumeCbm = Math.max(0, calculateVolumeCbm(draft));
+  const cargoDesc = summarizeCargoDesc(draft).trim();
+  const checklistItems = buildChecklistItems(draft);
+  const quoteItems = buildQuoteItems(draft);
+  const stops = buildStops(draft);
 
   const payload: QuoteCreateRequestPayload = {
     originAddress,
@@ -273,29 +287,27 @@ export function buildQuoteCreateRequest(draft: QuoteCreateDraft): QuoteCreateReq
     destinationLat,
     destinationLng,
     weightKg: calculateWeightKg(draft),
-    volumeCbm: Math.max(0, calculateVolumeCbm(draft)),
+    ...(volumeCbm > 0 ? { volumeCbm } : {}),
     vehicleType: mapVehicleType(draft.tonIdx),
     vehicleBodyType: mapVehicleBodyType(draft.typeIdx),
     cargoName: summarizeCargoName(draft),
     cargoType: mapCargoType(draft.isFrozen),
-    cargoDesc: summarizeCargoDesc(draft),
-    desiredPrice: resolveDesiredPrice(draft),
+    ...(cargoDesc ? { cargoDesc } : {}),
+    ...(desiredPrice > 0 ? { desiredPrice } : {}),
     allowCombine: !!draft.isPool,
     loadMethod: toActorOnlyWorkMethod(draft.loadMethod, DEFAULT_LOAD_METHOD),
     unloadMethod: toActorOnlyWorkMethod(draft.unloadMethod, DEFAULT_UNLOAD_METHOD),
-    checklistItems: buildChecklistItems(draft),
-    quoteItems: buildQuoteItems(draft),
-    stops: buildStops(draft),
+    ...(checklistItems.length > 0 ? { checklistItems } : {}),
+    ...(quoteItems.length > 0 ? { quoteItems } : {}),
+    ...(stops.length > 0 ? { stops } : {}),
   };
 
   if (truckId > 0) {
     payload.truckId = truckId;
-  } else {
-    // 확실히 하기 위해 삭제
-    delete (payload as any).truckId;
   }
   if (distanceKm > 0) payload.distanceKm = distanceKm;
   if (basePrice > 0) payload.basePrice = basePrice;
+  if (distancePrice > 0) payload.distancePrice = distancePrice;
 
   return payload;
 }

@@ -7,14 +7,15 @@ import { useFocusEffect } from "@react-navigation/native";
 import type { QuoteListItem, QuoteStatusApi } from "@/entities/quote/model/quote.types";
 import { listShipperQuotes } from "@/features/quote/api";
 import { listMyShipperMatches, type ShipperMatchItem } from "@/features/matching/api";
+import { getMatchPaymentSnapshot } from "@/features/payment/api/payment-api";
 import {
-  getQuoteActionPolicy,
+  getQuoteActionPolicyByUiState,
   resolveTonePalette,
   type QuoteActionPolicy,
   type QuoteTonePaletteKey,
 } from "@/features/quote/model/quoteActionMatrix";
 import { formatDateTime, formatDistance, formatKrw } from "@/shared/lib/format/display";
-import { BACKEND_STATUS, CUSTOMER_UI_STATE, getCustomerUiStateFromBackendStatus, normalizeStatus, type CustomerUiState } from "@/shared/lib/policy";
+import { CUSTOMER_UI_STATE, getCustomerUiStateFromBackendStatus, resolveEffectiveQuoteStatus, type CustomerUiState } from "@/shared/lib/policy";
 import { safeNumber, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppCard } from "@/shared/ui/kit/AppCard";
@@ -72,7 +73,7 @@ type SectionHeaderProps = {
 
 type QuoteListCardProps = {
   item: QuoteListViewItem;
-  onPress: (quoteId: number, quotePublicId: string | undefined, status: QuoteStatusApi) => void;
+  onPress: (quoteId: number, quotePublicId: string | undefined) => void;
 };
 
 type QuoteListSectionProps = {
@@ -98,47 +99,7 @@ const SORT_OPTIONS: Array<{ key: QuoteListSort; label: string }> = [
   { key: "PRICE", label: "금액순" },
 ];
 const FOCUS_REFETCH_THROTTLE_MS = 1500;
-
-const STATUS_PROMOTION_SOURCE_STATES: ReadonlySet<string> = new Set([
-  BACKEND_STATUS.READY,
-  BACKEND_STATUS.OPEN,
-  BACKEND_STATUS.UNKNOWN,
-]);
-
-const STATUS_PROMOTION_TARGET_STATES: ReadonlySet<string> = new Set([
-  BACKEND_STATUS.MATCHED,
-  BACKEND_STATUS.IN_TRANSIT,
-  BACKEND_STATUS.DELIVERED,
-  BACKEND_STATUS.READY,
-  BACKEND_STATUS.COMPLETED,
-  BACKEND_STATUS.CANCELLED,
-]);
-
-function normalizeMatchStatus(value: unknown): string {
-  const text = String(value ?? "").trim();
-  if (!text) return "";
-  const normalized = normalizeStatus(text);
-  return normalized === BACKEND_STATUS.UNKNOWN ? "" : normalized;
-}
-
-function resolveEffectiveQuoteStatus(quoteStatus: unknown, matchStatus: unknown, matchAccepted?: unknown): string {
-  const quoteText = String(quoteStatus ?? "").trim();
-  const quoteNormalized = normalizeStatus(quoteText);
-  const normalizedMatchStatus = normalizeMatchStatus(matchStatus);
-  if (!normalizedMatchStatus) return quoteText;
-
-  // READY는 기사 수락 전/후를 구분해야 결제 상태가 조기 노출되지 않는다.
-  if (normalizedMatchStatus === BACKEND_STATUS.READY && matchAccepted !== true) {
-    return quoteText || normalizedMatchStatus;
-  }
-
-  if (STATUS_PROMOTION_SOURCE_STATES.has(quoteNormalized) && STATUS_PROMOTION_TARGET_STATES.has(normalizedMatchStatus)) {
-    return normalizedMatchStatus;
-  }
-
-  return quoteText || normalizedMatchStatus;
-}
-
+const PRE_PAYMENT_STATUS_SET = new Set<QuoteStatusApi>(["OPEN", "NEGOTIATING", "ASSIGNED", "ACCEPTED"]);
 
 const useStyles = createThemedStyles((theme) => {
   const c = theme.colors;
@@ -505,7 +466,7 @@ function getPriceValue(quote: QuoteListItem): number {
 
 function toViewItem(quote: QuoteListItem): QuoteListViewItem {
   const uiState = getCustomerUiStateFromBackendStatus(quote.status);
-  const policy = getQuoteActionPolicy(quote.status);
+  const policy = getQuoteActionPolicyByUiState(uiState);
   const priceValue = getPriceValue(quote);
 
   return {
@@ -673,7 +634,7 @@ function QuoteListCardBase({ item, onPress }: QuoteListCardProps) {
   return (
     <Pressable
       accessibilityRole="button"
-      onPress={() => onPress(item.quote.quoteId, item.quote.quotePublicId, item.quote.status)}
+      onPress={() => onPress(item.quote.quoteId, item.quote.quotePublicId)}
       style={({ pressed }) => [styles.pressable, isClosed && styles.closedCard, pressed && styles.pressed]}
     >
       <AppCard outlined elevated={false}>
@@ -820,13 +781,15 @@ export default function QuoteListPage() {
       const rawQuotes = Array.isArray(quoteResponse) ? quoteResponse : [];
       const matches = Array.isArray(matchResponse) ? matchResponse : [];
 
-      const matchByQuoteId = new Map<number, { status: string; updatedAt: string; accepted: boolean }>();
+      const matchByQuoteId = new Map<number, { matchId: number; status: string; updatedAt: string; accepted: boolean }>();
       for (const m of matches as ShipperMatchItem[]) {
         const quoteId = typeof (m as any)?.quoteId === "number" ? (m as any).quoteId : 0;
         if (quoteId <= 0) continue;
+        const matchId = typeof (m as any)?.matchId === "number" ? (m as any).matchId : 0;
 
-        const status = typeof (m as any)?.status === "string" ? (m as any).status : "";
-        if (normalizeMatchStatus(status) === BACKEND_STATUS.CANCELLED) continue;
+        const statusCandidate = typeof (m as any)?.status === "string" ? (m as any).status : "";
+        const stateCandidate = typeof (m as any)?.state === "string" ? (m as any).state : "";
+        const status = statusCandidate || stateCandidate;
         const accepted = (m as any)?.accepted === true;
 
         const updatedAt = typeof (m as any)?.updatedAt === "string" ? (m as any).updatedAt : "";
@@ -835,13 +798,58 @@ export default function QuoteListPage() {
         const nextTs = updatedAt ? Date.parse(updatedAt) : 0;
 
         if (!prev || (Number.isFinite(nextTs) && nextTs >= (Number.isFinite(prevTs) ? prevTs : 0))) {
-          matchByQuoteId.set(quoteId, { status, updatedAt, accepted });
+          matchByQuoteId.set(quoteId, { matchId, status, updatedAt, accepted });
         }
       }
 
+      const prePaymentMatchIds = Array.from(
+        new Set(
+          rawQuotes
+            .map((quote) => {
+              const match = matchByQuoteId.get(quote.quoteId);
+              if (!match || match.matchId <= 0) return 0;
+
+              const promoted = resolveEffectiveQuoteStatus({
+                quoteStatus: quote.status,
+                matchStatus: match.status,
+                matchAccepted: match.accepted,
+              });
+              return PRE_PAYMENT_STATUS_SET.has(promoted) ? match.matchId : 0;
+            })
+            .filter((matchId): matchId is number => matchId > 0)
+        )
+      );
+
+      const paymentStatusByMatchId = new Map<number, string>();
+      if (prePaymentMatchIds.length > 0) {
+        const snapshots = await Promise.all(
+          prePaymentMatchIds.map(async (matchId) => {
+            try {
+              const snapshot = await getMatchPaymentSnapshot(matchId);
+              return { matchId, status: snapshot.effectiveStatus };
+            } catch {
+              return { matchId, status: null };
+            }
+          })
+        );
+        for (const snapshot of snapshots) {
+          if (snapshot.status) {
+            paymentStatusByMatchId.set(snapshot.matchId, snapshot.status);
+          }
+        }
+      }
+
+      if (!isMountedRef.current) return;
+
       const effectiveQuotes = rawQuotes.map((q) => {
         const match = matchByQuoteId.get(q.quoteId);
-        const effectiveStatus = resolveEffectiveQuoteStatus(q.status, match?.status, match?.accepted);
+        const paymentStatus = match?.matchId ? paymentStatusByMatchId.get(match.matchId) : undefined;
+        const effectiveStatus = resolveEffectiveQuoteStatus({
+          quoteStatus: q.status,
+          matchStatus: match?.status,
+          matchAccepted: match?.accepted,
+          paymentStatus,
+        });
         return effectiveStatus && effectiveStatus !== q.status ? { ...q, status: effectiveStatus as QuoteStatusApi } : q;
       });
 
@@ -908,12 +916,12 @@ export default function QuoteListPage() {
   }, [activeTab]);
 
   const handlePressCard = useCallback(
-    (quoteId: number, quotePublicId: string | undefined, status: QuoteStatusApi) => {
+    (quoteId: number, quotePublicId: string | undefined) => {
       const safePublicId = String(quotePublicId ?? "").trim();
       const hasNumericQuoteId = Number.isInteger(quoteId) && quoteId > 0;
       if (!safePublicId && !hasNumericQuoteId) return;
       const routeIdentifier = safePublicId || String(quoteId);
-      router.push({ pathname: "/(shipper)/quotes/[id]", params: { id: routeIdentifier, status } });
+      router.push({ pathname: "/(shipper)/quotes/[id]", params: { id: routeIdentifier } });
     },
     [router]
   );

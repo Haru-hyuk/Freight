@@ -7,6 +7,7 @@ import {
   getCounterOffers as getShipperCounterOffersGenerated,
   rejectCounterOffer as rejectShipperCounterOfferGenerated,
 } from "@/shared/api/generated/shipper-counter-offer-controller/shipper-counter-offer-controller";
+import type { CounterOfferAcceptResponse } from "@/shared/api/generated/schemas/counterOfferAcceptResponse";
 import { isMockMode } from "@/shared/lib/config/env";
 import {
   acceptMockFlowShipperCounterOffer,
@@ -17,7 +18,6 @@ import {
   rejectMockFlowShipperCounterOffer,
   waitRandom,
 } from "@/shared/lib/mock-flow";
-import { BACKEND_STATUS, normalizeStatus } from "@/shared/lib/policy";
 
 type AnyObject = Record<string, unknown>;
 
@@ -38,6 +38,12 @@ export type CounterOfferItem = {
 export type DriverCounterOfferCreateInput = {
   proposedPrice?: number;
   message?: string;
+};
+
+export type CounterOfferAcceptResult = CounterOfferAcceptResponse & {
+  counterOfferStatus?: string;
+  quoteStatus?: string;
+  matchStatus?: string;
 };
 
 function asObject(value: unknown): AnyObject {
@@ -64,13 +70,27 @@ function toOptionalText(value: unknown): string | undefined {
   return text ? text : undefined;
 }
 
-function normalizeCounterOfferStatusValue(value: unknown): string {
-  const text = toOptionalText(value);
-  if (!text) return BACKEND_STATUS.UNKNOWN;
+function toOptionalBoolean(value: unknown): boolean | undefined {
+  if (typeof value !== "boolean") return undefined;
+  return value;
+}
 
-  const normalized = normalizeStatus(text);
-  if (normalized !== BACKEND_STATUS.UNKNOWN) return normalized;
-  return text;
+function toStatusToken(value: unknown): string {
+  return String(value ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "_")
+    .replace(/-/g, "_");
+}
+
+function normalizeCounterOfferStatusValue(value: unknown): string {
+  const token = toStatusToken(value);
+  if (!token) return "UNKNOWN";
+  if (token === "CANCELLED") return "CANCELED";
+  if (token === "WAITING") return "PENDING";
+  if (token === "APPROVED") return "ACCEPTED";
+  if (token === "DECLINED") return "REJECTED";
+  return token;
 }
 
 function unwrapPayload(value: unknown): unknown {
@@ -137,6 +157,44 @@ function toSingleCounterOffer(value: unknown): CounterOfferItem | null {
   return toCounterOfferItem(payload);
 }
 
+function toCounterOfferAcceptResult(value: unknown): CounterOfferAcceptResult | null {
+  const source = asObject(unwrapPayload(value));
+  const counterOfferId = toPositiveInt(source.counterOfferId);
+  const quoteId = toPositiveInt(source.quoteId);
+  const matchId = toPositiveInt(source.matchId);
+  const driverId = toPositiveInt(source.driverId);
+  const counterOfferStatus = normalizeCounterOfferStatusValue(source.counterOfferStatus);
+  const quoteStatus = toStatusToken(source.quoteStatus);
+  const matchStatus = toStatusToken(source.matchStatus);
+  const nextAction = toOptionalText(source.nextAction);
+  const paymentRequired = toOptionalBoolean(source.paymentRequired);
+
+  if (
+    counterOfferId <= 0 &&
+    quoteId <= 0 &&
+    matchId <= 0 &&
+    counterOfferStatus === "UNKNOWN" &&
+    !quoteStatus &&
+    !matchStatus &&
+    typeof paymentRequired === "undefined" &&
+    !nextAction
+  ) {
+    return null;
+  }
+
+  return {
+    ...(counterOfferId > 0 ? { counterOfferId } : {}),
+    ...(quoteId > 0 ? { quoteId } : {}),
+    ...(matchId > 0 ? { matchId } : {}),
+    ...(driverId > 0 ? { driverId } : {}),
+    ...(counterOfferStatus !== "UNKNOWN" ? { counterOfferStatus } : {}),
+    ...(quoteStatus ? { quoteStatus } : {}),
+    ...(matchStatus ? { matchStatus } : {}),
+    ...(typeof paymentRequired !== "undefined" ? { paymentRequired } : {}),
+    ...(nextAction ? { nextAction } : {}),
+  };
+}
+
 export async function listShipperCounterOffers(quoteId: number): Promise<CounterOfferItem[]> {
   const safeQuoteId = toPositiveInt(quoteId);
   if (safeQuoteId <= 0) return [];
@@ -150,17 +208,27 @@ export async function listShipperCounterOffers(quoteId: number): Promise<Counter
   return toCounterOfferList(data);
 }
 
-export async function acceptShipperCounterOffer(offerId: number): Promise<void> {
+export async function acceptShipperCounterOffer(offerId: number): Promise<CounterOfferAcceptResult | null> {
   const safeOfferId = toPositiveInt(offerId);
-  if (safeOfferId <= 0) return;
+  if (safeOfferId <= 0) return null;
 
   if (isMockMode()) {
     await waitRandom();
-    acceptMockFlowShipperCounterOffer(safeOfferId);
-    return;
+    const accepted = acceptMockFlowShipperCounterOffer(safeOfferId);
+    return {
+      ...(toPositiveInt(accepted?.counterOfferId) > 0 ? { counterOfferId: toPositiveInt(accepted?.counterOfferId) } : {}),
+      ...(toPositiveInt(accepted?.quoteId) > 0 ? { quoteId: toPositiveInt(accepted?.quoteId) } : {}),
+      ...(toPositiveInt(accepted?.driverId) > 0 ? { driverId: toPositiveInt(accepted?.driverId) } : {}),
+      counterOfferStatus: "ACCEPTED",
+      quoteStatus: "ASSIGNED",
+      matchStatus: "ASSIGNED",
+      paymentRequired: true,
+      nextAction: "PAY",
+    };
   }
 
-  await acceptShipperCounterOfferGenerated(safeOfferId);
+  const data = await acceptShipperCounterOfferGenerated(safeOfferId);
+  return toCounterOfferAcceptResult(data);
 }
 
 export async function rejectShipperCounterOffer(offerId: number): Promise<void> {
@@ -246,12 +314,18 @@ export async function listMyDriverCounterOffersByQuotes(quoteIds: number[]): Pro
 }
 
 export function isCounterOfferPending(status: string): boolean {
-  const normalized = normalizeCounterOfferStatusValue(status);
-  if (normalized === BACKEND_STATUS.UNKNOWN) return false;
-  if (/ACCEPT/i.test(normalized)) return false;
-  if (/REJECT/i.test(normalized)) return false;
-  if (/CANCEL/i.test(normalized)) return false;
-  return true;
+  const token = normalizeCounterOfferStatusValue(status);
+  if (!token || token === "UNKNOWN") return false;
+  if (token === "PENDING" || token === "OPEN" || token === "REQUESTED" || token === "NEGOTIATING") return true;
+  if (token.includes("ACCEPT")) return false;
+  if (token.includes("APPROV")) return false;
+  if (token.includes("REJECT")) return false;
+  if (token.includes("DECLIN")) return false;
+  if (token.includes("CANCEL")) return false;
+  if (token.includes("EXPIRE")) return false;
+  if (token.includes("FAIL")) return false;
+  if (token === "MATCHED") return false;
+  return false;
 }
 
 export function normalizeCounterOfferStatus(status: string): string {

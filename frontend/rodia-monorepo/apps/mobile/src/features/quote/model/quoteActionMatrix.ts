@@ -188,6 +188,10 @@ function buildQuoteActionPolicyByUiState(uiState: CustomerUiState): QuoteActionP
   };
 }
 
+export function getQuoteActionPolicyByUiState(uiState: CustomerUiState): QuoteActionPolicy {
+  return buildQuoteActionPolicyByUiState(uiState);
+}
+
 function toCustomerUiState(status: QuoteStatusApi | string): CustomerUiState {
   return getCustomerUiStateFromBackendStatus(String(status ?? ""));
 }
@@ -208,6 +212,7 @@ export const QUOTE_ACTION_MATRIX: Record<QuoteStatusApi, QuoteActionPolicy> = {
   TRANSIT: buildQuoteActionPolicyByUiState(CUSTOMER_UI_STATE.TRANSIT_IN_PROGRESS),
   DROPOFF: buildQuoteActionPolicyByUiState(CUSTOMER_UI_STATE.COMPLETED),
   CANCELED: buildQuoteActionPolicyByUiState(CUSTOMER_UI_STATE.CANCELED),
+  UNKNOWN: buildQuoteActionPolicyByUiState(CUSTOMER_UI_STATE.UNKNOWN),
 };
 
 export function getQuoteActionPolicy(status: QuoteStatusApi | string): QuoteActionPolicy {

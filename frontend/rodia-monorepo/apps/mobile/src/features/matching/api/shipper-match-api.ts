@@ -41,9 +41,12 @@ export type MatchResponseItem = {
   driverId?: number;
   accepted?: boolean;
   status?: string;
+  state?: string;
   matchGroupKey?: string;
   matchGroupType?: string;
   matchGroupOrder?: number;
+  locationSharingEnabled?: boolean;
+  locationSharingUpdatedAt?: string;
   acceptedAt?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -92,7 +95,7 @@ function toDriverMatchList(value: unknown): DriverMatchItem[] {
 
 function toShipperMatchList(value: unknown): ShipperMatchItem[] {
   return toDriverMatchList(value).map((item) => {
-    const cancelable = normalizeStatus(item.status ?? "") !== BACKEND_STATUS.CANCELLED;
+    const cancelable = normalizeStatus(item.status ?? item.state ?? "") !== BACKEND_STATUS.CANCELLED;
     return {
       ...item,
       cancelable,
@@ -171,7 +174,7 @@ export async function createShipperMatch(quoteId: number): Promise<ShipperMatchI
   if (!item) return null;
   return {
     ...item,
-    cancelable: normalizeStatus(item.status ?? "") !== BACKEND_STATUS.CANCELLED,
+    cancelable: normalizeStatus(item.status ?? item.state ?? "") !== BACKEND_STATUS.CANCELLED,
   };
 }
 

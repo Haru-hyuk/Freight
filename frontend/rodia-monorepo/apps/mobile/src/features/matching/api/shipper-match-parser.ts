@@ -15,9 +15,12 @@ export type ParsedMatchResponseItem = {
   driverId?: number;
   accepted?: boolean;
   status?: string;
+  state?: string;
   matchGroupKey?: string;
   matchGroupType?: string;
   matchGroupOrder?: number;
+  locationSharingEnabled?: boolean;
+  locationSharingUpdatedAt?: string;
   acceptedAt?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -72,9 +75,6 @@ function toNormalizedMatchStatus(value: unknown): string | undefined {
   if (!token) return undefined;
 
   if (token === "CANCELLED") return "CANCELED";
-  if (token === "MATCHED") return "ASSIGNED";
-  if (token === "IN_TRANSIT" || token === "DRIVING") return "TRANSIT";
-  if (token === "DELIVERED" || token === "COMPLETED") return "DROPOFF";
   return token;
 }
 
@@ -110,10 +110,13 @@ function parseMatchResponseItem(value: unknown): ParsedMatchResponseItem | null 
     quoteId: quoteId > 0 ? quoteId : undefined,
     driverId: driverId > 0 ? driverId : undefined,
     accepted: toOptionalBoolean(source.accepted ?? source.isAccepted ?? source.is_accepted),
-    status: toNormalizedMatchStatus(source.status ?? source.matchStatus ?? source.match_status),
+    status: toNormalizedMatchStatus(source.status ?? source.matchStatus ?? source.match_status ?? source.state ?? source.matchState ?? source.match_state),
+    state: toNormalizedMatchStatus(source.state ?? source.matchState ?? source.match_state),
     matchGroupKey: toOptionalText(source.matchGroupKey ?? source.match_group_key),
     matchGroupType: toOptionalText(source.matchGroupType ?? source.match_group_type),
     matchGroupOrder: toOptionalPositiveInt(source.matchGroupOrder ?? source.match_group_order),
+    locationSharingEnabled: toOptionalBoolean(source.locationSharingEnabled ?? source.location_sharing_enabled),
+    locationSharingUpdatedAt: toOptionalText(source.locationSharingUpdatedAt ?? source.location_sharing_updated_at),
     acceptedAt: toOptionalText(source.acceptedAt ?? source.accepted_at),
     createdAt: toOptionalText(source.createdAt ?? source.created_at),
     updatedAt: toOptionalText(source.updatedAt ?? source.updated_at),

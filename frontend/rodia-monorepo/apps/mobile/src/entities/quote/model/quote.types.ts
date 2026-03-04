@@ -1,17 +1,25 @@
-﻿// rodia-monorepo/apps/mobile/src/entities/quote/model/quote.types.ts
+import type {
+  QuoteCreateRequest as QuoteCreateRequestSchema,
+  QuoteCreateResponse as QuoteCreateResponseSchema,
+  QuoteDetailResponse as QuoteDetailResponseSchema,
+  QuoteListResponse as QuoteListResponseSchema,
+  QuoteUpdateRequest as QuoteUpdateRequestSchema,
+} from "@/shared/api/generated/schemas";
+
 export type QuoteId = number;
 
 export type QuoteStatusApi =
   | "OPEN"
   | "NEGOTIATING"
-  | "ASSIGNED" // 배차완료 (MATCHED)
-  | "PREPARING" // 운행준비
-  | "DRIVING" // 운행중
+  | "ASSIGNED"
+  | "PREPARING"
+  | "DRIVING"
   | "ACCEPTED"
   | "PICKUP"
   | "TRANSIT"
   | "DROPOFF"
   | "CANCELED"
+  | "UNKNOWN"
   | (string & {});
 
 export type QuoteChecklistItem = {
@@ -54,39 +62,18 @@ export type QuoteItem = {
   sortOrder: number;
 };
 
-export type QuoteCreateRequest = {
-  truckId: number;
-  originAddress: string;
-  destinationAddress: string;
-  originLat: number;
-  originLng: number;
-  destinationLat: number;
-  destinationLng: number;
-  distanceKm: number;
-  weightKg: number;
-  volumeCbm: number;
-  vehicleType: string;
-  vehicleBodyType: string;
-  cargoName: string;
-  cargoType: string;
-  cargoDesc: string;
-  desiredPrice: number;
-  allowCombine: boolean;
-  loadMethod: string;
-  unloadMethod: string;
-  checklistItems: QuoteChecklistItem[];
-  quoteItems?: QuoteItem[];
-  stops?: QuoteStop[];
-};
+export type QuoteCreateRequest = QuoteCreateRequestSchema;
+export type QuoteUpdateRequest = QuoteUpdateRequestSchema;
 
-export type QuoteCreateResponse = {
-  quoteId: number;
-  quotePublicId?: string;
-  originLat?: number;
-  originLng?: number;
-  destinationLat?: number;
-  destinationLng?: number;
-  stops?: QuoteStop[];
+export type QuoteCreateResponseApi = QuoteCreateResponseSchema;
+export type QuoteListResponseApi = QuoteListResponseSchema;
+export type QuoteDetailResponseApi = QuoteDetailResponseSchema;
+
+/**
+ * UI 합성 응답 타입
+ * - API 스키마에 없는 필드는 별도 UI 조합 필드로 분리한다.
+ */
+export type QuoteCreateResponse = QuoteCreateResponseApi & {
   basePrice?: number;
   distancePrice?: number;
   extraPrice?: number;
@@ -110,15 +97,12 @@ export type QuoteListItem = {
   createdAt: string;
 };
 
-export type QuoteDetailResponse = {
+export type QuoteDetailResponse = QuoteDetailResponseApi & {
   quoteId: number;
-  quotePublicId?: string;
   shipperId: number;
   truckId: number;
   originAddress: string;
-  originAddressDetail?: string;
   destinationAddress: string;
-  destinationAddressDetail?: string;
   originLat: number;
   originLng: number;
   destinationLat: number;
@@ -142,17 +126,19 @@ export type QuoteDetailResponse = {
   status: QuoteStatusApi;
   createdAt: string;
   updatedAt: string;
+  quoteItems: QuoteItem[];
+  checklistItems: QuoteChecklistItem[];
+  stops: QuoteStop[];
+  /**
+   * UI 합성 필드 (API 스키마 외)
+   */
+  originAddressDetail?: string;
+  destinationAddressDetail?: string;
   senderName?: string;
   senderPhone?: string;
   receiverName?: string;
   receiverPhone?: string;
-  quoteItems: QuoteItem[];
-  checklistItems: QuoteChecklistItem[];
-  stops: QuoteStop[];
 };
 
-export type QuoteUpdateRequest = QuoteCreateRequest;
-
 export type QuoteUpdateResponse = QuoteDetailResponse;
-
 export type QuoteDeleteResponse = void;

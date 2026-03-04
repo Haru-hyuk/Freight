@@ -35,6 +35,14 @@ import {
 const TERMINAL_QUOTE_STATUSES = new Set(["DROPOFF", "CANCELED"]);
 const MATCH_ACCEPTED_STATUSES = new Set<MockFlowMatchStatus>(["ASSIGNED", "PICKUP", "TRANSIT", "DROPOFF"]);
 
+function toStatusToken(value: unknown): string {
+  return String(value ?? "").trim().toUpperCase();
+}
+
+function isCanceledStatusToken(token: string): boolean {
+  return token === "CANCELED" || token === "CANCELLED";
+}
+
 function normalizeChecklistItems(input: QuoteChecklistItemRequest[] | undefined): QuoteChecklistItemResponse[] {
   if (!Array.isArray(input)) return [];
   return input.map((item, index) => ({
@@ -132,7 +140,7 @@ function findLatestActiveMatchByQuote(quoteId: number): MatchResponse | null {
   const state = getMockFlowState();
   const candidates = Array.from(state.matchesById.values()).filter((match) => {
     if (toPositiveInt(match.quoteId) !== safeQuoteId) return false;
-    return normalizeStatus(match.status) !== "CANCELED";
+    return !isCanceledStatusToken(toStatusToken(match.status));
   });
 
   if (candidates.length <= 0) return null;
@@ -164,8 +172,8 @@ function updateMatch(match: MatchResponse): void {
 }
 
 function getNextStatus<T extends string>(currentStatus: string | undefined, order: readonly T[]): T {
-  const normalized = normalizeStatus(currentStatus);
-  const currentIndex = order.findIndex((status) => status === normalized);
+  const token = String(currentStatus ?? "").trim().toUpperCase();
+  const currentIndex = order.findIndex((status) => String(status).trim().toUpperCase() === token);
   if (currentIndex < 0) return order[0] as T;
   if (currentIndex >= order.length - 1) return order[order.length - 1] as T;
   return order[currentIndex + 1] as T;
@@ -262,7 +270,8 @@ export function createMockFlowShipperMatch(payload: MatchCreateRequest): MatchRe
   updateMatch(next);
 
   const quote = state.quotesById.get(quoteId);
-  if (quote && normalizeStatus(quote.status) === "CANCELED") {
+  const quoteToken = toStatusToken(quote?.status);
+  if (quote && isCanceledStatusToken(quoteToken)) {
     updateQuoteStatus(quoteId, "OPEN", now);
   }
 
@@ -303,7 +312,8 @@ export function processMockFlowPayment(matchId: number): MatchResponse | null {
   if (!current) return null;
 
   const currentStatus = normalizeStatus(current.status);
-  if (currentStatus === "CANCELED") return null;
+  const currentToken = toStatusToken(current.status);
+  if (isCanceledStatusToken(currentToken)) return null;
 
   // 결제 완료 후 기사는 즉시 상차 단계(PICKUP)로 진입한다.
   // ASSIGNED 상태를 거치지 않아 "결제 대기" 화면에 머무는 혼란을 방지한다.
@@ -473,12 +483,14 @@ export function rejectMockFlowShipperCounterOffer(offerId: number): CounterOffer
 
   const quoteId = toPositiveInt(next.quoteId);
   const quote = state.quotesById.get(quoteId);
-  if (quote && normalizeStatus(quote.status) === "NEGOTIATING") {
+  const quoteToken = toStatusToken(quote?.status);
+  if (quote && quoteToken === "NEGOTIATING") {
     updateQuoteStatus(quoteId, "OPEN", now);
   }
 
   const activeMatch = findLatestMatchByQuote(quoteId);
-  if (activeMatch && normalizeStatus(activeMatch.status) === "NEGOTIATING" && activeMatch.accepted !== true) {
+  const matchToken = toStatusToken(activeMatch?.status);
+  if (activeMatch && matchToken === "NEGOTIATING" && activeMatch.accepted !== true) {
     updateMatch({
       ...activeMatch,
       status: "OPEN",

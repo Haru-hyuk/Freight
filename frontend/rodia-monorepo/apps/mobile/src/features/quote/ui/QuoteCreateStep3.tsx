@@ -28,6 +28,7 @@ import {
   VEHICLE_DATA,
   computeQuotePricing, // 💡 9단계 로직이 적용된 계산 함수
 } from "@/features/quote/model/quoteCreateDraft";
+import type { QuotePricePreview } from "@/features/quote/api/quote-api";
 import { initLayoutAnimationForAndroid } from "@/shared/lib/ui/layoutAnimationInit";
 // import { useSubmitQuoteMutation } from "@/features/quote/model/useSubmitQuoteMutation"; // TODO: 나중에 연결할 제출 훅
 
@@ -40,6 +41,10 @@ const OPTION_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
 
 type AiStatus = "loading" | "ok" | "warn" | "danger" | "idle";
 type LoadLevel = "safe" | "warn" | "danger";
+type QuoteCreateStep3Props = {
+  validationPreview?: QuotePricePreview | null;
+  isValidationLoading?: boolean;
+};
 
 function clamp(n: number, min: number, max: number) {
   if (!Number.isFinite(n)) return min;
@@ -58,6 +63,48 @@ function formatDigitsWithComma(input: string) {
 
 function formatKg(value: number) {
   return `${Math.max(0, Math.floor(safeNumber(value, 0))).toLocaleString("ko-KR")}kg`;
+}
+
+function toStatusToken(value: unknown): string {
+  return String(value ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "_")
+    .replace(/-/g, "_");
+}
+
+function formatOverallStatusLabel(value: unknown, isLoading: boolean): string {
+  if (isLoading) return "확인 중";
+  const token = toStatusToken(value);
+  if (token === "GOOD") return "양호";
+  if (token === "NORMAL") return "보통";
+  if (token === "RISKY") return "주의";
+  return token || "-";
+}
+
+function formatDispatchSpeedLabel(value: unknown, isLoading: boolean): string {
+  if (isLoading) return "확인 중";
+  const token = toStatusToken(value);
+  if (token === "FAST") return "빠름";
+  if (token === "NORMAL") return "보통";
+  if (token === "SLOW") return "느림";
+  return token || "-";
+}
+
+function formatPriceFitLabel(value: unknown): string {
+  const token = toStatusToken(value);
+  if (token === "LOW") return "낮음";
+  if (token === "NORMAL") return "적정";
+  if (token === "HIGH") return "높음";
+  return token || "-";
+}
+
+function formatLoadSafetyLabel(value: unknown): string {
+  const token = toStatusToken(value);
+  if (token === "SAFE") return "안전";
+  if (token === "WARN") return "주의";
+  if (token === "RISK") return "위험";
+  return token || "-";
 }
 
 const useStyles = createThemedStyles((theme: AppTheme) => {
@@ -145,6 +192,40 @@ const useStyles = createThemedStyles((theme: AppTheme) => {
     aiGaugeFill: { height: "100%", borderRadius: 999 },
     aiGaugeText: { color: c.textMuted, textAlign: "right" },
     aiPriceValue: { marginTop: 2 },
+
+    serverCard: {
+      ...flatCard,
+      padding: 18,
+      gap: 12,
+      backgroundColor: tint(c.brandPrimary, 0.04, c.bgSurface),
+      borderColor: tint(c.brandPrimary, 0.18, c.borderDefault),
+    },
+    serverTitleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+    serverMetaRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+    serverMetaChip: {
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: c.borderDefault,
+      backgroundColor: c.bgSurface,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+    },
+    serverMetaText: { fontSize: 11, fontWeight: "800", color: c.textSub },
+    serverSummary: { fontSize: 13, fontWeight: "700", color: c.textMain, lineHeight: 18 },
+    serverBlock: {
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: c.borderDefault,
+      backgroundColor: c.bgSurface,
+      padding: 10,
+      gap: 6,
+    },
+    serverBlockTitle: { fontSize: 12, fontWeight: "900", color: c.textSub },
+    serverBlockRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 10 },
+    serverBlockLabel: { fontSize: 12, fontWeight: "700", color: c.textMuted },
+    serverBlockValue: { fontSize: 12, fontWeight: "800", color: c.textMain, flexShrink: 1, textAlign: "right" },
+    serverList: { gap: 4 },
+    serverListItem: { fontSize: 12, fontWeight: "700", color: c.textSub, lineHeight: 17 },
     
     // Modal Styles
     modalOverlay: { flex: 1, backgroundColor: tint(c.textMain, 0.5, c.textMain), justifyContent: "flex-end" },
@@ -159,7 +240,7 @@ const useStyles = createThemedStyles((theme: AppTheme) => {
   });
 });
 
-export function QuoteCreateStep3() {
+export function QuoteCreateStep3({ validationPreview = null, isValidationLoading = false }: QuoteCreateStep3Props) {
   const theme = useAppTheme();
   const styles = useStyles();
   const { draft, patchDraft, toggleOption } = useQuoteCreateDraft();
@@ -240,6 +321,17 @@ export function QuoteCreateStep3() {
 
   const isFrozen = draft?.isFrozen === true;
   const isPool = draft?.isPool === true;
+  const validationComments = validationPreview?.comments ?? [];
+  const validationReasons = validationPreview?.reasons ?? [];
+  const validationActions = validationPreview?.actions ?? [];
+  const loadAnalysis = validationPreview?.loadAnalysis;
+  const priceAnalysis = validationPreview?.priceAnalysis;
+  const hasValidationContent =
+    isValidationLoading ||
+    Boolean(validationPreview) ||
+    validationComments.length > 0 ||
+    validationReasons.length > 0 ||
+    validationActions.length > 0;
 
   return (
     <View style={styles.container}>
@@ -409,6 +501,119 @@ export function QuoteCreateStep3() {
             </View>
           </View>
         </View>
+
+        {hasValidationContent ? (
+          <View style={styles.serverCard}>
+            <View style={styles.serverTitleRow}>
+              <AppText size={15} weight="900" color="textMain">서버 검증 결과</AppText>
+              <Ionicons name="cloud-done-outline" size={16} color={theme.colors.brandPrimary} />
+            </View>
+
+            <View style={styles.serverMetaRow}>
+              <View style={styles.serverMetaChip}>
+                <AppText style={styles.serverMetaText}>
+                  {`종합 ${formatOverallStatusLabel(validationPreview?.overallStatus, isValidationLoading)}`}
+                </AppText>
+              </View>
+              <View style={styles.serverMetaChip}>
+                <AppText style={styles.serverMetaText}>
+                  {`배차 속도 ${formatDispatchSpeedLabel(validationPreview?.dispatchSpeed, isValidationLoading)}`}
+                </AppText>
+              </View>
+              <View style={styles.serverMetaChip}>
+                <AppText style={styles.serverMetaText}>
+                  {`배지 ${validationPreview?.badge ?? (isValidationLoading ? "확인 중" : "-")}`}
+                </AppText>
+              </View>
+              <View style={styles.serverMetaChip}>
+                <AppText style={styles.serverMetaText}>
+                  {`신뢰도 ${Number.isFinite(validationPreview?.confidence ?? NaN) ? `${Math.round((validationPreview?.confidence ?? 0) * 100)}%` : "-"}`}
+                </AppText>
+              </View>
+            </View>
+
+            <AppText style={styles.serverSummary}>
+              {isValidationLoading ? "서버 검증 결과를 가져오는 중입니다." : validationPreview?.aiSummary ?? "AI 요약이 없습니다."}
+            </AppText>
+
+            <View style={styles.serverBlock}>
+              <AppText style={styles.serverBlockTitle}>가격 예측</AppText>
+              <View style={styles.serverBlockRow}>
+                <AppText style={styles.serverBlockLabel}>최소/최대</AppText>
+                <AppText style={styles.serverBlockValue}>
+                  {`${formatKrw(safeNumber(validationPreview?.estimatedMinPrice, 0))} ~ ${formatKrw(safeNumber(validationPreview?.estimatedMaxPrice, 0))}`}
+                </AppText>
+              </View>
+              <View style={styles.serverBlockRow}>
+                <AppText style={styles.serverBlockLabel}>가중 예측</AppText>
+                <AppText style={styles.serverBlockValue}>{formatKrw(safeNumber(validationPreview?.estimatedWeightedPrice, 0))}</AppText>
+              </View>
+              <View style={styles.serverBlockRow}>
+                <AppText style={styles.serverBlockLabel}>희망/제안</AppText>
+                <AppText style={styles.serverBlockValue}>
+                  {`${formatKrw(safeNumber(priceAnalysis?.userDesiredPrice, 0))} / ${formatKrw(safeNumber(priceAnalysis?.suggestedPrice, 0))}`}
+                </AppText>
+              </View>
+              <View style={styles.serverBlockRow}>
+                <AppText style={styles.serverBlockLabel}>분석 최소/최대</AppText>
+                <AppText style={styles.serverBlockValue}>
+                  {`${formatKrw(safeNumber(priceAnalysis?.minPrice, 0))} / ${formatKrw(safeNumber(priceAnalysis?.maxPrice, 0))}`}
+                </AppText>
+              </View>
+              <View style={styles.serverBlockRow}>
+                <AppText style={styles.serverBlockLabel}>분석 가중가</AppText>
+                <AppText style={styles.serverBlockValue}>{formatKrw(safeNumber(priceAnalysis?.weightedPrice, 0))}</AppText>
+              </View>
+              <View style={styles.serverBlockRow}>
+                <AppText style={styles.serverBlockLabel}>적합도</AppText>
+                <AppText style={styles.serverBlockValue}>
+                  {formatPriceFitLabel(priceAnalysis?.fit)} {priceAnalysis?.label ? `(${priceAnalysis.label})` : ""}
+                </AppText>
+              </View>
+            </View>
+
+            <View style={styles.serverBlock}>
+              <AppText style={styles.serverBlockTitle}>적재 분석</AppText>
+              <View style={styles.serverBlockRow}>
+                <AppText style={styles.serverBlockLabel}>현재/한도</AppText>
+                <AppText style={styles.serverBlockValue}>
+                  {`${safeNumber(loadAnalysis?.currentKg, 0)}kg / ${safeNumber(loadAnalysis?.capacityKg, 0)}kg`}
+                </AppText>
+              </View>
+              <View style={styles.serverBlockRow}>
+                <AppText style={styles.serverBlockLabel}>사용률</AppText>
+                <AppText style={styles.serverBlockValue}>{`${safeNumber(loadAnalysis?.usagePercent, 0)}%`}</AppText>
+              </View>
+              <View style={styles.serverBlockRow}>
+                <AppText style={styles.serverBlockLabel}>안전도</AppText>
+                <AppText style={styles.serverBlockValue}>
+                  {formatLoadSafetyLabel(loadAnalysis?.safety)} {loadAnalysis?.label ? `(${loadAnalysis.label})` : ""}
+                </AppText>
+              </View>
+            </View>
+
+            <View style={styles.serverBlock}>
+              <AppText style={styles.serverBlockTitle}>코멘트</AppText>
+              <View style={styles.serverList}>
+                {(validationComments.length > 0 ? validationComments : ["-"]).map((item, index) => (
+                  <AppText key={`comment-${index}`} style={styles.serverListItem}>{`• ${item}`}</AppText>
+                ))}
+              </View>
+            </View>
+
+            <View style={styles.serverBlock}>
+              <AppText style={styles.serverBlockTitle}>사유/권장 액션</AppText>
+              <View style={styles.serverList}>
+                {(validationReasons.length > 0 ? validationReasons : ["-"]).map((item, index) => (
+                  <AppText key={`reason-${index}`} style={styles.serverListItem}>{`• ${item}`}</AppText>
+                ))}
+                {(validationActions.length > 0 ? validationActions : ["-"]).map((item, index) => (
+                  <AppText key={`action-${index}`} style={styles.serverListItem}>{`→ ${item}`}</AppText>
+                ))}
+              </View>
+            </View>
+          </View>
+        ) : null}
 
       </ScrollView>
       
