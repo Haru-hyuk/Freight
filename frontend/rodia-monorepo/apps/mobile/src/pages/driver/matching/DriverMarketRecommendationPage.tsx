@@ -25,6 +25,7 @@ import {
 } from "@/features/matching/model/driverRunSyncEvents";
 import { addDriverAcceptedRunGroup } from "@/features/driver-orders/model/acceptedRunGroups";
 import { previewLoadPlan as previewLoadPlanGenerated } from "@/shared/api/generated/driver-optimization-controller/driver-optimization-controller";
+import { recommend as recommendRouteAssemblyGenerated } from "@/shared/api/generated/route-assembly-controller/route-assembly-controller";
 import type { LoadPlanResponse, Placement, TruckSpecReferenceResponse } from "@/shared/api/generated/schemas";
 import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
 import { formatKrw } from "@/shared/lib/format/display";
@@ -51,9 +52,20 @@ type ParsedRecommendationPlan = {
   loadPlan: LoadPlanResponse | null;
   truckSpec: TruckSpecReferenceResponse | null;
 };
+type NormalizedRouteStop = {
+  name?: string;
+  lat?: number;
+  lng?: number;
+  type?: string;
+};
+type NormalizedRouteSummary = {
+  summary: string;
+  stops: NormalizedRouteStop[];
+};
 
 const SCALE = 0.01;
 const PALETTE = ["#4F46E5", "#0EA5E9", "#22C55E", "#F59E0B", "#EF4444", "#EC4899"];
+const ROUTE_INFO_UNAVAILABLE = "경로 정보 제공 없음";
 
 // ── Spatial Awareness v2 상수 ─────────────────────────────────────────────────
 /** true: 도어가 z=0 쪽, 캡이 z=truckL 쪽 / false: 반전 */
@@ -233,6 +245,11 @@ function toPositiveInt(value: unknown): number {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
 }
 
+function toOptionalFiniteNumber(value: unknown): number | undefined {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 function toOneDecimalText(value: unknown): string {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return "0.0";
@@ -241,6 +258,41 @@ function toOneDecimalText(value: unknown): string {
 
 function asObject(value: unknown): AnyObject {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as AnyObject) : {};
+}
+
+function buildEmptyRouteSummary(): NormalizedRouteSummary {
+  return { summary: ROUTE_INFO_UNAVAILABLE, stops: [] };
+}
+
+function normalizeRouteSummary(payload: unknown): NormalizedRouteSummary {
+  const source = asObject(payload);
+  const recommendations = Array.isArray(source.recommendations) ? source.recommendations : [];
+  const firstRecommendation = asObject(recommendations[0]);
+  const visitOrder = Array.isArray(firstRecommendation.visitOrder) ? firstRecommendation.visitOrder : [];
+
+  const stops = visitOrder
+    .map((entry) => {
+      const visit = asObject(entry);
+      const location = asObject(visit.location);
+      const rawType = toOptionalText(visit.type)?.toUpperCase();
+      const type = rawType === "PICKUP" ? "pickup" : rawType === "DELIVERY" ? "dropoff" : undefined;
+      const lat = toOptionalFiniteNumber(location.latitude);
+      const lng = toOptionalFiniteNumber(location.longitude);
+      const name = toOptionalText(location.name ?? location.address ?? visit.address);
+
+      if (!name && lat === undefined && lng === undefined && !type) return null;
+      return { name, lat, lng, type } as NormalizedRouteStop;
+    })
+    .filter((entry): entry is NormalizedRouteStop => entry !== null);
+
+  if (stops.length >= 2) {
+    return {
+      summary: `출발 → 도착 · 경유 ${Math.max(0, stops.length - 2)}`,
+      stops,
+    };
+  }
+
+  return buildEmptyRouteSummary();
 }
 
 function normalizePlacementItem(value: unknown, fallbackOrder: number): Placement | null {
@@ -749,6 +801,28 @@ const useStyles = createThemedStyles((theme) => {
     xrayToggleText: {
       color: theme.colors.textMain,
     },
+    routeSummaryWrap: {
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: tint(cBorder, 0.72, cBorder),
+      backgroundColor: tint(cBorder, 0.24, theme.colors.bgSurfaceAlt),
+      paddingHorizontal: spacing * 2,
+      paddingVertical: spacing * 1.5,
+      gap: spacing,
+    },
+    routeStopRow: {
+      borderRadius: 8,
+      backgroundColor: theme.colors.bgSurface,
+      paddingHorizontal: spacing * 1.5,
+      paddingVertical: spacing,
+      gap: spacing * 0.5,
+    },
+    routeStopText: {
+      color: theme.colors.textMain,
+    },
+    routeStopCoord: {
+      color: theme.colors.textMuted,
+    },
     canvasWrap: {
       height: 300,
       borderRadius: 12,
@@ -880,6 +954,13 @@ export default function DriverMarketRecommendationPage({
         ? params.key[0]
         : params.key;
   const key = String(rawKey ?? "").trim();
+  // OpenAPI grounding (route pipeline):
+  // - /api/driver/optimization/load-plan-preview(PreviewLoadPlan200)는 이 페이지에서 placements/truckSpec만 사용한다.
+  // - selection.recommendation 타입(DriverRouteRecommendation)은 quoteIds/routeType/지표/pathLabel만 보존하고
+  //   visitOrder/stops/polyline 좌표 필드를 담지 않는다.
+  // - 좌표 기반 경유지는 /api/route-assembly/recommend(route-assembly-controller.recommend)의
+  //   RouteAssemblyResponse.recommendations[].visitOrder[].location{latitude,longitude}에 정의돼 있다.
+  // - 본 페이지는 quoteIds로 route-assembly recommend를 호출해 텍스트 경로 요약(stops/summary)을 구성한다.
   const selection = useMemo(() => getDriverMarketRecommendationSelection(key), [key]);
 
   const [isLoading, setIsLoading] = useState(true);
@@ -893,6 +974,7 @@ export default function DriverMarketRecommendationPage({
   const [offerErrorMessage, setOfferErrorMessage] = useState<string | null>(null);
   const [selectedStopOrder, setSelectedStopOrder] = useState<number | null>(null);
   const [isXray, setIsXray] = useState(true);
+  const [routeSummary, setRouteSummary] = useState<NormalizedRouteSummary>(buildEmptyRouteSummary);
 
   const orderedOrders = useMemo(() => {
     if (!selection) return [] as DriverOrderCard[];
@@ -931,6 +1013,7 @@ export default function DriverMarketRecommendationPage({
     const load = async () => {
       if (!selection) {
         setErrorMessage("추천 상세 정보를 찾지 못했습니다. 오더 마켓에서 다시 선택해 주세요.");
+        setRouteSummary(buildEmptyRouteSummary());
         setIsLoading(false);
         return;
       }
@@ -941,12 +1024,14 @@ export default function DriverMarketRecommendationPage({
 
       if (safeQuoteIds.length <= 0) {
         setErrorMessage("추천 항목에 유효한 견적 ID가 없습니다.");
+        setRouteSummary(buildEmptyRouteSummary());
         setIsLoading(false);
         return;
       }
 
       setIsLoading(true);
       setErrorMessage(null);
+      setRouteSummary(buildEmptyRouteSummary());
       try {
         const quoteEntries = await Promise.all(
           safeQuoteIds.map(async (quoteId) => {
@@ -966,6 +1051,16 @@ export default function DriverMarketRecommendationPage({
         const quoteList = safeQuoteIds
           .map((quoteId) => quoteMap[quoteId])
           .filter((quote): quote is QuoteDetailResponse => Boolean(quote));
+        let resolvedRouteSummary = buildEmptyRouteSummary();
+        try {
+          const routeAssemblyPayload = await recommendRouteAssemblyGenerated({
+            selectedQuoteIds: safeQuoteIds,
+          });
+          if (cancelled) return;
+          resolvedRouteSummary = normalizeRouteSummary(routeAssemblyPayload);
+        } catch {
+          resolvedRouteSummary = buildEmptyRouteSummary();
+        }
         const previewTruckId = toPositiveInt(quoteList[0]?.truckId);
         let resolvedSpec: TruckSpecReferenceResponse | null = null;
         let resolvedPlacements: Placement[] = [];
@@ -1007,9 +1102,11 @@ export default function DriverMarketRecommendationPage({
         if (cancelled) return;
         setTruckSpec(resolvedSpec);
         setPlacements(resolvedPlacements);
+        setRouteSummary(resolvedRouteSummary);
       } catch {
         if (cancelled) return;
         setErrorMessage("추천 상세를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
+        setRouteSummary(buildEmptyRouteSummary());
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -1336,6 +1433,32 @@ export default function DriverMarketRecommendationPage({
             <AppText variant="caption" color="textMuted">
               적재함 {dims.widthCm} × {dims.lengthCm} × {dims.heightCm} cm 기준 · {isGroupedRecommendation ? "다건 순서 적재" : "단건 적재"}
             </AppText>
+            <View style={styles.routeSummaryWrap}>
+              <AppText variant="caption" weight="800" color="textMain">
+                {routeSummary.summary}
+              </AppText>
+              {routeSummary.stops.map((stop, index) => {
+                const hasLat = typeof stop.lat === "number" && Number.isFinite(stop.lat);
+                const hasLng = typeof stop.lng === "number" && Number.isFinite(stop.lng);
+                const typeLabel = stop.type ? `[${stop.type}] ` : "";
+                const title = stop.name || `지점 ${index + 1}`;
+                const lat = hasLat ? Number(stop.lat) : 0;
+                const lng = hasLng ? Number(stop.lng) : 0;
+                const coordText = hasLat && hasLng ? `${lat.toFixed(5)}, ${lng.toFixed(5)}` : "";
+                return (
+                  <View key={`route-stop-${index + 1}`} style={styles.routeStopRow}>
+                    <AppText variant="caption" weight="700" style={styles.routeStopText}>
+                      {`${index + 1}. ${typeLabel}${title}`}
+                    </AppText>
+                    {hasLat && hasLng ? (
+                      <AppText variant="caption" style={styles.routeStopCoord}>
+                        {coordText}
+                      </AppText>
+                    ) : null}
+                  </View>
+                );
+              })}
+            </View>
             <View style={styles.canvasWrap}>
               {(() => {
                 const sW = dims.widthCm * SCALE;
