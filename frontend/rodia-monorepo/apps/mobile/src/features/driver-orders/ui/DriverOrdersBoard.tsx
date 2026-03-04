@@ -23,11 +23,25 @@ import {
   matchesDriverOrderFilter,
   postCounterOffer,
   probeDriverOrderDetailAccess,
+  recommendDriverOrderRoutes,
   type DriverOrderCard,
   type DriverOrderFilterKey,
+  type DriverRouteRecommendation,
+  type DriverRouteRecommendationAnalysis,
+  type DriverRouteRecommendationMode,
   type DriverOrdersOverview,
   type DriverOrdersTabKey,
 } from "@/features/matching/api";
+import {
+  getDriverAcceptedRunGroups,
+  pruneDriverAcceptedRunGroups,
+} from "@/features/driver-orders/model/acceptedRunGroups";
+import { setDriverMarketRecommendationSelection } from "@/features/driver-orders/model/marketRecommendationSelection";
+import { DriverOrderUnifiedCard } from "@/features/driver-orders/ui/cards/DriverOrderUnifiedCard";
+import {
+  DriverRunGroupCard,
+  type DriverRunGroupCardModel,
+} from "@/features/driver-orders/ui/cards/DriverRunGroupCard";
 import CounterOfferModal, { type CounterOfferSubmitPayload } from "@/features/matching/ui/CounterOfferModal";
 import { formatKrw } from "@/shared/lib/format/display";
 import {
@@ -35,6 +49,7 @@ import {
   DRIVER_CTA_ID,
   DRIVER_UI_STATE,
   type BadgeTone,
+  type DriverUiState,
 } from "@/shared/lib/policy";
 import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
@@ -47,10 +62,7 @@ import { AppText } from "@/shared/ui/kit/AppText";
 import { PageScaffold } from "@/widgets/layout/PageScaffold";
 
 type DriverOrdersBoardProps = {
-  initialTab?: DriverOrdersTabKey;
   assignedOnly?: boolean;
-  activeTab?: DriverOrdersTabKey;
-  onChangeTab?: (nextTab: DriverOrdersTabKey) => void;
 };
 
 type ToastState = {
@@ -61,6 +73,51 @@ type ToastState = {
 const NETWORK_ERROR_TEXT = "네트워크 요청이 실패했습니다. 잠시 후 다시 시도해 주세요.";
 const TOAST_DURATION_MS = 2000;
 const FOCUS_REFETCH_THROTTLE_MS = 1500;
+const ROUTE_RECOMMEND_STEPS = [2, 3, 4, 5] as const;
+const ROUTE_RECOMMEND_STEP_HINT: Record<(typeof ROUTE_RECOMMEND_STEPS)[number], string> = {
+  2: "빠른 운행",
+  3: "균형 추천",
+  4: "수익 우선",
+  5: "최대 탐색",
+};
+const RUN_STATUS_FILTER_ORDER = ["ALL", "ASSIGNED", "PICKUP", "TRANSIT", "COMPLETED"] as const;
+
+type RunStatusFilterKey = (typeof RUN_STATUS_FILTER_ORDER)[number];
+type DriverOrdersListItem =
+  | {
+      kind: "group";
+      key: string;
+      group: DriverRunGroupCardModel;
+    }
+  | {
+      kind: "order";
+      key: string;
+      order: DriverOrderCard;
+    };
+
+const RUN_STATUS_FILTER_LABELS: Record<RunStatusFilterKey, string> = {
+  ALL: "전체",
+  ASSIGNED: "배차완료",
+  PICKUP: "상차중",
+  TRANSIT: "운송중",
+  COMPLETED: "완료",
+};
+
+function formatOneDecimal(value: unknown): string {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return "0.0";
+  return num.toLocaleString("ko-KR", {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  });
+}
+
+function resolveRunStatusFilter(item: DriverOrderCard): RunStatusFilterKey {
+  if (item.uiState === DRIVER_UI_STATE.PICKUP_IN_PROGRESS) return "PICKUP";
+  if (item.uiState === DRIVER_UI_STATE.TRANSIT_IN_PROGRESS) return "TRANSIT";
+  if (item.uiState === DRIVER_UI_STATE.COMPLETED) return "COMPLETED";
+  return "ASSIGNED";
+}
 
 const EMPTY_OVERVIEW: DriverOrdersOverview = {
   marketOrders: [],
@@ -359,6 +416,203 @@ const useStyles = createThemedStyles((theme) => {
       textAlign: "right",
     },
 
+    marketRecommendWrap: {
+      gap: spacing * 3,
+      paddingHorizontal: spacing * 4,
+      paddingTop: spacing * 2,
+      paddingBottom: spacing * 2,
+    },
+    marketModeTabs: {
+      flexDirection: "row",
+      backgroundColor: tint(cLine, 0.3, cSurfaceAlt),
+      borderRadius: radiusControl,
+      padding: spacing,
+      gap: spacing,
+    },
+    marketModeBtn: {
+      flex: 1,
+      minHeight: safeNumber(buttonSm?.minHeight, 36),
+      borderRadius: radiusControl,
+      alignItems: "center",
+      justifyContent: "center",
+      flexDirection: "row",
+      gap: spacing * 1.5,
+    },
+    marketModeBtnActive: {
+      backgroundColor: cSurface,
+      ...(raisedSoft as any),
+    },
+    marketModeLabel: {
+      color: cTextMuted,
+      fontSize: safeNumber(detailScale?.size, 14),
+      fontWeight: "800",
+    },
+    marketModeLabelActive: {
+      color: cTextMain,
+    },
+    marketScaleCard: {
+      borderRadius: radiusControl,
+      borderWidth: 1,
+      borderColor: tint(cPrimary, 0.4, cLine),
+      backgroundColor: tint(cPrimary, 0.08, cSurface),
+      paddingHorizontal: spacing * 3,
+      paddingVertical: spacing * 2.5,
+      gap: spacing * 2,
+    },
+    marketScaleHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: spacing * 2,
+    },
+    marketScaleCaption: {
+      color: cTextSub,
+      fontSize: safeNumber(captionScale?.size, 12),
+      lineHeight: safeNumber(captionScale?.lineHeight, 16),
+      fontWeight: "700",
+    },
+    marketScaleStepRow: {
+      flexDirection: "row",
+      gap: spacing * 1.5,
+    },
+    marketScaleStep: {
+      flex: 1,
+      minHeight: safeNumber(buttonSm?.minHeight, 36),
+      borderRadius: radiusPill,
+      borderWidth: 1,
+      borderColor: tint(cLine, 0.8, cLine),
+      backgroundColor: cSurface,
+      alignItems: "center",
+      justifyContent: "center",
+      gap: spacing * 0.5,
+    },
+    marketScaleStepActive: {
+      borderColor: cPrimary,
+      backgroundColor: cPrimary,
+    },
+    marketScaleStepText: {
+      color: cTextSub,
+      fontSize: safeNumber(captionScale?.size, 12),
+      fontWeight: "800",
+    },
+    marketScaleStepTextActive: {
+      color: cOnBrand,
+    },
+    marketScaleStepHint: {
+      color: cTextMuted,
+      fontSize: safeNumber(captionScale?.size, 12),
+      fontWeight: "700",
+    },
+    marketScaleStepHintActive: {
+      color: tint(cOnBrand, 0.2, cSurface),
+    },
+    marketRecommendHeaderRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: spacing * 2,
+      paddingHorizontal: spacing,
+    },
+    marketRouteList: {
+      gap: spacing * 2,
+    },
+    marketLoadingText: {
+      color: cTextMuted,
+      fontSize: safeNumber(captionScale?.size, 12),
+      fontWeight: "700",
+    },
+    marketRouteCard: {
+      borderRadius: radiusControl,
+      borderWidth: 1,
+      borderColor: tint(cLine, 0.8, cLine),
+      backgroundColor: cSurface,
+      paddingHorizontal: spacing * 3,
+      paddingVertical: spacing * 2.5,
+      gap: spacing * 1.5,
+    },
+    marketRouteCardSelected: {
+      borderColor: cPrimary,
+      backgroundColor: tint(cPrimary, 0.08, cSurface),
+    },
+    marketRouteTop: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: spacing * 2,
+    },
+    marketRouteBadge: {
+      borderRadius: radiusPill,
+      paddingHorizontal: spacing * 2,
+      paddingVertical: spacing,
+      backgroundColor: tint(cPrimary, 0.2, cSurface),
+    },
+    marketRouteStatRow: {
+      flexDirection: "row",
+      gap: spacing * 1.5,
+    },
+    marketRouteStatChip: {
+      flex: 1,
+      borderRadius: radiusControl,
+      backgroundColor: tint(cLine, 0.3, cSurfaceAlt),
+      paddingHorizontal: spacing * 1.5,
+      paddingVertical: spacing * 1.2,
+      alignItems: "center",
+      gap: spacing * 0.5,
+    },
+    marketRouteHintCard: {
+      borderRadius: radiusControl,
+      backgroundColor: tint(cInfo, 0.1, cSurface),
+      borderWidth: 1,
+      borderColor: tint(cInfo, 0.3, cLine),
+      paddingHorizontal: spacing * 3,
+      paddingVertical: spacing * 2,
+    },
+    runStatusTabs: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: spacing * 1.5,
+      paddingHorizontal: spacing * 4,
+      paddingVertical: spacing * 2,
+    },
+    runStatusBtn: {
+      minHeight: safeNumber(buttonSm?.minHeight, 36),
+      paddingHorizontal: safeNumber(buttonSm?.paddingX, spacing * 4),
+      borderRadius: radiusPill,
+      borderWidth: 1,
+      borderColor: tint(cLine, 0.8, cLine),
+      backgroundColor: cSurface,
+      alignItems: "center",
+      justifyContent: "center",
+      flexDirection: "row",
+      gap: spacing,
+      ...(raisedSoft as any),
+    },
+    runStatusBtnActive: {
+      borderColor: cPrimary,
+      backgroundColor: tint(cPrimary, 0.08, cSurface),
+    },
+    runStatusBtnLabel: {
+      color: cTextSub,
+      fontSize: safeNumber(captionScale?.size, 12),
+      lineHeight: safeNumber(captionScale?.lineHeight, 16),
+      fontWeight: "800",
+    },
+    runStatusBtnLabelActive: {
+      color: cPrimary,
+    },
+    runStatusBtnCount: {
+      minWidth: spacing * 5,
+      paddingHorizontal: spacing,
+      paddingVertical: spacing * 0.3,
+      borderRadius: 999,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: tint(cTextMuted, 0.2, cSurfaceAlt),
+    },
+    runStatusBtnCountActive: {
+      backgroundColor: tint(cPrimary, 0.2, cSurface),
+    },
+
     filterScroll: {
       flexDirection: "row",
       paddingHorizontal: spacing * 4,
@@ -652,10 +906,7 @@ function DriverOrderCardView({
 }
 
 export function DriverOrdersBoard({
-  initialTab,
   assignedOnly,
-  activeTab: controlledActiveTab,
-  onChangeTab,
 }: DriverOrdersBoardProps) {
   const router = useRouter();
   const theme = useAppTheme();
@@ -663,7 +914,6 @@ export function DriverOrdersBoard({
   const styles = useStyles();
   const { setActiveOrder } = useActiveOrder();
 
-  const [activeTab, setActiveTab] = useState<DriverOrdersTabKey>(assignedOnly ? "my" : initialTab ?? "market");
   const [overview, setOverview] = useState<DriverOrdersOverview>(EMPTY_OVERVIEW);
   const [activeFilter, setActiveFilter] = useState<DriverOrderFilterKey>("ALL");
   const [isLoading, setIsLoading] = useState(true);
@@ -675,8 +925,14 @@ export function DriverOrdersBoard({
   const [offerTargetCard, setOfferTargetCard] = useState<DriverOrderCard | null>(null);
   const [isSubmittingOffer, setIsSubmittingOffer] = useState(false);
   const [offerErrorMessage, setOfferErrorMessage] = useState<string | null>(null);
+  const [recommendMode, setRecommendMode] = useState<DriverRouteRecommendationMode>("SINGLE");
+  const [maxQuotesPerRoute, setMaxQuotesPerRoute] = useState<number>(5);
+  const [isRecommending, setIsRecommending] = useState(false);
+  const [recommendAnalysis, setRecommendAnalysis] = useState<DriverRouteRecommendationAnalysis | null>(null);
+  const [selectedRecommendKey, setSelectedRecommendKey] = useState<string | null>(null);
+  const [runStatusFilter, setRunStatusFilter] = useState<RunStatusFilterKey>("ALL");
 
-  const resolvedActiveTab = controlledActiveTab ?? activeTab;
+  const resolvedActiveTab: DriverOrdersTabKey = assignedOnly ? "my" : "market";
   const refreshIconColor = safeString(
     theme.colors?.textSub,
     safeString(theme.colors?.textMain, safeString(theme.colors?.brandPrimary, ""))
@@ -686,6 +942,7 @@ export function DriverOrdersBoard({
   const cardNavLockRef = useRef(false);
   const lastCardNavIdRef = useRef(0);
   const isFetchInFlightRef = useRef(false);
+  const isRecommendingRef = useRef(false);
   const focusRefetchMetaRef = useRef({ hasFocusedOnce: false, lastRefetchAt: 0 });
   const themeColors = theme.colors as Record<string, string>;
 
@@ -718,6 +975,8 @@ export function DriverOrdersBoard({
       const nextOverview = await loadDriverOrdersOverview();
       setOverview(nextOverview);
       setActiveFilter((prev) => (nextOverview.availableFilters.includes(prev) ? prev : "ALL"));
+      setRecommendAnalysis(null);
+      setSelectedRecommendKey(null);
       setErrorMessage(null);
     } catch {
       setOverview(EMPTY_OVERVIEW);
@@ -735,8 +994,8 @@ export function DriverOrdersBoard({
 
   useEffect(() => {
     if (!assignedOnly) return;
-    setActiveTab("my");
     setActiveFilter("ALL");
+    setRunStatusFilter("ALL");
   }, [assignedOnly]);
 
   useFocusEffect(
@@ -758,7 +1017,7 @@ export function DriverOrdersBoard({
     }, [loadOrders])
   );
 
-  const filteredMarketOrders = useMemo(
+  const baseMarketOrders = useMemo(
     () =>
       overview.marketOrders.filter(
         (item) => item.uiState === DRIVER_UI_STATE.READY_TO_ACCEPT && matchesDriverOrderFilter(item, activeFilter)
@@ -766,41 +1025,143 @@ export function DriverOrdersBoard({
     [activeFilter, overview.marketOrders]
   );
 
-  const filteredMyOrders = useMemo(
-    () =>
-      [...overview.myOrders, ...overview.runOrders].filter(
-        (item) => item.uiState === DRIVER_UI_STATE.ASSIGNED || item.uiState === DRIVER_UI_STATE.NEGOTIATING
-      ),
-    [overview.myOrders, overview.runOrders]
-  );
+  const selectedRecommendation = useMemo(() => {
+    if (!recommendAnalysis || recommendAnalysis.routes.length <= 0) return null;
+    if (!selectedRecommendKey) return recommendAnalysis.routes[0] ?? null;
+    return recommendAnalysis.routes.find((route) => route.key === selectedRecommendKey) ?? null;
+  }, [recommendAnalysis, selectedRecommendKey]);
 
-  const filteredRunOrders = useMemo(
-    () =>
-      overview.runOrders.filter(
-        (item) =>
-          item.uiState === DRIVER_UI_STATE.PICKUP_IN_PROGRESS ||
-          item.uiState === DRIVER_UI_STATE.TRANSIT_IN_PROGRESS ||
-          item.uiState === DRIVER_UI_STATE.COMPLETED
-      ),
-    [overview.runOrders]
-  );
+  const runOrderPool = useMemo(() => {
+    const runStates = new Set<DriverUiState>([
+      DRIVER_UI_STATE.ASSIGNED,
+      DRIVER_UI_STATE.NEGOTIATING,
+      DRIVER_UI_STATE.PICKUP_IN_PROGRESS,
+      DRIVER_UI_STATE.TRANSIT_IN_PROGRESS,
+      DRIVER_UI_STATE.COMPLETED,
+    ]);
 
-  const visibleOrders = useMemo(() => {
-    if (resolvedActiveTab === "market") return filteredMarketOrders;
-    if (assignedOnly) return filteredRunOrders;
-    return filteredMyOrders;
-  }, [assignedOnly, filteredMarketOrders, filteredMyOrders, filteredRunOrders, resolvedActiveTab]);
+    const byMatchId = new Map<number, DriverOrderCard>();
+    [...overview.myOrders, ...overview.runOrders].forEach((item) => {
+      if (!runStates.has(item.uiState)) return;
+      const safeMatchId = Number(item.matchId);
+      if (Number.isInteger(safeMatchId) && safeMatchId > 0) {
+        if (!byMatchId.has(safeMatchId)) byMatchId.set(safeMatchId, item);
+        return;
+      }
+      byMatchId.set(-(byMatchId.size + 1), item);
+    });
 
-  const showFilters = resolvedActiveTab === "market" && overview.availableFilters.length > 1;
+    return Array.from(byMatchId.values());
+  }, [overview.myOrders, overview.runOrders]);
 
-  const changeTab = useCallback(
-    (nextTab: DriverOrdersTabKey) => {
-      if (!controlledActiveTab) setActiveTab(nextTab);
-      onChangeTab?.(nextTab);
-      if (nextTab !== "market") setActiveFilter("ALL");
-    },
-    [controlledActiveTab, onChangeTab]
-  );
+  const runStatusOptions = useMemo(() => {
+    const counts = new Map<RunStatusFilterKey, number>();
+    RUN_STATUS_FILTER_ORDER.forEach((key) => counts.set(key, 0));
+    runOrderPool.forEach((item) => {
+      const filterKey = resolveRunStatusFilter(item);
+      counts.set(filterKey, (counts.get(filterKey) ?? 0) + 1);
+      counts.set("ALL", (counts.get("ALL") ?? 0) + 1);
+    });
+    return RUN_STATUS_FILTER_ORDER.filter((key) => key === "ALL" || (counts.get(key) ?? 0) > 0).map((key) => ({
+      key,
+      label: RUN_STATUS_FILTER_LABELS[key],
+      count: counts.get(key) ?? 0,
+    }));
+  }, [runOrderPool]);
+
+  useEffect(() => {
+    if (!assignedOnly) return;
+    const availableKeys = new Set(runStatusOptions.map((entry) => entry.key));
+    if (!availableKeys.has(runStatusFilter)) {
+      setRunStatusFilter("ALL");
+    }
+  }, [assignedOnly, runStatusFilter, runStatusOptions]);
+
+  const filteredRunOrders = useMemo(() => {
+    if (runStatusFilter === "ALL") return runOrderPool;
+    return runOrderPool.filter((item) => resolveRunStatusFilter(item) === runStatusFilter);
+  }, [runOrderPool, runStatusFilter]);
+
+  useEffect(() => {
+    if (!assignedOnly) return;
+    pruneDriverAcceptedRunGroups(runOrderPool.map((item) => item.matchId));
+  }, [assignedOnly, runOrderPool]);
+
+  const runListItems = useMemo(() => {
+    const groupSeeds = getDriverAcceptedRunGroups();
+    if (groupSeeds.length <= 0) {
+      return filteredRunOrders.map((order) => ({
+        kind: "order" as const,
+        key: `order-${order.cardKey}`,
+        order,
+      }));
+    }
+
+    const byMatchId = new Map<number, DriverOrderCard>();
+    filteredRunOrders.forEach((order) => {
+      const safeMatchId = Number(order.matchId);
+      if (!Number.isInteger(safeMatchId) || safeMatchId <= 0) return;
+      byMatchId.set(safeMatchId, order);
+    });
+
+    const consumedMatchIds = new Set<number>();
+    const grouped: DriverOrdersListItem[] = [];
+
+    groupSeeds.forEach((entry) => {
+      const orders = entry.matchIds
+        .map((matchId) => byMatchId.get(matchId))
+        .filter((order): order is DriverOrderCard => Boolean(order));
+      if (orders.length <= 1) return;
+
+      orders.forEach((order) => {
+        const safeMatchId = Number(order.matchId);
+        if (Number.isInteger(safeMatchId) && safeMatchId > 0) {
+          consumedMatchIds.add(safeMatchId);
+        }
+      });
+
+      const fallbackRevenue = orders.reduce((sum, order) => sum + Number(order.priceValue ?? 0), 0);
+      const fallbackDistance = orders
+        .map((order) => Number(String(order.routeDistanceText ?? "").replace(/[^0-9.]/g, "")))
+        .filter((distance) => Number.isFinite(distance) && distance > 0)
+        .reduce((sum, distance) => sum + distance, 0);
+
+      grouped.push({
+        kind: "group",
+        key: `group-${entry.key}`,
+        group: {
+          key: entry.key,
+          mode: entry.mode,
+          pathLabel: entry.pathLabel,
+          totalRevenue: entry.totalRevenue > 0 ? entry.totalRevenue : fallbackRevenue,
+          estimatedTotalDistanceKm:
+            entry.estimatedTotalDistanceKm > 0 ? entry.estimatedTotalDistanceKm : fallbackDistance,
+          acceptedAt: entry.acceptedAt,
+          orders,
+        },
+      });
+    });
+
+    const singles = filteredRunOrders
+      .filter((order) => {
+        const safeMatchId = Number(order.matchId);
+        return !Number.isInteger(safeMatchId) || !consumedMatchIds.has(safeMatchId);
+      })
+      .map((order) => ({
+        kind: "order" as const,
+        key: `order-${order.cardKey}`,
+        order,
+      }));
+
+    return [...grouped, ...singles];
+  }, [filteredRunOrders]);
+
+  const visibleItems = useMemo(() => {
+    if (assignedOnly) return runListItems;
+    return [] as DriverOrdersListItem[];
+  }, [assignedOnly, runListItems]);
+
+  const showFilters = !assignedOnly && overview.availableFilters.length > 1;
 
   const handlePressCard = useCallback(
     async (card: DriverOrderCard) => {
@@ -889,7 +1250,7 @@ export function DriverOrdersBoard({
         }
 
         await loadOrders("refresh");
-        changeTab("my");
+        router.replace("/(driver)/run");
         showToast("오더를 수락했습니다.");
       } catch {
         showToast(NETWORK_ERROR_TEXT);
@@ -897,7 +1258,7 @@ export function DriverOrdersBoard({
         setAcceptingMatchId(null);
       }
     },
-    [acceptingMatchId, changeTab, loadOrders, showToast]
+    [acceptingMatchId, loadOrders, router, showToast]
   );
 
   const handleOpenCounterOffer = useCallback((card: DriverOrderCard) => {
@@ -952,58 +1313,362 @@ export function DriverOrdersBoard({
     [isSubmittingOffer, loadOrders, offerTargetCard, showToast]
   );
 
+  const handleAnalyzeRecommendations = useCallback(async () => {
+    if (isRecommendingRef.current) return;
+    if (baseMarketOrders.length <= 0) {
+      setRecommendAnalysis(null);
+      setSelectedRecommendKey(null);
+      return;
+    }
+
+    isRecommendingRef.current = true;
+    setIsRecommending(true);
+    try {
+      const analysis = await recommendDriverOrderRoutes({
+        orders: baseMarketOrders,
+        mode: recommendMode,
+        maxQuotesPerRoute,
+      });
+      setRecommendAnalysis(analysis);
+      const firstKey = analysis.routes[0]?.key ?? null;
+      setSelectedRecommendKey(firstKey);
+    } catch {
+      setRecommendAnalysis(null);
+      setSelectedRecommendKey(null);
+    } finally {
+      isRecommendingRef.current = false;
+      setIsRecommending(false);
+    }
+  }, [baseMarketOrders, maxQuotesPerRoute, recommendMode]);
+
+  useEffect(() => {
+    if (assignedOnly) return;
+    if (resolvedActiveTab !== "market") return;
+    void handleAnalyzeRecommendations();
+  }, [assignedOnly, handleAnalyzeRecommendations, resolvedActiveTab]);
+
+  const handleOpenRecommendationDetail = useCallback(
+    (route: DriverRouteRecommendation) => {
+      const safeQuoteIds = Array.from(
+        new Set(
+          route.quoteIds
+            .map((quoteId) => Number(quoteId))
+            .filter((quoteId) => Number.isInteger(quoteId) && quoteId > 0)
+        )
+      );
+      if (safeQuoteIds.length <= 0) {
+        showToast("추천 노선에 유효한 견적 ID가 없습니다.");
+        return;
+      }
+
+      const marketOrderByQuoteId = new Map<number, DriverOrderCard>();
+      baseMarketOrders.forEach((order) => {
+        const quoteId = Number(order.quoteId);
+        if (!Number.isInteger(quoteId) || quoteId <= 0) return;
+        if (marketOrderByQuoteId.has(quoteId)) return;
+        marketOrderByQuoteId.set(quoteId, order);
+      });
+
+      const selectedOrders = safeQuoteIds
+        .map((quoteId) => marketOrderByQuoteId.get(quoteId))
+        .filter((order): order is DriverOrderCard => Boolean(order));
+
+      if (selectedOrders.length <= 0) {
+        showToast("추천 상세를 열 수 없습니다. 목록을 새로고침 후 다시 시도해 주세요.");
+        return;
+      }
+      const primaryMatchId = Number(selectedOrders[0]?.matchId);
+      if (!Number.isInteger(primaryMatchId) || primaryMatchId <= 0) {
+        showToast("추천 노선의 매칭 정보가 유효하지 않습니다.");
+        return;
+      }
+
+      setSelectedRecommendKey(route.key);
+      setDriverMarketRecommendationSelection({
+        key: route.key,
+        recommendation: route,
+        orders: selectedOrders,
+        mode: recommendMode,
+        maxQuotesPerRoute,
+        analyzedAt: Date.now(),
+      });
+      router.push({
+        pathname: "/(driver)/(stack)/order/[id]",
+        params: { id: String(primaryMatchId), source: "market", recommendKey: route.key },
+      });
+    },
+    [baseMarketOrders, maxQuotesPerRoute, recommendMode, router, showToast]
+  );
+
   const renderListHeader = useCallback(() => {
-    if (!showFilters) return null;
+    const showRecommendPanel = resolvedActiveTab === "market" && !assignedOnly;
+    const recommendationRows = recommendAnalysis?.routes ?? [];
+    const showRunStatusFilter = assignedOnly && runStatusOptions.length > 1;
+
+    if (!showRecommendPanel && !showFilters && !showRunStatusFilter) return null;
 
     return (
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
-        {overview.availableFilters.map((f) => (
-          <Pressable
-            key={f}
-            style={[styles.filterChip, activeFilter === f ? styles.filterChipActive : null]}
-            onPress={() => setActiveFilter(f)}
-          >
-            <AppText
-              style={[styles.filterChipText, activeFilter === f ? styles.filterChipTextActive : null]}
-              numberOfLines={1}
-            >
-              {getDriverOrderFilterLabel(f)}
-            </AppText>
-          </Pressable>
-        ))}
-      </ScrollView>
+      <View>
+        {showRunStatusFilter ? (
+          <View style={styles.runStatusTabs}>
+            {runStatusOptions.map((entry) => {
+              const active = runStatusFilter === entry.key;
+              return (
+                <Pressable
+                  key={`run-status-${entry.key}`}
+                  style={[styles.runStatusBtn, active ? styles.runStatusBtnActive : null]}
+                  onPress={() => setRunStatusFilter(entry.key)}
+                >
+                  <AppText style={[styles.runStatusBtnLabel, active ? styles.runStatusBtnLabelActive : null]}>
+                    {entry.label}
+                  </AppText>
+                  <View style={[styles.runStatusBtnCount, active ? styles.runStatusBtnCountActive : null]}>
+                    <AppText variant="caption" weight="900" color={active ? "brandPrimary" : "textMuted"}>
+                      {entry.count}
+                    </AppText>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
+
+        {showRecommendPanel ? (
+          <View style={styles.marketRecommendWrap}>
+            <View style={styles.marketModeTabs}>
+              <Pressable
+                style={[styles.marketModeBtn, recommendMode === "SINGLE" ? styles.marketModeBtnActive : null]}
+                onPress={() => {
+                  setRecommendMode("SINGLE");
+                  setRecommendAnalysis(null);
+                  setSelectedRecommendKey(null);
+                }}
+              >
+                <Ionicons
+                  name="cube-outline"
+                  size={16}
+                  color={recommendMode === "SINGLE" ? themeColors.textMain : themeColors.textMuted}
+                />
+                <AppText style={[styles.marketModeLabel, recommendMode === "SINGLE" ? styles.marketModeLabelActive : null]}>
+                  단건 노선
+                </AppText>
+              </Pressable>
+              <Pressable
+                style={[styles.marketModeBtn, recommendMode === "BUNDLED" ? styles.marketModeBtnActive : null]}
+                onPress={() => {
+                  setRecommendMode("BUNDLED");
+                  setRecommendAnalysis(null);
+                  setSelectedRecommendKey(null);
+                }}
+              >
+                <Ionicons
+                  name="car-outline"
+                  size={16}
+                  color={recommendMode === "BUNDLED" ? themeColors.textMain : themeColors.textMuted}
+                />
+                <AppText style={[styles.marketModeLabel, recommendMode === "BUNDLED" ? styles.marketModeLabelActive : null]}>
+                  합짐 노선
+                </AppText>
+              </Pressable>
+            </View>
+
+            <View style={styles.marketScaleCard}>
+              <View style={styles.marketScaleHeader}>
+                <AppText variant="detail" weight="800" color="textMain">
+                  한 번에 묶을 오더 수
+                </AppText>
+                <AppText variant="detail" weight="900" color="brandPrimary">
+                  {maxQuotesPerRoute}건 선택
+                </AppText>
+              </View>
+              <AppText style={styles.marketScaleCaption}>
+                {recommendMode === "SINGLE"
+                  ? "단건 노선은 2~3건 중심으로 추천 정확도가 높습니다."
+                  : "합짐 노선은 3~5건을 선택하면 조합 추천 폭이 넓어집니다."}
+              </AppText>
+              <View style={styles.marketScaleStepRow}>
+                {ROUTE_RECOMMEND_STEPS.map((step) => {
+                  const active = step === maxQuotesPerRoute;
+                  return (
+                    <Pressable
+                      key={`route-step-${step}`}
+                      style={[styles.marketScaleStep, active ? styles.marketScaleStepActive : null]}
+                      onPress={() => {
+                        setMaxQuotesPerRoute(step);
+                        setRecommendAnalysis(null);
+                        setSelectedRecommendKey(null);
+                      }}
+                    >
+                      <AppText style={[styles.marketScaleStepText, active ? styles.marketScaleStepTextActive : null]}>
+                        {step}건
+                      </AppText>
+                      <AppText style={[styles.marketScaleStepHint, active ? styles.marketScaleStepHintActive : null]}>
+                        {ROUTE_RECOMMEND_STEP_HINT[step]}
+                      </AppText>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            <View style={styles.marketRecommendHeaderRow}>
+              <AppText variant="detail" weight="900" color="textMain">
+                추천 노선
+              </AppText>
+              <AppText style={styles.marketLoadingText}>
+                {isRecommending ? "추천 계산 중..." : `${recommendationRows.length}건`}
+              </AppText>
+            </View>
+
+            {recommendationRows.length > 0 ? (
+              <View style={styles.marketRouteList}>
+                {recommendationRows.map((route, index) => {
+                  const selected = route.key === (selectedRecommendation?.key ?? "");
+                  return (
+                    <Pressable
+                      key={route.key}
+                      style={[styles.marketRouteCard, selected ? styles.marketRouteCardSelected : null]}
+                      onPress={() => handleOpenRecommendationDetail(route)}
+                    >
+                      <View style={styles.marketRouteTop}>
+                        <View style={styles.marketRouteBadge}>
+                          <AppText variant="caption" weight="900" color="brandPrimary">
+                            {index === 0 ? "BEST" : `순위 ${route.rank}`}
+                          </AppText>
+                        </View>
+                        <AppText variant="title" weight="900" color="semanticSuccess">
+                          {formatKrw(route.totalRevenue)}
+                        </AppText>
+                      </View>
+
+                      <AppText variant="detail" weight="700" color="textSub">
+                        {route.pathLabel}
+                      </AppText>
+
+                      <View style={styles.marketRouteStatRow}>
+                        <View style={styles.marketRouteStatChip}>
+                          <AppText variant="caption" weight="700" color="textMuted">왕복거리</AppText>
+                          <AppText variant="detail" weight="900" color="brandPrimary">
+                            {formatOneDecimal(route.estimatedTotalDistanceKm)}km
+                          </AppText>
+                        </View>
+                        <View style={styles.marketRouteStatChip}>
+                          <AppText variant="caption" weight="700" color="textMuted">CBM</AppText>
+                          <AppText variant="detail" weight="900" color="textMain">
+                            {formatOneDecimal(route.totalCbm)}
+                          </AppText>
+                        </View>
+                        <View style={styles.marketRouteStatChip}>
+                          <AppText variant="caption" weight="700" color="textMuted">복귀</AppText>
+                          <AppText variant="detail" weight="900" color="textMain">
+                            {formatOneDecimal(route.emptyRunDistanceKm)}km
+                          </AppText>
+                        </View>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+                <View style={styles.marketRouteHintCard}>
+                  <AppText variant="caption" weight="800" color="textSub">
+                    추천 노선을 클릭하면 추천 상세 화면으로 이동합니다.
+                  </AppText>
+                </View>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
+        {showFilters ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
+            {overview.availableFilters.map((f) => (
+              <Pressable
+                key={f}
+                style={[styles.filterChip, activeFilter === f ? styles.filterChipActive : null]}
+                onPress={() => {
+                  setActiveFilter(f);
+                  setSelectedRecommendKey(null);
+                }}
+              >
+                <AppText
+                  style={[styles.filterChipText, activeFilter === f ? styles.filterChipTextActive : null]}
+                  numberOfLines={1}
+                >
+                  {getDriverOrderFilterLabel(f)}
+                </AppText>
+              </Pressable>
+            ))}
+          </ScrollView>
+        ) : null}
+      </View>
     );
-  }, [activeFilter, overview.availableFilters, showFilters, styles]);
+  }, [
+    activeFilter,
+    assignedOnly,
+    isRecommending,
+    maxQuotesPerRoute,
+    overview.availableFilters,
+    recommendAnalysis,
+    recommendMode,
+    resolvedActiveTab,
+    runStatusFilter,
+    runStatusOptions,
+    selectedRecommendation?.key,
+    handleOpenRecommendationDetail,
+    setRunStatusFilter,
+    showFilters,
+    styles,
+    themeColors.textMain,
+    themeColors.textMuted,
+  ]);
+
+  const handlePressRunGroup = useCallback(
+    (group: DriverRunGroupCardModel) => {
+      const target = group.orders[0];
+      if (!target) return;
+      void handlePressCard(target);
+    },
+    [handlePressCard]
+  );
 
   const renderOrderItem = useCallback(
-    ({ item }: { item: DriverOrderCard }) => (
-      <DriverOrderCardView
-        item={item}
-        activeTab={resolvedActiveTab}
-        onPress={handlePressCard}
-        onAcceptClick={handleAcceptFromMarket}
-        onOfferClick={handleOpenCounterOffer}
-        acceptingMatchId={acceptingMatchId}
-        isSubmittingOffer={isSubmittingOffer}
-        onPrepareClick={handlePrepareForDrive}
-        styles={styles}
-        colors={themeColors}
-      />
-    ),
+    ({ item }: { item: DriverOrdersListItem }) => {
+      if (item.kind === "group") {
+        return (
+          <DriverRunGroupCard
+            group={item.group}
+            onPress={handlePressRunGroup}
+            onPressOrder={(order) => void handlePressCard(order)}
+          />
+        );
+      }
+
+      return (
+        <DriverOrderUnifiedCard
+          item={item.order}
+          scope={assignedOnly ? "run" : resolvedActiveTab}
+          onPress={handlePressCard}
+          onAcceptClick={handleAcceptFromMarket}
+          onOfferClick={handleOpenCounterOffer}
+          acceptingMatchId={acceptingMatchId}
+          isSubmittingOffer={isSubmittingOffer}
+          onPrepareClick={handlePrepareForDrive}
+        />
+      );
+    },
     [
       acceptingMatchId,
+      assignedOnly,
       handleAcceptFromMarket,
       handleOpenCounterOffer,
       handlePrepareForDrive,
       handlePressCard,
+      handlePressRunGroup,
       isSubmittingOffer,
       resolvedActiveTab,
-      styles,
-      themeColors,
     ]
   );
 
-  const keyExtractor = useCallback((item: DriverOrderCard) => `${resolvedActiveTab}:${item.cardKey}`, [resolvedActiveTab]);
+  const keyExtractor = useCallback((item: DriverOrdersListItem) => item.key, []);
 
   return (
     <>
@@ -1021,33 +1686,6 @@ export function DriverOrdersBoard({
         }
       >
         <View style={styles.flex1}>
-          {!assignedOnly ? (
-            <View style={styles.tabsContainer}>
-              <Pressable
-                style={[styles.tabBtn, resolvedActiveTab === "market" ? styles.tabBtnActive : null]}
-                onPress={() => changeTab("market")}
-              >
-                <AppText style={[styles.tabLabel, resolvedActiveTab === "market" ? styles.tabLabelActive : null]}>
-                  마켓
-                </AppText>
-              </Pressable>
-
-              <Pressable
-                style={[styles.tabBtn, resolvedActiveTab === "my" ? styles.tabBtnActive : null]}
-                onPress={() => changeTab("my")}
-              >
-                <AppText style={[styles.tabLabel, resolvedActiveTab === "my" ? styles.tabLabelActive : null]}>
-                  내 오더
-                </AppText>
-                {filteredMyOrders.length > 0 ? (
-                  <View style={styles.tabBadge}>
-                    <AppText style={styles.tabBadgeText}>{filteredMyOrders.length}</AppText>
-                  </View>
-                ) : null}
-              </Pressable>
-            </View>
-          ) : null}
-
           {isLoading ? (
             <AppSpinner label="목록을 불러오는 중입니다." />
           ) : errorMessage ? (
@@ -1063,35 +1701,30 @@ export function DriverOrdersBoard({
           ) : (
             <FlatList
               key={resolvedActiveTab}
-              extraData={activeFilter}
+              extraData={`${activeFilter}:${runStatusFilter}:${selectedRecommendKey ?? ""}:${recommendAnalysis?.recommendedCount ?? 0}`}
               style={styles.flex1}
-              data={visibleOrders}
+              data={visibleItems}
               keyExtractor={keyExtractor}
               renderItem={renderOrderItem}
               ListHeaderComponent={renderListHeader}
-              stickyHeaderIndices={showFilters ? [0] : undefined}
               ItemSeparatorComponent={() => <View style={styles.separator} />}
               contentContainerStyle={styles.listContent}
               showsVerticalScrollIndicator={false}
               refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => void loadOrders("refresh")} />}
               ListEmptyComponent={
-                <AppEmptyState
-                  title={
-                    resolvedActiveTab === "market"
-                      ? "오더 마켓이 비어 있습니다."
-                      : assignedOnly
-                        ? "운행 오더가 없습니다."
-                        : "내 오더가 없습니다."
-                  }
-                  description={
-                    resolvedActiveTab === "market"
-                      ? "새 오더가 등록되면 이곳에 표시됩니다."
-                      : assignedOnly
-                        ? "운송 중이거나 완료된 오더가 생기면 이곳에 표시됩니다."
-                        : "수락한 오더가 있으면 이곳에 표시됩니다."
-                  }
-                  fullScreen={false}
-                />
+                (!assignedOnly && (isRecommending || (recommendAnalysis?.routes?.length ?? 0) > 0)) ? null : (
+                  <AppEmptyState
+                    title={
+                      assignedOnly ? "운행 오더가 없습니다." : "추천 가능한 오더가 없습니다."
+                    }
+                    description={
+                      assignedOnly
+                        ? "수락 후 운행 가능한 오더가 생기면 이곳에 표시됩니다."
+                        : "필터를 변경하거나 새로고침 후 다시 확인해 주세요."
+                    }
+                    fullScreen={false}
+                  />
+                )
               }
             />
           )}

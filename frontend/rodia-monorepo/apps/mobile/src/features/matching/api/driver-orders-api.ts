@@ -5,6 +5,7 @@ import {
   type CounterOfferItem,
 } from "@/features/counter-offer/api";
 import { getQuoteSummary } from "@/shared/api/generated";
+import { recommendRoutes as recommendRoutesGenerated } from "@/shared/api/generated/driver-optimization-controller/driver-optimization-controller";
 import { getDriverMatchMode } from "@/shared/lib/config/env";
 import {
   BACKEND_STATUS,
@@ -63,7 +64,14 @@ export type DriverOrderCard = {
   pickupTimeText?: string;
   originAddress?: string;
   destinationAddress?: string;
+  originLat?: number;
+  originLng?: number;
+  destinationLat?: number;
+  destinationLng?: number;
   routeDistanceText?: string;
+  weightKg?: number;
+  volumeCbm?: number;
+  allowCombine?: boolean;
   vehicleText?: string;
   methodText?: string;
   cargoText?: string;
@@ -92,6 +100,44 @@ export type DriverOrdersOverview = {
 };
 
 export type DriverOrderDetailAccess = "ok" | "forbidden" | "error";
+export type DriverRouteRecommendationMode = "SINGLE" | "BUNDLED";
+
+export type DriverRouteRecommendation = {
+  key: string;
+  rank: number;
+  quoteIds: number[];
+  routeType: DriverRouteRecommendationMode | "HOME_ROUTE" | "UNKNOWN";
+  totalRevenue: number;
+  estimatedTotalDistanceKm: number;
+  emptyRunDistanceKm: number;
+  profitPerKm: number;
+  totalCbm: number;
+  totalWeight: number;
+  finalScore: number;
+  pathLabel: string;
+};
+
+export type DriverRouteRecommendationAnalysis = {
+  mode: DriverRouteRecommendationMode;
+  maxQuotesPerRoute: number;
+  source: "server" | "heuristic";
+  elapsedMs: number;
+  totalQuotes: number;
+  combinableQuotes: number;
+  evaluatedCombos: number;
+  recommendedCount: number;
+  routes: DriverRouteRecommendation[];
+};
+
+type DriverRouteRecommendInput = {
+  orders: DriverOrderCard[];
+  mode: DriverRouteRecommendationMode;
+  maxQuotesPerRoute: number;
+};
+
+const ROUTE_RECOMMEND_MAX_QUOTES_MIN = 2;
+const ROUTE_RECOMMEND_MAX_QUOTES_MAX = 5;
+const ROUTE_RECOMMEND_LIMIT = 15;
 
 const FILTER_LABELS: Record<DriverOrderFilterKey, string> = {
   ALL: "전체",
@@ -310,6 +356,268 @@ function pickFirstBoolean(candidates: AnyObject[], keys: string[]): boolean | un
     }
   }
   return undefined;
+}
+
+function toFiniteNumber(value: unknown, fallback = 0): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function toPositiveNumber(value: unknown, fallback = 0): number {
+  const parsed = toFiniteNumber(value, fallback);
+  return parsed > 0 ? parsed : fallback;
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function parseDistanceKmFromText(distanceText: string | undefined): number {
+  const text = String(distanceText ?? "").trim().toLowerCase();
+  if (!text) return 0;
+  const match = text.match(/(\d+(?:\.\d+)?)/);
+  if (!match) return 0;
+  const value = Number(match[1]);
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  if (text.includes("m") && !text.includes("km")) return value / 1000;
+  return value;
+}
+
+function normalizeRouteType(value: unknown): DriverRouteRecommendation["routeType"] {
+  const token = toStatusToken(value);
+  if (token === "SINGLE") return "SINGLE";
+  if (token === "BUNDLED") return "BUNDLED";
+  if (token === "HOME_ROUTE") return "HOME_ROUTE";
+  return "UNKNOWN";
+}
+
+function parseQuoteIdList(input: unknown): number[] {
+  if (!Array.isArray(input)) return [];
+  return Array.from(
+    new Set(
+      input
+        .map((entry) => parseDriverOrderPositiveInt(entry))
+        .filter((entry) => entry > 0)
+    )
+  );
+}
+
+function toRoutePathLabel(route: AnyObject): string {
+  const visitOrder = Array.isArray(route.visitOrder) ? route.visitOrder : [];
+  if (visitOrder.length <= 0) return "출발 → 복귀";
+
+  const visits = visitOrder
+    .map((entry) => asObject(entry))
+    .map((entry) => {
+      const typeToken = toStatusToken(entry.type);
+      const quoteId = parseDriverOrderPositiveInt(entry.quoteId);
+      if (typeToken === "PICKUP") return `상#${quoteId || "?"}`;
+      if (typeToken === "DELIVERY") return `하#${quoteId || "?"}`;
+      return quoteId > 0 ? `Q#${quoteId}` : "";
+    })
+    .filter(Boolean);
+
+  if (visits.length <= 0) return "출발 → 복귀";
+  return ["출발", ...visits, "복귀"].join(" → ");
+}
+
+function parseRecommendedRoute(
+  route: unknown,
+  index: number
+): DriverRouteRecommendation | null {
+  const source = asObject(route);
+  if (Object.keys(source).length <= 0) return null;
+  const routeType = normalizeRouteType(
+    source.routeType ?? (source.single === true ? "SINGLE" : source.bundled === true ? "BUNDLED" : undefined)
+  );
+
+  const quoteIdsFromPrimary = parseQuoteIdList(source.quoteIds);
+  const quoteIdsFromSelected = parseQuoteIdList(source.selectedQuoteIds);
+  const quoteIdsFromFallback = parseQuoteIdList(source.quotes);
+  const quoteIds =
+    quoteIdsFromPrimary.length > 0
+      ? quoteIdsFromPrimary
+      : quoteIdsFromSelected.length > 0
+        ? quoteIdsFromSelected
+        : quoteIdsFromFallback;
+  if (quoteIds.length <= 0) {
+    const visits = Array.isArray(source.visitOrder) ? source.visitOrder : [];
+    const visitQuoteIds = Array.from(
+      new Set(
+        visits
+          .map((visit) => parseDriverOrderPositiveInt(asObject(visit).quoteId))
+          .filter((quoteId) => quoteId > 0)
+      )
+    );
+    if (visitQuoteIds.length > 0) {
+      return {
+        key: toOptionalText(source.calibrationId) ?? `server-${index + 1}-${visitQuoteIds.join("-")}`,
+        rank: Math.max(1, Math.trunc(toPositiveNumber(source.rank, index + 1))),
+        quoteIds: visitQuoteIds,
+        routeType,
+        totalRevenue: toPositiveNumber(source.totalRevenue, 0),
+        estimatedTotalDistanceKm: toPositiveNumber(source.estimatedTotalDistanceM, 0) / 1000,
+        emptyRunDistanceKm: toPositiveNumber(source.emptyRunDistanceM, 0) / 1000,
+        profitPerKm: toPositiveNumber(source.profitPerKm, 0),
+        totalCbm: toPositiveNumber(source.totalCbm, 0),
+        totalWeight: toPositiveNumber(source.totalWeight, 0),
+        finalScore: toPositiveNumber(source.finalScore, 0),
+        pathLabel: toRoutePathLabel(source),
+      };
+    }
+    return null;
+  }
+
+  return {
+    key: toOptionalText(source.calibrationId) ?? `server-${index + 1}-${quoteIds.join("-")}`,
+    rank: Math.max(1, Math.trunc(toPositiveNumber(source.rank, index + 1))),
+    quoteIds,
+    routeType,
+    totalRevenue: toPositiveNumber(source.totalRevenue, 0),
+    estimatedTotalDistanceKm: toPositiveNumber(source.estimatedTotalDistanceM, 0) / 1000,
+    emptyRunDistanceKm: toPositiveNumber(source.emptyRunDistanceM, 0) / 1000,
+    profitPerKm: toPositiveNumber(source.profitPerKm, 0),
+    totalCbm: toPositiveNumber(source.totalCbm, 0),
+    totalWeight: toPositiveNumber(source.totalWeight, 0),
+    finalScore: toPositiveNumber(source.finalScore, 0),
+    pathLabel: toRoutePathLabel(source),
+  };
+}
+
+function collectRouteArray(payload: unknown): unknown[] {
+  if (Array.isArray(payload)) return payload;
+
+  const queue: unknown[] = [payload];
+  const visited = new Set<AnyObject>();
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (Array.isArray(current)) {
+      const first = current[0];
+      if (typeof first === "object" && first !== null) return current;
+      continue;
+    }
+
+    const source = asObject(current);
+    if (Object.keys(source).length <= 0) continue;
+    if (visited.has(source)) continue;
+    visited.add(source);
+
+    const listCandidates = ["routes", "recommendations", "items", "list", "content", "result", "data"];
+    for (const key of listCandidates) {
+      const value = source[key];
+      if (Array.isArray(value) && value.length > 0) {
+        const first = value[0];
+        if (typeof first === "object" && first !== null) return value;
+      }
+    }
+
+    Object.values(source).forEach((value) => {
+      if (value && typeof value === "object") queue.push(value);
+    });
+  }
+
+  return [];
+}
+
+function estimateCombinationCount(total: number, maxSelection: number): number {
+  const n = Math.max(0, Math.trunc(total));
+  const limit = Math.max(1, Math.trunc(maxSelection));
+  if (n <= 1) return n;
+
+  let count = 0;
+  const safeUpper = Math.min(limit, n);
+  for (let r = 1; r <= safeUpper; r += 1) {
+    let numerator = 1;
+    let denominator = 1;
+    for (let i = 1; i <= r; i += 1) {
+      numerator *= n - (i - 1);
+      denominator *= i;
+    }
+    count += Math.round(numerator / denominator);
+    if (count > 500000) return 500000;
+  }
+  return count;
+}
+
+function buildHeuristicRouteRecommendations(
+  orders: DriverOrderCard[],
+  mode: DriverRouteRecommendationMode,
+  maxQuotesPerRoute: number
+): DriverRouteRecommendation[] {
+  const candidates = orders
+    .filter((order) => parseDriverOrderPositiveInt(order.quoteId) > 0)
+    .map((order) => ({
+      ...order,
+      quoteId: parseDriverOrderPositiveInt(order.quoteId),
+      priceValue: toPositiveNumber(order.priceValue, 0),
+      routeDistanceKm: parseDistanceKmFromText(order.routeDistanceText),
+      volumeCbm: toPositiveNumber(order.volumeCbm, 0),
+      weightKg: toPositiveNumber(order.weightKg, 0),
+    }))
+    .sort((a, b) => {
+      const byPrice = (b.priceValue ?? 0) - (a.priceValue ?? 0);
+      if (byPrice !== 0) return byPrice;
+      const byDistance = (a.routeDistanceKm ?? 0) - (b.routeDistanceKm ?? 0);
+      if (byDistance !== 0) return byDistance;
+      return b.matchId - a.matchId;
+    });
+
+  if (candidates.length <= 0) return [];
+
+  if (mode === "SINGLE") {
+    return candidates.slice(0, ROUTE_RECOMMEND_LIMIT).map((order, index) => {
+      const distance = toPositiveNumber(order.routeDistanceKm, 1);
+      const price = toPositiveNumber(order.priceValue, 0);
+      return {
+        key: `single-${order.quoteId}`,
+        rank: index + 1,
+        quoteIds: [order.quoteId],
+        routeType: "SINGLE",
+        totalRevenue: price,
+        estimatedTotalDistanceKm: distance,
+        emptyRunDistanceKm: Math.max(0, Number((distance * 0.3).toFixed(1))),
+        profitPerKm: distance > 0 ? Math.round(price / distance) : 0,
+        totalCbm: toPositiveNumber(order.volumeCbm, 0),
+        totalWeight: toPositiveNumber(order.weightKg, 0),
+        finalScore: Math.max(0, Math.round((price / Math.max(distance, 1)) / 100)),
+        pathLabel: "출발 → 상차 → 하차 → 복귀",
+      };
+    });
+  }
+
+  const chunkSize = clampNumber(maxQuotesPerRoute, ROUTE_RECOMMEND_MAX_QUOTES_MIN, ROUTE_RECOMMEND_MAX_QUOTES_MAX);
+  const routes: DriverRouteRecommendation[] = [];
+  for (let i = 0; i < candidates.length; i += chunkSize) {
+    const chunk = candidates.slice(i, i + chunkSize);
+    if (chunk.length <= 0) continue;
+    if (chunk.length <= 1) continue;
+
+    const quoteIds = chunk.map((item) => item.quoteId);
+    const totalRevenue = chunk.reduce((sum, item) => sum + toPositiveNumber(item.priceValue, 0), 0);
+    const totalDistance = chunk.reduce((sum, item) => sum + Math.max(1, toPositiveNumber(item.routeDistanceKm, 0)), 0);
+    const totalCbm = chunk.reduce((sum, item) => sum + toPositiveNumber(item.volumeCbm, 0), 0);
+    const totalWeight = chunk.reduce((sum, item) => sum + toPositiveNumber(item.weightKg, 0), 0);
+    const emptyRunDistanceKm = Math.max(0, Number((totalDistance * 0.12).toFixed(1)));
+
+    routes.push({
+      key: `bundle-${quoteIds.join("-")}`,
+      rank: routes.length + 1,
+      quoteIds,
+      routeType: "BUNDLED",
+      totalRevenue,
+      estimatedTotalDistanceKm: Number(totalDistance.toFixed(1)),
+      emptyRunDistanceKm,
+      profitPerKm: totalDistance > 0 ? Math.round(totalRevenue / totalDistance) : 0,
+      totalCbm: Number(totalCbm.toFixed(2)),
+      totalWeight: Math.round(totalWeight),
+      finalScore: Math.max(0, Math.round((totalRevenue / Math.max(totalDistance, 1)) / 120)),
+      pathLabel: `출발 → 상차${chunk.length}건 → 하차${chunk.length}건 → 복귀`,
+    });
+
+    if (routes.length >= ROUTE_RECOMMEND_LIMIT) break;
+  }
+
+  return routes;
 }
 
 function normalizeSummaryPayload(input: unknown): AnyObject | null {
@@ -636,6 +944,204 @@ export async function loadDriverOrdersOverview(): Promise<DriverOrdersOverview> 
     myCount: myOrdersWithNegotiating.length,
     availableFilters,
     capability,
+  };
+}
+
+export async function recommendDriverOrderRoutes(
+  input: DriverRouteRecommendInput
+): Promise<DriverRouteRecommendationAnalysis> {
+  const safeOrders = Array.isArray(input.orders)
+    ? input.orders.filter(
+        (order) =>
+          order.uiState === DRIVER_UI_STATE.READY_TO_ACCEPT &&
+          parseDriverOrderPositiveInt(order.quoteId) > 0
+      )
+    : [];
+  const safeMode: DriverRouteRecommendationMode =
+    input.mode === "BUNDLED" ? "BUNDLED" : "SINGLE";
+  const safeMaxQuotesPerRoute = clampNumber(
+    Math.trunc(toPositiveNumber(input.maxQuotesPerRoute, ROUTE_RECOMMEND_MAX_QUOTES_MAX)),
+    ROUTE_RECOMMEND_MAX_QUOTES_MIN,
+    ROUTE_RECOMMEND_MAX_QUOTES_MAX
+  );
+
+  const totalQuotes = safeOrders.length;
+  const combinableQuotes = safeOrders.filter(
+    (order) => order.allowCombine === true || order.tags.some((tag) => tag.key === "COMBINED")
+  ).length;
+
+  if (totalQuotes <= 0) {
+    return {
+      mode: safeMode,
+      maxQuotesPerRoute: safeMaxQuotesPerRoute,
+      source: "heuristic",
+      elapsedMs: 0,
+      totalQuotes: 0,
+      combinableQuotes: 0,
+      evaluatedCombos: 0,
+      recommendedCount: 0,
+      routes: [],
+    };
+  }
+
+  const startedAt = Date.now();
+  const quoteIdToOrder = new Map<number, DriverOrderCard>();
+  safeOrders.forEach((order) => {
+    const quoteId = parseDriverOrderPositiveInt(order.quoteId);
+    if (quoteId > 0) quoteIdToOrder.set(quoteId, order);
+  });
+
+  let source: "server" | "heuristic" = "heuristic";
+  let routes: DriverRouteRecommendation[] = [];
+
+  try {
+    if (getDriverMatchMode() === "mock") {
+      await waitRandom();
+      routes = buildHeuristicRouteRecommendations(safeOrders, safeMode, safeMaxQuotesPerRoute);
+    } else {
+      const firstWithOrigin = safeOrders.find(
+        (order) =>
+          Number.isFinite(order.originLat) &&
+          Number.isFinite(order.originLng) &&
+          Number(order.originLat) !== 0 &&
+          Number(order.originLng) !== 0
+      );
+      const firstWithDestination = safeOrders.find(
+        (order) =>
+          Number.isFinite(order.destinationLat) &&
+          Number.isFinite(order.destinationLng) &&
+          Number(order.destinationLat) !== 0 &&
+          Number(order.destinationLng) !== 0
+      );
+
+      const payload = {
+        currentLat: Number(firstWithOrigin?.originLat ?? 37.5665),
+        currentLng: Number(firstWithOrigin?.originLng ?? 126.978),
+        ...(Number.isFinite(firstWithDestination?.destinationLat)
+          ? { endLat: Number(firstWithDestination?.destinationLat) }
+          : {}),
+        ...(Number.isFinite(firstWithDestination?.destinationLng)
+          ? { endLng: Number(firstWithDestination?.destinationLng) }
+          : {}),
+        combinePreference: safeMode,
+        mode: safeMode,
+        loadedWeightKg: Math.max(
+          0,
+          Math.round(
+            safeOrders.reduce((sum, order) => sum + toPositiveNumber(order.weightKg, 0), 0)
+          )
+        ),
+        loadedVolumeCbm: Number(
+          safeOrders
+            .reduce((sum, order) => sum + toPositiveNumber(order.volumeCbm, 0), 0)
+            .toFixed(2)
+        ),
+        maxPickupDistanceKm: 60,
+        selectedQuoteIds: safeOrders
+          .map((order) => parseDriverOrderPositiveInt(order.quoteId))
+          .filter((quoteId) => quoteId > 0),
+      };
+
+      const raw = await recommendRoutesGenerated(payload as any);
+      const routeArray = collectRouteArray(raw);
+      const parsed = routeArray
+        .map((route, index) => parseRecommendedRoute(route, index))
+        .filter((route): route is DriverRouteRecommendation => route !== null)
+        .slice(0, ROUTE_RECOMMEND_LIMIT);
+      const parsedByMode =
+        safeMode === "BUNDLED"
+          ? parsed.filter((route) => route.quoteIds.length > 1)
+          : parsed;
+
+      if (parsedByMode.length > 0) {
+        source = "server";
+        routes = parsedByMode.map((route, index) => {
+          const quoteOrders = route.quoteIds
+            .map((quoteId) => quoteIdToOrder.get(quoteId))
+            .filter((order): order is DriverOrderCard => Boolean(order));
+          const fallbackRevenue = quoteOrders.reduce(
+            (sum, order) => sum + toPositiveNumber(order.priceValue, 0),
+            0
+          );
+          const fallbackDistance = quoteOrders.reduce(
+            (sum, order) => sum + Math.max(1, parseDistanceKmFromText(order.routeDistanceText)),
+            0
+          );
+          const fallbackWeight = quoteOrders.reduce(
+            (sum, order) => sum + toPositiveNumber(order.weightKg, 0),
+            0
+          );
+          const fallbackVolume = quoteOrders.reduce(
+            (sum, order) => sum + toPositiveNumber(order.volumeCbm, 0),
+            0
+          );
+
+          const totalRevenue = route.totalRevenue > 0 ? route.totalRevenue : fallbackRevenue;
+          const estimatedTotalDistanceKm =
+            route.estimatedTotalDistanceKm > 0 ? route.estimatedTotalDistanceKm : fallbackDistance;
+          const emptyRunDistanceKm =
+            route.emptyRunDistanceKm > 0
+              ? route.emptyRunDistanceKm
+              : Number((estimatedTotalDistanceKm * 0.15).toFixed(1));
+          const totalWeight = route.totalWeight > 0 ? route.totalWeight : fallbackWeight;
+          const totalCbm = route.totalCbm > 0 ? route.totalCbm : fallbackVolume;
+          const profitPerKm =
+            route.profitPerKm > 0
+              ? route.profitPerKm
+              : estimatedTotalDistanceKm > 0
+                ? Math.round(totalRevenue / estimatedTotalDistanceKm)
+                : 0;
+
+          return {
+            ...route,
+            key: route.key || `server-${index + 1}-${route.quoteIds.join("-")}`,
+            rank: route.rank > 0 ? route.rank : index + 1,
+            totalRevenue: Math.round(totalRevenue),
+            estimatedTotalDistanceKm: Number(estimatedTotalDistanceKm.toFixed(1)),
+            emptyRunDistanceKm: Number(emptyRunDistanceKm.toFixed(1)),
+            totalWeight: Math.round(totalWeight),
+            totalCbm: Number(totalCbm.toFixed(2)),
+            profitPerKm,
+            pathLabel:
+              route.pathLabel && route.pathLabel !== "출발 → 복귀"
+                ? route.pathLabel
+                : `출발 → 상차${route.quoteIds.length}건 → 하차${route.quoteIds.length}건 → 복귀`,
+          };
+        });
+      } else {
+        routes = buildHeuristicRouteRecommendations(safeOrders, safeMode, safeMaxQuotesPerRoute);
+      }
+    }
+  } catch {
+    routes = buildHeuristicRouteRecommendations(safeOrders, safeMode, safeMaxQuotesPerRoute);
+  }
+
+  if (safeMode === "BUNDLED") {
+    routes = routes.filter((route) => route.quoteIds.length > 1);
+  }
+
+  routes = routes
+    .sort((a, b) => {
+      if (a.rank !== b.rank) return a.rank - b.rank;
+      if (b.finalScore !== a.finalScore) return b.finalScore - a.finalScore;
+      return b.totalRevenue - a.totalRevenue;
+    })
+    .slice(0, ROUTE_RECOMMEND_LIMIT)
+    .map((route, index) => ({ ...route, rank: index + 1 }));
+
+  return {
+    mode: safeMode,
+    maxQuotesPerRoute: safeMaxQuotesPerRoute,
+    source,
+    elapsedMs: Math.max(0, Date.now() - startedAt),
+    totalQuotes,
+    combinableQuotes,
+    evaluatedCombos: estimateCombinationCount(
+      totalQuotes,
+      safeMode === "SINGLE" ? 1 : safeMaxQuotesPerRoute
+    ),
+    recommendedCount: routes.length,
+    routes,
   };
 }
 
