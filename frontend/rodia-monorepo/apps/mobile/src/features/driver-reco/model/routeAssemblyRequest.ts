@@ -18,6 +18,12 @@ function toOptionalStr(v: unknown): string | undefined {
   return typeof v === "string" && v.trim() ? v.trim() : undefined;
 }
 
+function toFinite(v: unknown, fallback?: number): number | undefined {
+  const n = Number(v);
+  if (Number.isFinite(n)) return n;
+  return fallback;
+}
+
 /** Maps QuoteDetailResponse → generated Quote schema type (schema-grounded fields only). */
 export function buildCandidateQuote(q: QuoteDetailResponse): Quote {
   return {
@@ -54,9 +60,37 @@ export function buildRouteAssemblyRequest(params: {
   const candidateQuotes = quotes
     .filter((q) => selectedIdSet.has(q.quoteId))
     .map(buildCandidateQuote);
+
+  const firstQuote = quotes[0];
+  const lastQuote = quotes[quotes.length - 1];
+  const currentLat = toFinite(firstQuote?.originLat, 37.5665);
+  const currentLng = toFinite(firstQuote?.originLng, 126.978);
+  const endLat = toFinite(lastQuote?.destinationLat);
+  const endLng = toFinite(lastQuote?.destinationLng);
+  const truckId = Number(firstQuote?.truckId);
+
   return {
     selectedQuoteIds,
     mode: "SIMPLE",
+    driverState: {
+      currentLocation: {
+        name: toOptionalStr(firstQuote?.originAddress),
+        address: toOptionalStr(firstQuote?.originAddress),
+        latitude: currentLat,
+        longitude: currentLng,
+      },
+      ...(Number.isFinite(endLat) && Number.isFinite(endLng)
+        ? {
+            endLocation: {
+              name: toOptionalStr(lastQuote?.destinationAddress),
+              address: toOptionalStr(lastQuote?.destinationAddress),
+              latitude: endLat,
+              longitude: endLng,
+            },
+          }
+        : {}),
+      ...(Number.isInteger(truckId) && truckId > 0 ? { truckId } : {}),
+    },
     ...(candidateQuotes.length > 0 ? { candidateQuotes } : {}),
   };
 }

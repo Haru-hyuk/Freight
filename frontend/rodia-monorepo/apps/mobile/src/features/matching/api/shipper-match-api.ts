@@ -5,6 +5,7 @@ import {
   getMatch1 as getDriverMatchGenerated,
   getMyMatches1 as getMyDriverMatchesGenerated,
   getOpenMatches as getOpenDriverMatchesGenerated,
+  startTransit as startDriverTransitGenerated,
 } from "@/shared/api/generated/driver-match-controller/driver-match-controller";
 import {
   createDriverCounterOffer,
@@ -25,6 +26,7 @@ import {
   listMockFlowDriverMyMatches,
   listMockFlowDriverOpenMatches,
   listMockFlowShipperMatches,
+  startDriving,
   waitRandom,
 } from "@/shared/lib/mock-flow";
 import { BACKEND_STATUS, normalizeStatus } from "@/shared/lib/policy";
@@ -253,6 +255,19 @@ export async function acceptDriverMatch(matchId: number): Promise<DriverMatchIte
   }
 
   const data = await acceptDriverMatchGenerated(safeMatchId);
+  return toSingleDriverMatch(data);
+}
+
+export async function startDriverTransit(matchId: number): Promise<DriverMatchItem | null> {
+  const safeMatchId = parseMatchPositiveInt(matchId);
+  if (safeMatchId <= 0) return null;
+
+  if (isMockMode()) {
+    await waitRandom();
+    return toSingleDriverMatch(startDriving(safeMatchId));
+  }
+
+  const data = await startDriverTransitGenerated(safeMatchId);
   return toSingleDriverMatch(data);
 }
 

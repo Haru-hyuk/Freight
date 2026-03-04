@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useActiveOrder } from "@/entities/order/model/active-order.store";
+import { listDriverTrucks, type DriverTruck } from "@/features/driver-profile/api/driver-profile-api";
 import {
   acceptDriverMatch,
   buildDriverOrderDetailParams,
@@ -52,6 +53,10 @@ import {
 } from "@/features/matching/model/driverRunSyncEvents";
 import { formatKrw } from "@/shared/lib/format/display";
 import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
+import {
+  readDriverOrdersActiveTruckId,
+  writeDriverOrdersActiveTruckId,
+} from "@/shared/lib/storage/driverOrdersStorage";
 import {
   API_ERROR_CODE,
   BADGE_TONE,
@@ -112,6 +117,25 @@ const RUN_STATUS_FILTER_LABELS: Record<RunStatusFilterKey, string> = {
   TRANSIT: "운송중",
   COMPLETED: "완료",
 };
+
+function toPositiveInt(value: unknown): number {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function toText(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function buildTruckOptionLabel(truck: DriverTruck): string {
+  const name = toText(truck.name);
+  const tonnage =
+    typeof truck.tonnage === "number" && Number.isFinite(truck.tonnage) && truck.tonnage > 0
+      ? `${truck.tonnage}톤`
+      : "";
+  const body = toText(truck.vehicleBodyType);
+  return [tonnage, body, name].filter(Boolean).join(" · ") || `차량 #${toPositiveInt(truck.truckId) || "-"}`;
+}
 
 function formatOneDecimal(value: unknown): string {
   const num = Number(value);
@@ -466,6 +490,63 @@ const useStyles = createThemedStyles((theme) => {
       paddingHorizontal: spacing * 4,
       paddingTop: spacing * 2,
       paddingBottom: spacing * 2,
+    },
+    truckSelectorWrap: {
+      gap: spacing * 1.5,
+    },
+    truckSelectorLabel: {
+      color: cTextMuted,
+      fontSize: safeNumber(captionScale?.size, 12),
+      lineHeight: safeNumber(captionScale?.lineHeight, 16),
+      fontWeight: "800",
+      paddingHorizontal: spacing,
+    },
+    truckSelectorTrigger: {
+      minHeight: safeNumber(buttonSm?.minHeight, 36),
+      borderRadius: radiusControl,
+      borderWidth: 1,
+      borderColor: tint(cLine, 0.8, cLine),
+      backgroundColor: cSurface,
+      paddingHorizontal: spacing * 3,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: spacing * 2,
+    },
+    truckSelectorMenu: {
+      borderRadius: radiusControl,
+      borderWidth: 1,
+      borderColor: tint(cLine, 0.8, cLine),
+      backgroundColor: cSurface,
+      overflow: "hidden",
+    },
+    truckSelectorOption: {
+      minHeight: safeNumber(buttonSm?.minHeight, 36),
+      paddingHorizontal: spacing * 3,
+      paddingVertical: spacing * 1.5,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: spacing * 2,
+      borderTopWidth: 1,
+      borderTopColor: tint(cLine, 0.8, cLine),
+    },
+    truckSelectorOptionFirst: {
+      borderTopWidth: 0,
+    },
+    truckSelectorOptionActive: {
+      backgroundColor: tint(cPrimary, 0.08, cSurface),
+    },
+    truckSelectorOptionText: {
+      flex: 1,
+      color: cTextSub,
+      fontSize: safeNumber(detailScale?.size, 14),
+      lineHeight: safeNumber(detailScale?.lineHeight, 20),
+      fontWeight: "700",
+    },
+    truckSelectorOptionTextActive: {
+      color: cPrimary,
+      fontWeight: "900",
     },
     marketModeTabs: {
       flexDirection: "row",
@@ -976,6 +1057,9 @@ export function DriverOrdersBoard({
   const [recommendAnalysis, setRecommendAnalysis] = useState<DriverRouteRecommendationAnalysis | null>(null);
   const [selectedRecommendKey, setSelectedRecommendKey] = useState<string | null>(null);
   const [runStatusFilter, setRunStatusFilter] = useState<RunStatusFilterKey>("ALL");
+  const [availableTrucks, setAvailableTrucks] = useState<DriverTruck[]>([]);
+  const [selectedTruckId, setSelectedTruckId] = useState<number | null>(null);
+  const [isTruckMenuOpen, setIsTruckMenuOpen] = useState(false);
 
   const resolvedActiveTab: DriverOrdersTabKey = assignedOnly ? "my" : "market";
   const refreshIconColor = safeString(
@@ -1033,15 +1117,52 @@ export function DriverOrdersBoard({
     }
   }, []);
 
+  const loadTruckOptions = useCallback(async () => {
+    if (assignedOnly) return;
+    try {
+      const trucks = await listDriverTrucks();
+      const approved = trucks.filter((truck) => truck.approved === true);
+      const candidates = approved.length > 0 ? approved : trucks;
+      setAvailableTrucks(candidates);
+      setIsTruckMenuOpen(false);
+
+      const savedId = await readDriverOrdersActiveTruckId();
+      const matchSaved = candidates.find((truck) => toPositiveInt(truck.truckId) === toPositiveInt(savedId));
+      if (matchSaved) {
+        const safeId = toPositiveInt(matchSaved.truckId);
+        setSelectedTruckId(safeId > 0 ? safeId : null);
+        return;
+      }
+
+      const firstId = toPositiveInt(candidates[0]?.truckId);
+      const fallbackId = firstId > 0 ? firstId : null;
+      setSelectedTruckId(fallbackId);
+      await writeDriverOrdersActiveTruckId(fallbackId);
+    } catch {
+      setAvailableTrucks([]);
+      setSelectedTruckId(null);
+    }
+  }, [assignedOnly]);
+
   useEffect(() => {
     void loadOrders("initial");
   }, [loadOrders]);
+
+  useEffect(() => {
+    void loadTruckOptions();
+  }, [loadTruckOptions]);
 
   useEffect(() => {
     if (!assignedOnly) return;
     setActiveFilter("ALL");
     setRunStatusFilter("ALL");
   }, [assignedOnly]);
+
+  useEffect(() => {
+    if (resolvedActiveTab !== "market") {
+      setIsTruckMenuOpen(false);
+    }
+  }, [resolvedActiveTab]);
 
   useEffect(() => {
     return subscribeDriverRunSyncEvent((event) => {
@@ -1070,8 +1191,9 @@ export function DriverOrdersBoard({
 
       meta.lastRefetchAt = now;
       void loadOrders("refresh");
+      void loadTruckOptions();
       return undefined;
-    }, [loadOrders])
+    }, [loadOrders, loadTruckOptions])
   );
 
   const baseMarketOrders = useMemo(
@@ -1087,6 +1209,12 @@ export function DriverOrdersBoard({
     if (!selectedRecommendKey) return recommendAnalysis.routes[0] ?? null;
     return recommendAnalysis.routes.find((route) => route.key === selectedRecommendKey) ?? null;
   }, [recommendAnalysis, selectedRecommendKey]);
+
+  const selectedTruck = useMemo(() => {
+    const safeSelected = toPositiveInt(selectedTruckId);
+    if (safeSelected <= 0) return null;
+    return availableTrucks.find((truck) => toPositiveInt(truck.truckId) === safeSelected) ?? null;
+  }, [availableTrucks, selectedTruckId]);
 
   const runOrderPool = useMemo(() => {
     const runStates = new Set<DriverUiState>([
@@ -1503,6 +1631,14 @@ export function DriverOrdersBoard({
     }
   }, [baseMarketOrders, maxQuotesPerRoute, recommendMode]);
 
+  const handleSelectTruck = useCallback((truckId: number) => {
+    const safeId = toPositiveInt(truckId);
+    if (safeId <= 0) return;
+    setSelectedTruckId(safeId);
+    setIsTruckMenuOpen(false);
+    void writeDriverOrdersActiveTruckId(safeId);
+  }, []);
+
   useEffect(() => {
     if (assignedOnly) return;
     if (resolvedActiveTab !== "market") return;
@@ -1553,13 +1689,14 @@ export function DriverOrdersBoard({
         mode: recommendMode,
         maxQuotesPerRoute,
         analyzedAt: Date.now(),
+        selectedTruckId,
       });
       router.push({
         pathname: DRIVER_ROUTE_PATH.ORDER_DETAIL,
         params: { id: String(primaryMatchId), source: "market", recommendKey: route.key },
       });
     },
-    [baseMarketOrders, maxQuotesPerRoute, recommendMode, router, showToast]
+    [baseMarketOrders, maxQuotesPerRoute, recommendMode, router, selectedTruckId, showToast]
   );
 
   const renderListHeader = useCallback(() => {
@@ -1597,6 +1734,61 @@ export function DriverOrdersBoard({
 
         {showRecommendPanel ? (
           <View style={styles.marketRecommendWrap}>
+            {availableTrucks.length > 0 ? (
+              <View style={styles.truckSelectorWrap}>
+                <AppText style={styles.truckSelectorLabel}>선택된 차량</AppText>
+                <Pressable
+                  style={styles.truckSelectorTrigger}
+                  onPress={() => setIsTruckMenuOpen((prev) => !prev)}
+                >
+                  <AppText
+                    style={styles.truckSelectorOptionText}
+                    numberOfLines={1}
+                  >
+                    {selectedTruck ? buildTruckOptionLabel(selectedTruck) : "차량을 선택해 주세요"}
+                  </AppText>
+                  <Ionicons
+                    name={isTruckMenuOpen ? "chevron-up" : "chevron-down"}
+                    size={16}
+                    color={themeColors.textMuted}
+                  />
+                </Pressable>
+
+                {isTruckMenuOpen ? (
+                  <View style={styles.truckSelectorMenu}>
+                    {availableTrucks.map((truck, index) => {
+                      const safeTruckId = toPositiveInt(truck.truckId);
+                      const active = safeTruckId > 0 && safeTruckId === toPositiveInt(selectedTruckId);
+                      return (
+                        <Pressable
+                          key={`truck-option-${safeTruckId || index}`}
+                          style={[
+                            styles.truckSelectorOption,
+                            index === 0 ? styles.truckSelectorOptionFirst : null,
+                            active ? styles.truckSelectorOptionActive : null,
+                          ]}
+                          onPress={() => handleSelectTruck(safeTruckId)}
+                        >
+                          <AppText
+                            style={[
+                              styles.truckSelectorOptionText,
+                              active ? styles.truckSelectorOptionTextActive : null,
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {buildTruckOptionLabel(truck)}
+                          </AppText>
+                          {active ? (
+                            <Ionicons name="checkmark" size={16} color={themeColors.brandPrimary} />
+                          ) : null}
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
+
             <View style={styles.marketModeTabs}>
               <Pressable
                 style={[styles.marketModeBtn, recommendMode === "SINGLE" ? styles.marketModeBtnActive : null]}
@@ -1765,8 +1957,11 @@ export function DriverOrdersBoard({
     );
   }, [
     activeFilter,
+    availableTrucks,
     assignedOnly,
+    handleSelectTruck,
     isRecommending,
+    isTruckMenuOpen,
     maxQuotesPerRoute,
     overview.availableFilters,
     recommendAnalysis,
@@ -1774,6 +1969,8 @@ export function DriverOrdersBoard({
     resolvedActiveTab,
     runStatusFilter,
     runStatusOptions,
+    selectedTruck,
+    selectedTruckId,
     selectedRecommendation?.key,
     handleOpenRecommendationDetail,
     setRunStatusFilter,

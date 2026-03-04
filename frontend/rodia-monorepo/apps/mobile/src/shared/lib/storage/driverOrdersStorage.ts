@@ -1,6 +1,7 @@
 import * as SecureStore from "expo-secure-store";
 
 const AI_TOOLTIP_SEEN_KEY = "driverOrders.aiTooltipSeen";
+const ACTIVE_TRUCK_ID_KEY = "driverOrders.activeTruckId";
 
 const memoryFallback = new Map<string, string>();
 
@@ -74,3 +75,17 @@ export async function writeDriverOrdersAiTooltipSeen(seen: boolean): Promise<voi
   await setItem(AI_TOOLTIP_SEEN_KEY, seen ? "1" : "0");
 }
 
+export async function readDriverOrdersActiveTruckId(): Promise<number | null> {
+  const raw = (await getItem(ACTIVE_TRUCK_ID_KEY)) ?? "";
+  const value = Number(raw.trim());
+  return Number.isInteger(value) && value > 0 ? value : null;
+}
+
+export async function writeDriverOrdersActiveTruckId(truckId: number | null): Promise<void> {
+  const safeTruckId = Number(truckId);
+  if (!Number.isInteger(safeTruckId) || safeTruckId <= 0) {
+    await setItem(ACTIVE_TRUCK_ID_KEY, "");
+    return;
+  }
+  await setItem(ACTIVE_TRUCK_ID_KEY, String(safeTruckId));
+}

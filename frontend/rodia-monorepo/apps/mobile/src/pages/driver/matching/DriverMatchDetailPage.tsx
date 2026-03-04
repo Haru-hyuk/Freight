@@ -4,11 +4,12 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { acceptDriverMatch, getDriverMatchDetailBadges, postCounterOffer } from "@/features/matching/api";
+import { acceptDriverMatch, getDriverMatchDetailBadges, postCounterOffer, startDriverTransit } from "@/features/matching/api";
 import { useMatchDetail, type MatchDetailRouteSnapshot } from "@/features/matching/model/useMatchDetail";
 import CounterOfferModal, { type CounterOfferSubmitPayload } from "@/features/matching/ui/CounterOfferModal";
 import { formatWorkMethodLabel } from "@/features/quote/model/workMethod";
 import { formatDateTime, formatDistance, formatKrw } from "@/shared/lib/format/display";
+import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
 import {
   DRIVER_CTA_ID,
   DRIVER_UI_STATE,
@@ -352,6 +353,7 @@ export function DriverMatchDetailPage({ matchId, routeSnapshot }: DriverMatchDet
 
   const [isOfferOpen, setIsOfferOpen] = useState(false);
   const [isAccepting, setIsAccepting] = useState(false);
+  const [isStartingDrive, setIsStartingDrive] = useState(false);
   const [isSubmittingOffer, setIsSubmittingOffer] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [offerErrorMessage, setOfferErrorMessage] = useState<string | null>(null);
@@ -508,6 +510,26 @@ export function DriverMatchDetailPage({ matchId, routeSnapshot }: DriverMatchDet
     setIsOfferOpen(true);
   }, [isReadyAction]);
 
+  const handleStartDrive = useCallback(async () => {
+    if (!isAssignedCta || !ctaPolicy.enabled || isStartingDrive) return;
+
+    setIsStartingDrive(true);
+    setActionMessage(null);
+    try {
+      const result = await startDriverTransit(matchId);
+      if (!result) {
+        setActionMessage({ tone: "error", text: NETWORK_ERROR_TEXT });
+        return;
+      }
+      setActionMessage({ tone: "success", text: "운행을 시작했습니다." });
+      await detail.refetch();
+    } catch (error) {
+      setActionMessage({ tone: "error", text: readApiErrorMessage(error, NETWORK_ERROR_TEXT) });
+    } finally {
+      setIsStartingDrive(false);
+    }
+  }, [ctaPolicy.enabled, detail, isAssignedCta, isStartingDrive, matchId]);
+
   const headerRight = (
     <Pressable
       style={styles.headerRefreshBtn}
@@ -526,8 +548,9 @@ export function DriverMatchDetailPage({ matchId, routeSnapshot }: DriverMatchDet
         <AppButton
           title={ctaPolicy.label}
           variant={ctaPolicy.enabled ? "primary" : "secondary"}
-          disabled={!ctaPolicy.enabled}
-          onPress={ctaPolicy.enabled ? () => { router.push("/(driver)/run"); } : undefined}
+          disabled={!ctaPolicy.enabled || isStartingDrive}
+          loading={isStartingDrive}
+          onPress={ctaPolicy.enabled ? () => { void handleStartDrive(); } : undefined}
           style={styles.actionButton}
           textStyle={{ fontSize: 16, fontWeight: "900" }}
         />

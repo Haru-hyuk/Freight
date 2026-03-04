@@ -105,7 +105,11 @@ public class QuoteCandidateService {
             int limit
     ) {
         if (truckOpt.isEmpty()) {
-            return jdbcTemplate.query(selectSql + orderLimitSql, (rs, rowNum) -> mapQuote(rs), limit);
+            try {
+                return jdbcTemplate.query(selectSql + orderLimitSql, (rs, rowNum) -> mapQuote(rs), limit);
+            } catch (DataAccessException ignored) {
+                return queryMinimalOpenCandidates(limit);
+            }
         }
 
         TruckDimension truck = truckOpt.get();

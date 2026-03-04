@@ -566,7 +566,8 @@ export default function DriverMarketRecommendationPage({
         if (cancelled) return;
         setRouteLoading(false);
         if (resolvedRouteSummary.isError) setRouteError(resolvedRouteSummary.reason ?? "경로 계산 실패");
-        const previewTruckId = toPositiveInt(quoteList[0]?.truckId);
+        const previewTruckId =
+          toPositiveInt(selection?.selectedTruckId) || toPositiveInt(quoteList[0]?.truckId);
         let resolvedSpec: TruckSpecReferenceResponse | null = null;
         let resolvedPlacements: Placement[] = [];
 
