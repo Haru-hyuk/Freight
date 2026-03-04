@@ -7,12 +7,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { QuoteDetailResponse } from "@/entities/quote/model/quote.types";
 import {
   buildEmptyRouteSummary,
-  normalizeRouteSummary,
+  fetchRouteSummary,
   type NormalizedRouteSummary,
 } from "@/features/driver-reco/model/routeSummary";
 import RecoLoadSimulationCard, {
   type RecoSelectedOrderDetail,
 } from "@/features/driver-reco/ui/RecoLoadSimulationCard";
+import RecoRouteMapCard from "@/features/driver-reco/ui/RecoRouteMapCard";
 import {
   acceptDriverMatchesBatch,
   getDriverQuoteSummaryDetail,
@@ -31,8 +32,7 @@ import {
 } from "@/features/matching/model/driverRunSyncEvents";
 import { addDriverAcceptedRunGroup } from "@/features/driver-orders/model/acceptedRunGroups";
 import { previewLoadPlan as previewLoadPlanGenerated } from "@/shared/api/generated/driver-optimization-controller/driver-optimization-controller";
-import { recommend as recommendRouteAssemblyGenerated } from "@/shared/api/generated/route-assembly-controller/route-assembly-controller";
-import type { LoadPlanResponse, Placement, RouteAssemblyRequest, TruckSpecReferenceResponse } from "@/shared/api/generated/schemas";
+import type { LoadPlanResponse, Placement, TruckSpecReferenceResponse } from "@/shared/api/generated/schemas";
 import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
 import { formatKrw } from "@/shared/lib/format/display";
 import { API_ERROR_CODE, getApiErrorCode } from "@/shared/lib/policy";
@@ -477,6 +477,15 @@ export default function DriverMarketRecommendationPage({
   const [selectedStopOrder, setSelectedStopOrder] = useState<number | null>(null);
   const [isXray, setIsXray] = useState(true);
   const [routeSummary, setRouteSummary] = useState<NormalizedRouteSummary>(buildEmptyRouteSummary);
+  const [routeLoading, setRouteLoading] = useState(false);
+  const [routeError, setRouteError] = useState<string | null>(null);
+
+  const safeQuoteIds = useMemo(() => {
+    if (!selection) return [] as number[];
+    return selection.recommendation.quoteIds
+      .map((quoteId) => toPositiveInt(quoteId))
+      .filter((quoteId) => quoteId > 0);
+  }, [selection]);
 
   const orderedOrders = useMemo(() => {
     if (!selection) return [] as DriverOrderCard[];
@@ -520,10 +529,6 @@ export default function DriverMarketRecommendationPage({
         return;
       }
 
-      const safeQuoteIds = selection.recommendation.quoteIds
-        .map((quoteId) => toPositiveInt(quoteId))
-        .filter((quoteId) => quoteId > 0);
-
       if (safeQuoteIds.length <= 0) {
         setErrorMessage("추천 항목에 유효한 견적 ID가 없습니다.");
         setRouteSummary(buildEmptyRouteSummary());
@@ -534,6 +539,7 @@ export default function DriverMarketRecommendationPage({
       setIsLoading(true);
       setErrorMessage(null);
       setRouteSummary(buildEmptyRouteSummary());
+      setRouteError(null);
       try {
         const quoteEntries = await Promise.all(
           safeQuoteIds.map(async (quoteId) => {
@@ -553,26 +559,13 @@ export default function DriverMarketRecommendationPage({
         const quoteList = safeQuoteIds
           .map((quoteId) => quoteMap[quoteId])
           .filter((quote): quote is QuoteDetailResponse => Boolean(quote));
-        let resolvedRouteSummary = buildEmptyRouteSummary();
-        try {
-          // OpenAPI grounding:
-          // - operationId: route-assembly-controller.recommend
-          // - generated client: recommendRouteAssemblyGenerated (route-assembly-controller.recommend)
-          // - RouteAssemblyRequest required fields: 없음 (openapi required 배열 미정의, 전 필드 optional)
-          // - RouteAssemblyResponse/RecommendedRoute fields:
-          //   A) link/url/deeplink: 스키마에 없음
-          //   B) polyline/geometry: 스키마에 없음
-          //   C) recommendations[].visitOrder[].location{latitude,longitude}: 존재
-          // - Kakao 7지점 제한은 OpenAPI 제약이 아닌 link/by URL 렌더링 UI 제약으로 처리한다.
-          const routeReq: RouteAssemblyRequest = {
-            selectedQuoteIds: safeQuoteIds,
-          };
-          const routeAssemblyPayload = await recommendRouteAssemblyGenerated(routeReq);
-          if (cancelled) return;
-          resolvedRouteSummary = normalizeRouteSummary(routeAssemblyPayload, safeQuoteIds);
-        } catch {
-          resolvedRouteSummary = buildEmptyRouteSummary();
-        }
+
+        // fetchRouteSummary: passes candidateQuotes so server can resolve route geometry
+        setRouteLoading(true);
+        const resolvedRouteSummary = await fetchRouteSummary({ selectedQuoteIds: safeQuoteIds, quotes: quoteList });
+        if (cancelled) return;
+        setRouteLoading(false);
+        if (resolvedRouteSummary.isError) setRouteError(resolvedRouteSummary.reason ?? "경로 계산 실패");
         const previewTruckId = toPositiveInt(quoteList[0]?.truckId);
         let resolvedSpec: TruckSpecReferenceResponse | null = null;
         let resolvedPlacements: Placement[] = [];
@@ -620,7 +613,10 @@ export default function DriverMarketRecommendationPage({
         setErrorMessage("추천 상세를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
         setRouteSummary(buildEmptyRouteSummary());
       } finally {
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled) {
+          setIsLoading(false);
+          setRouteLoading(false);
+        }
       }
     };
 
@@ -628,7 +624,20 @@ export default function DriverMarketRecommendationPage({
     return () => {
       cancelled = true;
     };
-  }, [selection]);
+  }, [safeQuoteIds, selection]);
+
+  const refetchRoute = useCallback(async () => {
+    if (routeLoading || safeQuoteIds.length === 0) return;
+    setRouteLoading(true);
+    setRouteError(null);
+    const quotes = safeQuoteIds
+      .map((id) => quotesById[id])
+      .filter((q): q is QuoteDetailResponse => Boolean(q));
+    const summary = await fetchRouteSummary({ selectedQuoteIds: safeQuoteIds, quotes });
+    setRouteSummary(summary);
+    setRouteLoading(false);
+    if (summary.isError) setRouteError(summary.reason ?? "경로 계산 실패");
+  }, [routeLoading, safeQuoteIds, quotesById]);
 
   const quoteCards = useMemo(() => {
     if (!selection) return [];
@@ -640,6 +649,26 @@ export default function DriverMarketRecommendationPage({
       }))
       .filter((entry) => entry.quoteId > 0);
   }, [orderedOrders, quotesById, selection]);
+
+  // Fallback stops built from quote origin/destination coordinates.
+  // Used when routeSummary.stops is empty (route-assembly unavailable).
+  // Kakao web calculates the polyline itself — only 2 valid coordinate points are needed.
+  const directRouteStops = useMemo(() => {
+    if (routeSummary.stops.length >= 2) return [];
+    const quoteList = safeQuoteIds
+      .map((id) => quotesById[id])
+      .filter((q): q is QuoteDetailResponse => Boolean(q));
+    if (quoteList.length === 0) return [];
+    const first = quoteList[0];
+    const last = quoteList[quoteList.length - 1];
+    const candidates = [
+      { name: toOptionalText(first.originAddress), lat: first.originLat, lng: first.originLng, type: "pickup" as const },
+      { name: toOptionalText(last.destinationAddress), lat: last.destinationLat, lng: last.destinationLng, type: "dropoff" as const },
+    ];
+    return candidates.every(
+      (s) => Number.isFinite(s.lat) && Number.isFinite(s.lng)
+    ) ? candidates : [];
+  }, [routeSummary.stops, safeQuoteIds, quotesById]);
 
   const orderedPlacements = useMemo(
     () => [...placements].sort((a, b) => (toPositiveInt(a.stopOrder) || 9999) - (toPositiveInt(b.stopOrder) || 9999)),
@@ -968,6 +997,15 @@ export default function DriverMarketRecommendationPage({
             selectedStopOrder={selectedStopOrder}
             onSelectStopOrder={setSelectedStopOrder}
             selectedOrderDetail={selectedOrderDetail}
+          />
+
+          <RecoRouteMapCard
+            summaryText={routeSummary.summary}
+            stops={routeSummary.stops}
+            fallbackStops={directRouteStops}
+            isError={routeSummary.isError}
+            routeLoading={routeLoading}
+            onRetry={() => void refetchRoute()}
           />
 
           <AppCard style={styles.quotesCard}>

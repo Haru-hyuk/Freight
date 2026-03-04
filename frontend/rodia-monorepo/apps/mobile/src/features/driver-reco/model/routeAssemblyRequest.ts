@@ -1,0 +1,62 @@
+// OpenAPI grounding:
+// - Quote { quoteId, origin: Place, destination: Place, volumeCbm, weightKg, allowCombine, combineAllowed,
+//           finalPrice, scheduledDate, lengthCm, widthCm, heightCm, rotatable, stackable, fragile,
+//           noStack, bottomOnly, maxStackWeight, status, handling }
+// - Place { name?, address?, latitude?, longitude? }
+// - RouteAssemblyRequest { selectedQuoteIds?, candidateQuotes?: Quote[], mode?: "SIMPLE"|"SMART" }
+// - candidateQuotes with origin.latitude/longitude is required at runtime (server 500 without it)
+
+import type { QuoteDetailResponse } from "@/entities/quote/model/quote.types";
+import type { Quote, RouteAssemblyRequest } from "@/shared/api/generated/schemas";
+
+function toOptionalFinite(v: unknown): number | undefined {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+function toOptionalStr(v: unknown): string | undefined {
+  return typeof v === "string" && v.trim() ? v.trim() : undefined;
+}
+
+/** Maps QuoteDetailResponse → generated Quote schema type (schema-grounded fields only). */
+export function buildCandidateQuote(q: QuoteDetailResponse): Quote {
+  return {
+    quoteId: q.quoteId,
+    origin: {
+      name: toOptionalStr(q.originAddress),
+      address: toOptionalStr(q.originAddress),
+      latitude: toOptionalFinite(q.originLat),
+      longitude: toOptionalFinite(q.originLng),
+    },
+    destination: {
+      name: toOptionalStr(q.destinationAddress),
+      address: toOptionalStr(q.destinationAddress),
+      latitude: toOptionalFinite(q.destinationLat),
+      longitude: toOptionalFinite(q.destinationLng),
+    },
+    volumeCbm: toOptionalFinite(q.volumeCbm),
+    weightKg: toOptionalFinite(q.weightKg),
+    allowCombine: q.allowCombine,
+    combineAllowed: q.allowCombine,
+    finalPrice: toOptionalFinite(q.finalPrice),
+    status: q.status,
+  };
+}
+
+/** Builds a RouteAssemblyRequest grounded in schema.
+ *  Populates candidateQuotes so the server can resolve route geometry. */
+export function buildRouteAssemblyRequest(params: {
+  selectedQuoteIds: number[];
+  quotes: QuoteDetailResponse[];
+}): RouteAssemblyRequest {
+  const { selectedQuoteIds, quotes } = params;
+  const selectedIdSet = new Set(selectedQuoteIds);
+  const candidateQuotes = quotes
+    .filter((q) => selectedIdSet.has(q.quoteId))
+    .map(buildCandidateQuote);
+  return {
+    selectedQuoteIds,
+    mode: "SIMPLE",
+    ...(candidateQuotes.length > 0 ? { candidateQuotes } : {}),
+  };
+}
