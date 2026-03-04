@@ -8,6 +8,10 @@ import {
   normalizeMatchDetailRouteSnapshot,
   type MatchDetailRouteSnapshot,
 } from "./matchDetailRouteSnapshot";
+import {
+  DRIVER_RUN_SYNC_EVENT,
+  subscribeDriverRunSyncEvent,
+} from "./driverRunSyncEvents";
 
 export type { MatchDetailRouteSnapshot } from "./matchDetailRouteSnapshot";
 
@@ -44,6 +48,21 @@ export function useMatchDetail(matchId: number, routeSnapshot?: MatchDetailRoute
       setReloadTick((prev) => prev + 1);
     });
   }, []);
+
+  useEffect(() => {
+    if (safeMatchId <= 0) return;
+
+    return subscribeDriverRunSyncEvent((event) => {
+      if (event.type !== DRIVER_RUN_SYNC_EVENT.COUNTER_OFFER_SUBMITTED) return;
+
+      const currentQuoteId = parseMatchPositiveInt(quote?.quoteId ?? match?.quoteId ?? bootstrapMatch?.quoteId);
+      const hasMatch = event.matchIds.includes(safeMatchId);
+      const hasQuote = currentQuoteId > 0 && event.quoteIds.includes(currentQuoteId);
+      if (!hasMatch && !hasQuote) return;
+
+      setReloadTick((prev) => prev + 1);
+    });
+  }, [bootstrapMatch?.quoteId, match?.quoteId, quote?.quoteId, safeMatchId]);
 
   useEffect(() => {
     let mounted = true;

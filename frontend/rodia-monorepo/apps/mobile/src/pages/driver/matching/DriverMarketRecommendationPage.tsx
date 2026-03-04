@@ -19,9 +19,14 @@ import {
   clearDriverMarketRecommendationSelection,
 } from "@/features/driver-orders/model/marketRecommendationSelection";
 import { DRIVER_ROUTE_PATH } from "@/features/matching/model/driverRunUiApiGrounding";
+import {
+  DRIVER_RUN_SYNC_EVENT,
+  publishDriverRunSyncEvent,
+} from "@/features/matching/model/driverRunSyncEvents";
 import { addDriverAcceptedRunGroup } from "@/features/driver-orders/model/acceptedRunGroups";
 import { previewLoadPlan as previewLoadPlanGenerated } from "@/shared/api/generated/driver-optimization-controller/driver-optimization-controller";
 import type { LoadPlanResponse, Placement, TruckSpecReferenceResponse } from "@/shared/api/generated/schemas";
+import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
 import { formatKrw } from "@/shared/lib/format/display";
 import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
@@ -793,10 +798,16 @@ export default function DriverMarketRecommendationPage({
           setOfferErrorMessage("운임 제안 처리에 실패했습니다.");
           return;
         }
+        publishDriverRunSyncEvent({
+          type: DRIVER_RUN_SYNC_EVENT.COUNTER_OFFER_SUBMITTED,
+          matchIds: [safeMatchId],
+          quoteIds: [safeQuoteId],
+          source: "market_recommendation",
+        });
         setIsOfferOpen(false);
         Alert.alert("완료", "운임 제안을 전송했습니다.");
-      } catch {
-        setOfferErrorMessage("운임 제안 처리에 실패했습니다.");
+      } catch (error) {
+        setOfferErrorMessage(readApiErrorMessage(error, "운임 제안 처리에 실패했습니다."));
       } finally {
         setIsSubmittingOffer(false);
       }
@@ -810,7 +821,7 @@ export default function DriverMarketRecommendationPage({
         title={isGroupedRecommendation ? "운임 제안(대표 1건)" : "운임 제안"}
         variant="secondary"
         style={styles.bottomBtn}
-        disabled={!primaryOrder || isBusy}
+        disabled={!primaryOrder || isBusy || isSubmittingOffer}
         onPress={() => {
           setOfferErrorMessage(null);
           setIsOfferOpen(true);

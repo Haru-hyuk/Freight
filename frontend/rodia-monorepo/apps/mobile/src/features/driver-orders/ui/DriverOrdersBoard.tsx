@@ -44,7 +44,13 @@ import {
 } from "@/features/driver-orders/ui/cards/DriverRunGroupCard";
 import CounterOfferModal, { type CounterOfferSubmitPayload } from "@/features/matching/ui/CounterOfferModal";
 import { DRIVER_ROUTE_PATH } from "@/features/matching/model/driverRunUiApiGrounding";
+import {
+  DRIVER_RUN_SYNC_EVENT,
+  publishDriverRunSyncEvent,
+  subscribeDriverRunSyncEvent,
+} from "@/features/matching/model/driverRunSyncEvents";
 import { formatKrw } from "@/shared/lib/format/display";
+import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
 import {
   BADGE_TONE,
   DRIVER_CTA_ID,
@@ -999,6 +1005,13 @@ export function DriverOrdersBoard({
     setRunStatusFilter("ALL");
   }, [assignedOnly]);
 
+  useEffect(() => {
+    return subscribeDriverRunSyncEvent((event) => {
+      if (event.type !== DRIVER_RUN_SYNC_EVENT.COUNTER_OFFER_SUBMITTED) return;
+      void loadOrders("refresh");
+    });
+  }, [loadOrders]);
+
   useFocusEffect(
     useCallback(() => {
       const meta = focusRefetchMetaRef.current;
@@ -1301,12 +1314,19 @@ export function DriverOrdersBoard({
           return;
         }
 
+        const safeQuoteId = Number(target.quoteId);
+        publishDriverRunSyncEvent({
+          type: DRIVER_RUN_SYNC_EVENT.COUNTER_OFFER_SUBMITTED,
+          matchIds: [safeMatchId],
+          quoteIds: Number.isInteger(safeQuoteId) && safeQuoteId > 0 ? [safeQuoteId] : [],
+          source: "order_board",
+        });
         setIsOfferOpen(false);
         setOfferTargetCard(null);
         showToast("역제안을 전송했습니다.");
         await loadOrders("refresh");
-      } catch {
-        setOfferErrorMessage(NETWORK_ERROR_TEXT);
+      } catch (error) {
+        setOfferErrorMessage(readApiErrorMessage(error, NETWORK_ERROR_TEXT));
       } finally {
         setIsSubmittingOffer(false);
       }

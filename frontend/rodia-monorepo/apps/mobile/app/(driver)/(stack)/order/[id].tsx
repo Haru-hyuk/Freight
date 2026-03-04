@@ -16,12 +16,17 @@ import { getDriverMarketRecommendationSelection } from "@/features/driver-orders
 import { acceptDriverMatch, postCounterOffer, uploadImage, type DriverPhotoUploadType } from "@/features/matching/api";
 import type { ParsedMatchResponseItem } from "@/features/matching/api/shipper-match-parser";
 import { useMatchDetail } from "@/features/matching/model/useMatchDetail";
+import {
+  DRIVER_RUN_SYNC_EVENT,
+  publishDriverRunSyncEvent,
+} from "@/features/matching/model/driverRunSyncEvents";
 import CounterOfferModal, { type CounterOfferSubmitPayload } from "@/features/matching/ui/CounterOfferModal";
 import DriverMarketRecommendationPage from "@/pages/driver/matching/DriverMarketRecommendationPage";
 import type { QuoteDetailResponse } from "@/entities/quote/model/quote.types";
 import { previewLoadPlan as previewLoadPlanGenerated } from "@/shared/api/generated/driver-optimization-controller/driver-optimization-controller";
 import type { LoadPlanResponse, Placement, TruckSpecReferenceResponse } from "@/shared/api/generated/schemas";
 import { confirmLoading, confirmUnloading, startDriving } from "@/shared/lib/mock-flow";
+import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
 import {
   DRIVER_CTA_ID,
   DRIVER_UI_STATE,
@@ -1271,16 +1276,31 @@ function DriverOrderDetailContent({ params }: { params: DriverOrderRouteParams }
       setIsSubmittingOffer(true);
       setOfferErrorMessage(null);
       try {
-        await postCounterOffer(matchId, { proposedPrice: payload.amount, message: payload.message });
+        const safeQuoteId = toPositiveInt(viewModel.quoteId);
+        const result = await postCounterOffer(
+          matchId,
+          { proposedPrice: payload.amount, message: payload.message },
+          safeQuoteId > 0 ? safeQuoteId : undefined
+        );
+        if (!result) {
+          setOfferErrorMessage("운임 제안에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+          return;
+        }
+        publishDriverRunSyncEvent({
+          type: DRIVER_RUN_SYNC_EVENT.COUNTER_OFFER_SUBMITTED,
+          matchIds: [matchId],
+          quoteIds: safeQuoteId > 0 ? [safeQuoteId] : [],
+          source: "order_detail",
+        });
         setIsOfferModalOpen(false);
         await viewModel.refetch();
-      } catch {
-        setOfferErrorMessage("운임 제안에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+      } catch (error) {
+        setOfferErrorMessage(readApiErrorMessage(error, "운임 제안에 실패했습니다. 잠시 후 다시 시도해 주세요."));
       } finally {
         setIsSubmittingOffer(false);
       }
     },
-    [isSubmittingOffer, matchId, viewModel.refetch]
+    [isSubmittingOffer, matchId, viewModel.quoteId, viewModel.refetch]
   );
 
   const handleStartDriving = useCallback(() => {
