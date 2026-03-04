@@ -1,11 +1,11 @@
-export type MatchingProgressStatus = "READY" | "IN_TRANSIT" | "COMPLETED" | "CANCELLED" | "UNMATCHED";
+﻿export type MatchingProgressStatus = "READY" | "IN_TRANSIT" | "COMPLETED" | "CANCELLED" | "UNMATCHED";
 
 export function getMatchingProgressLabel(status: MatchingProgressStatus, accepted?: boolean): string {
-  if (status === "CANCELLED") return "\uCDE8\uC18C";
-  if (status === "COMPLETED") return "\uBC30\uCC28\uC644\uB8CC";
-  if (status === "IN_TRANSIT") return "\uBC30\uCC28\uC911";
-  if (status === "UNMATCHED") return "\uB9E4\uCE6D\uC911";
-  return accepted ? "\uBC30\uCC28\uC911" : "\uB9E4\uCE6D\uC911";
+  if (status === "CANCELLED") return "취소";
+  if (status === "COMPLETED") return "배차완료";
+  if (status === "IN_TRANSIT") return "배차중";
+  if (status === "UNMATCHED") return "매칭중";
+  return accepted ? "배차중" : "매칭중";
 }
 
 export function getMatchingProgressBadgeVariant(
@@ -16,3 +16,4 @@ export function getMatchingProgressBadgeVariant(
   if (status === "IN_TRANSIT") return "secondary";
   return "outline";
 }
+

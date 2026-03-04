@@ -28,8 +28,6 @@ export function DashboardKpiGrid({ loading, kpi, range }: Props) {
   const totalSettlementAmount = kpi?.totalSettlementAmount ?? 0;
   const deviationCasesOpen = kpi?.deviationCasesOpen ?? 0;
 
-  const averageShipperRating = kpi?.averageShipperRating ?? 0;
-  const averageDriverRating = kpi?.averageDriverRating ?? 0;
   const driverCompletionRate = kpi?.driverCompletionRate ?? 0;
   const driverOnTimeRate = kpi?.driverOnTimeRate ?? 0;
 
@@ -122,28 +120,6 @@ export function DashboardKpiGrid({ loading, kpi, range }: Props) {
         meta={{
           label: "검토 필요",
           source: "deviations.open",
-        }}
-      />
-
-      <KpiCard
-        loading={loading}
-        title="화주 평점 평균"
-        value={`${averageShipperRating.toFixed(1)}/5.0`}
-        tone="accent"
-        meta={{
-          label: "전체 화주 평균 점수",
-          source: "shipper.ratings",
-        }}
-      />
-
-      <KpiCard
-        loading={loading}
-        title="기사 평점 평균"
-        value={`${averageDriverRating.toFixed(1)}/5.0`}
-        tone="secondary"
-        meta={{
-          label: "전체 기사 평균 점수",
-          source: "driver.ratings",
         }}
       />
 

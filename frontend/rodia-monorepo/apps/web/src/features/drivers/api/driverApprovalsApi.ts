@@ -1,4 +1,4 @@
-import { DRIVER_APPROVAL_MOCK_ROWS } from "@/features/drivers/model/mockData";
+﻿import { DRIVER_APPROVAL_MOCK_ROWS } from "@/features/drivers/model/mockData";
 import type { DriverApprovalReviewPayload, DriverApprovalRow } from "@/features/drivers/model/types";
 import { appendActivityLog } from "@/shared/lib/activity-log";
 import { apiClient } from "@/shared/lib/api/client";
@@ -94,7 +94,7 @@ function mapBackendTruck(raw: unknown): BackendTruck {
 
 function toVehicleSummary(truck: BackendTruck): string {
   const detail = [truck.vehicleType, truck.vehicleBodyType].filter(Boolean).join(" ").trim();
-  return (truck.name ?? detail) || "\uBBF8\uC0C1 \uCC28\uB7C9";
+  return (truck.name ?? detail) || "미상 차량";
 }
 
 function compareByDateDesc(a: string | null | undefined, b: string | null | undefined): number {
@@ -132,7 +132,7 @@ function deriveRowsFromTrucks(trucks: BackendTruck[]): DriverApprovalRow[] {
       requestedAt: toDisplayDate(latest?.createdAt ?? null),
       name: `Driver-${driverId}`,
       phone: "-",
-      vehicleSummary: latest ? toVehicleSummary(latest) : "\uBBF8\uC0C1 \uCC28\uB7C9",
+      vehicleSummary: latest ? toVehicleSummary(latest) : "미상 차량",
       licenseStatus: allVerified ? "VERIFIED" : "UNVERIFIED",
       approvalStatus: defaultApprovalStatus,
       documents: undefined,
@@ -216,7 +216,7 @@ export async function reviewDriverApproval(payload: DriverApprovalReviewPayload)
       action: "DRIVER_APPROVAL_REVIEWED",
       targetId: payload.driverId,
       mode: "MOCK",
-      message: `\uCC28\uC8FC ${payload.driverId} \uC2B9\uC778 \uAC80\uD1A0 ${payload.action === "APPROVE" ? "\uC2B9\uC778" : "\uBC18\uB824"}`,
+      message: `차주 ${payload.driverId} 승인 검토 ${payload.action === "APPROVE" ? "승인" : "반려"}`,
     });
     return;
   }
@@ -248,7 +248,8 @@ export async function reviewDriverApproval(payload: DriverApprovalReviewPayload)
     targetId: payload.driverId,
     mode: "REAL",
     message: remoteApplied
-      ? `\uCC28\uC8FC ${payload.driverId} \uC2B9\uC778 \uAC80\uD1A0 \uACB0\uACFC\uAC00 \uBC31\uC5D4\uB4DC\uC5D0 \uBC18\uC601\uB418\uC5C8\uC2B5\uB2C8\uB2E4.`
-      : `\uCC28\uC8FC ${payload.driverId} \uC2B9\uC778 \uAC80\uD1A0 \uACB0\uACFC\uB97C \uC138\uC158\uC5D0\uB9CC \uBC18\uC601\uD588\uC2B5\uB2C8\uB2E4(\uBC31\uC5D4\uB4DC API \uBBF8\uC9C0\uC6D0).`,
+      ? `차주 ${payload.driverId} 승인 검토 결과가 백엔드에 반영되었습니다.`
+      : `차주 ${payload.driverId} 승인 검토 결과를 세션에만 반영했습니다(백엔드 API 미지원).`,
   });
 }
+

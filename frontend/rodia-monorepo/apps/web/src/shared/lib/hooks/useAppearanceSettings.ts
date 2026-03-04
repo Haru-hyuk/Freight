@@ -20,22 +20,22 @@ export const PRIMARY_COLOR_PRESET_OPTIONS: Array<{
   {
     value: "brand",
     label: "브랜드 오렌지",
-    description: "기본 브랜드 메인 색상",
+    description: "기본 브랜드 중심 색상입니다.",
   },
   {
     value: "accent",
     label: "강조 톤",
-    description: "부드러운 강조 중심 톤",
+    description: "부드러운 강조 전달에 적합합니다.",
   },
   {
     value: "destructive",
-    label: "강한 대비 톤",
-    description: "경고 중심의 강한 메인 톤",
+    label: "강한 대비",
+    description: "경고 중심 운영 화면에 적합합니다.",
   },
   {
     value: "foreground",
     label: "모노 톤",
-    description: "텍스트 기반의 단색 톤",
+    description: "텍스트 중심 가독성 테마입니다.",
   },
 ];
 

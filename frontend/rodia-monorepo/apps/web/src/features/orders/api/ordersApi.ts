@@ -1,4 +1,7 @@
-import { ORDER_MONITORING_MOCK_ROWS } from "@/features/orders/model/mockData";
+﻿import {
+  ORDER_CANCELLATION_REQUEST_MOCK_ROWS,
+  ORDER_MONITORING_MOCK_ROWS,
+} from "@/features/orders/model/mockData";
 import type {
   CancellationApprovalStatus,
   CancellationRequestDetail,
@@ -85,7 +88,7 @@ type BackendUser = {
 type ReviewOverride = Pick<CancellationRequestRow, "approvalStatus" | "reviewedAt" | "reviewedBy" | "reviewMemo">;
 
 const REVIEWER_ID = "admin.web";
-const DERIVED_REASON_TEXT = "\uBC31\uC5D4\uB4DC \uCDE8\uC18C \uC0AC\uC720 \uD544\uB4DC\uAC00 \uC5C6\uC5B4 \uC0C1\uD0DC \uAE30\uBC18\uC73C\uB85C \uC0DD\uC131\uB41C \uC694\uCCAD\uC785\uB2C8\uB2E4.";
+const DERIVED_REASON_TEXT = "백엔드 취소 사유 필드가 없어 상태 기반으로 생성된 요청입니다.";
 const liveReviewOverrides = new Map<string, ReviewOverride>();
 
 function toRecord(value: unknown): Record<string, unknown> {
@@ -307,7 +310,7 @@ function mapBackendUser(raw: unknown): BackendUser {
   return {
     id: toNumberValue(row.id ?? row.shipperId ?? row.shipper_id ?? row.driverId ?? row.driver_id ?? code),
     code,
-    name: toStringValue(row.name, "\uC815\uBCF4 \uC5C6\uC74C"),
+    name: toStringValue(row.name, "정보 없음"),
     phone: toStringValue(row.phone, "-"),
     email: toStringValue(row.email, "") || undefined,
     status: toStringValue(row.status, "") || undefined,
@@ -332,10 +335,10 @@ function mapBackendCancellationRequest(raw: unknown): CancellationRequestRow {
   const requestedByName =
     toStringValue(row.requestedByName ?? row.requested_by_name, "").trim() ||
     (requestedByRole === "SHIPPER"
-      ? toStringValue(row.shipperName ?? row.shipper_name, "\uD654\uC8FC")
+      ? toStringValue(row.shipperName ?? row.shipper_name, "화주")
       : requestedByRole === "DRIVER"
-        ? toStringValue(row.driverName ?? row.driver_name, "\uAE30\uC0AC")
-        : "\uD655\uC778 \uD544\uC694");
+        ? toStringValue(row.driverName ?? row.driver_name, "기사")
+        : "확인 필요");
 
   return {
     requestId:
@@ -348,12 +351,12 @@ function mapBackendCancellationRequest(raw: unknown): CancellationRequestRow {
     shipperId: toShipperIdText(row.shipperId ?? row.shipper_id),
     shipperName: toStringValue(
       row.shipperName ?? row.shipper_name,
-      "\uD654\uC8FC \uC815\uBCF4 \uD655\uC778 \uD544\uC694",
+      "화주 정보 확인 필요",
     ),
     driverId: toDriverIdText(row.driverId ?? row.driver_id),
     driverName: toStringValue(
       row.driverName ?? row.driver_name,
-      "\uAE30\uC0AC \uC815\uBCF4 \uD655\uC778 \uD544\uC694",
+      "기사 정보 확인 필요",
     ),
     originAddress: toStringValue(row.originAddress ?? row.origin_address, "-"),
     destinationAddress: toStringValue(row.destinationAddress ?? row.destination_address, "-"),
@@ -568,22 +571,22 @@ async function fetchDerivedCancellationRequests(): Promise<CancellationRequestRo
       requestedByRole,
       requestedByName:
         requestedByRole === "SHIPPER"
-          ? shipperUser?.name ?? "\uD654\uC8FC"
+          ? shipperUser?.name ?? "화주"
           : requestedByRole === "DRIVER"
-            ? driverUser?.name ?? "\uAE30\uC0AC"
-            : "\uD655\uC778 \uD544\uC694",
+            ? driverUser?.name ?? "기사"
+            : "확인 필요",
       shipperId: toShipperIdText(shipperId),
       shipperName:
         shipperUser?.name ??
         (shipperId !== null
-          ? `\uD654\uC8FC S-${shipperId}`
-          : "\uD654\uC8FC \uC815\uBCF4 \uD655\uC778 \uD544\uC694"),
+          ? `화주 S-${shipperId}`
+          : "화주 정보 확인 필요"),
       driverId: toDriverIdText(driverId),
       driverName:
         driverUser?.name ??
         (driverId !== null
-          ? `\uAE30\uC0AC D-${driverId}`
-          : "\uAE30\uC0AC \uC815\uBCF4 \uD655\uC778 \uD544\uC694"),
+          ? `기사 D-${driverId}`
+          : "기사 정보 확인 필요"),
       originAddress: quote.originAddress,
       destinationAddress: quote.destinationAddress,
       cargoName: quote.cargoName ?? "-",
@@ -600,9 +603,17 @@ async function fetchDerivedCancellationRequests(): Promise<CancellationRequestRo
 }
 
 async function fetchAllCancellationRows(): Promise<CancellationRequestRow[]> {
+  if (isMockModeEnabled()) {
+    return [...ORDER_CANCELLATION_REQUEST_MOCK_ROWS]
+      .map(applyReviewOverride)
+      .sort((a, b) => toTimestamp(b.requestedAt) - toTimestamp(a.requestedAt));
+  }
+
   const remoteRows = await fetchRemoteCancellationRequests();
   const sourceRows = remoteRows ?? (await fetchDerivedCancellationRequests());
-  return sourceRows.map(applyReviewOverride).sort((a, b) => toTimestamp(b.requestedAt) - toTimestamp(a.requestedAt));
+  return sourceRows
+    .map(applyReviewOverride)
+    .sort((a, b) => toTimestamp(b.requestedAt) - toTimestamp(a.requestedAt));
 }
 
 function buildMonitoringRows(
@@ -648,14 +659,14 @@ function buildMonitoringRows(
       settlementStatus: normalizeSettlementStatus(settlement?.settlementStatus),
       shipperName:
         quote.shipperName ??
-        (quote.shipperId !== null ? `\uD654\uC8FC S-${quote.shipperId}` : "\uD654\uC8FC"),
+        (quote.shipperId !== null ? `화주 S-${quote.shipperId}` : "화주"),
       driverName:
         match?.driverId !== null && match?.driverId !== undefined
-          ? `\uAE30\uC0AC D-${match.driverId}`
+          ? `기사 D-${match.driverId}`
           : "-",
       originAddress: quote.originAddress,
       destinationAddress: quote.destinationAddress,
-      cargoName: quote.cargoName ?? "\uD654\uBB3C",
+      cargoName: quote.cargoName ?? "화물",
       requestedAt: toDisplayDate(quote.createdAt),
       totalFare: payment?.totalAmount ?? quote.finalPrice ?? 0,
     } satisfies Omit<OrderMonitoringRow, "riskState">;
@@ -678,11 +689,11 @@ function buildMonitoringRows(
       matchStatus: normalizeMatchStatus(match.status, true),
       paymentStatus: normalizePaymentStatus(payment?.status),
       settlementStatus: normalizeSettlementStatus(settlement?.settlementStatus),
-      shipperName: "\uD654\uC8FC",
-      driverName: match.driverId !== null ? `\uAE30\uC0AC D-${match.driverId}` : "-",
+      shipperName: "화주",
+      driverName: match.driverId !== null ? `기사 D-${match.driverId}` : "-",
       originAddress: "-",
       destinationAddress: "-",
-      cargoName: "\uD654\uBB3C",
+      cargoName: "화물",
       requestedAt: toDisplayDate(match.createdAt),
       totalFare: payment?.totalAmount ?? 0,
     } satisfies Omit<OrderMonitoringRow, "riskState">;
@@ -832,6 +843,16 @@ export async function reviewCancellationRequest(payload: CancellationReviewPaylo
 
   liveReviewOverrides.set(payload.requestId, override);
 
+  if (isMockModeEnabled()) {
+    appendActivityLog({
+      action: "ORDER_CANCELLATION_REVIEWED",
+      targetId: payload.requestId,
+      mode: "MOCK",
+      message: `취소 요청 ${payload.requestId} 검토 결과를 목업 데이터에 반영했습니다.`,
+    });
+    return;
+  }
+
   let remoteApplied = false;
   try {
     await apiClient.post(apiPaths.adminOrderCancellationReview(payload.requestId), {
@@ -848,8 +869,8 @@ export async function reviewCancellationRequest(payload: CancellationReviewPaylo
     targetId: payload.requestId,
     mode: "REAL",
     message: remoteApplied
-      ? `\uCDE8\uC18C \uC694\uCCAD ${payload.requestId} \uAC80\uD1A0 \uACB0\uACFC\uAC00 \uAD00\uB9AC\uC790 API\uC5D0 \uBC18\uC601\uB418\uC5C8\uC2B5\uB2C8\uB2E4.`
-      : `\uCDE8\uC18C \uC694\uCCAD ${payload.requestId} \uAC80\uD1A0 \uACB0\uACFC\uB97C \uB85C\uCEEC \uC138\uC158\uC5D0 \uC800\uC7A5\uD588\uC2B5\uB2C8\uB2E4.`,
+      ? `취소 요청 ${payload.requestId} 검토 결과가 관리자 API에 반영되었습니다.`
+      : `취소 요청 ${payload.requestId} 검토 결과를 로컬 세션에 저장했습니다.`,
   });
 }
 
@@ -875,3 +896,7 @@ export async function fetchOrderMonitoringSnapshot(): Promise<OrderMonitoringSna
     summary: buildMonitoringSummary(rows),
   };
 }
+
+
+
+

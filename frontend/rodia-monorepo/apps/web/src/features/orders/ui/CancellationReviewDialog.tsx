@@ -1,4 +1,4 @@
-import * as React from "react";
+﻿import * as React from "react";
 
 import type { CancellationReviewAction, CancellationRequestRow } from "@/features/orders/model/types";
 import { Button } from "@/shared/ui/shadcn/button";
@@ -32,9 +32,9 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 }
 
 function roleLabel(role: CancellationRequestRow["requestedByRole"]): string {
-  if (role === "SHIPPER") return "\uD654\uC8FC";
-  if (role === "DRIVER") return "\uAE30\uC0AC";
-  return "\uD655\uC778 \uD544\uC694";
+  if (role === "SHIPPER") return "화주";
+  if (role === "DRIVER") return "기사";
+  return "확인 필요";
 }
 
 export function CancellationReviewDialog({ row, open, submitting, onOpenChange, onReview }: Props) {
@@ -52,7 +52,7 @@ export function CancellationReviewDialog({ row, open, submitting, onOpenChange, 
     if (!row) return;
     const trimmed = memo.trim();
     if (action === "REJECT" && trimmed.length < 5) {
-      setError("\uBC18\uB824 \uC2DC \uAC80\uD1A0 \uBA54\uBAA8\uB97C 5\uC790 \uC774\uC0C1 \uC785\uB825\uD574 \uC8FC\uC138\uC694.");
+      setError("반려 시 검토 메모를 5자 이상 입력해 주세요.");
       return;
     }
     setError(null);
@@ -68,10 +68,10 @@ export function CancellationReviewDialog({ row, open, submitting, onOpenChange, 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="rounded-lg border border-border bg-background">
         <DialogHeader>
-          <DialogTitle>{"\uCDE8\uC18C \uC694\uCCAD \uAC80\uD1A0"}</DialogTitle>
+          <DialogTitle>{"취소 요청 검토"}</DialogTitle>
           <DialogDescription>
             {
-              "\uB9E4\uCE6D\uC774 \uAC78\uB9B0 \uC8FC\uBB38 \uCDE8\uC18C \uC694\uCCAD\uC785\uB2C8\uB2E4. \uC694\uCCAD \uC815\uBCF4\uC640 \uC0AC\uC720\uB97C \uD655\uC778\uD55C \uB4A4 \uC2B9\uC778 \uB610\uB294 \uBC18\uB824\uD574 \uC8FC\uC138\uC694."
+              "매칭이 걸린 주문 취소 요청입니다. 요청 정보와 사유를 확인한 뒤 승인 또는 반려해 주세요."
             }
           </DialogDescription>
         </DialogHeader>
@@ -80,33 +80,33 @@ export function CancellationReviewDialog({ row, open, submitting, onOpenChange, 
           <div className="space-y-4">
             <div className="rounded-lg border border-border bg-muted p-4">
               <div className="space-y-2">
-                <DetailRow label="\uC694\uCCAD ID" value={row.requestId} />
+                <DetailRow label="요청 ID" value={row.requestId} />
                 <Separator />
-                <DetailRow label="\uACAC\uC801/\uB9E4\uCE6D" value={`${row.quoteId} / ${row.matchId}`} />
+                <DetailRow label="견적/매칭" value={`${row.quoteId} / ${row.matchId}`} />
                 <Separator />
-                <DetailRow label="\uC694\uCCAD\uC790" value={`${roleLabel(row.requestedByRole)} / ${row.requestedByName}`} />
+                <DetailRow label="요청자" value={`${roleLabel(row.requestedByRole)} / ${row.requestedByName}`} />
                 <Separator />
-                <DetailRow label="\uD654\uC8FC/\uAE30\uC0AC" value={`${row.shipperName} / ${row.driverName}`} />
+                <DetailRow label="화주/기사" value={`${row.shipperName} / ${row.driverName}`} />
                 <Separator />
-                <DetailRow label="\uD654\uBB3C" value={row.cargoName} />
+                <DetailRow label="화물" value={row.cargoName} />
                 <Separator />
-                <DetailRow label="\uC6B4\uC1A1\uAD6C\uAC04" value={`${row.originAddress} \u2192 ${row.destinationAddress}`} />
+                <DetailRow label="운송구간" value={`${row.originAddress} → ${row.destinationAddress}`} />
               </div>
               <div className="mt-4 rounded-lg border border-border bg-background p-3 text-sm text-foreground">
-                <div className="mb-1 font-semibold">{"\uCDE8\uC18C \uC0AC\uC720"}</div>
+                <div className="mb-1 font-semibold">{"취소 사유"}</div>
                 <div>{row.cancelReason}</div>
               </div>
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="cancellation-review-memo" className="text-sm font-semibold text-foreground">
-                {"\uAC80\uD1A0 \uBA54\uBAA8"}
+                {"검토 메모"}
               </Label>
               <Textarea
                 id="cancellation-review-memo"
                 value={memo}
                 onChange={(event) => setMemo(event.target.value)}
-                placeholder="\uAC80\uD1A0 \uADFC\uAC70\uB97C \uC785\uB825\uD558\uC138\uC694."
+                placeholder="검토 근거를 입력하세요."
                 className="border border-border bg-background text-foreground focus-visible:ring-2 focus-visible:ring-primary"
               />
               {error ? <p className="text-sm text-foreground">{error}</p> : null}
@@ -116,10 +116,10 @@ export function CancellationReviewDialog({ row, open, submitting, onOpenChange, 
 
         <DialogFooter className="gap-2">
           <Button type="button" variant="secondary" onClick={() => onOpenChange(false)} disabled={submitting}>
-            {"\uB2EB\uAE30"}
+            {"닫기"}
           </Button>
           <Button type="button" onClick={() => void handleSubmit("APPROVE")} disabled={submitting || !row}>
-            {"\uC2B9\uC778"}
+            {"승인"}
           </Button>
           <Button
             type="button"
@@ -127,10 +127,11 @@ export function CancellationReviewDialog({ row, open, submitting, onOpenChange, 
             onClick={() => void handleSubmit("REJECT")}
             disabled={submitting || !row}
           >
-            {"\uBC18\uB824"}
+            {"반려"}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
+

@@ -1,4 +1,4 @@
-import * as React from "react";
+﻿import * as React from "react";
 import { useNavigate } from "react-router-dom";
 
 import { fetchCancellationRequestRows, reviewCancellationRequest } from "@/features/orders/api/ordersApi";
@@ -14,10 +14,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/shadcn/car
 import { Input } from "@/shared/ui/shadcn/input";
 
 const STATUS_OPTIONS: Array<{ value: CancellationStatusFilter; label: string }> = [
-  { value: "ALL", label: "\uC804\uCCB4" },
-  { value: "PENDING", label: "\uAC80\uD1A0\uB300\uAE30" },
-  { value: "APPROVED", label: "\uC2B9\uC778" },
-  { value: "REJECTED", label: "\uBC18\uB824" },
+  { value: "ALL", label: "전체" },
+  { value: "PENDING", label: "검토대기" },
+  { value: "APPROVED", label: "승인" },
+  { value: "REJECTED", label: "반려" },
 ];
 
 type Props = {
@@ -36,8 +36,8 @@ function SummaryCard({ label, value }: { label: string; value: number }) {
 }
 
 export function OrderCancellationRequestsView({
-  title = "\uB9E4\uCE6D \uCDE8\uC18C \uC694\uCCAD \uAD00\uB9AC",
-  description = "\uAE30\uC0AC\uAC00 \uBC30\uC815\uB41C \uC8FC\uBB38\uC758 \uCDE8\uC18C \uC694\uCCAD\uC744 \uC2EC\uC0AC\uD558\uACE0 \uC2B9\uC778/\uBC18\uB824\uB97C \uCC98\uB9AC\uD569\uB2C8\uB2E4.",
+  title = "매칭 취소 요청 관리",
+  description = "기사가 배정된 주문의 취소 요청을 심사하고 승인/반려를 처리합니다.",
   detailBasePath = "/orders/cancellations",
 }: Props) {
   const navigate = useNavigate();
@@ -84,7 +84,7 @@ export function OrderCancellationRequestsView({
     setReviewSubmitting(true);
     try {
       await reviewCancellationRequest(payload);
-      setNotice(`\uC694\uCCAD ${payload.requestId} \uAC80\uD1A0\uB97C \uC644\uB8CC\uD588\uC2B5\uB2C8\uB2E4.`);
+      setNotice(`요청 ${payload.requestId} 검토를 완료했습니다.`);
       await load();
     } finally {
       setReviewSubmitting(false);
@@ -103,7 +103,7 @@ export function OrderCancellationRequestsView({
             <CardContent className="flex items-center justify-between gap-3 p-4">
               <p className="text-sm text-foreground">{notice}</p>
               <Button type="button" size="sm" variant="secondary" onClick={() => setNotice(null)}>
-                {"\uB2EB\uAE30"}
+                {"닫기"}
               </Button>
             </CardContent>
           </Card>
@@ -119,10 +119,10 @@ export function OrderCancellationRequestsView({
               <Input
                 value={searchInput}
                 onChange={(event) => setSearchInput(event.target.value)}
-                placeholder="\uC694\uCCADID, \uACAC\uC801ID, \uB9E4\uCE6DID, \uD654\uC8FC/\uAE30\uC0AC \uC774\uB984 \uAC80\uC0C9"
+                placeholder="요청ID, 견적ID, 매칭ID, 화주/기사 이름 검색"
                 className="border border-border bg-background text-foreground focus-visible:ring-2 focus-visible:ring-primary"
               />
-              <Button type="submit">{"\uAC80\uC0C9"}</Button>
+              <Button type="submit">{"검색"}</Button>
               <Button
                 type="button"
                 variant="secondary"
@@ -131,10 +131,10 @@ export function OrderCancellationRequestsView({
                   setSearch("");
                 }}
               >
-                {"\uCD08\uAE30\uD654"}
+                {"초기화"}
               </Button>
               <Button type="button" variant="secondary" onClick={() => void load()}>
-                {"\uC0C8\uB85C\uACE0\uCE68"}
+                {"새로고침"}
               </Button>
             </form>
 
@@ -155,10 +155,10 @@ export function OrderCancellationRequestsView({
         </Card>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-          <SummaryCard label="\uC804\uCCB4 \uC694\uCCAD" value={total} />
-          <SummaryCard label="\uAC80\uD1A0\uB300\uAE30" value={pendingCount} />
-          <SummaryCard label="\uD654\uC8FC \uC694\uCCAD" value={shipperCount} />
-          <SummaryCard label="\uAE30\uC0AC \uC694\uCCAD" value={driverCount} />
+          <SummaryCard label="전체 요청" value={total} />
+          <SummaryCard label="검토대기" value={pendingCount} />
+          <SummaryCard label="화주 요청" value={shipperCount} />
+          <SummaryCard label="기사 요청" value={driverCount} />
         </div>
 
         <CancellationApprovalTable
@@ -182,3 +182,4 @@ export function OrderCancellationRequestsView({
     </div>
   );
 }
+

@@ -1,4 +1,4 @@
-import * as React from "react";
+﻿import * as React from "react";
 import { useSyncExternalStore } from "react";
 
 import { fetchRemoteActivityLogs } from "@/features/ops/api/activityApi";
@@ -13,16 +13,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/shadcn/car
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/shared/ui/shadcn/table";
 
 const ACTION_LABELS: Record<AdminActivityLog["action"], string> = {
-  QUOTE_UPDATED: "\uACAC\uC801 \uC218\uC815",
-  QUOTE_NOTIFICATION_SENT: "\uACAC\uC801 \uC54C\uB9BC \uBC1C\uC1A1",
-  PRICING_UPDATED: "\uC694\uC728 \uC218\uC815",
-  PRICING_NOTIFICATION_SENT: "\uC694\uC728 \uC54C\uB9BC \uBC1C\uC1A1",
-  DISPATCH_ASSIGNED: "\uBC30\uCC28 \uC9C0\uC815",
-  DRIVER_APPROVAL_REVIEWED: "\uCC28\uC8FC \uC2B9\uC778 \uAC80\uD1A0",
-  TRUCK_APPROVAL_REVIEWED: "\uCC28\uB7C9 \uC2B9\uC778 \uAC80\uD1A0",
-  SETTLEMENT_REVIEWED: "\uC815\uC0B0 \uAC80\uD1A0",
-  ORDER_CANCELLATION_REVIEWED: "\uC8FC\uBB38 \uCDE8\uC18C \uAC80\uD1A0",
-  LIVE_ALERT_SENT: "\uC2E4\uC2DC\uAC04 \uC54C\uB9BC \uBC1C\uC1A1",
+  QUOTE_UPDATED: "견적 수정",
+  QUOTE_NOTIFICATION_SENT: "견적 알림 발송",
+  PRICING_UPDATED: "요율 수정",
+  PRICING_NOTIFICATION_SENT: "요율 알림 발송",
+  DISPATCH_ASSIGNED: "배차 지정",
+  DRIVER_APPROVAL_REVIEWED: "차주 승인 검토",
+  TRUCK_APPROVAL_REVIEWED: "차량 승인 검토",
+  SETTLEMENT_REVIEWED: "정산 검토",
+  ORDER_CANCELLATION_REVIEWED: "주문 취소 검토",
+  LIVE_ALERT_SENT: "실시간 알림 발송",
 };
 
 function formatDateTime(value: string): string {
@@ -53,7 +53,7 @@ export function ActivityLogView() {
       setRemoteLogs(rows);
     } catch {
       setRemoteLogs([]);
-      setError("\uD65C\uB3D9 \uB85C\uADF8\uB97C \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.");
+      setError("활동 로그를 불러오지 못했습니다.");
     } finally {
       setLoading(false);
     }
@@ -69,9 +69,9 @@ export function ActivityLogView() {
     <div className="min-h-screen space-y-6 bg-background text-foreground">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-semibold">\uD65C\uB3D9 \uB85C\uADF8</h1>
+          <h1 className="text-3xl font-semibold">활동 로그</h1>
           <p className="text-base text-foreground opacity-70">
-            \uAD00\uB9AC\uC790 \uC870\uCE58 \uB0B4\uC5ED\uACFC \uC11C\uBC84 \uD65C\uB3D9 \uC774\uBCA4\uD2B8\uB97C \uD568\uAED8 \uD655\uC778\uD569\uB2C8\uB2E4.
+            관리자 조치 내역과 서버 활동 이벤트를 함께 확인합니다.
           </p>
         </div>
         <Button
@@ -83,55 +83,55 @@ export function ActivityLogView() {
           }}
           disabled={loading || isCoolingDown}
         >
-          {loading ? "\uB85C\uB529 \uC911..." : isCoolingDown ? `${remainingSeconds}\uCD08` : "\uC0C8\uB85C\uACE0\uCE68"}
+          {loading ? "로딩 중..." : isCoolingDown ? `${remainingSeconds}초` : "새로고침"}
         </Button>
       </div>
 
       {error ? (
         <Alert variant="destructive">
-          <AlertTitle>\uD65C\uB3D9 \uB85C\uADF8 \uC624\uB958</AlertTitle>
+          <AlertTitle>활동 로그 오류</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       ) : null}
 
       <Card className="rounded-lg border border-border bg-background">
         <CardHeader>
-          <CardTitle>\uCD5C\uADFC \uD65C\uB3D9</CardTitle>
+          <CardTitle>최근 활동</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-hidden rounded-lg border border-border bg-background">
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted">
-                  <TableHead>\uBC1C\uC0DD \uC2DC\uAC01</TableHead>
-                  <TableHead>\uC870\uCE58</TableHead>
-                  <TableHead>\uB300\uC0C1 ID</TableHead>
-                  <TableHead>\uBAA8\uB4DC</TableHead>
-                  <TableHead>\uBA54\uC2DC\uC9C0</TableHead>
+                  <TableHead>발생 시각</TableHead>
+                  <TableHead>조치</TableHead>
+                  <TableHead>대상 ID</TableHead>
+                  <TableHead>모드</TableHead>
+                  <TableHead>메시지</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading && logs.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center text-foreground opacity-70">
-                      \uD65C\uB3D9 \uB85C\uADF8 \uB85C\uB529 \uC911...
+                      활동 로그 로딩 중...
                     </TableCell>
                   </TableRow>
                 ) : logs.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center text-foreground opacity-70">
-                      \uD65C\uB3D9 \uB85C\uADF8\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.
+                      활동 로그가 없습니다.
                     </TableCell>
                   </TableRow>
                 ) : (
                   logs.map((item) => (
                     <TableRow key={item.id}>
                       <TableCell>{formatDateTime(item.createdAt)}</TableCell>
-                      <TableCell>{ACTION_LABELS[item.action] ?? "\uC54C \uC218 \uC5C6\uB294 \uC870\uCE58"}</TableCell>
+                      <TableCell>{ACTION_LABELS[item.action] ?? "알 수 없는 조치"}</TableCell>
                       <TableCell>{item.targetId ?? "-"}</TableCell>
                       <TableCell>
                         <Badge variant={item.mode === "MOCK" ? "secondary" : "outline"}>
-                          {item.mode === "MOCK" ? "\uBAA9\uC5C5" : "\uC2E4\uC11C\uBE44\uC2A4"}
+                          {item.mode === "MOCK" ? "목업" : "실서비스"}
                         </Badge>
                       </TableCell>
                       <TableCell>{item.message}</TableCell>
@@ -146,3 +146,4 @@ export function ActivityLogView() {
     </div>
   );
 }
+

@@ -1,4 +1,4 @@
-import type { CancellationRequestRow } from "@/features/orders/model/types";
+﻿import type { CancellationRequestRow } from "@/features/orders/model/types";
 import { Badge } from "@/shared/ui/shadcn/badge";
 import { Button } from "@/shared/ui/shadcn/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/shadcn/card";
@@ -14,36 +14,36 @@ type Props = {
 };
 
 function ApprovalStatusBadge({ status }: { status: CancellationRequestRow["approvalStatus"] }) {
-  if (status === "APPROVED") return <Badge variant="secondary">{"\uC2B9\uC778"}</Badge>;
-  if (status === "REJECTED") return <Badge variant="destructive">{"\uBC18\uB824"}</Badge>;
-  return <Badge variant="outline">{"\uB300\uAE30"}</Badge>;
+  if (status === "APPROVED") return <Badge variant="secondary">{"승인"}</Badge>;
+  if (status === "REJECTED") return <Badge variant="destructive">{"반려"}</Badge>;
+  return <Badge variant="outline">{"대기"}</Badge>;
 }
 
 function RequesterRoleLabel({ role }: { role: CancellationRequestRow["requestedByRole"] }) {
-  if (role === "SHIPPER") return <>{`\uD654\uC8FC`}</>;
-  if (role === "DRIVER") return <>{`\uAE30\uC0AC`}</>;
-  return <>{`\uD655\uC778 \uD544\uC694`}</>;
+  if (role === "SHIPPER") return <>{`화주`}</>;
+  if (role === "DRIVER") return <>{`기사`}</>;
+  return <>{`확인 필요`}</>;
 }
 
 export function CancellationApprovalTable({ rows, total, loading, onOpenReview, onOpenDetail }: Props) {
   return (
     <Card className="rounded-lg border border-border bg-background">
       <CardHeader className="space-y-1">
-        <CardTitle className="text-lg font-semibold">{"\uCDE8\uC18C \uC694\uCCAD \uBAA9\uB85D"}</CardTitle>
+        <CardTitle className="text-lg font-semibold">{"취소 요청 목록"}</CardTitle>
       </CardHeader>
       <CardContent className="p-0">
         <div className="rounded-b-lg border-t border-border bg-muted">
           <Table>
             <TableHeader>
               <TableRow className="bg-muted">
-                <TableHead className="text-foreground">{"\uC694\uCCAD\uC2DC\uAC01"}</TableHead>
-                <TableHead className="text-foreground">{"\uC694\uCCADID"}</TableHead>
-                <TableHead className="text-foreground">{"\uC694\uCCAD\uC790"}</TableHead>
-                <TableHead className="text-foreground">{"\uD654\uC8FC/\uAE30\uC0AC"}</TableHead>
-                <TableHead className="text-foreground">{"\uC6B4\uC1A1\uAD6C\uAC04"}</TableHead>
-                <TableHead className="text-foreground">{"\uCDE8\uC18C\uC0AC\uC720"}</TableHead>
-                <TableHead className="text-foreground">{"\uC0C1\uD0DC"}</TableHead>
-                <TableHead className="text-right text-foreground">{"\uC870\uCE58"}</TableHead>
+                <TableHead className="text-foreground">{"요청시각"}</TableHead>
+                <TableHead className="text-foreground">{"요청ID"}</TableHead>
+                <TableHead className="text-foreground">{"요청자"}</TableHead>
+                <TableHead className="text-foreground">{"화주/기사"}</TableHead>
+                <TableHead className="text-foreground">{"운송구간"}</TableHead>
+                <TableHead className="text-foreground">{"취소사유"}</TableHead>
+                <TableHead className="text-foreground">{"상태"}</TableHead>
+                <TableHead className="text-right text-foreground">{"조치"}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -59,7 +59,7 @@ export function CancellationApprovalTable({ rows, total, loading, onOpenReview, 
               ) : rows.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={8} className="py-10 text-center text-foreground">
-                    {"\uCDE8\uC18C \uC694\uCCAD\uC774 \uC5C6\uC2B5\uB2C8\uB2E4."}
+                    {"취소 요청이 없습니다."}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -105,7 +105,7 @@ export function CancellationApprovalTable({ rows, total, loading, onOpenReview, 
                           onOpenReview(row);
                         }}
                       >
-                        {"\uAC80\uD1A0"}
+                        {"검토"}
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -116,8 +116,9 @@ export function CancellationApprovalTable({ rows, total, loading, onOpenReview, 
         </div>
       </CardContent>
       <div className="rounded-b-lg border-t border-border bg-background px-6 py-3 text-sm text-foreground">
-        {`\uCD1D ${total}\uAC74`}
+        {`총 ${total}건`}
       </div>
     </Card>
   );
 }
+

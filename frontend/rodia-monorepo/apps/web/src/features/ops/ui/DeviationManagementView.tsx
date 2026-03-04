@@ -255,7 +255,7 @@ function ActionButtons({
 
   if (row.status === DeviationStatus.OPEN) {
     return (
-      <div className="flex items-center gap-2">
+      <div className="flex min-h-8 items-center justify-end gap-2">
         <Button
           type="button"
           size="sm"
@@ -281,7 +281,7 @@ function ActionButtons({
 
   if (row.status === DeviationStatus.INVESTIGATING) {
     return (
-      <div className="flex items-center gap-2">
+      <div className="flex min-h-8 items-center justify-end gap-2">
         <Button
           type="button"
           size="sm"
@@ -306,9 +306,9 @@ function ActionButtons({
   }
 
   return (
-    <span className="text-xs text-foreground/70">
-      처리 완료
-    </span>
+    <div className="flex min-h-8 items-center justify-end">
+      <span className="text-xs text-foreground/70">처리 완료</span>
+    </div>
   );
 }
 
