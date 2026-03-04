@@ -122,6 +122,41 @@ function formatOneDecimal(value: unknown): string {
   });
 }
 
+function parseDistanceKmFromText(value: string | undefined): number {
+  const text = String(value ?? "").trim().toLowerCase();
+  if (!text) return 0;
+  const matched = text.match(/(\d+(?:\.\d+)?)/);
+  if (!matched) return 0;
+  const parsed = Number(matched[1]);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 0;
+  if (text.includes("m") && !text.includes("km")) return parsed / 1000;
+  return parsed;
+}
+
+function normalizeGroupTypeToken(value: string | undefined): string {
+  return String(value ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "_")
+    .replace(/-/g, "_");
+}
+
+function resolveRunGroupMode(groupType: string | undefined, orderCount: number): DriverRouteRecommendationMode {
+  const token = normalizeGroupTypeToken(groupType);
+  if (token.includes("SINGLE")) return "SINGLE";
+  if (token.includes("BUNDLE") || token.includes("GROUP")) return "BUNDLED";
+  return orderCount > 1 ? "BUNDLED" : "SINGLE";
+}
+
+function buildServerGroupPathLabel(orders: DriverOrderCard[]): string {
+  const first = orders[0];
+  const last = orders[orders.length - 1];
+  const origin = String(first?.originAddress ?? "").trim();
+  const destination = String(last?.destinationAddress ?? "").trim();
+  if (origin && destination) return `${origin} → ${destination}`;
+  return "그룹 오더";
+}
+
 function resolveRunStatusFilter(item: DriverOrderCard): RunStatusFilterKey {
   if (item.uiState === DRIVER_UI_STATE.PICKUP_IN_PROGRESS) return "PICKUP";
   if (item.uiState === DRIVER_UI_STATE.TRANSIT_IN_PROGRESS) return "TRANSIT";
@@ -1110,14 +1145,6 @@ export function DriverOrdersBoard({
 
   const runListItems = useMemo(() => {
     const groupSeeds = getDriverAcceptedRunGroups();
-    if (groupSeeds.length <= 0) {
-      return filteredRunOrders.map((order) => ({
-        kind: "order" as const,
-        key: `order-${order.cardKey}`,
-        order,
-      }));
-    }
-
     const byMatchId = new Map<number, DriverOrderCard>();
     filteredRunOrders.forEach((order) => {
       const safeMatchId = Number(order.matchId);
@@ -1159,6 +1186,95 @@ export function DriverOrdersBoard({
             entry.estimatedTotalDistanceKm > 0 ? entry.estimatedTotalDistanceKm : fallbackDistance,
           acceptedAt: entry.acceptedAt,
           orders,
+        },
+      });
+    });
+
+    // Root cause grounding:
+    // 기존 운행 탭은 acceptedRunGroups seed 없으면 단건 렌더링만 수행해서,
+    // 서버가 MatchResponse.matchGroupKey/type/order를 내려줘도 1개씩 따로 보였다.
+    // Grounding (OpenAPI MatchResponse):
+    // - matchGroupKey: 같은 그룹의 매칭 묶음 키
+    // - matchGroupType: 그룹 타입(BUNDLED 등)
+    // - matchGroupOrder: 그룹 내 표시 순서
+    // acceptedRunGroups seed가 없어도 서버 그룹키가 있으면 운행 탭에서 묶어서 표시한다.
+    const serverGroupByKey = new Map<string, DriverOrderCard[]>();
+    filteredRunOrders.forEach((order) => {
+      const safeMatchId = Number(order.matchId);
+      if (Number.isInteger(safeMatchId) && consumedMatchIds.has(safeMatchId)) return;
+
+      const groupKey = String(order.matchGroupKey ?? "").trim();
+      if (!groupKey) return;
+
+      const bucket = serverGroupByKey.get(groupKey);
+      if (bucket) {
+        bucket.push(order);
+        return;
+      }
+      serverGroupByKey.set(groupKey, [order]);
+    });
+
+    const serverGroupedEntries = Array.from(serverGroupByKey.entries())
+      .map(([groupKey, orders]) => {
+        const sortedOrders = [...orders].sort((a, b) => {
+          const aOrder = Number(a.matchGroupOrder ?? 0);
+          const bOrder = Number(b.matchGroupOrder ?? 0);
+          const hasA = Number.isInteger(aOrder) && aOrder > 0;
+          const hasB = Number.isInteger(bOrder) && bOrder > 0;
+          if (hasA && hasB && aOrder !== bOrder) return aOrder - bOrder;
+          if (hasA && !hasB) return -1;
+          if (!hasA && hasB) return 1;
+
+          const aTs = Number(a.sortTimestamp ?? 0);
+          const bTs = Number(b.sortTimestamp ?? 0);
+          if (Number.isFinite(aTs) && Number.isFinite(bTs) && aTs !== bTs) return bTs - aTs;
+          return b.matchId - a.matchId;
+        });
+
+        const acceptedAt = sortedOrders.reduce((max, order) => {
+          const ts = Number(order.sortTimestamp ?? 0);
+          return Number.isFinite(ts) && ts > max ? ts : max;
+        }, 0);
+
+        return {
+          groupKey,
+          orders: sortedOrders,
+          acceptedAt,
+        };
+      })
+      .filter((entry) => entry.orders.length > 1)
+      .sort((a, b) => b.acceptedAt - a.acceptedAt);
+
+    serverGroupedEntries.forEach((entry) => {
+      entry.orders.forEach((order) => {
+        const safeMatchId = Number(order.matchId);
+        if (Number.isInteger(safeMatchId) && safeMatchId > 0) {
+          consumedMatchIds.add(safeMatchId);
+        }
+      });
+
+      const totalRevenue = entry.orders.reduce((sum, order) => sum + Number(order.priceValue ?? 0), 0);
+      const estimatedTotalDistanceKm = entry.orders.reduce(
+        (sum, order) => sum + parseDistanceKmFromText(order.routeDistanceText),
+        0
+      );
+      const representative = entry.orders[0];
+      const mode = resolveRunGroupMode(representative?.matchGroupType, entry.orders.length);
+      const pathLabel = buildServerGroupPathLabel(entry.orders);
+      const acceptedAt = entry.acceptedAt > 0 ? entry.acceptedAt : Date.now();
+      const cardGroupKey = `server-${entry.groupKey}`;
+
+      grouped.push({
+        kind: "group",
+        key: `group-${cardGroupKey}`,
+        group: {
+          key: cardGroupKey,
+          mode,
+          pathLabel,
+          totalRevenue,
+          estimatedTotalDistanceKm,
+          acceptedAt,
+          orders: entry.orders,
         },
       });
     });

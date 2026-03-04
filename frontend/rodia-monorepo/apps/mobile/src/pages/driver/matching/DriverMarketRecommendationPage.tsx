@@ -8,7 +8,6 @@ import * as THREE from "three";
 
 import type { QuoteDetailResponse } from "@/entities/quote/model/quote.types";
 import {
-  acceptDriverMatch,
   acceptDriverMatchesBatch,
   getDriverQuoteSummaryDetail,
   postCounterOffer,
@@ -911,6 +910,8 @@ export default function DriverMarketRecommendationPage({
   }, [selection]);
 
   const primaryOrder = orderedOrders[0] ?? null;
+  // Grounding: /api/driver/matches/accept-batch uses BatchAcceptMatchRequest.matchIds:number[].
+  // groupedMatchIds is the request source and is explicitly de-duplicated + filtered (>0) here.
   const groupedMatchIds = useMemo(() => {
     const seen = new Set<number>();
     const ids: number[] = [];
@@ -1064,101 +1065,103 @@ export default function DriverMarketRecommendationPage({
   }, [orderedPlacements]);
   const selectedEntry = selectedStopOrder ? quoteCards[selectedStopOrder - 1] ?? null : null;
 
-  const handleAccept = useCallback(async () => {
+  const handleAccept = useCallback(() => {
     if (isBusy || isSubmittingOffer) return;
     if (groupedMatchIds.length <= 0) {
       Alert.alert("안내", "수락 가능한 매칭 정보가 없습니다.");
       return;
     }
 
-    setIsBusy(true);
-    try {
-      let acceptedMatches: Awaited<ReturnType<typeof acceptDriverMatchesBatch>> = [];
-      if (groupedMatchIds.length > 1) {
-        acceptedMatches = await acceptDriverMatchesBatch({
+    const runAcceptBatch = async () => {
+      setIsBusy(true);
+      try {
+        // OpenAPI grounding:
+        // - POST /api/driver/matches/accept-batch (operationId: acceptMatches)
+        // - request schema: BatchAcceptMatchRequest { matchIds, routeType?, orderedQuoteIds? }
+        // - generated client: driver-match-controller.acceptMatches (wrapped by acceptDriverMatchesBatch)
+        const acceptedMatches = await acceptDriverMatchesBatch({
           matchIds: groupedMatchIds,
           routeType: selection?.mode,
           orderedQuoteIds: selection?.recommendation.quoteIds,
         });
-      } else {
-        const singleMatchId = groupedMatchIds[0];
-        if (singleMatchId) {
-          const single = await acceptDriverMatch(singleMatchId);
-          acceptedMatches = single ? [single] : [];
+
+        const successMatchIds = Array.from(
+          new Set(
+            acceptedMatches
+              .map((item) => toPositiveInt(item.matchId))
+              .filter((matchId) => matchId > 0)
+          )
+        );
+        const successCount = successMatchIds.length;
+        const failureCount = Math.max(0, groupedMatchIds.length - successCount);
+
+        if (successCount <= 0) {
+          Alert.alert("배차 수락 실패", "배차 수락에 실패했습니다.", [
+            { text: "취소", style: "cancel" },
+            { text: "다시 시도", onPress: () => void runAcceptBatch() },
+          ]);
+          return;
         }
-      }
 
-      const successMatchIds = Array.from(
-        new Set(
-          acceptedMatches
-            .map((item) => toPositiveInt(item.matchId))
-            .filter((matchId) => matchId > 0)
-        )
-      );
-      const successCount = successMatchIds.length;
-      const failureCount = Math.max(0, groupedMatchIds.length - successCount);
-
-      if (successCount <= 0) {
-        Alert.alert("배차 수락 실패", "배차 수락에 실패했습니다.", [
-          { text: "취소", style: "cancel" },
-          { text: "다시 시도", onPress: () => void handleAccept() },
-        ]);
-        return;
-      }
-
-      const message =
-        failureCount > 0
-          ? `${successCount}건 수락, ${failureCount}건 실패했습니다.`
-          : `${successCount}건 추천 오더를 수락했습니다.`;
-      if (isGroupedRecommendation && successMatchIds.length > 1 && selection) {
-        addDriverAcceptedRunGroup({
-          key: `${selection.key}-${Date.now()}`,
-          mode: selection.mode,
-          pathLabel: selection.recommendation.pathLabel,
+        const message =
+          failureCount > 0
+            ? `${successCount}건 수락, ${failureCount}건 실패했습니다.`
+            : `${successCount}건 추천 오더를 수락했습니다.`;
+        if (isGroupedRecommendation && successMatchIds.length > 1 && selection) {
+          addDriverAcceptedRunGroup({
+            key: `${selection.key}-${Date.now()}`,
+            mode: selection.mode,
+            pathLabel: selection.recommendation.pathLabel,
+            matchIds: successMatchIds,
+            quoteIds: selection.recommendation.quoteIds,
+            totalRevenue: selection.recommendation.totalRevenue,
+            estimatedTotalDistanceKm: selection.recommendation.estimatedTotalDistanceKm,
+            acceptedAt: Date.now(),
+          });
+        }
+        publishDriverRunSyncEvent({
+          type: DRIVER_RUN_SYNC_EVENT.MATCH_ACCEPTED,
           matchIds: successMatchIds,
-          quoteIds: selection.recommendation.quoteIds,
-          totalRevenue: selection.recommendation.totalRevenue,
-          estimatedTotalDistanceKm: selection.recommendation.estimatedTotalDistanceKm,
-          acceptedAt: Date.now(),
+          quoteIds: selection?.recommendation.quoteIds ?? [],
+          source: "market_recommendation",
         });
-      }
-      publishDriverRunSyncEvent({
-        type: DRIVER_RUN_SYNC_EVENT.MATCH_ACCEPTED,
-        matchIds: successMatchIds,
-        quoteIds: selection?.recommendation.quoteIds ?? [],
-        source: "market_recommendation",
-      });
-      const nextMatchId = groupedMatchIds[0];
-      Alert.alert("배차 수락 완료", message, [
-        {
-          text: failureCount > 0 ? "상세 보기" : "운행 탭으로",
-          onPress: () => {
-            clearDriverMarketRecommendationSelection();
-            if (failureCount > 0 && nextMatchId > 0) {
-              router.replace({
-                pathname: DRIVER_ROUTE_PATH.ORDER_DETAIL,
-                params: { id: String(nextMatchId), source: "market" },
-              });
-              return;
-            }
-            router.replace(DRIVER_ROUTE_PATH.RUN_TAB);
+        const nextMatchId = groupedMatchIds[0];
+        Alert.alert("배차 수락 완료", message, [
+          {
+            text: failureCount > 0 ? "상세 보기" : "운행 탭으로",
+            onPress: () => {
+              clearDriverMarketRecommendationSelection();
+              if (failureCount > 0 && nextMatchId > 0) {
+                router.replace({
+                  pathname: DRIVER_ROUTE_PATH.ORDER_DETAIL,
+                  params: { id: String(nextMatchId), source: "market" },
+                });
+                return;
+              }
+              router.replace(DRIVER_ROUTE_PATH.RUN_TAB);
+            },
           },
-        },
-      ]);
-    } catch (error) {
-      const code = getApiErrorCode(error);
-      if (code === API_ERROR_CODE.CONFLICT) {
-        Alert.alert("배차 수락 실패", "이미 배차 처리된 오더가 포함되어 있습니다. 목록을 새로고침해 주세요.");
-        return;
+        ]);
+      } catch (error) {
+        const code = getApiErrorCode(error);
+        if (code === API_ERROR_CODE.CONFLICT) {
+          Alert.alert("배차 수락 실패", "이미 배차 처리된 오더가 포함되어 있습니다. 목록을 새로고침해 주세요.");
+          return;
+        }
+        const message = readApiErrorMessage(error, "잠시 후 다시 시도해 주세요.");
+        Alert.alert("배차 수락 실패", message, [
+          { text: "취소", style: "cancel" },
+          { text: "다시 시도", onPress: () => void runAcceptBatch() },
+        ]);
+      } finally {
+        setIsBusy(false);
       }
-      const message = readApiErrorMessage(error, "잠시 후 다시 시도해 주세요.");
-      Alert.alert("배차 수락 실패", message, [
-        { text: "취소", style: "cancel" },
-        { text: "다시 시도", onPress: () => void handleAccept() },
-      ]);
-    } finally {
-      setIsBusy(false);
-    }
+    };
+
+    Alert.alert("배차 수락", `총 ${groupedMatchIds.length}건 배차를 수락합니다.`, [
+      { text: "취소", style: "cancel", onPress: () => setIsBusy(false) },
+      { text: "수락", onPress: () => void runAcceptBatch() },
+    ]);
   }, [groupedMatchIds, isBusy, isGroupedRecommendation, isSubmittingOffer, router, selection]);
 
   const handleSubmitOffer = useCallback(

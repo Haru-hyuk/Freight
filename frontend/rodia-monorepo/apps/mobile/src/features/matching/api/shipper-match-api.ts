@@ -41,6 +41,9 @@ export type MatchResponseItem = {
   driverId?: number;
   accepted?: boolean;
   status?: string;
+  matchGroupKey?: string;
+  matchGroupType?: string;
+  matchGroupOrder?: number;
   acceptedAt?: string;
   createdAt?: string;
   updatedAt?: string;

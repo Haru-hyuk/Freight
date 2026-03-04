@@ -55,6 +55,9 @@ export type DriverOrderCard = {
   cardKey: string;
   matchId: number;
   quoteId?: number;
+  matchGroupKey?: string;
+  matchGroupType?: string;
+  matchGroupOrder?: number;
   status: string;
   uiState: DriverUiState;
   statusLabel: string;
