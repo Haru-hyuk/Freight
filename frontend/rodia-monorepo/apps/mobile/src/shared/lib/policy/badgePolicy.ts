@@ -32,7 +32,7 @@ const CUSTOMER_BADGE_MAP: Readonly<Record<CustomerUiState, StateBadgePolicy>> = 
 const DRIVER_BADGE_MAP: Readonly<Record<DriverUiState, StateBadgePolicy>> = {
   [DRIVER_UI_STATE.READY_TO_ACCEPT]: { label: "요청 접수", tone: BADGE_TONE.NEUTRAL },
   [DRIVER_UI_STATE.NEGOTIATING]: { label: "협상 중", tone: BADGE_TONE.ATTENTION },
-  [DRIVER_UI_STATE.ASSIGNED]: { label: "결제 대기", tone: BADGE_TONE.ATTENTION },
+  [DRIVER_UI_STATE.ASSIGNED]: { label: "배차 확정", tone: BADGE_TONE.ATTENTION },
   [DRIVER_UI_STATE.PICKUP_IN_PROGRESS]: { label: "상차 중", tone: BADGE_TONE.PROGRESS },
   [DRIVER_UI_STATE.TRANSIT_IN_PROGRESS]: { label: "운송 중", tone: BADGE_TONE.PROGRESS },
   [DRIVER_UI_STATE.COMPLETED]: { label: "운송 완료", tone: BADGE_TONE.CLOSED },

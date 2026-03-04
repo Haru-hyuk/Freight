@@ -1055,7 +1055,6 @@ export function DriverOrdersBoard({
   const runOrderPool = useMemo(() => {
     const runStates = new Set<DriverUiState>([
       DRIVER_UI_STATE.ASSIGNED,
-      DRIVER_UI_STATE.NEGOTIATING,
       DRIVER_UI_STATE.PICKUP_IN_PROGRESS,
       DRIVER_UI_STATE.TRANSIT_IN_PROGRESS,
       DRIVER_UI_STATE.COMPLETED,
