@@ -1,18 +1,22 @@
 import React, { useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { Alert, Pressable, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useActiveOrder } from "@/entities/order/model/active-order.store";
+import type { ActiveRun } from "@/entities/order/model/types";
+import { startDriverTransit } from "@/features/driver-run/api/driver-run-api";
+import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
 import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppButton } from "@/shared/ui/kit/AppButton";
 import { AppCard } from "@/shared/ui/kit/AppCard";
 import { AppText } from "@/shared/ui/kit/AppText";
 import { PageScaffold } from "@/widgets/layout/PageScaffold";
-import type { ActiveOrder } from "@/entities/order/model/active-order.store";
-import { useActiveOrder } from "@/entities/order/model/active-order.store";
 
 type Props = {
-  order: ActiveOrder;
+  activeRun: ActiveRun;
+  isSyncing?: boolean;
+  onRefetchRun?: () => Promise<void> | void;
 };
 
 const CHECKLIST_ITEMS = [
@@ -117,12 +121,18 @@ const useStyles = createThemedStyles((theme) => {
   });
 });
 
-export function PrepareForRunScreen({ order }: Props) {
+function parsePositiveInt(value: unknown): number {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
+}
+
+export function PrepareForRunScreen({ activeRun, isSyncing = false, onRefetchRun }: Props) {
   const theme = useAppTheme();
   const styles = useStyles();
-  const { setActiveOrder, clearActiveOrder } = useActiveOrder();
+  const { clearActiveRun } = useActiveOrder();
   const insets = useSafeAreaInsets();
   const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
+  const [isStarting, setIsStarting] = useState(false);
 
   const toggleCheck = (item: string) => {
     setCheckedItems((prev) => {
@@ -137,15 +147,36 @@ export function PrepareForRunScreen({ order }: Props) {
   };
 
   const allChecked = checkedItems.size === CHECKLIST_ITEMS.length;
+  const safeMatchId = parsePositiveInt(activeRun.match.matchId);
+  const originAddress = activeRun.summary?.originAddress || "-";
+  const canStart = allChecked && safeMatchId > 0 && !isStarting && !isSyncing;
 
-  const handleStartDriving = () => {
-    if (!allChecked) return;
-    const drivingOrder = { ...order, status: "DRIVING" as const };
-    setActiveOrder(drivingOrder);
+  const handleStartDriving = async () => {
+    if (!canStart) return;
+
+    try {
+      setIsStarting(true);
+      const result = await startDriverTransit(safeMatchId);
+      if (!result) {
+        throw new Error("운행 시작 응답이 비어 있습니다.");
+      }
+      if (typeof onRefetchRun === "function") {
+        await onRefetchRun();
+      }
+      Alert.alert("운행 시작", "운행을 시작했습니다.");
+    } catch (error) {
+      Alert.alert("운행 시작 실패", readApiErrorMessage(error), [
+        { text: "취소", style: "cancel" },
+        { text: "다시 시도", onPress: () => void handleStartDriving() },
+      ]);
+    } finally {
+      setIsStarting(false);
+    }
   };
 
   const handleViewRunList = () => {
-    clearActiveOrder();
+    if (isStarting) return;
+    clearActiveRun();
   };
 
   return (
@@ -154,7 +185,7 @@ export function PrepareForRunScreen({ order }: Props) {
         <View style={styles.scrollInner}>
           <AppCard outlined style={styles.originCard}>
             <AppText style={styles.originLabel}>상차지</AppText>
-            <AppText style={styles.originAddress}>{order.originAddress}</AppText>
+            <AppText style={styles.originAddress}>{originAddress}</AppText>
             <AppText style={styles.subText}>운행을 시작하기 전, 아래 항목을 모두 확인해 주세요.</AppText>
           </AppCard>
 
@@ -167,6 +198,7 @@ export function PrepareForRunScreen({ order }: Props) {
                   <Pressable
                     key={item}
                     onPress={() => toggleCheck(item)}
+                    disabled={isStarting || isSyncing}
                     style={[styles.checkRow, checked ? styles.checkRowChecked : null]}
                   >
                     <Ionicons
@@ -187,8 +219,9 @@ export function PrepareForRunScreen({ order }: Props) {
         <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
           <AppButton
             title="운행 시작"
-            onPress={handleStartDriving}
-            disabled={!allChecked}
+            onPress={() => void handleStartDriving()}
+            disabled={!canStart}
+            loading={isStarting}
             style={styles.startButton}
             textStyle={{ fontSize: 16, fontWeight: "900" }}
           />
@@ -196,6 +229,7 @@ export function PrepareForRunScreen({ order }: Props) {
             title="운행 목록 보기"
             onPress={handleViewRunList}
             variant="secondary"
+            disabled={isStarting}
             style={styles.listButton}
           />
         </View>

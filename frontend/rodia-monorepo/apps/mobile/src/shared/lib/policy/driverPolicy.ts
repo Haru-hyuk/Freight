@@ -229,6 +229,7 @@ export function getDriverUiStateFromStatusPayload(input: {
 }): DriverUiState {
   const scope = (input.scope ?? "unknown") as DriverStatusScope;
   const accepted = input.accepted === true;
+  const explicitlyNotAccepted = input.accepted === false;
   const rawStatus = resolveDriverRawStatus({
     matchStatus: input.matchStatus,
     quoteStatus: input.quoteStatus,
@@ -242,6 +243,13 @@ export function getDriverUiStateFromStatusPayload(input: {
     if (token === "NEGOTIATING") {
       return DRIVER_UI_STATE.NEGOTIATING;
     }
+  }
+
+  if ((scope === "run" || scope === "my") && explicitlyNotAccepted) {
+    if (token === "NEGOTIATING") {
+      return DRIVER_UI_STATE.NEGOTIATING;
+    }
+    return DRIVER_UI_STATE.ASSIGNED;
   }
 
   return getDriverUiStateFromRawStatus(rawStatus);

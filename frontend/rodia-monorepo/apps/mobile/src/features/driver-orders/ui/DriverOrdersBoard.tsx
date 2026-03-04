@@ -19,7 +19,8 @@ import {
   acceptDriverMatch,
   buildDriverOrderDetailParams,
   getDriverOrderFilterLabel,
-  getDriverQuoteSummaryDetail,
+  getDriverMatch,
+  getDriverQuoteSummaryByQuoteId,
   loadDriverOrdersOverview,
   matchesDriverOrderFilter,
   postCounterOffer,
@@ -957,13 +958,14 @@ export function DriverOrdersBoard({
   const theme = useAppTheme();
   const insets = useSafeAreaInsets();
   const styles = useStyles();
-  const { setActiveOrder } = useActiveOrder();
+  const { setActiveRun } = useActiveOrder();
 
   const [overview, setOverview] = useState<DriverOrdersOverview>(EMPTY_OVERVIEW);
   const [activeFilter, setActiveFilter] = useState<DriverOrderFilterKey>("ALL");
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [acceptingMatchId, setAcceptingMatchId] = useState<number | null>(null);
+  const [preparingRunMatchId, setPreparingRunMatchId] = useState<number | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastState>({ visible: false, message: "" });
   const [isOfferOpen, setIsOfferOpen] = useState(false);
@@ -1345,27 +1347,50 @@ export function DriverOrdersBoard({
 
   const handlePrepareForDrive = useCallback(
     async (card: DriverOrderCard) => {
-      if (!card.quoteId) return;
+      if (preparingRunMatchId !== null) return;
+
+      const safeMatchId = Number(card.matchId);
+      if (!Number.isInteger(safeMatchId) || safeMatchId <= 0) {
+        showToast("유효하지 않은 매칭입니다.");
+        return;
+      }
 
       try {
-        const detail = await getDriverQuoteSummaryDetail(card.quoteId);
-        if (!detail) {
-          showToast("오더 정보를 불러올 수 없습니다.");
+        setPreparingRunMatchId(safeMatchId);
+        const match = await getDriverMatch(safeMatchId);
+        if (!match) {
+          Alert.alert("운행 준비 실패", "매칭 정보를 불러오지 못했습니다.", [
+            { text: "취소", style: "cancel" },
+            { text: "다시 시도", onPress: () => void handlePrepareForDrive(card) },
+          ]);
           return;
         }
-        const fallbackStatus = typeof card.status === "string" ? card.status.trim() : "";
-        setActiveOrder({
-          ...detail,
-          status: (typeof detail.status === "string" && detail.status.trim()) || fallbackStatus || "READY",
-        });
-        void loadOrders("refresh").then(() => {
-          router.push(DRIVER_ROUTE_PATH.RUN_TAB);
-        });
-      } catch {
-        showToast(NETWORK_ERROR_TEXT);
+
+        const safeQuoteIdFromMatch = Number(match.quoteId);
+        const safeQuoteIdFromCard = Number(card.quoteId);
+        const resolvedQuoteId =
+          Number.isInteger(safeQuoteIdFromMatch) && safeQuoteIdFromMatch > 0
+            ? safeQuoteIdFromMatch
+            : Number.isInteger(safeQuoteIdFromCard) && safeQuoteIdFromCard > 0
+              ? safeQuoteIdFromCard
+              : 0;
+
+        const summary = resolvedQuoteId > 0 ? await getDriverQuoteSummaryByQuoteId(resolvedQuoteId) : null;
+        setActiveRun(summary ? { match, summary } : { match });
+
+        await loadOrders("refresh");
+        router.push(DRIVER_ROUTE_PATH.RUN_TAB);
+      } catch (error) {
+        const message = readApiErrorMessage(error, NETWORK_ERROR_TEXT);
+        Alert.alert("운행 준비 실패", message, [
+          { text: "취소", style: "cancel" },
+          { text: "다시 시도", onPress: () => void handlePrepareForDrive(card) },
+        ]);
+      } finally {
+        setPreparingRunMatchId(null);
       }
     },
-    [loadOrders, router, setActiveOrder, showToast]
+    [loadOrders, preparingRunMatchId, router, setActiveRun, showToast]
   );
 
   const handleAcceptFromMarket = useCallback(
@@ -1812,6 +1837,7 @@ export function DriverOrdersBoard({
           onAcceptClick={handleAcceptFromMarket}
           onOfferClick={handleOpenCounterOffer}
           acceptingMatchId={acceptingMatchId}
+          preparingMatchId={preparingRunMatchId}
           isSubmittingOffer={isSubmittingOffer}
           onPrepareClick={handlePrepareForDrive}
         />
@@ -1826,6 +1852,7 @@ export function DriverOrdersBoard({
       handlePressCard,
       handlePressRunGroup,
       isSubmittingOffer,
+      preparingRunMatchId,
       resolvedActiveTab,
     ]
   );
@@ -1863,7 +1890,7 @@ export function DriverOrdersBoard({
           ) : (
             <FlatList
               key={resolvedActiveTab}
-              extraData={`${activeFilter}:${runStatusFilter}:${selectedRecommendKey ?? ""}:${recommendAnalysis?.recommendedCount ?? 0}`}
+              extraData={`${activeFilter}:${runStatusFilter}:${selectedRecommendKey ?? ""}:${recommendAnalysis?.recommendedCount ?? 0}:${preparingRunMatchId ?? ""}`}
               style={styles.flex1}
               data={visibleItems}
               keyExtractor={keyExtractor}
