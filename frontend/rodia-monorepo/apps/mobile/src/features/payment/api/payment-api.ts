@@ -31,6 +31,13 @@ export type ConfirmShipperPaymentInput = PaymentConfirmRequest & {
 };
 
 export type ConfirmShipperPaymentResult = PaymentResponse;
+export type MatchPaymentSnapshot = {
+  latestPayment: PaymentResponse | null;
+  completedPayment: PaymentResponse | null;
+  hasCompleted: boolean;
+  effectiveStatus: PaymentResponseStatus | null;
+  effectiveMethod: PaymentResponseMethod | null;
+};
 
 function asObject(value: unknown): AnyObj {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as AnyObj) : {};
@@ -150,6 +157,21 @@ function sortPaymentsByLatest(a: PaymentResponse, b: PaymentResponse): number {
   }
 
   return toPositiveInt(b.paymentId) - toPositiveInt(a.paymentId);
+}
+
+function buildMatchPaymentSnapshot(payments: PaymentResponse[]): MatchPaymentSnapshot {
+  const sorted = [...payments].sort(sortPaymentsByLatest);
+  const latestPayment = sorted[0] ?? null;
+  const completedPayment = sorted.find((payment) => payment.status === "COMPLETED") ?? null;
+  const effectivePayment = completedPayment ?? latestPayment;
+
+  return {
+    latestPayment,
+    completedPayment,
+    hasCompleted: completedPayment !== null,
+    effectiveStatus: effectivePayment?.status ?? null,
+    effectiveMethod: effectivePayment?.method ?? null,
+  };
 }
 
 async function listPaymentsByMatchId(matchId: number): Promise<PaymentResponse[]> {
@@ -320,6 +342,22 @@ export async function getLatestPaymentForMatch(matchId: number): Promise<Payment
 
   const list = await listPaymentsByMatchId(safeMatchId);
   return list[0] ?? null;
+}
+
+export async function getMatchPaymentSnapshot(matchId: number): Promise<MatchPaymentSnapshot> {
+  const safeMatchId = toPositiveInt(matchId);
+  if (safeMatchId <= 0 || isMockMode()) {
+    return {
+      latestPayment: null,
+      completedPayment: null,
+      hasCompleted: false,
+      effectiveStatus: null,
+      effectiveMethod: null,
+    };
+  }
+
+  const list = await listPaymentsByMatchId(safeMatchId);
+  return buildMatchPaymentSnapshot(list);
 }
 
 export async function hasCompletedPaymentForMatch(matchId: number): Promise<boolean> {

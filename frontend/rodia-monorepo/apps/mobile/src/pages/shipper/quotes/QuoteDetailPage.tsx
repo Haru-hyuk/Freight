@@ -15,7 +15,7 @@ import {
 } from "@/features/counter-offer/api";
 import {
   confirmShipperPayment,
-  getLatestPaymentForMatch,
+  getMatchPaymentSnapshot,
   hasCompletedPaymentForMatch,
   prepareShipperPayment,
   type PrepareShipperPaymentResult,
@@ -918,13 +918,14 @@ export default function QuoteDetailPage() {
   const effectiveQuoteStatus = React.useMemo(() => {
     const matchStatus = matchHydrated ? activeQuoteMatch?.status ?? activeQuoteMatch?.state : null;
     const matchAccepted = matchHydrated ? isAcceptedByMatch : null;
+    const paymentStatusForResolver = hasCompletedPayment ? "COMPLETED" : latestPaymentStatus;
     return resolveEffectiveQuoteStatus({
       quoteStatus: view.quote.status,
       matchStatus,
       matchAccepted,
-      paymentStatus: latestPaymentStatus,
+      paymentStatus: paymentStatusForResolver,
     });
-  }, [activeQuoteMatch?.state, activeQuoteMatch?.status, isAcceptedByMatch, latestPaymentStatus, matchHydrated, view.quote.status]);
+  }, [activeQuoteMatch?.state, activeQuoteMatch?.status, hasCompletedPayment, isAcceptedByMatch, latestPaymentStatus, matchHydrated, view.quote.status]);
 
   const shouldForcePaymentRequired = React.useMemo(() => {
     if (hasPendingCounterOffer) return false;
@@ -1029,15 +1030,20 @@ export default function QuoteDetailPage() {
       return;
     }
     try {
-      const [latestPayment, completed] = await Promise.all([
-        getLatestPaymentForMatch(safeMatchId),
-        hasCompletedPaymentForMatch(safeMatchId),
-      ]);
-      setLatestPaymentStatus(latestPayment?.status ?? null);
-      setLatestPaymentMethod(latestPayment?.method ?? null);
-      setHasCompletedPayment(completed);
-      if (completed) {
+      const snapshot = await getMatchPaymentSnapshot(safeMatchId);
+      setLatestPaymentStatus(snapshot.effectiveStatus ?? null);
+      setLatestPaymentMethod(snapshot.effectiveMethod ?? null);
+      setHasCompletedPayment(snapshot.hasCompleted);
+      if (snapshot.hasCompleted) {
         setPaidMatchId(safeMatchId);
+      }
+      if (!snapshot.hasCompleted) {
+        const completed = await hasCompletedPaymentForMatch(safeMatchId);
+        if (completed) {
+          setHasCompletedPayment(true);
+          setLatestPaymentStatus("COMPLETED");
+          setPaidMatchId(safeMatchId);
+        }
       }
     } catch {
       // keep current local state on transient API error
