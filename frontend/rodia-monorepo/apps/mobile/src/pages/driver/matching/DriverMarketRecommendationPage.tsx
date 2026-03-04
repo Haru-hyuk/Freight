@@ -7,7 +7,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as THREE from "three";
 
 import type { QuoteDetailResponse } from "@/entities/quote/model/quote.types";
-import { CargoItemChips } from "@/features/driver-orders/ui/detail/CargoItemChips";
 import {
   acceptDriverMatch,
   acceptDriverMatchesBatch,
@@ -143,6 +142,10 @@ function renderTextToDataTexture(
   });
 
   const texture = new THREE.DataTexture(data, texW, texH, THREE.RGBAFormat);
+  texture.flipY = true;
+  texture.generateMipmaps = false;
+  texture.magFilter = THREE.NearestFilter;
+  texture.minFilter = THREE.NearestFilter;
   texture.needsUpdate = true;
   return { texture, texW, texH };
 }
@@ -171,7 +174,7 @@ const LabelSprite = React.memo(({ text, color, boxW, boxH, boxL }: LabelSpritePr
 
   return (
     <sprite renderOrder={30} scale={[s * aspect, s, s]}>
-      <spriteMaterial map={result.texture} transparent depthTest={false} />
+      <spriteMaterial map={result.texture} transparent depthTest={false} depthWrite={false} toneMapped={false} />
     </sprite>
   );
 });
@@ -471,10 +474,11 @@ type CargoMeshProps = {
   color: string;
   stopOrder: number;
   isSelected: boolean;
+  isXray: boolean;
   onSelect: () => void;
 };
 
-const CargoMesh = ({ placement, color, stopOrder, isSelected, onSelect }: CargoMeshProps) => {
+const CargoMesh = ({ placement, color, stopOrder, isSelected, isXray, onSelect }: CargoMeshProps) => {
   const x = toFiniteNumber(placement.x, 0);
   const y = toFiniteNumber(placement.y, 0);
   const z = toFiniteNumber(placement.z, 0);
@@ -490,9 +494,10 @@ const CargoMesh = ({ placement, color, stopOrder, isSelected, onSelect }: CargoM
         <boxGeometry args={boxArgs} />
         <meshStandardMaterial
           color={color}
-          transparent={false}
-          opacity={1}
-          depthWrite={true}
+          transparent={isXray}
+          opacity={isXray ? 0.45 : 1}
+          depthWrite={!isXray}
+          alphaTest={isXray ? 0.02 : 0}
           emissive={isSelected ? color : "#000000"}
           emissiveIntensity={isSelected ? 0.40 : 0}
         />
@@ -728,6 +733,23 @@ const useStyles = createThemedStyles((theme) => {
       padding: spacing * 4,
       gap: spacing * 2,
     },
+    loadHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: spacing * 2,
+    },
+    xrayToggle: {
+      borderRadius: 999,
+      paddingHorizontal: spacing * 2,
+      paddingVertical: spacing,
+      borderWidth: 1,
+      borderColor: cBorder,
+      backgroundColor: tint(cBorder, 0.24, theme.colors.bgSurfaceAlt),
+    },
+    xrayToggleText: {
+      color: theme.colors.textMain,
+    },
     canvasWrap: {
       height: 300,
       borderRadius: 12,
@@ -735,6 +757,58 @@ const useStyles = createThemedStyles((theme) => {
       backgroundColor: theme.colors.bgSurfaceAlt,
       borderWidth: 1,
       borderColor: cBorder,
+    },
+    selectedPanel: {
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: tint(cBorder, 0.8, cBorder),
+      backgroundColor: theme.colors.bgSurface,
+      paddingHorizontal: spacing * 3,
+      paddingVertical: spacing * 2.5,
+      gap: spacing * 1.5,
+    },
+    selectedPanelHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing * 1.5,
+    },
+    selectedPanelBadge: {
+      minWidth: 24,
+      height: 24,
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: spacing,
+    },
+    selectedRouteWrap: {
+      gap: spacing,
+    },
+    selectedMetaRow: {
+      flexDirection: "row",
+      gap: spacing * 1.5,
+    },
+    selectedMetaCell: {
+      flex: 1,
+      borderRadius: 10,
+      backgroundColor: tint(cBorder, 0.38, theme.colors.bgSurfaceAlt),
+      paddingHorizontal: spacing * 1.5,
+      paddingVertical: spacing * 1.2,
+      alignItems: "center",
+      gap: spacing * 0.5,
+    },
+    selectedItemsWrap: {
+      borderRadius: 10,
+      backgroundColor: tint(cBorder, 0.22, theme.colors.bgSurfaceAlt),
+      paddingHorizontal: spacing * 2,
+      paddingVertical: spacing * 1.5,
+      gap: spacing,
+    },
+    selectedItemRow: {
+      borderRadius: 8,
+      backgroundColor: theme.colors.bgSurface,
+      paddingHorizontal: spacing * 1.5,
+      paddingVertical: spacing,
+      gap: spacing * 0.5,
     },
     placementRow: {
       flexDirection: "row",
@@ -819,6 +893,7 @@ export default function DriverMarketRecommendationPage({
   const [isSubmittingOffer, setIsSubmittingOffer] = useState(false);
   const [offerErrorMessage, setOfferErrorMessage] = useState<string | null>(null);
   const [selectedStopOrder, setSelectedStopOrder] = useState<number | null>(null);
+  const [isXray, setIsXray] = useState(true);
 
   const orderedOrders = useMemo(() => {
     if (!selection) return [] as DriverOrderCard[];
@@ -960,13 +1035,21 @@ export default function DriverMarketRecommendationPage({
     () => [...placements].sort((a, b) => (toPositiveInt(a.stopOrder) || 9999) - (toPositiveInt(b.stopOrder) || 9999)),
     [placements]
   );
-  const quoteStopLabelMap = useMemo(() => {
-    const map = new Map<number, string>();
-    quoteCards.forEach((_, index) => {
-      map.set(index + 1, `추천 오더 #${index + 1}`);
+  const cameraDir = useMemo(() => new THREE.Vector3(1, 0.75, 1).normalize(), []);
+  const renderPlacements = useMemo(() => {
+    if (!isXray) return orderedPlacements;
+    return [...orderedPlacements].sort((a, b) => {
+      const ax = (toFiniteNumber(a.x, 0) + Math.max(20, toFiniteNumber(a.width, 80)) / 2) * SCALE;
+      const ay = (toFiniteNumber(a.y, 0) + Math.max(20, toFiniteNumber(a.height, 80)) / 2) * SCALE;
+      const az = (toFiniteNumber(a.z, 0) + Math.max(20, toFiniteNumber(a.length, 80)) / 2) * SCALE;
+      const bx = (toFiniteNumber(b.x, 0) + Math.max(20, toFiniteNumber(b.width, 80)) / 2) * SCALE;
+      const by = (toFiniteNumber(b.y, 0) + Math.max(20, toFiniteNumber(b.height, 80)) / 2) * SCALE;
+      const bz = (toFiniteNumber(b.z, 0) + Math.max(20, toFiniteNumber(b.length, 80)) / 2) * SCALE;
+      const aKey = ax * cameraDir.x + ay * cameraDir.y + az * cameraDir.z;
+      const bKey = bx * cameraDir.x + by * cameraDir.y + bz * cameraDir.z;
+      return aKey - bKey;
     });
-    return map;
-  }, [quoteCards]);
+  }, [cameraDir, isXray, orderedPlacements]);
   const stopColorMap = useMemo(() => {
     const map = new Map<number, string>();
     let cursor = 0;
@@ -979,19 +1062,7 @@ export default function DriverMarketRecommendationPage({
     });
     return map;
   }, [orderedPlacements]);
-  const placementGroups = useMemo(() => {
-    const byStopOrder = new Map<number, Placement[]>();
-    orderedPlacements.forEach((placement) => {
-      const stopOrder = toPositiveInt(placement.stopOrder) || 1;
-      const bucket = byStopOrder.get(stopOrder) ?? [];
-      bucket.push(placement);
-      byStopOrder.set(stopOrder, bucket);
-    });
-
-    return Array.from(byStopOrder.entries())
-      .sort((a, b) => a[0] - b[0])
-      .map(([stopOrder, items]) => ({ stopOrder, items }));
-  }, [orderedPlacements]);
+  const selectedEntry = selectedStopOrder ? quoteCards[selectedStopOrder - 1] ?? null : null;
 
   const handleAccept = useCallback(async () => {
     if (isBusy || isSubmittingOffer) return;
@@ -1248,11 +1319,183 @@ export default function DriverMarketRecommendationPage({
             </View>
           </AppCard>
 
+          <AppCard style={styles.loadCard}>
+            <View style={styles.loadHeader}>
+              <AppText variant="heading" weight="900" color="textMain">
+                3D 적재 시뮬레이션
+              </AppText>
+              <Pressable style={styles.xrayToggle} onPress={() => setIsXray((prev) => !prev)}>
+                <AppText variant="caption" weight="800" style={styles.xrayToggleText}>
+                  {`X-ray ${isXray ? "ON" : "OFF"}`}
+                </AppText>
+              </Pressable>
+            </View>
+            <AppText variant="caption" color="textMuted">
+              적재함 {dims.widthCm} × {dims.lengthCm} × {dims.heightCm} cm 기준 · {isGroupedRecommendation ? "다건 순서 적재" : "단건 적재"}
+            </AppText>
+            <View style={styles.canvasWrap}>
+              {(() => {
+                const sW = dims.widthCm * SCALE;
+                const sH = dims.heightCm * SCALE;
+                const sL = dims.lengthCm * SCALE;
+                return (
+                  <Canvas
+                    camera={{ position: [5, 4, 5], fov: 50 }}
+                    onCreated={({ camera }) => {
+                      // 트럭 컨테이너 + 전체 cargo를 포함하는 Box3 계산
+                      const box = new THREE.Box3();
+                      box.expandByPoint(new THREE.Vector3(0, 0, 0));
+                      box.expandByPoint(new THREE.Vector3(sW, sH, sL));
+                      orderedPlacements.forEach((p) => {
+                        const px = toFiniteNumber(p.x, 0) * SCALE;
+                        const py = toFiniteNumber(p.y, 0) * SCALE;
+                        const pz = toFiniteNumber(p.z, 0) * SCALE;
+                        const pw = Math.max(20, toFiniteNumber(p.width, 80)) * SCALE;
+                        const ph = Math.max(20, toFiniteNumber(p.height, 80)) * SCALE;
+                        const pl = Math.max(20, toFiniteNumber(p.length, 80)) * SCALE;
+                        box.expandByPoint(new THREE.Vector3(px, py, pz));
+                        box.expandByPoint(new THREE.Vector3(px + pw, py + ph, pz + pl));
+                      });
+                      const center = new THREE.Vector3();
+                      box.getCenter(center);
+                      const sphere = new THREE.Sphere();
+                      box.getBoundingSphere(sphere);
+                      const fovRad = (50 * Math.PI) / 180;
+                      const dist = (sphere.radius / Math.sin(fovRad / 2)) * 1.3;
+                      camera.position.copy(center).addScaledVector(cameraDir, dist);
+                      camera.lookAt(center);
+                      camera.updateProjectionMatrix();
+                    }}
+                  >
+                    <ambientLight intensity={0.85} />
+                    <directionalLight position={[5, 8, 5]} intensity={1.0} />
+                    <Suspense fallback={null}>
+                      {/* 트럭 적재함 베이스 (데크·레일·마커·격자) */}
+                      <TruckSceneBase truckW={sW} truckL={sL} truckH={sH} truckWCm={dims.widthCm} truckLCm={dims.lengthCm} />
+                      <mesh renderOrder={5} position={[sW / 2, sH / 2, sL / 2]}>
+                        <boxGeometry args={[sW, sH, sL]} />
+                        <meshStandardMaterial color="#E2E8F0" transparent opacity={0.07} depthWrite={false} />
+                      </mesh>
+                      {renderPlacements.map((placement) => {
+                        const so = toPositiveInt(placement.stopOrder) || 1;
+                        return (
+                          <CargoMesh
+                            key={placement.id ?? `cargo-${so}`}
+                            placement={placement}
+                            color={stopColorMap.get(so) ?? PALETTE[(so - 1) % PALETTE.length]}
+                            stopOrder={so}
+                            isSelected={selectedStopOrder === so}
+                            isXray={isXray}
+                            onSelect={() => setSelectedStopOrder((prev) => (prev === so ? null : so))}
+                          />
+                        );
+                      })}
+                    </Suspense>
+                  </Canvas>
+                );
+              })()}
+              {orderedPlacements.length <= 0 ? (
+                <View style={{ position: "absolute", inset: 0, alignItems: "center", justifyContent: "center" }}>
+                  <ActivityIndicator color={theme.colors.brandPrimary} />
+                </View>
+              ) : null}
+            </View>
+            {selectedEntry ? (
+              (() => {
+                const stopOrder = selectedStopOrder ?? 1;
+                const accentColor = stopColorMap.get(stopOrder) ?? PALETTE[(stopOrder - 1) % PALETTE.length];
+                const originAddress = selectedEntry.order?.originAddress || selectedEntry.quote?.originAddress || "-";
+                const destinationAddress = selectedEntry.order?.destinationAddress || selectedEntry.quote?.destinationAddress || "-";
+                const distanceText =
+                  selectedEntry.order?.routeDistanceText ||
+                  (toPositiveNumber(selectedEntry.quote?.distanceKm, 0) > 0
+                    ? `${toOneDecimalText(selectedEntry.quote?.distanceKm)}km`
+                    : "-");
+                const weightText =
+                  toPositiveNumber(selectedEntry.order?.weightKg ?? selectedEntry.quote?.weightKg, 0) > 0
+                    ? `${toOneDecimalText(selectedEntry.order?.weightKg ?? selectedEntry.quote?.weightKg)}kg`
+                    : "-";
+                const cbmText =
+                  toPositiveNumber(selectedEntry.order?.volumeCbm ?? selectedEntry.quote?.volumeCbm, 0) > 0
+                    ? toOneDecimalText(selectedEntry.order?.volumeCbm ?? selectedEntry.quote?.volumeCbm)
+                    : "-";
+                const quoteItems = Array.isArray(selectedEntry.quote?.quoteItems) ? selectedEntry.quote.quoteItems : [];
+                const cargoFallback = selectedEntry.order?.cargoText || selectedEntry.quote?.cargoName || "-";
+
+                return (
+                  <View style={styles.selectedPanel}>
+                    <View style={styles.selectedPanelHeader}>
+                      <View style={[styles.selectedPanelBadge, { backgroundColor: accentColor }]}>
+                        <AppText variant="caption" weight="900" color="#FFFFFF">
+                          {stopOrder}
+                        </AppText>
+                      </View>
+                      <AppText variant="detail" weight="900" color="textMain">
+                        선택된 추천 오더
+                      </AppText>
+                    </View>
+
+                    <View style={styles.selectedRouteWrap}>
+                      <AppText variant="caption" color="textSub">
+                        출발: {originAddress}
+                      </AppText>
+                      <AppText variant="caption" color="textSub">
+                        도착: {destinationAddress}
+                      </AppText>
+                    </View>
+
+                    <View style={styles.selectedMetaRow}>
+                      <View style={styles.selectedMetaCell}>
+                        <AppText variant="caption" color="textMuted">거리</AppText>
+                        <AppText variant="detail" weight="900" color="brandPrimary">{distanceText}</AppText>
+                      </View>
+                      <View style={styles.selectedMetaCell}>
+                        <AppText variant="caption" color="textMuted">중량</AppText>
+                        <AppText variant="detail" weight="900" color="textMain">{weightText}</AppText>
+                      </View>
+                      <View style={styles.selectedMetaCell}>
+                        <AppText variant="caption" color="textMuted">CBM</AppText>
+                        <AppText variant="detail" weight="900" color="textMain">{cbmText}</AppText>
+                      </View>
+                    </View>
+
+                    <View style={styles.selectedItemsWrap}>
+                      <AppText variant="caption" weight="800" color="textMuted">
+                        화물 품목
+                      </AppText>
+                      {quoteItems.length > 0 ? (
+                        quoteItems.map((item, itemIndex) => (
+                          <View key={`${item.quoteItemId}-${itemIndex}`} style={styles.selectedItemRow}>
+                            <AppText variant="caption" weight="800" color="textMain">
+                              {item.itemName || `화물 ${itemIndex + 1}`} · {Math.max(1, toPositiveInt(item.quantity) || 1)}개
+                            </AppText>
+                            <AppText variant="caption" color="textSub">
+                              {toPositiveNumber(item.widthCm, 0)}×{toPositiveNumber(item.lengthCm, 0)}×{toPositiveNumber(item.heightCm, 0)}cm · {toOneDecimalText(item.unitWeightKg)}kg
+                            </AppText>
+                          </View>
+                        ))
+                      ) : (
+                        <View style={styles.selectedItemRow}>
+                          <AppText variant="caption" color="textSub">
+                            {cargoFallback}
+                          </AppText>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                );
+              })()
+            ) : null}
+          </AppCard>
+
           <AppCard style={styles.quotesCard}>
             <AppText variant="heading" weight="900" color="textMain">
               추천 오더
             </AppText>
             {quoteCards.map((entry, index) => {
+              const stopOrder = index + 1;
+              const accentColor = stopColorMap.get(stopOrder) ?? PALETTE[(stopOrder - 1) % PALETTE.length];
+              const isCardSelected = selectedStopOrder === stopOrder;
               const priceValue = toPositiveNumber(entry.order?.priceValue ?? entry.quote?.finalPrice, 0);
               const originAddress = entry.order?.originAddress || entry.quote?.originAddress || "-";
               const destinationAddress = entry.order?.destinationAddress || entry.quote?.destinationAddress || "-";
@@ -1276,12 +1519,25 @@ export default function DriverMarketRecommendationPage({
                 `${entry.quote?.loadMethod || "-"} · ${entry.quote?.unloadMethod || "-"}`;
 
               return (
-                <View key={`quote-${entry.quoteId}`} style={styles.quoteRow}>
+                <Pressable
+                  key={`quote-${entry.quoteId}`}
+                  onPress={() => setSelectedStopOrder((prev) => (prev === stopOrder ? null : stopOrder))}
+                  style={[
+                    styles.quoteRow,
+                    isCardSelected
+                      ? {
+                          borderColor: accentColor,
+                          borderWidth: 2,
+                          backgroundColor: tint(accentColor, 0.08, theme.colors.bgSurface),
+                        }
+                      : null,
+                  ]}
+                >
                   <View style={styles.quoteTop}>
                     <View style={styles.quoteSeqWrap}>
-                      <View style={styles.quoteSeqBadge}>
+                      <View style={[styles.quoteSeqBadge, isCardSelected ? { backgroundColor: accentColor } : null]}>
                         <AppText variant="caption" weight="900" color="#FFFFFF">
-                          {index + 1}
+                          {stopOrder}
                         </AppText>
                       </View>
                       <AppText variant="detail" weight="900" color="textMain">
@@ -1330,143 +1586,9 @@ export default function DriverMarketRecommendationPage({
                   <AppText variant="caption" color="textSub">
                     차량/작업: {vehicleText} · {methodText}
                   </AppText>
-                </View>
+                </Pressable>
               );
             })}
-          </AppCard>
-
-          <AppCard style={styles.loadCard}>
-            <AppText variant="heading" weight="900" color="textMain">
-              3D 적재 시뮬레이션
-            </AppText>
-            <AppText variant="caption" color="textMuted">
-              적재함 {dims.widthCm} × {dims.lengthCm} × {dims.heightCm} cm 기준 · {isGroupedRecommendation ? "다건 순서 적재" : "단건 적재"}
-            </AppText>
-            <View style={styles.canvasWrap}>
-              {(() => {
-                const sW = dims.widthCm * SCALE;
-                const sH = dims.heightCm * SCALE;
-                const sL = dims.lengthCm * SCALE;
-                return (
-                  <Canvas
-                    camera={{ position: [5, 4, 5], fov: 50 }}
-                    onCreated={({ camera }) => {
-                      // 트럭 컨테이너 + 전체 cargo를 포함하는 Box3 계산
-                      const box = new THREE.Box3();
-                      box.expandByPoint(new THREE.Vector3(0, 0, 0));
-                      box.expandByPoint(new THREE.Vector3(sW, sH, sL));
-                      orderedPlacements.forEach((p) => {
-                        const px = toFiniteNumber(p.x, 0) * SCALE;
-                        const py = toFiniteNumber(p.y, 0) * SCALE;
-                        const pz = toFiniteNumber(p.z, 0) * SCALE;
-                        const pw = Math.max(20, toFiniteNumber(p.width, 80)) * SCALE;
-                        const ph = Math.max(20, toFiniteNumber(p.height, 80)) * SCALE;
-                        const pl = Math.max(20, toFiniteNumber(p.length, 80)) * SCALE;
-                        box.expandByPoint(new THREE.Vector3(px, py, pz));
-                        box.expandByPoint(new THREE.Vector3(px + pw, py + ph, pz + pl));
-                      });
-                      const center = new THREE.Vector3();
-                      box.getCenter(center);
-                      const sphere = new THREE.Sphere();
-                      box.getBoundingSphere(sphere);
-                      const fovRad = (50 * Math.PI) / 180;
-                      const dist = (sphere.radius / Math.sin(fovRad / 2)) * 1.3;
-                      const dir = new THREE.Vector3(1, 0.75, 1).normalize();
-                      camera.position.copy(center).addScaledVector(dir, dist);
-                      camera.lookAt(center);
-                      camera.updateProjectionMatrix();
-                    }}
-                  >
-                    <ambientLight intensity={0.85} />
-                    <directionalLight position={[5, 8, 5]} intensity={1.0} />
-                    <Suspense fallback={null}>
-                      {/* 트럭 적재함 베이스 (데크·레일·마커·격자) */}
-                      <TruckSceneBase truckW={sW} truckL={sL} truckH={sH} truckWCm={dims.widthCm} truckLCm={dims.lengthCm} />
-                      <mesh renderOrder={5} position={[sW / 2, sH / 2, sL / 2]}>
-                        <boxGeometry args={[sW, sH, sL]} />
-                        <meshStandardMaterial color="#E2E8F0" transparent opacity={0.07} depthWrite={false} />
-                      </mesh>
-                      {orderedPlacements.map((placement, index) => {
-                        const so = toPositiveInt(placement.stopOrder) || 1;
-                        return (
-                          <CargoMesh
-                            key={placement.id ?? `cargo-${index}`}
-                            placement={placement}
-                            color={stopColorMap.get(so) ?? PALETTE[index % PALETTE.length]}
-                            stopOrder={so}
-                            isSelected={selectedStopOrder === so}
-                            onSelect={() => setSelectedStopOrder((prev) => (prev === so ? null : so))}
-                          />
-                        );
-                      })}
-                    </Suspense>
-                  </Canvas>
-                );
-              })()}
-              {orderedPlacements.length <= 0 ? (
-                <View style={{ position: "absolute", inset: 0, alignItems: "center", justifyContent: "center" }}>
-                  <ActivityIndicator color={theme.colors.brandPrimary} />
-                </View>
-              ) : null}
-            </View>
-
-            {/* 그룹 선택 칩 — 탭하면 해당 stopOrder의 3D 박스를 하이라이트 */}
-            {placementGroups.length > 0 && (
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, paddingVertical: 4 }}>
-                {placementGroups.map((group) => {
-                  const isChipSelected = selectedStopOrder === group.stopOrder;
-                  const chipColor = stopColorMap.get(group.stopOrder) ?? PALETTE[(group.stopOrder - 1) % PALETTE.length];
-                  return (
-                    <Pressable
-                      key={`sel-${group.stopOrder}`}
-                      onPress={() => setSelectedStopOrder((prev) => (prev === group.stopOrder ? null : group.stopOrder))}
-                      style={{
-                        paddingHorizontal: 12,
-                        paddingVertical: 7,
-                        borderRadius: 20,
-                        borderWidth: 2,
-                        borderColor: chipColor,
-                        backgroundColor: isChipSelected ? chipColor : "transparent",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <AppText variant="detail" weight="900" color={isChipSelected ? "#FFFFFF" : chipColor}>
-                        {group.stopOrder}
-                      </AppText>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            )}
-
-            {placementGroups.map((group) => (
-              <View key={`group-${group.stopOrder}`} style={styles.placementGroupWrap}>
-                <View style={styles.placementGroupHeader}>
-                  <View
-                    style={[
-                      styles.placementBadge,
-                      { backgroundColor: stopColorMap.get(group.stopOrder) ?? PALETTE[(group.stopOrder - 1) % PALETTE.length] },
-                    ]}
-                  >
-                    <AppText variant="caption" weight="900" color="#FFFFFF">
-                      {group.stopOrder}
-                    </AppText>
-                  </View>
-                  <AppText variant="detail" weight="800" color="textMain" style={styles.placementGroupTitle}>
-                    {quoteStopLabelMap.get(group.stopOrder) ?? `적재 순서 ${group.stopOrder}`}
-                  </AppText>
-                  <AppText variant="caption" style={styles.placementGroupCount}>
-                    {group.items.length}개
-                  </AppText>
-                </View>
-
-                <CargoItemChips
-                  items={group.items}
-                  color={stopColorMap.get(group.stopOrder) ?? PALETTE[(group.stopOrder - 1) % PALETTE.length]}
-                />
-              </View>
-            ))}
           </AppCard>
         </View>
       </PageScaffold>
