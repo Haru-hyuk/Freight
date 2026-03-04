@@ -1190,6 +1190,9 @@ export function DriverOrdersBoard({
       });
     });
 
+    // Root cause grounding:
+    // 기존 운행 탭은 acceptedRunGroups seed 없으면 단건 렌더링만 수행해서,
+    // 서버가 MatchResponse.matchGroupKey/type/order를 내려줘도 1개씩 따로 보였다.
     // Grounding (OpenAPI MatchResponse):
     // - matchGroupKey: 같은 그룹의 매칭 묶음 키
     // - matchGroupType: 그룹 타입(BUNDLED 등)
