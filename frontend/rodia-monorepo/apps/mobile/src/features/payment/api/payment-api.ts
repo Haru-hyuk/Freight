@@ -245,8 +245,12 @@ export async function prepareShipperPayment(input: PrepareShipperPaymentInput): 
   const clientKey = toText(payload.clientKey) || undefined;
   const paymentKey = toText(payload.paymentKey || payload.pgPaymentKey || payload.transactionKey) || undefined;
   const orderName = toText(payload.orderName) || safeOrderName;
-
-  const latest = (await listPaymentsByMatchId(safeMatchId))[0] ?? null;
+  let latest: PaymentResponse | null = null;
+  try {
+    latest = (await listPaymentsByMatchId(safeMatchId))[0] ?? null;
+  } catch {
+    latest = null;
+  }
 
   return {
     paymentId,

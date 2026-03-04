@@ -22,7 +22,11 @@ import {
 } from "@/features/payment/api/payment-api";
 import { TossPaymentModal } from "@/features/payment/ui/TossPaymentModal";
 import { deleteShipperQuote } from "@/features/quote/api";
-import { getQuoteActionPolicyByUiState, resolveTonePalette, type DecisionActionId } from "@/features/quote/model/quoteActionMatrix";
+import {
+  getQuoteActionPolicyByUiState,
+  resolveTonePalette,
+  type DecisionActionId,
+} from "@/features/quote/model/quoteActionMatrix";
 import { useQuoteDetail, type QuoteActionsContext } from "@/features/quote/model/useQuoteDetail";
 import { formatWorkMethodLabel } from "@/features/quote/model/workMethod";
 import { BottomActionRouter } from "@/features/quote/ui/actions/BottomActionRouter";
@@ -934,19 +938,18 @@ export default function QuoteDetailPage() {
     const uiState = getCustomerUiStateFromBackendStatus(effectiveQuoteStatus);
     return uiState === CUSTOMER_UI_STATE.PAYMENT_REQUIRED || uiState === CUSTOMER_UI_STATE.REQUESTED || uiState === CUSTOMER_UI_STATE.UNKNOWN;
   }, [cancelTargetMatchId, effectiveQuoteStatus, forcePaymentRequired, hasCompletedPayment, hasPendingCounterOffer, isAcceptedByMatch, isRoutePayRequested, latestPaymentStatus, paidMatchId]);
-  const quoteUiState = React.useMemo(
+  const statusUiState = React.useMemo(() => getCustomerUiStateFromBackendStatus(effectiveQuoteStatus), [effectiveQuoteStatus]);
+  const actionUiState = React.useMemo(
     () =>
       shouldForcePaymentRequired
         ? CUSTOMER_UI_STATE.PAYMENT_REQUIRED
         : hasPendingCounterOffer
           ? CUSTOMER_UI_STATE.NEGOTIATION_REQUIRED
-          : getCustomerUiStateFromBackendStatus(effectiveQuoteStatus),
-    [effectiveQuoteStatus, hasPendingCounterOffer, shouldForcePaymentRequired]
+          : statusUiState,
+    [hasPendingCounterOffer, shouldForcePaymentRequired, statusUiState]
   );
-  const effectivePolicy = React.useMemo(
-    () => getQuoteActionPolicyByUiState(quoteUiState),
-    [quoteUiState]
-  );
+  const statusPolicy = React.useMemo(() => getQuoteActionPolicyByUiState(statusUiState), [statusUiState]);
+  const actionPolicy = React.useMemo(() => getQuoteActionPolicyByUiState(actionUiState), [actionUiState]);
   const effectiveActionsContext = React.useMemo(
     () => ({ ...view.actionsContext, status: effectiveQuoteStatus }),
     [effectiveQuoteStatus, view.actionsContext]
@@ -964,14 +967,14 @@ export default function QuoteDetailPage() {
 
   React.useEffect(() => {
     if (
-      quoteUiState === CUSTOMER_UI_STATE.TRANSIT_IN_PROGRESS ||
-      quoteUiState === CUSTOMER_UI_STATE.PICKUP_IN_PROGRESS ||
-      quoteUiState === CUSTOMER_UI_STATE.COMPLETED ||
-      quoteUiState === CUSTOMER_UI_STATE.CANCELED
+      statusUiState === CUSTOMER_UI_STATE.TRANSIT_IN_PROGRESS ||
+      statusUiState === CUSTOMER_UI_STATE.PICKUP_IN_PROGRESS ||
+      statusUiState === CUSTOMER_UI_STATE.COMPLETED ||
+      statusUiState === CUSTOMER_UI_STATE.CANCELED
     ) {
       setForcePaymentRequired(false);
     }
-  }, [quoteUiState]);
+  }, [statusUiState]);
 
   React.useEffect(() => {
     if (actionQuoteId <= 0) {
@@ -982,8 +985,8 @@ export default function QuoteDetailPage() {
     }
   }, [actionQuoteId]);
 
-  const palette = resolveTonePalette(theme, effectivePolicy);
-  const effectiveStatusLabel = effectivePolicy.badgeLabel || view.commandCenter.statusLabel;
+  const palette = resolveTonePalette(theme, statusPolicy);
+  const effectiveStatusLabel = statusPolicy.badgeLabel || view.commandCenter.statusLabel;
 
   const loadMatchSnapshot = React.useCallback(async (targetQuoteId: number): Promise<MatchSnapshot> => {
     const safeQuoteId = parsePositiveInt(targetQuoteId);
@@ -1171,10 +1174,6 @@ export default function QuoteDetailPage() {
 
   const executePayment = React.useCallback(async () => {
     if (isPaying) return;
-    if (latestPaymentStatus === "PENDING") {
-      Alert.alert("결제 진행 중", "이전 결제 요청이 처리 중입니다. 잠시 후 다시 확인해 주세요.");
-      return;
-    }
     if (cancelTargetMatchId <= 0) {
       Alert.alert("Payment failed", "No active match found.");
       return;
@@ -1211,7 +1210,7 @@ export default function QuoteDetailPage() {
     } finally {
       setIsPaying(false);
     }
-  }, [cancelTargetMatchId, isPaying, latestPaymentStatus, view.quote.basePrice, view.quote.desiredPrice, view.quote.destinationAddress, view.quote.finalPrice, view.quote.originAddress]);
+  }, [cancelTargetMatchId, isPaying, view.quote.basePrice, view.quote.desiredPrice, view.quote.destinationAddress, view.quote.finalPrice, view.quote.originAddress]);
 
   const handleClosePaymentModal = React.useCallback(() => {
     setShowPaymentModal(false);
@@ -1391,18 +1390,18 @@ export default function QuoteDetailPage() {
   }, []);
 
   const spacing = safeNumber(theme.layout.spacing.base, 4);
-  const shouldUsePolicyActionBar = POLICY_ACTION_UI_STATES.has(quoteUiState) && Boolean(effectivePolicy.bottomBar);
+  const shouldUsePolicyActionBar = POLICY_ACTION_UI_STATES.has(actionUiState) && Boolean(actionPolicy.bottomBar);
   const isDriveInProgress =
-    quoteUiState === CUSTOMER_UI_STATE.PICKUP_IN_PROGRESS ||
-    quoteUiState === CUSTOMER_UI_STATE.TRANSIT_IN_PROGRESS ||
+    statusUiState === CUSTOMER_UI_STATE.PICKUP_IN_PROGRESS ||
+    statusUiState === CUSTOMER_UI_STATE.TRANSIT_IN_PROGRESS ||
     isPostPaymentFlow;
   const bottomTitle = isPostPaymentFlow ? "결제 완료" : hasActiveQuoteMatch ? "배차 요청 취소" : "배차 요청";
   const bottomVariant = React.useMemo(() => {
     if (isPostPaymentFlow) return "secondary";
     if (hasActiveQuoteMatch) return "destructive";
-    if (quoteUiState === CUSTOMER_UI_STATE.UNKNOWN) return "secondary";
+    if (statusUiState === CUSTOMER_UI_STATE.UNKNOWN) return "secondary";
     return "primary";
-  }, [hasActiveQuoteMatch, isPostPaymentFlow, quoteUiState]);
+  }, [hasActiveQuoteMatch, isPostPaymentFlow, statusUiState]);
   const handlePressBottomAction = React.useCallback(() => {
     if (isPostPaymentFlow) return;
     if (hasActiveQuoteMatch) {
@@ -1412,24 +1411,17 @@ export default function QuoteDetailPage() {
     void handleCreateMatch();
   }, [handleCancelMatch, handleCreateMatch, hasActiveQuoteMatch, isPostPaymentFlow]);
 
-  const bottomBar = !isBlockedByFetchState ? (
+  const bottomBar = !isBlockedByFetchState && matchHydrated ? (
     <View style={[styles.bottomBar, { paddingBottom: insets.bottom + spacing * 2 }]} onLayout={(e) => {
       const nextHeight = e?.nativeEvent?.layout?.height;
       if (!nextHeight) return;
       setBottomBarHeight((prev) => Math.max(prev, nextHeight));
     }}>
-{!matchHydrated ? (
-        <AppButton
-          title="배차 상태 확인 중..."
-          variant="secondary"
-          style={styles.bottomButton}
-          disabled
-        />
-      ) : shouldUsePolicyActionBar ? (
+{shouldUsePolicyActionBar ? (
         <BottomActionRouter
           ctx={effectiveActionsContext}
-          bottomBar={effectivePolicy.bottomBar}
-          guards={effectivePolicy.guards}
+          bottomBar={actionPolicy.bottomBar}
+          guards={actionPolicy.guards}
           onCancelRequest={handlePolicyCancelRequest}
           onRunAction={(action, ctx) => runPolicyAction(action, ctx)}
         />
@@ -1439,12 +1431,12 @@ export default function QuoteDetailPage() {
         </View>
       ) : (
         <AppButton
-          title={isDriveInProgress ? (quoteUiState === CUSTOMER_UI_STATE.PICKUP_IN_PROGRESS ? "상차 진행 중..." : "운송 진행 중...") : bottomTitle}
+          title={isDriveInProgress ? (statusUiState === CUSTOMER_UI_STATE.PICKUP_IN_PROGRESS ? "상차 진행 중..." : "운송 진행 중...") : bottomTitle}
           variant={isDriveInProgress ? "secondary" : bottomVariant}
           style={styles.bottomButton}
           onPress={handlePressBottomAction}
           loading={isMatchSubmitting || isPaying}
-          disabled={isDriveInProgress || isMatchSubmitting || isPaying || latestPaymentStatus === "PENDING" || (hasActiveQuoteMatch && isCancelIdInvalid) || actionQuoteId <= 0}
+          disabled={isDriveInProgress || isMatchSubmitting || isPaying || (hasActiveQuoteMatch && isCancelIdInvalid) || actionQuoteId <= 0}
         />
       )}
     </View>
