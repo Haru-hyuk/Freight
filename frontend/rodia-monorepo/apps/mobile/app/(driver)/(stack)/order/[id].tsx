@@ -1253,6 +1253,7 @@ function DriverOrderDetailContent({ params }: { params: DriverOrderRouteParams }
   const currentStep = resolveWorkflowStepIndex(uiState);
 
   const handleAcceptMatch = useCallback(() => {
+    if (isBusy || isSubmittingOffer) return;
     Alert.alert("배차 수락", "이 배차를 수락하시겠습니까?", [
       { text: "취소", style: "cancel" },
       {
@@ -1262,7 +1263,10 @@ function DriverOrderDetailContent({ params }: { params: DriverOrderRouteParams }
           try {
             const result = await acceptDriverMatch(matchId);
             if (!result) {
-              Alert.alert("배차 수락 실패", "잠시 후 다시 시도해 주세요.");
+              Alert.alert("배차 수락 실패", "잠시 후 다시 시도해 주세요.", [
+                { text: "취소", style: "cancel" },
+                { text: "다시 시도", onPress: handleAcceptMatch },
+              ]);
               return;
             }
 
@@ -1285,14 +1289,18 @@ function DriverOrderDetailContent({ params }: { params: DriverOrderRouteParams }
               Alert.alert("배차 수락 실패", "이미 다른 기사에게 배차된 오더입니다.");
               return;
             }
-            Alert.alert("배차 수락 실패", readApiErrorMessage(error, "잠시 후 다시 시도해 주세요."));
+            const message = readApiErrorMessage(error, "잠시 후 다시 시도해 주세요.");
+            Alert.alert("배차 수락 실패", message, [
+              { text: "취소", style: "cancel" },
+              { text: "다시 시도", onPress: handleAcceptMatch },
+            ]);
           } finally {
             setIsBusy(false);
           }
         },
       },
     ]);
-  }, [isQuoteMode, matchId, routeSource, router, viewModel.quoteId, viewModel.refetch]);
+  }, [isBusy, isQuoteMode, isSubmittingOffer, matchId, routeSource, router, viewModel.quoteId, viewModel.refetch]);
 
   const handleNegotiate = useCallback(() => {
     setOfferErrorMessage(null);
@@ -1607,11 +1615,21 @@ function DriverOrderDetailContent({ params }: { params: DriverOrderRouteParams }
     id: DRIVER_CTA_ID.ACCEPT_MATCH,
     label: "배차 수락",
     variant: "primary",
-    enabled: !isBusy,
+    enabled: !isBusy && !isSubmittingOffer,
   } as const;
-  const negotiateSecondary = { label: "운임 제안", onPress: handleNegotiate };
+  const negotiateSecondary = {
+    label: "운임 제안",
+    onPress: handleNegotiate,
+    disabled: isBusy || isSubmittingOffer,
+    loading: isSubmittingOffer,
+  };
   const finalBottomBar = isQuoteMode ? (
-    <DriverOrderActionBar cta={quotePrimaryCta} onPress={handleAcceptMatch} secondaryCta={negotiateSecondary} />
+    <DriverOrderActionBar
+      cta={quotePrimaryCta}
+      onPress={handleAcceptMatch}
+      primaryLoading={isBusy}
+      secondaryCta={negotiateSecondary}
+    />
   ) : renderBottomBar();
 
   return (
@@ -1691,7 +1709,11 @@ function DriverOrderDetailContent({ params }: { params: DriverOrderRouteParams }
       visible={isOfferModalOpen}
       isSubmitting={isSubmittingOffer}
       errorMessage={offerErrorMessage}
-      onClose={() => setIsOfferModalOpen(false)}
+      onClose={() => {
+        if (isSubmittingOffer) return;
+        setIsOfferModalOpen(false);
+        setOfferErrorMessage(null);
+      }}
       onSubmit={handleOfferSubmit}
     />
   </>

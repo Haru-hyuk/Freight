@@ -710,6 +710,7 @@ export default function DriverMarketRecommendationPage({
   }, [orderedPlacements]);
 
   const handleAccept = useCallback(async () => {
+    if (isBusy || isSubmittingOffer) return;
     if (groupedMatchIds.length <= 0) {
       Alert.alert("안내", "수락 가능한 매칭 정보가 없습니다.");
       return;
@@ -743,7 +744,10 @@ export default function DriverMarketRecommendationPage({
       const failureCount = Math.max(0, groupedMatchIds.length - successCount);
 
       if (successCount <= 0) {
-        Alert.alert("오류", "배차 수락에 실패했습니다.");
+        Alert.alert("배차 수락 실패", "배차 수락에 실패했습니다.", [
+          { text: "취소", style: "cancel" },
+          { text: "다시 시도", onPress: () => void handleAccept() },
+        ]);
         return;
       }
 
@@ -792,11 +796,15 @@ export default function DriverMarketRecommendationPage({
         Alert.alert("배차 수락 실패", "이미 배차 처리된 오더가 포함되어 있습니다. 목록을 새로고침해 주세요.");
         return;
       }
-      Alert.alert("배차 수락 실패", readApiErrorMessage(error, "잠시 후 다시 시도해 주세요."));
+      const message = readApiErrorMessage(error, "잠시 후 다시 시도해 주세요.");
+      Alert.alert("배차 수락 실패", message, [
+        { text: "취소", style: "cancel" },
+        { text: "다시 시도", onPress: () => void handleAccept() },
+      ]);
     } finally {
       setIsBusy(false);
     }
-  }, [groupedMatchIds, isGroupedRecommendation, router, selection]);
+  }, [groupedMatchIds, isBusy, isGroupedRecommendation, isSubmittingOffer, router, selection]);
 
   const handleSubmitOffer = useCallback(
     async (payload: CounterOfferSubmitPayload) => {
@@ -843,6 +851,7 @@ export default function DriverMarketRecommendationPage({
         title={isGroupedRecommendation ? "운임 제안(대표 1건)" : "운임 제안"}
         variant="secondary"
         style={styles.bottomBtn}
+        loading={isSubmittingOffer}
         disabled={!primaryOrder || isBusy || isSubmittingOffer}
         onPress={() => {
           setOfferErrorMessage(null);
@@ -854,7 +863,7 @@ export default function DriverMarketRecommendationPage({
         variant="primary"
         style={styles.bottomBtn}
         loading={isBusy}
-        disabled={groupedMatchIds.length <= 0 || isBusy}
+        disabled={groupedMatchIds.length <= 0 || isBusy || isSubmittingOffer}
         onPress={() => void handleAccept()}
       />
     </View>

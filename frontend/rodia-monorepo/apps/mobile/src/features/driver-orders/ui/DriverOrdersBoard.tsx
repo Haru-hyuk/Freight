@@ -3,6 +3,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Alert,
   FlatList,
   Platform,
   Pressable,
@@ -1253,7 +1254,7 @@ export function DriverOrdersBoard({
 
   const handleAcceptFromMarket = useCallback(
     async (card: DriverOrderCard) => {
-      if (acceptingMatchId !== null) return;
+      if (acceptingMatchId !== null || isSubmittingOffer) return;
 
       const safeMatchId = Number(card.matchId);
       if (!Number.isInteger(safeMatchId) || safeMatchId <= 0) {
@@ -1265,7 +1266,10 @@ export function DriverOrdersBoard({
       try {
         const result = await acceptDriverMatch(safeMatchId);
         if (!result) {
-          showToast(NETWORK_ERROR_TEXT);
+          Alert.alert("배차 수락 실패", NETWORK_ERROR_TEXT, [
+            { text: "취소", style: "cancel" },
+            { text: "다시 시도", onPress: () => void handleAcceptFromMarket(card) },
+          ]);
           return;
         }
 
@@ -1284,12 +1288,16 @@ export function DriverOrdersBoard({
           showToast("이미 배차 처리된 오더입니다.");
           return;
         }
-        showToast(readApiErrorMessage(error, NETWORK_ERROR_TEXT));
+        const message = readApiErrorMessage(error, NETWORK_ERROR_TEXT);
+        Alert.alert("배차 수락 실패", message, [
+          { text: "취소", style: "cancel" },
+          { text: "다시 시도", onPress: () => void handleAcceptFromMarket(card) },
+        ]);
       } finally {
         setAcceptingMatchId(null);
       }
     },
-    [acceptingMatchId, loadOrders, router, showToast]
+    [acceptingMatchId, isSubmittingOffer, loadOrders, router, showToast]
   );
 
   const handleOpenCounterOffer = useCallback((card: DriverOrderCard) => {
