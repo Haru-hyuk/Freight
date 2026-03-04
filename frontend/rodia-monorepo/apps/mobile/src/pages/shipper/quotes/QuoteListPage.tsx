@@ -8,7 +8,7 @@ import type { QuoteListItem, QuoteStatusApi } from "@/entities/quote/model/quote
 import { listShipperQuotes } from "@/features/quote/api";
 import { listMyShipperMatches, type ShipperMatchItem } from "@/features/matching/api";
 import {
-  getQuoteActionPolicy,
+  getQuoteActionPolicyByUiState,
   resolveTonePalette,
   type QuoteActionPolicy,
   type QuoteTonePaletteKey,
@@ -505,7 +505,7 @@ function getPriceValue(quote: QuoteListItem): number {
 
 function toViewItem(quote: QuoteListItem): QuoteListViewItem {
   const uiState = getCustomerUiStateFromBackendStatus(quote.status);
-  const policy = getQuoteActionPolicy(quote.status);
+  const policy = getQuoteActionPolicyByUiState(uiState);
   const priceValue = getPriceValue(quote);
 
   return {

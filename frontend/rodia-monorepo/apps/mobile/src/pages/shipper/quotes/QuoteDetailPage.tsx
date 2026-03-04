@@ -21,7 +21,7 @@ import {
 } from "@/features/payment/api/payment-api";
 import { TossPaymentModal } from "@/features/payment/ui/TossPaymentModal";
 import { deleteShipperQuote } from "@/features/quote/api";
-import { getQuoteActionPolicy, resolveTonePalette, type DecisionActionId } from "@/features/quote/model/quoteActionMatrix";
+import { getQuoteActionPolicyByUiState, resolveTonePalette, type DecisionActionId } from "@/features/quote/model/quoteActionMatrix";
 import { useQuoteDetail, type QuoteActionsContext } from "@/features/quote/model/useQuoteDetail";
 import { formatWorkMethodLabel } from "@/features/quote/model/workMethod";
 import { BottomActionRouter } from "@/features/quote/ui/actions/BottomActionRouter";
@@ -992,19 +992,6 @@ export default function QuoteDetailPage() {
       normalized === BACKEND_STATUS.READY
     );
   }, [cancelTargetMatchId, effectiveQuoteStatus, forcePaymentRequired, hasCompletedPayment, hasPendingCounterOffer, isAcceptedByMatch, isRoutePayRequested, paidMatchId]);
-  const effectivePolicy = React.useMemo(
-    () =>
-      shouldForcePaymentRequired
-        ? getQuoteActionPolicy("ASSIGNED")
-        : hasPendingCounterOffer
-          ? getQuoteActionPolicy("NEGOTIATING")
-          : getQuoteActionPolicy(effectiveQuoteStatus),
-    [effectiveQuoteStatus, hasPendingCounterOffer, shouldForcePaymentRequired]
-  );
-  const effectiveActionsContext = React.useMemo(
-    () => ({ ...view.actionsContext, status: effectiveQuoteStatus }),
-    [effectiveQuoteStatus, view.actionsContext]
-  );
   const quoteUiState = React.useMemo(
     () =>
       shouldForcePaymentRequired
@@ -1013,6 +1000,14 @@ export default function QuoteDetailPage() {
           ? CUSTOMER_UI_STATE.NEGOTIATION_REQUIRED
           : getCustomerUiStateFromBackendStatus(effectiveQuoteStatus),
     [effectiveQuoteStatus, hasPendingCounterOffer, shouldForcePaymentRequired]
+  );
+  const effectivePolicy = React.useMemo(
+    () => getQuoteActionPolicyByUiState(quoteUiState),
+    [quoteUiState]
+  );
+  const effectiveActionsContext = React.useMemo(
+    () => ({ ...view.actionsContext, status: effectiveQuoteStatus }),
+    [effectiveQuoteStatus, view.actionsContext]
   );
 
   const isPostPaymentFlow = React.useMemo(() => isPostPaymentStatus(effectiveQuoteStatus), [effectiveQuoteStatus]);

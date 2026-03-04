@@ -188,6 +188,10 @@ function buildQuoteActionPolicyByUiState(uiState: CustomerUiState): QuoteActionP
   };
 }
 
+export function getQuoteActionPolicyByUiState(uiState: CustomerUiState): QuoteActionPolicy {
+  return buildQuoteActionPolicyByUiState(uiState);
+}
+
 function toCustomerUiState(status: QuoteStatusApi | string): CustomerUiState {
   return getCustomerUiStateFromBackendStatus(String(status ?? ""));
 }

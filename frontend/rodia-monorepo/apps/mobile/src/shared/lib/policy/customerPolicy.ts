@@ -139,6 +139,10 @@ export function canCustomerViewLocation(uiState: CustomerUiState): boolean {
  */
 export function getCustomerUiStateFromBackendStatus(rawStatus: string): CustomerUiState {
   const token = toStatusToken(rawStatus);
+
+  // QuoteStatusApi: 협의 단계(화주 액션 필요)
+  if (token === "NEGOTIATING") return CUSTOMER_UI_STATE.NEGOTIATION_REQUIRED;
+
   if (token === "PICKUP" || token === "PREPARING") return CUSTOMER_UI_STATE.PICKUP_IN_PROGRESS;
   if (token === "TRANSIT" || token === "DRIVING" || token === "IN_TRANSIT") return CUSTOMER_UI_STATE.TRANSIT_IN_PROGRESS;
   if (token === "DROPOFF" || token === "DELIVERED" || token === "COMPLETED") return CUSTOMER_UI_STATE.COMPLETED;
