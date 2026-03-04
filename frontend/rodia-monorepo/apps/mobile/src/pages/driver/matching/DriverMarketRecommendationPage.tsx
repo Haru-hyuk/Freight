@@ -2,11 +2,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { Canvas } from "@react-three/fiber/native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, StyleSheet, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as THREE from "three";
 
 import type { QuoteDetailResponse } from "@/entities/quote/model/quote.types";
+import { CargoItemChips } from "@/features/driver-orders/ui/detail/CargoItemChips";
 import {
   acceptDriverMatch,
   acceptDriverMatchesBatch,
@@ -55,6 +56,156 @@ type ParsedRecommendationPlan = {
 
 const SCALE = 0.01;
 const PALETTE = ["#4F46E5", "#0EA5E9", "#22C55E", "#F59E0B", "#EF4444", "#EC4899"];
+
+// ── Spatial Awareness v2 상수 ─────────────────────────────────────────────────
+/** true: 도어가 z=0 쪽, 캡이 z=truckL 쪽 / false: 반전 */
+const DOOR_AT_Z0  = true;
+/** 패널·화살표를 컨테이너 경계에서 안쪽으로 띄우는 여유(world unit) */
+const EPS_INSIDE  = 0.006;
+/** 방향 패널이 EPS_INSIDE 기준 안쪽으로 추가 오프셋(항상 < EPS_INSIDE) */
+const PANEL_EPS   = 0.003;
+
+// ── 5×7 픽셀 폰트 (row-major, 1=white, 0=transparent) — 0~9 전체 정의 ─────
+const GW = 5, GH = 7, GGAP = 1;
+const PIXEL_FONT: Record<string, number[]> = {
+  "0": [0,1,1,1,0, 1,0,0,0,1, 1,0,0,1,1, 1,0,1,0,1, 1,1,0,0,1, 1,0,0,0,1, 0,1,1,1,0],
+  "1": [0,0,1,0,0, 0,1,1,0,0, 0,0,1,0,0, 0,0,1,0,0, 0,0,1,0,0, 0,0,1,0,0, 0,1,1,1,0],
+  "2": [0,1,1,1,0, 1,0,0,0,1, 0,0,0,0,1, 0,0,0,1,0, 0,0,1,0,0, 0,1,0,0,0, 1,1,1,1,1],
+  "3": [1,1,1,1,0, 0,0,0,0,1, 0,0,0,0,1, 0,1,1,1,0, 0,0,0,0,1, 0,0,0,0,1, 1,1,1,1,0],
+  "4": [0,0,0,1,0, 0,0,1,1,0, 0,1,0,1,0, 1,0,0,1,0, 1,1,1,1,1, 0,0,0,1,0, 0,0,0,1,0],
+  "5": [1,1,1,1,1, 1,0,0,0,0, 1,1,1,1,0, 0,0,0,0,1, 0,0,0,0,1, 1,0,0,0,1, 0,1,1,1,0],
+  "6": [0,1,1,1,0, 1,0,0,0,0, 1,0,0,0,0, 1,1,1,1,0, 1,0,0,0,1, 1,0,0,0,1, 0,1,1,1,0],
+  "7": [1,1,1,1,1, 0,0,0,0,1, 0,0,0,1,0, 0,0,1,0,0, 0,1,0,0,0, 0,1,0,0,0, 0,1,0,0,0],
+  "8": [0,1,1,1,0, 1,0,0,0,1, 1,0,0,0,1, 0,1,1,1,0, 1,0,0,0,1, 1,0,0,0,1, 0,1,1,1,0],
+  "9": [0,1,1,1,0, 1,0,0,0,1, 1,0,0,0,1, 0,1,1,1,1, 0,0,0,0,1, 1,0,0,0,1, 0,1,1,1,0],
+};
+
+/** SDF 라운드렉트 판별 (badge 배경 렌더링용) */
+function insideRR(px: number, py: number, x0: number, y0: number, x1: number, y1: number, r: number): boolean {
+  const cx = Math.max(x0 + r, Math.min(x1 - r, px));
+  const cy = Math.max(y0 + r, Math.min(y1 - r, py));
+  return (px - cx) ** 2 + (py - cy) ** 2 <= r * r;
+}
+
+/**
+ * 문자열(숫자)을 DataTexture에 렌더링한다. DOM canvas 불필요.
+ * - 최대 4자리까지: ≤3자 → 32×32, 4자 → 64×32
+ * - 라운드렉트 badge 배경 + 흰색 픽셀 폰트, 중앙 정렬
+ * - texW/texH 반환으로 Sprite에서 aspect 보정 가능
+ */
+function renderTextToDataTexture(
+  text: string,
+  bgR: number,
+  bgG: number,
+  bgB: number,
+): { texture: THREE.DataTexture; texW: number; texH: number } {
+  const chars = text.split("").filter((c) => PIXEL_FONT[c] != null);
+  const n = Math.max(1, chars.length);
+  const textPxW = n * GW + (n - 1) * GGAP;
+  // 3px 여백 포함 폭이 26px 이하면 32, 초과면 64
+  const texW = textPxW + 6 <= 26 ? 32 : 64;
+  const texH = 32;
+  const data = new Uint8Array(texW * texH * 4);
+
+  // badge: 2px margin from edges, r=5 corner
+  const bx0 = 2, by0 = 2, bx1 = texW - 2, by1 = texH - 2, br = 5;
+  for (let py = 0; py < texH; py++) {
+    for (let px = 0; px < texW; px++) {
+      const i = (py * texW + px) * 4;
+      if (insideRR(px, py, bx0, by0, bx1, by1, br)) {
+        data[i] = bgR; data[i + 1] = bgG; data[i + 2] = bgB; data[i + 3] = 215;
+      } else {
+        data[i + 3] = 0;
+      }
+    }
+  }
+
+  // 글리프: badge 내 중앙 배치
+  const badgeW = bx1 - bx0;
+  const badgeH = by1 - by0;
+  const startX = bx0 + Math.floor((badgeW - textPxW) / 2);
+  const startY = by0 + Math.floor((badgeH - GH) / 2);
+
+  chars.forEach((ch, ci) => {
+    const glyph = PIXEL_FONT[ch]!;
+    const charX = startX + ci * (GW + GGAP);
+    for (let row = 0; row < GH; row++) {
+      for (let col = 0; col < GW; col++) {
+        if (glyph[row * GW + col]) {
+          const px = charX + col, py = startY + row;
+          if (px >= 0 && px < texW && py >= 0 && py < texH) {
+            const i = (py * texW + px) * 4;
+            data[i] = 255; data[i + 1] = 255; data[i + 2] = 255; data[i + 3] = 255;
+          }
+        }
+      }
+    }
+  });
+
+  const texture = new THREE.DataTexture(data, texW, texH, THREE.RGBAFormat);
+  texture.needsUpdate = true;
+  return { texture, texW, texH };
+}
+
+type LabelSpriteProps = { text: string; color: string; boxW: number; boxH: number; boxL: number };
+
+/**
+ * 박스 중앙 레이블 스프라이트 (항상 카메라를 향함).
+ * - 박스 최소 치수에 비례한 scale (0.14~0.55 world unit)
+ * - texW:texH 비율로 sprite x-scale 보정 → 비율 왜곡 없음
+ */
+const LabelSprite = React.memo(({ text, color, boxW, boxH, boxL }: LabelSpriteProps) => {
+  const result = useMemo(() => {
+    const hex = color.replace(/^#/, "");
+    const r = parseInt(hex.slice(0, 2), 16) || 80;
+    const g = parseInt(hex.slice(2, 4), 16) || 80;
+    const b = parseInt(hex.slice(4, 6), 16) || 200;
+    return renderTextToDataTexture(text, r, g, b);
+  }, [text, color]);
+
+  useEffect(() => () => { result.texture.dispose(); }, [result.texture]);
+
+  const minDim = Math.min(boxW, boxH, boxL) * SCALE;
+  const s = Math.min(0.55, Math.max(0.14, minDim * 0.40));
+  const aspect = result.texW / result.texH; // 1.0 또는 2.0
+
+  return (
+    <sprite renderOrder={30} scale={[s * aspect, s, s]}>
+      <spriteMaterial map={result.texture} transparent depthTest={false} />
+    </sprite>
+  );
+});
+
+// ── 접촉 그림자 텍스처 (싱글턴) ───────────────────────────────────────────────
+let _shadowDiscTex: THREE.DataTexture | null = null;
+function getShadowDiscTexture(): THREE.DataTexture {
+  if (!_shadowDiscTex) {
+    const S = 64; const C = 31.5;
+    const data = new Uint8Array(S * S * 4);
+    for (let py = 0; py < S; py++) {
+      for (let px = 0; px < S; px++) {
+        const nx = (px - C) / C, ny = (py - C) / C;
+        const dist = Math.sqrt(nx * nx + ny * ny);
+        const t = Math.max(0, 1 - dist);
+        data[(py * S + px) * 4 + 3] = Math.round(Math.pow(t, 1.8) * 210);
+      }
+    }
+    _shadowDiscTex = new THREE.DataTexture(data, S, S, THREE.RGBAFormat);
+    _shadowDiscTex.needsUpdate = true;
+  }
+  return _shadowDiscTex;
+}
+
+type ShadowDiscProps = { boxWW: number; boxLW: number; boxHW: number };
+const ShadowDisc = React.memo(({ boxWW, boxLW, boxHW }: ShadowDiscProps) => {
+  const tex = useMemo(() => getShadowDiscTexture(), []);
+  return (
+    <mesh position={[0, -boxHW / 2 + 0.002, 0]} rotation={[-Math.PI / 2, 0, 0]} scale={[boxWW * 0.90, boxLW * 0.90, 1]}>
+      <planeGeometry args={[1, 1]} />
+      <meshBasicMaterial map={tex} transparent depthWrite={false} />
+    </mesh>
+  );
+});
 
 function toText(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -315,29 +466,161 @@ function buildFallbackPlacements(quotes: QuoteDetailResponse[], spec: TruckSpecR
   return placements;
 }
 
-const CargoMesh = ({ placement, color }: { placement: Placement; color: string }) => {
+type CargoMeshProps = {
+  placement: Placement;
+  color: string;
+  stopOrder: number;
+  isSelected: boolean;
+  onSelect: () => void;
+};
+
+const CargoMesh = ({ placement, color, stopOrder, isSelected, onSelect }: CargoMeshProps) => {
   const x = toFiniteNumber(placement.x, 0);
   const y = toFiniteNumber(placement.y, 0);
   const z = toFiniteNumber(placement.z, 0);
   const w = Math.max(20, toFiniteNumber(placement.width, 80));
   const h = Math.max(20, toFiniteNumber(placement.height, 80));
   const l = Math.max(20, toFiniteNumber(placement.length, 80));
-  const position: [number, number, number] = [(x + w / 2) * SCALE, (y + h / 2) * SCALE, (z + l / 2) * SCALE];
+  const center: [number, number, number] = [(x + w / 2) * SCALE, (y + h / 2) * SCALE, (z + l / 2) * SCALE];
   const boxArgs: [number, number, number] = [w * SCALE, h * SCALE, l * SCALE];
 
   return (
-    <group position={position}>
-      <mesh>
+    <group position={center} onClick={onSelect}>
+      <mesh renderOrder={10}>
         <boxGeometry args={boxArgs} />
-        <meshStandardMaterial color={color} transparent opacity={0.72} />
+        <meshStandardMaterial
+          color={color}
+          transparent={false}
+          opacity={1}
+          depthWrite={true}
+          emissive={isSelected ? color : "#000000"}
+          emissiveIntensity={isSelected ? 0.40 : 0}
+        />
       </mesh>
-      <lineSegments>
+      {isSelected && (
+        <mesh renderOrder={20} scale={[1.07, 1.07, 1.07]}>
+          <boxGeometry args={boxArgs} />
+          <meshBasicMaterial color="#FFFFFF" wireframe transparent opacity={0.55} depthWrite={false} />
+        </mesh>
+      )}
+      <lineSegments renderOrder={20}>
         <edgesGeometry args={[new THREE.BoxGeometry(...boxArgs)]} />
-        <lineBasicMaterial color="#0F172A" />
+        <lineBasicMaterial color={isSelected ? "#FFFFFF" : "#1E293B"} />
       </lineSegments>
+      <LabelSprite text={String(stopOrder)} color={color} boxW={w} boxH={h} boxL={l} />
+      {/* 래디얼 그라디언트 접촉 그림자 — 바닥에 닿은 박스(y ≤ 1 cm)만 표시 */}
+      {y <= 1 && <ShadowDisc boxWW={w * SCALE} boxLW={l * SCALE} boxHW={h * SCALE} />}
     </group>
   );
 };
+
+// ─────────────────────────────────────────────────────────────
+// TruckSceneBase — 데크·레일·경계·도어프레임·방향마커·격자
+// ─────────────────────────────────────────────────────────────
+type TruckSceneBaseProps = { truckW: number; truckL: number; truckH: number; truckWCm: number; truckLCm: number };
+const TruckSceneBase = React.memo(({ truckW, truckL, truckH, truckWCm, truckLCm }: TruckSceneBaseProps) => {
+  const intDirDoor: 1 | -1 = DOOR_AT_Z0 ? 1 : -1;
+  const intDirCab:  1 | -1 = DOOR_AT_Z0 ? -1 : 1;
+  const doorEps    = DOOR_AT_Z0 ? EPS_INSIDE : truckL - EPS_INSIDE;
+  const cabEps     = DOOR_AT_Z0 ? truckL - EPS_INSIDE : EPS_INSIDE;
+  const doorPanelZ = doorEps + intDirDoor * PANEL_EPS;
+  const cabPanelZ  = cabEps  + intDirCab  * PANEL_EPS;
+  // 화살표: 도어는 바깥 방향, 캡은 안쪽 방향
+  const doorArrowDirZ = -intDirDoor;
+  const cabArrowDirZ  =  intDirCab;
+  const doorRotX = doorArrowDirZ > 0 ?  Math.PI / 2 : -Math.PI / 2;
+  const cabRotX  = cabArrowDirZ  > 0 ?  Math.PI / 2 : -Math.PI / 2;
+
+  const arrowSize = Math.min(0.28, Math.max(0.10, Math.min(truckW, truckL) * 0.06));
+  const markerW   = Math.min(0.70, Math.max(0.25, truckW * 0.18));
+  const markerH   = Math.min(0.35, Math.max(0.12, truckH * 0.12));
+  const railH  = 8  * SCALE;
+  const railD  = 3  * SCALE;
+  const bar    = 3  * SCALE;
+  const bdrH   = 0.006;
+  const bdrD   = 3  * SCALE;
+  const arrowY = railH + arrowSize * 0.6;
+
+  const gridGeo = useMemo(() => {
+    const spacingCm = truckWCm >= 200 && truckLCm >= 400 ? 100 : 50;
+    const step   = spacingCm * SCALE;
+    const stepsX = Math.floor(truckWCm / spacingCm);
+    const stepsZ = Math.floor(truckLCm / spacingCm);
+    const verts: number[] = [];
+    const Y = 0.0015;
+    for (let i = 1; i < stepsZ; i++) { const z = i * step; verts.push(0, Y, z, truckW, Y, z); }
+    for (let i = 1; i < stepsX; i++) { const x = i * step; verts.push(x, Y, 0, x, Y, truckL); }
+    const geo = new THREE.BufferGeometry();
+    if (verts.length > 0) geo.setAttribute("position", new THREE.Float32BufferAttribute(verts, 3));
+    return geo;
+  }, [truckW, truckL, truckWCm, truckLCm]);
+  useEffect(() => () => { gridGeo.dispose(); }, [gridGeo]);
+
+  return (
+    <>
+      {/* 바닥 데크 */}
+      <mesh renderOrder={1} position={[truckW / 2, 0, truckL / 2]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[truckW, truckL]} />
+        <meshStandardMaterial color="#CBD5E0" transparent opacity={0.90} depthWrite={false} side={THREE.DoubleSide} polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
+      </mesh>
+      {/* 좌우 사이드 레일 */}
+      <mesh position={[railD / 2, railH / 2, truckL / 2]}>
+        <boxGeometry args={[railD, railH, truckL]} />
+        <meshStandardMaterial color="#94A3B8" />
+      </mesh>
+      <mesh position={[truckW - railD / 2, railH / 2, truckL / 2]}>
+        <boxGeometry args={[railD, railH, truckL]} />
+        <meshStandardMaterial color="#94A3B8" />
+      </mesh>
+      {/* 데크 경계 스트립 (앞·뒤·좌·우) */}
+      <mesh renderOrder={2} position={[truckW / 2, bdrH / 2, bdrD / 2]}>
+        <boxGeometry args={[truckW, bdrH, bdrD]} />
+        <meshBasicMaterial color="#64748B" transparent opacity={0.6} depthWrite={false} />
+      </mesh>
+      <mesh renderOrder={2} position={[truckW / 2, bdrH / 2, truckL - bdrD / 2]}>
+        <boxGeometry args={[truckW, bdrH, bdrD]} />
+        <meshBasicMaterial color="#64748B" transparent opacity={0.6} depthWrite={false} />
+      </mesh>
+      <mesh renderOrder={2} position={[bdrD / 2, bdrH / 2, truckL / 2]}>
+        <boxGeometry args={[bdrD, bdrH, truckL]} />
+        <meshBasicMaterial color="#64748B" transparent opacity={0.6} depthWrite={false} />
+      </mesh>
+      <mesh renderOrder={2} position={[truckW - bdrD / 2, bdrH / 2, truckL / 2]}>
+        <boxGeometry args={[bdrD, bdrH, truckL]} />
+        <meshBasicMaterial color="#64748B" transparent opacity={0.6} depthWrite={false} />
+      </mesh>
+      {/* 도어 프레임 (황색) */}
+      <mesh position={[truckW / 2, truckH - bar / 2, doorEps]}><boxGeometry args={[truckW, bar, bar]} /><meshBasicMaterial color="#F59E0B" /></mesh>
+      <mesh position={[truckW / 2, bar / 2, doorEps]}><boxGeometry args={[truckW, bar, bar]} /><meshBasicMaterial color="#F59E0B" /></mesh>
+      <mesh position={[bar / 2, truckH / 2, doorEps]}><boxGeometry args={[bar, truckH, bar]} /><meshBasicMaterial color="#F59E0B" /></mesh>
+      <mesh position={[truckW - bar / 2, truckH / 2, doorEps]}><boxGeometry args={[bar, truckH, bar]} /><meshBasicMaterial color="#F59E0B" /></mesh>
+      {/* 도어 방향 마커 — 황색 화살표 + 반투명 패널 */}
+      <mesh position={[truckW / 2, arrowY, doorEps]} rotation={[doorRotX, 0, 0]}>
+        <coneGeometry args={[arrowSize * 0.55, arrowSize, 6]} />
+        <meshBasicMaterial color="#F59E0B" />
+      </mesh>
+      <mesh renderOrder={3} position={[truckW / 2, arrowY, doorPanelZ]}>
+        <planeGeometry args={[markerW, markerH]} />
+        <meshBasicMaterial color="#0F172A" transparent opacity={0.50} depthWrite={false} side={THREE.DoubleSide} />
+      </mesh>
+      {/* 캡 방향 마커 — 녹색 화살표 + 반투명 패널 */}
+      <mesh position={[truckW / 2, arrowY, cabEps]} rotation={[cabRotX, 0, 0]}>
+        <coneGeometry args={[arrowSize * 0.55, arrowSize, 6]} />
+        <meshBasicMaterial color="#22C55E" />
+      </mesh>
+      <mesh renderOrder={3} position={[truckW / 2, arrowY, cabPanelZ]}>
+        <planeGeometry args={[markerW, markerH]} />
+        <meshBasicMaterial color="#0F172A" transparent opacity={0.50} depthWrite={false} side={THREE.DoubleSide} />
+      </mesh>
+      {/* 내부 격자선 */}
+      {gridGeo.getAttribute("position") != null && (
+        <lineSegments geometry={gridGeo}>
+          <lineBasicMaterial color="#94A3B8" transparent opacity={0.45} />
+        </lineSegments>
+      )}
+    </>
+  );
+});
 
 const useStyles = createThemedStyles((theme) => {
   const spacing = safeNumber(theme?.layout?.spacing?.base, 4);
@@ -535,6 +818,7 @@ export default function DriverMarketRecommendationPage({
   const [isOfferOpen, setIsOfferOpen] = useState(false);
   const [isSubmittingOffer, setIsSubmittingOffer] = useState(false);
   const [offerErrorMessage, setOfferErrorMessage] = useState<string | null>(null);
+  const [selectedStopOrder, setSelectedStopOrder] = useState<number | null>(null);
 
   const orderedOrders = useMemo(() => {
     if (!selection) return [] as DriverOrderCard[];
@@ -1059,35 +1343,103 @@ export default function DriverMarketRecommendationPage({
               적재함 {dims.widthCm} × {dims.lengthCm} × {dims.heightCm} cm 기준 · {isGroupedRecommendation ? "다건 순서 적재" : "단건 적재"}
             </AppText>
             <View style={styles.canvasWrap}>
-              <Canvas camera={{ position: [4.2, 4, 4.2], fov: 45 }}>
-                <ambientLight intensity={0.7} />
-                <directionalLight position={[5, 8, 5]} intensity={1.1} />
-                <Suspense fallback={null}>
-                  <mesh
-                    position={[
-                      (dims.widthCm * SCALE) / 2,
-                      (dims.heightCm * SCALE) / 2,
-                      (dims.lengthCm * SCALE) / 2,
-                    ]}
+              {(() => {
+                const sW = dims.widthCm * SCALE;
+                const sH = dims.heightCm * SCALE;
+                const sL = dims.lengthCm * SCALE;
+                return (
+                  <Canvas
+                    camera={{ position: [5, 4, 5], fov: 50 }}
+                    onCreated={({ camera }) => {
+                      // 트럭 컨테이너 + 전체 cargo를 포함하는 Box3 계산
+                      const box = new THREE.Box3();
+                      box.expandByPoint(new THREE.Vector3(0, 0, 0));
+                      box.expandByPoint(new THREE.Vector3(sW, sH, sL));
+                      orderedPlacements.forEach((p) => {
+                        const px = toFiniteNumber(p.x, 0) * SCALE;
+                        const py = toFiniteNumber(p.y, 0) * SCALE;
+                        const pz = toFiniteNumber(p.z, 0) * SCALE;
+                        const pw = Math.max(20, toFiniteNumber(p.width, 80)) * SCALE;
+                        const ph = Math.max(20, toFiniteNumber(p.height, 80)) * SCALE;
+                        const pl = Math.max(20, toFiniteNumber(p.length, 80)) * SCALE;
+                        box.expandByPoint(new THREE.Vector3(px, py, pz));
+                        box.expandByPoint(new THREE.Vector3(px + pw, py + ph, pz + pl));
+                      });
+                      const center = new THREE.Vector3();
+                      box.getCenter(center);
+                      const sphere = new THREE.Sphere();
+                      box.getBoundingSphere(sphere);
+                      const fovRad = (50 * Math.PI) / 180;
+                      const dist = (sphere.radius / Math.sin(fovRad / 2)) * 1.3;
+                      const dir = new THREE.Vector3(1, 0.75, 1).normalize();
+                      camera.position.copy(center).addScaledVector(dir, dist);
+                      camera.lookAt(center);
+                      camera.updateProjectionMatrix();
+                    }}
                   >
-                    <boxGeometry args={[dims.widthCm * SCALE, dims.heightCm * SCALE, dims.lengthCm * SCALE]} />
-                    <meshStandardMaterial color="#E2E8F0" transparent opacity={0.1} />
-                  </mesh>
-                  {orderedPlacements.map((placement, index) => (
-                    <CargoMesh
-                      key={placement.id ?? `cargo-${index}`}
-                      placement={placement}
-                      color={stopColorMap.get(toPositiveInt(placement.stopOrder) || 1) ?? PALETTE[index % PALETTE.length]}
-                    />
-                  ))}
-                </Suspense>
-              </Canvas>
+                    <ambientLight intensity={0.85} />
+                    <directionalLight position={[5, 8, 5]} intensity={1.0} />
+                    <Suspense fallback={null}>
+                      {/* 트럭 적재함 베이스 (데크·레일·마커·격자) */}
+                      <TruckSceneBase truckW={sW} truckL={sL} truckH={sH} truckWCm={dims.widthCm} truckLCm={dims.lengthCm} />
+                      <mesh renderOrder={5} position={[sW / 2, sH / 2, sL / 2]}>
+                        <boxGeometry args={[sW, sH, sL]} />
+                        <meshStandardMaterial color="#E2E8F0" transparent opacity={0.07} depthWrite={false} />
+                      </mesh>
+                      {orderedPlacements.map((placement, index) => {
+                        const so = toPositiveInt(placement.stopOrder) || 1;
+                        return (
+                          <CargoMesh
+                            key={placement.id ?? `cargo-${index}`}
+                            placement={placement}
+                            color={stopColorMap.get(so) ?? PALETTE[index % PALETTE.length]}
+                            stopOrder={so}
+                            isSelected={selectedStopOrder === so}
+                            onSelect={() => setSelectedStopOrder((prev) => (prev === so ? null : so))}
+                          />
+                        );
+                      })}
+                    </Suspense>
+                  </Canvas>
+                );
+              })()}
               {orderedPlacements.length <= 0 ? (
                 <View style={{ position: "absolute", inset: 0, alignItems: "center", justifyContent: "center" }}>
                   <ActivityIndicator color={theme.colors.brandPrimary} />
                 </View>
               ) : null}
             </View>
+
+            {/* 그룹 선택 칩 — 탭하면 해당 stopOrder의 3D 박스를 하이라이트 */}
+            {placementGroups.length > 0 && (
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, paddingVertical: 4 }}>
+                {placementGroups.map((group) => {
+                  const isChipSelected = selectedStopOrder === group.stopOrder;
+                  const chipColor = stopColorMap.get(group.stopOrder) ?? PALETTE[(group.stopOrder - 1) % PALETTE.length];
+                  return (
+                    <Pressable
+                      key={`sel-${group.stopOrder}`}
+                      onPress={() => setSelectedStopOrder((prev) => (prev === group.stopOrder ? null : group.stopOrder))}
+                      style={{
+                        paddingHorizontal: 12,
+                        paddingVertical: 7,
+                        borderRadius: 20,
+                        borderWidth: 2,
+                        borderColor: chipColor,
+                        backgroundColor: isChipSelected ? chipColor : "transparent",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <AppText variant="detail" weight="900" color={isChipSelected ? "#FFFFFF" : chipColor}>
+                        {group.stopOrder}
+                      </AppText>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
+
             {placementGroups.map((group) => (
               <View key={`group-${group.stopOrder}`} style={styles.placementGroupWrap}>
                 <View style={styles.placementGroupHeader}>
@@ -1109,28 +1461,10 @@ export default function DriverMarketRecommendationPage({
                   </AppText>
                 </View>
 
-                {group.items.map((placement, index) => (
-                  <View key={`placement-${group.stopOrder}-${placement.id ?? index}`} style={styles.placementRow}>
-                    <View
-                      style={[
-                        styles.placementBadge,
-                        { backgroundColor: stopColorMap.get(group.stopOrder) ?? PALETTE[(group.stopOrder - 1) % PALETTE.length] },
-                      ]}
-                    >
-                      <AppText variant="caption" weight="900" color="#FFFFFF">
-                        {index + 1}
-                      </AppText>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <AppText variant="detail" weight="800" color="textMain">
-                        적재물 {index + 1}
-                      </AppText>
-                      <AppText variant="caption" color="textSub">
-                        {toPositiveNumber(placement.width, 0)}×{toPositiveNumber(placement.length, 0)}×{toPositiveNumber(placement.height, 0)}cm · 위치({toFiniteNumber(placement.x, 0)}, {toFiniteNumber(placement.y, 0)}, {toFiniteNumber(placement.z, 0)})
-                      </AppText>
-                    </View>
-                  </View>
-                ))}
+                <CargoItemChips
+                  items={group.items}
+                  color={stopColorMap.get(group.stopOrder) ?? PALETTE[(group.stopOrder - 1) % PALETTE.length]}
+                />
               </View>
             ))}
           </AppCard>
