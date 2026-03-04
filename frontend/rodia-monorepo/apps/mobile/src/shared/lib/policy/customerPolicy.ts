@@ -1,4 +1,5 @@
 import { normalizeStatus } from "./normalizeStatus";
+import { normalizeQuoteStatusApi } from "./quoteStatusResolver";
 import {
   BACKEND_STATUS,
   CTA_VARIANT,
@@ -138,14 +139,19 @@ export function canCustomerViewLocation(uiState: CustomerUiState): boolean {
  * 백엔드 계약이 준비되면 화면 계층은 변환 없이 `uiState`를 직접 사용해야 합니다.
  */
 export function getCustomerUiStateFromBackendStatus(rawStatus: string): CustomerUiState {
+  const quoteStatus = normalizeQuoteStatusApi(rawStatus);
   const token = toStatusToken(rawStatus);
 
-  // QuoteStatusApi: 협의 단계(화주 액션 필요)
-  if (token === "NEGOTIATING") return CUSTOMER_UI_STATE.NEGOTIATION_REQUIRED;
+  if (quoteStatus === "OPEN") return CUSTOMER_UI_STATE.REQUESTED;
+  if (quoteStatus === "NEGOTIATING") return CUSTOMER_UI_STATE.NEGOTIATION_REQUIRED;
+  if (quoteStatus === "ASSIGNED" || quoteStatus === "ACCEPTED") return CUSTOMER_UI_STATE.PAYMENT_REQUIRED;
+  if (quoteStatus === "PREPARING" || quoteStatus === "PICKUP") return CUSTOMER_UI_STATE.PICKUP_IN_PROGRESS;
+  if (quoteStatus === "TRANSIT" || quoteStatus === "DRIVING") return CUSTOMER_UI_STATE.TRANSIT_IN_PROGRESS;
+  if (quoteStatus === "DROPOFF") return CUSTOMER_UI_STATE.COMPLETED;
+  if (quoteStatus === "CANCELED") return CUSTOMER_UI_STATE.CANCELED;
 
-  if (token === "PICKUP" || token === "PREPARING") return CUSTOMER_UI_STATE.PICKUP_IN_PROGRESS;
-  if (token === "TRANSIT" || token === "DRIVING" || token === "IN_TRANSIT") return CUSTOMER_UI_STATE.TRANSIT_IN_PROGRESS;
-  if (token === "DROPOFF" || token === "DELIVERED" || token === "COMPLETED") return CUSTOMER_UI_STATE.COMPLETED;
+  if (token === "IN_TRANSIT") return CUSTOMER_UI_STATE.TRANSIT_IN_PROGRESS;
+  if (token === "DELIVERED" || token === "COMPLETED") return CUSTOMER_UI_STATE.COMPLETED;
 
   const backendStatus = normalizeStatus(rawStatus);
   return CUSTOMER_UI_STATE_BY_BACKEND_STATUS[backendStatus] ?? CUSTOMER_UI_STATE.UNKNOWN;
