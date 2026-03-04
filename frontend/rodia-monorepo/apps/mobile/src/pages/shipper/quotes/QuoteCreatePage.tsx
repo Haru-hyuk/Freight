@@ -20,7 +20,7 @@ import {
   useQuoteCreateDraft,
 } from "@/features/quote/model/quoteCreateDraft";
 import { createShipperMatch } from "@/features/matching/api";
-import { createShipperQuote, previewShipperQuote } from "@/features/quote/api/quote-api";
+import { createShipperQuote, previewShipperQuote, type QuotePricePreview } from "@/features/quote/api/quote-api";
 import { buildQuoteCreateRequest } from "@/features/quote/model/quoteCreateRequestMapper";
 import { isActorOnlyWorkMethod } from "@/features/quote/model/workMethod";
 import { getQuoteFlatCardStyle, QUOTE_PROGRESS_TOKENS } from "@/features/quote/ui/QuoteCreateUiPrimitives";
@@ -180,6 +180,8 @@ function QuoteCreatePageInner() {
   const [isSubmitDoneOpen, setIsSubmitDoneOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [previewPrice, setPreviewPrice] = useState<number | null>(null);
+  const [validationPreview, setValidationPreview] = useState<QuotePricePreview | null>(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [createdQuoteIdentifier, setCreatedQuoteIdentifier] = useState("");
 
   const pricing = useMemo(() => computeQuotePricing(draft), [draft]);
@@ -235,14 +237,18 @@ function QuoteCreatePageInner() {
 
     if (!String(previewPayload?.originAddress ?? "").trim() || !String(previewPayload?.destinationAddress ?? "").trim()) {
       setPreviewPrice(null);
+      setValidationPreview(null);
+      setIsPreviewLoading(false);
       return;
     }
 
     let canceled = false;
+    setIsPreviewLoading(true);
     const timer = setTimeout(async () => {
       try {
         const preview = await previewShipperQuote(previewPayload);
         if (canceled) return;
+        setValidationPreview(preview ?? null);
 
         const weighted = Number(preview?.estimatedWeightedPrice ?? NaN);
         const _min = Number(preview?.estimatedMinPrice ?? NaN);
@@ -255,6 +261,11 @@ function QuoteCreatePageInner() {
       } catch {
         if (canceled) return;
         setPreviewPrice(null);
+        setValidationPreview(null);
+      } finally {
+        if (!canceled) {
+          setIsPreviewLoading(false);
+        }
       }
     }, 350);
 
@@ -368,7 +379,7 @@ function QuoteCreatePageInner() {
 
       if (nextQuoteIdentifier) {
         setIsSubmitDoneOpen(false);
-        router.replace({ pathname: "/(shipper)/quotes/[id]", params: { id: nextQuoteIdentifier } });
+        router.replace({ pathname: "/(shipper)/quotes/[id]", params: { id: nextQuoteIdentifier, refreshedAt: String(Date.now()) } });
         return;
       }
 
@@ -387,7 +398,7 @@ function QuoteCreatePageInner() {
       router.replace("/(shipper)/quotes");
       return;
     }
-    router.replace({ pathname: "/(shipper)/quotes/[id]", params: { id: safeIdentifier } });
+    router.replace({ pathname: "/(shipper)/quotes/[id]", params: { id: safeIdentifier, refreshedAt: String(Date.now()) } });
   };
 
   const goToQuoteList = () => {
@@ -493,7 +504,7 @@ function QuoteCreatePageInner() {
 
       {step === 1 && <QuoteCreateStep1 />}
       {step === 2 && <QuoteCreateStep2 />}
-      {step === 3 && <QuoteCreateStep3 />}
+      {step === 3 && <QuoteCreateStep3 validationPreview={validationPreview} isValidationLoading={isPreviewLoading} />}
 
       <Modal visible={isSubmitDoneOpen} transparent animationType="fade" onRequestClose={goToQuoteList}>
         <View style={styles.requestModalOverlay}>
@@ -543,4 +554,3 @@ export function QuoteCreatePage() {
 }
 
 export default QuoteCreatePage;
-

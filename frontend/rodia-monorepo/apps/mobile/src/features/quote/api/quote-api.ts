@@ -1,19 +1,16 @@
 // rodia-monorepo/apps/mobile/src/features/quote/api/quote-api.ts
 import type {
   QuoteChecklistItemDto,
-  QuoteCreateRequestDto,
-  QuoteCreateResponseDto,
-  QuoteDetailResponseDto,
   QuoteItemDto,
-  QuoteListItemDto,
   QuoteStopDto,
   QuoteStopRequestDto,
-  QuoteUpdateRequestDto,
 } from "@/entities/quote/dto";
 import type {
+  QuoteCreateResponse,
   QuoteDetailResponse,
   QuoteListItem,
   QuoteStatusApi,
+  QuoteUpdateRequest,
   QuoteUpdateResponse,
 } from "@/entities/quote/model/quote.types";
 import { apiClient } from "@/shared/lib/api/apiClient";
@@ -29,6 +26,17 @@ import {
   validateQuote as validateQuoteGenerated,
 } from "@/shared/api/generated/quote-controller/quote-controller";
 import type { ChecklistItemResponse } from "@/shared/api/generated/schemas/checklistItemResponse";
+import type {
+  LoadAnalysis,
+  PriceAnalysis,
+  QuoteChecklistItemRequest,
+  QuoteCreateRequest,
+  QuoteDetailResponse as QuoteDetailResponseSchema,
+  QuoteItemRequest,
+  QuoteListResponse as QuoteListResponseSchema,
+  QuoteStopRequest,
+  QuoteValidationResponse,
+} from "@/shared/api/generated/schemas";
 import { getShipperQuoteCreatePath, isMockMode as isApiMockMode } from "@/shared/lib/config/env";
 import {
   DEFAULT_LOAD_METHOD,
@@ -45,21 +53,17 @@ import {
   updateMockFlowShipperQuote,
   waitRandom,
 } from "@/shared/lib/mock-flow";
+import { normalizeQuoteStatusApi } from "@/shared/lib/policy/quoteStatusResolver";
 
-export type QuotePricePreview = {
-  estimatedWeightedPrice?: number;
-  estimatedMinPrice?: number;
-  estimatedMaxPrice?: number;
-  aiSummary?: string;
-};
+export type QuotePricePreview = QuoteValidationResponse;
 
 export interface QuoteApi {
   listShipperQuotes: () => Promise<QuoteListItem[]>;
   getShipperQuoteDetail: (quoteId: number) => Promise<QuoteDetailResponse>;
   getShipperQuoteDetailByIdentifier: (quoteIdentifier: string) => Promise<QuoteDetailResponse>;
-  previewShipperQuote: (payload: QuoteCreateRequestDto) => Promise<QuotePricePreview | null>;
-  createShipperQuote: (payload: QuoteCreateRequestDto) => Promise<QuoteCreateResponseDto>;
-  updateShipperQuote: (quoteIdentifier: string, payload: QuoteUpdateRequestDto) => Promise<QuoteUpdateResponse>;
+  previewShipperQuote: (payload: QuoteCreateRequest) => Promise<QuotePricePreview | null>;
+  createShipperQuote: (payload: QuoteCreateRequest) => Promise<QuoteCreateResponse>;
+  updateShipperQuote: (quoteIdentifier: string, payload: QuoteUpdateRequest) => Promise<QuoteUpdateResponse>;
   deleteShipperQuote: (quoteIdentifier: string) => Promise<void>;
 }
 
@@ -94,22 +98,11 @@ function resolveQuoteApi(): QuoteApi {
 }
 
 type AnyObj = Record<string, unknown>;
-type QuoteCreateTransportPayload = QuoteCreateRequestDto & { basePrice?: number };
+type QuoteCreateTransportPayload = QuoteCreateRequest;
 type ChecklistMasterItem = { checklistItemId: number; name: string };
 
 let checklistMasterCache: ChecklistMasterItem[] | null = null;
 let checklistMasterPromise: Promise<ChecklistMasterItem[]> | null = null;
-
-const QUOTE_STATUS: QuoteStatusApi[] = [
-  "OPEN",
-  "NEGOTIATING",
-  "ASSIGNED",
-  "ACCEPTED",
-  "PICKUP",
-  "TRANSIT",
-  "DROPOFF",
-  "CANCELED",
-];
 
 function isPlainObject(input: unknown): input is AnyObj {
   return typeof input === "object" && input !== null && !Array.isArray(input);
@@ -152,19 +145,7 @@ function pickFirstStringFrom(objects: AnyObj[], keys: string[], fallback = ""): 
 }
 
 function parseStatus(input: unknown): QuoteStatusApi {
-  const raw = safeString(input, "").toUpperCase();
-  if (!raw) return "UNKNOWN";
-  if (raw === "REQUESTED") return "OPEN";
-  // 서버/레거시: READY/MATCHED/ASSIGNED 계열은 "결제 필요" 단계로 통일
-  if (raw === "READY" || raw === "MATCHED" || raw === "ASSIGNED_CONFIRMED") return "ASSIGNED";
-  // 서버: IN_TRANSIT → 운행중(상세/리스트 정책 일치)
-  if (raw === "IN_TRANSIT") return "DRIVING";
-  // 서버: DELIVERED → 하차완료
-  if (raw === "DELIVERED") return "DROPOFF";
-  if (raw === "ACCEPTED") return "ACCEPTED";
-  if (raw === "CANCELLED" || raw === "CANCEL" || raw === "CANCELED") return "CANCELED";
-  if (raw === "COMPLETED" || raw === "DONE" || raw === "FINISHED") return "DROPOFF";
-  return QUOTE_STATUS.find((status) => status === raw) ?? raw;
+  return normalizeQuoteStatusApi(input);
 }
 
 function pickPayload(input: unknown): unknown {
@@ -358,10 +339,10 @@ function mapStops(input: unknown): QuoteDetailResponse["stops"] {
     });
 }
 
-function sanitizeChecklistItems(input: unknown): QuoteChecklistItemDto[] {
+function sanitizeChecklistItems(input: unknown): QuoteChecklistItemRequest[] {
   if (!Array.isArray(input)) return [];
 
-  const mapped: Array<QuoteChecklistItemDto | null> = input
+  const mapped: Array<QuoteChecklistItemRequest | null> = input
     .slice(0, 100)
     .map((item) => {
       const source = asObject(item as QuoteChecklistItemDto);
@@ -374,13 +355,13 @@ function sanitizeChecklistItems(input: unknown): QuoteChecklistItemDto[] {
       };
     });
 
-  return mapped.filter((item): item is QuoteChecklistItemDto => item !== null);
+  return mapped.filter((item): item is QuoteChecklistItemRequest => item !== null);
 }
 
-function sanitizeQuoteItemsForRequest(input: unknown): QuoteItemDto[] {
+function sanitizeQuoteItemsForRequest(input: unknown): QuoteItemRequest[] {
   if (!Array.isArray(input)) return [];
 
-  const mapped: Array<QuoteItemDto | null> = input.slice(0, 200).map((item, index) => {
+  const mapped: Array<QuoteItemRequest | null> = input.slice(0, 200).map((item, index) => {
     const source = asObject(item as QuoteItemDto);
     const quantity = Math.max(1, safeInt(source.quantity, 1));
     const unitWeightKg = Math.max(0, safeNumber(source.unitWeightKg, 0));
@@ -413,10 +394,10 @@ function sanitizeQuoteItemsForRequest(input: unknown): QuoteItemDto[] {
     };
   });
 
-  return mapped.filter((item): item is QuoteItemDto => item !== null);
+  return mapped.filter((item): item is QuoteItemRequest => item !== null);
 }
 
-function sanitizeStopsForRequest(input: unknown): QuoteStopRequestDto[] {
+function sanitizeStopsForRequest(input: unknown): QuoteStopRequest[] {
   if (!Array.isArray(input)) return [];
 
   const mapped = input.slice(0, 100).map((item, index) => {
@@ -442,7 +423,7 @@ function sanitizeStopsForRequest(input: unknown): QuoteStopRequestDto[] {
     }));
 }
 
-async function resolveChecklistItemsForRequest(input: unknown): Promise<QuoteChecklistItemDto[]> {
+async function resolveChecklistItemsForRequest(input: unknown): Promise<QuoteChecklistItemRequest[]> {
   if (!Array.isArray(input) || input.length === 0) return [];
   const masterItems = await fetchChecklistMaster();
   if (!masterItems.length) return [];
@@ -452,7 +433,7 @@ async function resolveChecklistItemsForRequest(input: unknown): Promise<QuoteChe
     byName.set(normalizeText(item.name), item.checklistItemId);
   }
 
-  const mapped: Array<QuoteChecklistItemDto | null> = input
+  const mapped: Array<QuoteChecklistItemRequest | null> = input
     .slice(0, 100)
     .map((item) => {
       const source = asObject(item as QuoteChecklistItemDto);
@@ -472,7 +453,7 @@ async function resolveChecklistItemsForRequest(input: unknown): Promise<QuoteChe
       };
     });
 
-  return mapped.filter((item): item is QuoteChecklistItemDto => item !== null);
+  return mapped.filter((item): item is QuoteChecklistItemRequest => item !== null);
 }
 
 function sanitizeQuotePayload(payload: QuoteCreateTransportPayload): QuoteCreateTransportPayload {
@@ -571,7 +552,7 @@ function toMockQuoteCreateRequest(payload: QuoteCreateTransportPayload): QuoteCr
   };
 }
 
-function toQuoteCreateResponse(input: unknown): QuoteCreateResponseDto {
+function toQuoteCreateResponse(input: unknown): QuoteCreateResponse {
   const payload = asObject(pickPayload(input));
   const quoteId = pickQuoteId(payload, 0);
   const quotePublicId = pickFirstStringFrom([payload], ["quotePublicId", "quoteIdentifier", "quote_identifier"]);
@@ -581,12 +562,6 @@ function toQuoteCreateResponse(input: unknown): QuoteCreateResponseDto {
   const destinationLng = safeNumber(payload.destinationLng, NaN);
   const stops = mapStops(payload.stops);
 
-  const basePrice = safeInt(payload.basePrice, NaN);
-  const distancePrice = safeInt(payload.distancePrice, NaN);
-  const extraPrice = safeInt(payload.extraPrice, NaN);
-  const desiredPrice = safeInt(payload.desiredPrice, NaN);
-  const finalPrice = safeInt(payload.finalPrice, NaN);
-
   return {
     quoteId,
     quotePublicId: quotePublicId || undefined,
@@ -595,11 +570,6 @@ function toQuoteCreateResponse(input: unknown): QuoteCreateResponseDto {
     ...(Number.isFinite(destinationLat) ? { destinationLat } : {}),
     ...(Number.isFinite(destinationLng) ? { destinationLng } : {}),
     ...(stops.length > 0 ? { stops } : {}),
-    ...(Number.isFinite(basePrice) ? { basePrice: Math.max(0, basePrice) } : {}),
-    ...(Number.isFinite(distancePrice) ? { distancePrice: Math.max(0, distancePrice) } : {}),
-    ...(Number.isFinite(extraPrice) ? { extraPrice: Math.max(0, extraPrice) } : {}),
-    ...(Number.isFinite(desiredPrice) ? { desiredPrice: Math.max(0, desiredPrice) } : {}),
-    ...(Number.isFinite(finalPrice) ? { finalPrice: Math.max(0, finalPrice) } : {}),
   };
 }
 
@@ -608,20 +578,76 @@ function toQuotePricePreview(input: unknown): QuotePricePreview | null {
   const estimatedWeightedPrice = safeInt(payload.estimatedWeightedPrice, NaN);
   const estimatedMinPrice = safeInt(payload.estimatedMinPrice, NaN);
   const estimatedMaxPrice = safeInt(payload.estimatedMaxPrice, NaN);
+  const confidence = safeNumber(payload.confidence, NaN);
   const aiSummary = safeString(payload.aiSummary, "");
+  const badge = safeString(payload.badge, "");
+  const overallStatus = safeString(payload.overallStatus, "");
+  const dispatchSpeed = safeString(payload.dispatchSpeed, "");
+  const comments = Array.isArray(payload.comments) ? payload.comments.map((item) => safeString(item, "")).filter(Boolean) : [];
+  const reasons = Array.isArray(payload.reasons) ? payload.reasons.map((item) => safeString(item, "")).filter(Boolean) : [];
+  const actions = Array.isArray(payload.actions) ? payload.actions.map((item) => safeString(item, "")).filter(Boolean) : [];
+  const loadAnalysisSource = asObject(payload.loadAnalysis);
+  const priceAnalysisSource = asObject(payload.priceAnalysis);
 
   const preview: QuotePricePreview = {
     ...(Number.isFinite(estimatedWeightedPrice) ? { estimatedWeightedPrice: Math.max(0, estimatedWeightedPrice) } : {}),
     ...(Number.isFinite(estimatedMinPrice) ? { estimatedMinPrice: Math.max(0, estimatedMinPrice) } : {}),
     ...(Number.isFinite(estimatedMaxPrice) ? { estimatedMaxPrice: Math.max(0, estimatedMaxPrice) } : {}),
+    ...(comments.length > 0 ? { comments } : {}),
+    ...(overallStatus ? { overallStatus: overallStatus as QuoteValidationResponse["overallStatus"] } : {}),
+    ...(dispatchSpeed ? { dispatchSpeed: dispatchSpeed as QuoteValidationResponse["dispatchSpeed"] } : {}),
+    ...(badge ? { badge } : {}),
+    ...(Number.isFinite(confidence) ? { confidence: Math.max(0, confidence) } : {}),
     ...(aiSummary ? { aiSummary } : {}),
+    ...(reasons.length > 0 ? { reasons } : {}),
+    ...(actions.length > 0 ? { actions } : {}),
+    ...(Object.keys(loadAnalysisSource).length > 0
+      ? {
+          loadAnalysis: {
+            ...(Number.isFinite(safeNumber(loadAnalysisSource.currentKg, NaN))
+              ? { currentKg: Math.max(0, safeNumber(loadAnalysisSource.currentKg, 0)) }
+              : {}),
+            ...(Number.isFinite(safeNumber(loadAnalysisSource.capacityKg, NaN))
+              ? { capacityKg: Math.max(0, safeNumber(loadAnalysisSource.capacityKg, 0)) }
+              : {}),
+            ...(Number.isFinite(safeNumber(loadAnalysisSource.usagePercent, NaN))
+              ? { usagePercent: Math.max(0, safeNumber(loadAnalysisSource.usagePercent, 0)) }
+              : {}),
+            ...(safeString(loadAnalysisSource.safety, "") ? { safety: safeString(loadAnalysisSource.safety, "") as LoadAnalysis["safety"] } : {}),
+            ...(safeString(loadAnalysisSource.label, "") ? { label: safeString(loadAnalysisSource.label, "") } : {}),
+          },
+        }
+      : {}),
+    ...(Object.keys(priceAnalysisSource).length > 0
+      ? {
+          priceAnalysis: {
+            ...(Number.isFinite(safeNumber(priceAnalysisSource.userDesiredPrice, NaN))
+              ? { userDesiredPrice: Math.max(0, safeNumber(priceAnalysisSource.userDesiredPrice, 0)) }
+              : {}),
+            ...(Number.isFinite(safeNumber(priceAnalysisSource.minPrice, NaN))
+              ? { minPrice: Math.max(0, safeNumber(priceAnalysisSource.minPrice, 0)) }
+              : {}),
+            ...(Number.isFinite(safeNumber(priceAnalysisSource.maxPrice, NaN))
+              ? { maxPrice: Math.max(0, safeNumber(priceAnalysisSource.maxPrice, 0)) }
+              : {}),
+            ...(Number.isFinite(safeNumber(priceAnalysisSource.weightedPrice, NaN))
+              ? { weightedPrice: Math.max(0, safeNumber(priceAnalysisSource.weightedPrice, 0)) }
+              : {}),
+            ...(Number.isFinite(safeNumber(priceAnalysisSource.suggestedPrice, NaN))
+              ? { suggestedPrice: Math.max(0, safeNumber(priceAnalysisSource.suggestedPrice, 0)) }
+              : {}),
+            ...(safeString(priceAnalysisSource.fit, "") ? { fit: safeString(priceAnalysisSource.fit, "") as PriceAnalysis["fit"] } : {}),
+            ...(safeString(priceAnalysisSource.label, "") ? { label: safeString(priceAnalysisSource.label, "") } : {}),
+          },
+        }
+      : {}),
   };
 
   return Object.keys(preview).length > 0 ? preview : null;
 }
 
 function toQuoteListItem(input: unknown, fallbackId = 0): QuoteListItem {
-  const source = asObject(input as QuoteListItemDto);
+  const source = asObject(input as QuoteListResponseSchema);
   const nowIso = new Date().toISOString();
   const quoteId = pickQuoteId(source, fallbackId);
   const quotePublicIdRaw = safeString(source.quotePublicId, "");
@@ -649,7 +675,7 @@ function toQuoteList(input: unknown): QuoteListItem[] {
 }
 
 function toQuoteDetail(input: unknown, fallbackQuoteId = 0): QuoteDetailResponse {
-  const source = pickDetailPayload(input as QuoteDetailResponseDto);
+  const source = pickDetailPayload(input as QuoteDetailResponseSchema);
   const nowIso = new Date().toISOString();
   const quoteId = pickQuoteId(source, fallbackQuoteId);
   const createdAt = safeDateString(source.createdAt, nowIso);
@@ -784,7 +810,7 @@ function createRealQuoteApi(): QuoteApi {
       return fetchQuoteDetailByIdentifier(quoteIdentifier);
     },
 
-    async previewShipperQuote(payload: QuoteCreateRequestDto): Promise<QuotePricePreview | null> {
+    async previewShipperQuote(payload: QuoteCreateRequest): Promise<QuotePricePreview | null> {
       const safePayload = await prepareQuotePayload((payload ?? {}) as QuoteCreateTransportPayload);
       try {
         const data = await validateQuoteGenerated(
@@ -799,10 +825,10 @@ function createRealQuoteApi(): QuoteApi {
       }
     },
 
-    async createShipperQuote(payload: QuoteCreateRequestDto): Promise<QuoteCreateResponseDto> {
+    async createShipperQuote(payload: QuoteCreateRequest): Promise<QuoteCreateResponse> {
       const safePayload = await prepareQuotePayload((payload ?? {}) as QuoteCreateTransportPayload);
       quoteDebugLog("create.payload", {
-        keys: Object.keys((safePayload ?? {}) as Record<string, unknown>),
+        keys: Object.keys((safePayload ?? {}) as unknown as Record<string, unknown>),
         stopsLength: Array.isArray(safePayload?.stops) ? safePayload.stops.length : 0,
         distanceKm: safePayload?.distanceKm ?? null,
       });
@@ -820,7 +846,7 @@ function createRealQuoteApi(): QuoteApi {
       }
     },
 
-    async updateShipperQuote(quoteIdentifier: string, payload: QuoteUpdateRequestDto): Promise<QuoteUpdateResponse> {
+    async updateShipperQuote(quoteIdentifier: string, payload: QuoteUpdateRequest): Promise<QuoteUpdateResponse> {
       const safeIdentifier = normalizeQuoteIdentifier(quoteIdentifier);
       if (!safeIdentifier) return toQuoteDetail({}, 0);
       const fallbackQuoteId = normalizeQuoteId(Number(safeIdentifier));
@@ -873,7 +899,7 @@ function createMockQuoteApi(): QuoteApi {
       return toQuoteDetail(getMockFlowShipperQuoteDetailByIdentifier(safeIdentifier), fallbackQuoteId);
     },
 
-    async previewShipperQuote(payload: QuoteCreateRequestDto): Promise<QuotePricePreview | null> {
+    async previewShipperQuote(payload: QuoteCreateRequest): Promise<QuotePricePreview | null> {
       await waitRandom();
       const safePayload = sanitizeQuotePayload((payload ?? {}) as QuoteCreateTransportPayload);
       const desiredPrice = Math.max(0, safeInt(safePayload?.desiredPrice, 0));
@@ -882,11 +908,34 @@ function createMockQuoteApi(): QuoteApi {
         estimatedWeightedPrice: fallbackPrice,
         estimatedMinPrice: Math.max(0, Math.floor(fallbackPrice * 0.9)),
         estimatedMaxPrice: Math.max(0, Math.floor(fallbackPrice * 1.1)),
+        comments: ["목업 예측 데이터"],
+        overallStatus: "NORMAL",
+        dispatchSpeed: "NORMAL",
+        badge: "BASIC",
+        loadAnalysis: {
+          currentKg: Math.max(0, safeNumber(safePayload?.weightKg, 0)),
+          capacityKg: Math.max(0, safeNumber(safePayload?.weightKg, 0)) || 1000,
+          usagePercent: 50,
+          safety: "SAFE",
+          label: "적재 가능",
+        },
+        priceAnalysis: {
+          userDesiredPrice: desiredPrice,
+          minPrice: Math.max(0, Math.floor(fallbackPrice * 0.9)),
+          maxPrice: Math.max(0, Math.floor(fallbackPrice * 1.1)),
+          weightedPrice: fallbackPrice,
+          suggestedPrice: fallbackPrice,
+          fit: "NORMAL",
+          label: "시장 평균",
+        },
+        confidence: 0.8,
         aiSummary: "목업 미리보기 금액",
+        reasons: ["기본 조건 충족"],
+        actions: ["희망 운임을 확인하세요"],
       };
     },
 
-    async createShipperQuote(payload: QuoteCreateRequestDto): Promise<QuoteCreateResponseDto> {
+    async createShipperQuote(payload: QuoteCreateRequest): Promise<QuoteCreateResponse> {
       await waitRandom();
       const safePayload = sanitizeQuotePayload((payload ?? {}) as QuoteCreateTransportPayload);
       return toQuoteCreateResponse(
@@ -894,7 +943,7 @@ function createMockQuoteApi(): QuoteApi {
       );
     },
 
-    async updateShipperQuote(quoteIdentifier: string, payload: QuoteUpdateRequestDto): Promise<QuoteUpdateResponse> {
+    async updateShipperQuote(quoteIdentifier: string, payload: QuoteUpdateRequest): Promise<QuoteUpdateResponse> {
       await waitRandom();
       const safeIdentifier = normalizeQuoteIdentifier(quoteIdentifier);
       const safeQuoteId = normalizeQuoteId(
@@ -937,15 +986,15 @@ export function getShipperQuoteDetailByIdentifier(quoteIdentifier: string): Prom
   return quoteApi.getShipperQuoteDetailByIdentifier(quoteIdentifier);
 }
 
-export function createShipperQuote(payload: QuoteCreateRequestDto): Promise<QuoteCreateResponseDto> {
+export function createShipperQuote(payload: QuoteCreateRequest): Promise<QuoteCreateResponse> {
   return quoteApi.createShipperQuote(payload);
 }
 
-export function previewShipperQuote(payload: QuoteCreateRequestDto): Promise<QuotePricePreview | null> {
+export function previewShipperQuote(payload: QuoteCreateRequest): Promise<QuotePricePreview | null> {
   return quoteApi.previewShipperQuote(payload);
 }
 
-export function updateShipperQuote(quoteIdentifier: string, payload: QuoteUpdateRequestDto): Promise<QuoteUpdateResponse> {
+export function updateShipperQuote(quoteIdentifier: string, payload: QuoteUpdateRequest): Promise<QuoteUpdateResponse> {
   return quoteApi.updateShipperQuote(quoteIdentifier, payload);
 }
 
