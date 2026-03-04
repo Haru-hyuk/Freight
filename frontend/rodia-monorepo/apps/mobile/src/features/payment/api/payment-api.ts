@@ -15,6 +15,7 @@ import { isMockMode } from "@/shared/lib/config/env";
 import { advanceMockFlowMatchStatus, getMockFlowDriverMatch, waitRandom } from "@/shared/lib/mock-flow";
 
 type AnyObj = Record<string, unknown>;
+type JsonPayload = AnyObj | unknown[] | null;
 
 export type PrepareShipperPaymentInput = PaymentPrepareRequest;
 
@@ -75,46 +76,52 @@ function toPaymentMethod(value: unknown): PaymentResponseMethod | undefined {
   return undefined;
 }
 
-async function toJsonPayload(raw: unknown): Promise<AnyObj> {
-  if (!raw) return {};
+async function toJsonPayload(raw: unknown): Promise<JsonPayload> {
+  if (!raw) return null;
+  if (Array.isArray(raw)) return raw;
 
   if (typeof Blob !== "undefined" && raw instanceof Blob) {
     const text = (await raw.text()).trim();
-    if (!text) return {};
+    if (!text) return null;
     try {
-      return asObject(JSON.parse(text));
+      const parsed = JSON.parse(text);
+      if (Array.isArray(parsed)) return parsed;
+      return asObject(parsed);
     } catch {
-      return {};
+      return null;
     }
   }
 
   if (typeof raw === "string") {
     const text = raw.trim();
-    if (!text) return {};
+    if (!text) return null;
     try {
-      return asObject(JSON.parse(text));
+      const parsed = JSON.parse(text);
+      if (Array.isArray(parsed)) return parsed;
+      return asObject(parsed);
     } catch {
-      return {};
+      return null;
     }
   }
 
   return asObject(raw);
 }
 
-function unwrapPayload(raw: AnyObj): AnyObj {
-  const data = asObject(raw.data);
-  if (Object.keys(data).length > 0) return data;
-  const result = asObject(raw.result);
-  if (Object.keys(result).length > 0) return result;
+function unwrapPayload(raw: JsonPayload): unknown {
+  if (!raw || Array.isArray(raw)) return raw;
+  if (typeof raw.data !== "undefined" && raw.data !== null) return raw.data;
+  if (typeof raw.result !== "undefined" && raw.result !== null) return raw.result;
   return raw;
 }
 
 function extractArrayPayload(raw: unknown): unknown[] {
   if (Array.isArray(raw)) return raw;
-  if (!raw || typeof raw !== "object") return [];
-  const obj = raw as Record<string, unknown>;
+  const obj = asObject(raw);
+  if (!Object.keys(obj).length) return [];
   if (Array.isArray(obj.data)) return obj.data;
   if (Array.isArray(obj.result)) return obj.result;
+  if (Array.isArray(obj.items)) return obj.items as unknown[];
+  if (Array.isArray(obj.list)) return obj.list as unknown[];
   return [];
 }
 
@@ -181,7 +188,7 @@ async function listPaymentsByMatchId(matchId: number): Promise<PaymentResponse[]
   const raw = await getPaymentsByMatchIdGenerated({ matchId: safeMatchId });
   const json = await toJsonPayload(raw);
   const payload = unwrapPayload(json);
-  const list = Array.isArray(payload) ? payload : extractArrayPayload(json);
+  const list = Array.isArray(payload) ? payload : extractArrayPayload(payload ?? json);
   return list
     .map((item) => toPaymentResponse(item))
     .filter((item): item is PaymentResponse => item !== null)
@@ -255,7 +262,7 @@ export async function prepareShipperPayment(input: PrepareShipperPaymentInput): 
     ...(safeOrderName ? { orderName: safeOrderName } : {}),
   });
   const json = await toJsonPayload(raw);
-  const payload = unwrapPayload(json);
+  const payload = asObject(unwrapPayload(json));
 
   const orderId = toText(payload.orderId);
   if (!orderId) {

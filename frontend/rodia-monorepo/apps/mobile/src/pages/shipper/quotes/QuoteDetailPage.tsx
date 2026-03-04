@@ -515,6 +515,21 @@ function toStatusToken(value: unknown): string {
     .replace(/-/g, "_");
 }
 
+function toPaymentStatusLabel(value: PaymentResponseStatus | null): string {
+  if (value === "PENDING") return "결제 대기";
+  if (value === "COMPLETED") return "결제 완료";
+  if (value === "FAILED") return "결제 실패";
+  if (value === "REFUNDED") return "환불 완료";
+  return "상태 확인";
+}
+
+function toPaymentMethodLabel(value: PaymentResponseMethod | null): string {
+  if (value === "CARD") return "카드";
+  if (value === "TRANSFER") return "계좌이체";
+  if (value === "PREPAID") return "선불";
+  return "";
+}
+
 function toPositiveAmount(value: unknown): number {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed <= 0) return 0;
@@ -987,7 +1002,7 @@ export default function QuoteDetailPage() {
   }, [actionQuoteId]);
 
   const palette = resolveTonePalette(theme, statusPolicy);
-  const effectiveStatusLabel = statusPolicy.badgeLabel || view.commandCenter.statusLabel;
+  const effectiveStatusLabel = statusPolicy.badgeLabel;
 
   const loadMatchSnapshot = React.useCallback(async (targetQuoteId: number): Promise<MatchSnapshot> => {
     const safeQuoteId = parsePositiveInt(targetQuoteId);
@@ -1057,15 +1072,23 @@ export default function QuoteDetailPage() {
     }
 
     const task = (async () => {
-      const tasks: Array<Promise<unknown>> = [view.refetch()];
+      const quoteRefetchTask = view.refetch();
+      const tasks: Array<Promise<unknown>> = [];
       if (actionQuoteId > 0) {
-        tasks.push(loadMatchSnapshot(actionQuoteId));
+        const snapshot = await loadMatchSnapshot(actionQuoteId);
         tasks.push(loadPendingCounterOffer(actionQuoteId));
-        if (cancelTargetMatchId > 0) {
-          tasks.push(loadPaymentCompletion(cancelTargetMatchId));
+        const activeMatchId = parsePositiveInt(
+          (snapshot.cancelableMatch ?? snapshot.nonCanceledMatch)?.matchId
+        );
+        if (activeMatchId > 0) {
+          tasks.push(loadPaymentCompletion(activeMatchId));
+        } else {
+          setHasCompletedPayment(false);
+          setLatestPaymentStatus(null);
+          setLatestPaymentMethod(null);
         }
       }
-      await Promise.all(tasks);
+      await Promise.all([quoteRefetchTask, ...tasks]);
     })();
 
     refreshInFlightRef.current = task;
@@ -1076,21 +1099,7 @@ export default function QuoteDetailPage() {
         refreshInFlightRef.current = null;
       }
     }
-  }, [actionQuoteId, cancelTargetMatchId, loadMatchSnapshot, loadPaymentCompletion, loadPendingCounterOffer, view.refetch]);
-
-  React.useEffect(() => {
-    if (actionQuoteId > 0) {
-      void loadPendingCounterOffer(actionQuoteId);
-    } else {
-      setPendingCounterOffer(null);
-    }
-  }, [actionQuoteId, loadPendingCounterOffer]);
-
-  React.useEffect(() => {
-    if (cancelTargetMatchId > 0) {
-      void loadPaymentCompletion(cancelTargetMatchId);
-    }
-  }, [cancelTargetMatchId, loadPaymentCompletion]);
+  }, [actionQuoteId, loadMatchSnapshot, loadPaymentCompletion, loadPendingCounterOffer, view.refetch]);
 
   React.useEffect(() => {
     const safeQuoteId = parsePositiveInt(actionQuoteId);
@@ -1099,13 +1108,34 @@ export default function QuoteDetailPage() {
     let canceled = false;
     if (safeQuoteId <= 0) {
       setMatchSnapshot(EMPTY_MATCH_SNAPSHOT);
+      setPendingCounterOffer(null);
+      setHasCompletedPayment(false);
+      setLatestPaymentStatus(null);
+      setLatestPaymentMethod(null);
       setMatchHydrated(true);
       return;
     }
     setMatchHydrated(false);
     const task = InteractionManager.runAfterInteractions(() => {
       if (canceled || matchLoadTokenRef.current !== token) return;
-      void loadMatchSnapshot(safeQuoteId).finally(() => {
+      void (async () => {
+        const snapshot = await loadMatchSnapshot(safeQuoteId);
+        if (canceled || matchLoadTokenRef.current !== token) return;
+
+        await loadPendingCounterOffer(safeQuoteId);
+        if (canceled || matchLoadTokenRef.current !== token) return;
+
+        const activeMatchId = parsePositiveInt(
+          (snapshot.cancelableMatch ?? snapshot.nonCanceledMatch)?.matchId
+        );
+        if (activeMatchId > 0) {
+          await loadPaymentCompletion(activeMatchId);
+        } else {
+          setHasCompletedPayment(false);
+          setLatestPaymentStatus(null);
+          setLatestPaymentMethod(null);
+        }
+      })().finally(() => {
         if (canceled || matchLoadTokenRef.current !== token) return;
         setMatchHydrated(true);
       });
@@ -1114,7 +1144,7 @@ export default function QuoteDetailPage() {
       canceled = true;
       task.cancel();
     };
-  }, [actionQuoteId, loadMatchSnapshot]);
+  }, [actionQuoteId, loadMatchSnapshot, loadPaymentCompletion, loadPendingCounterOffer]);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -1417,13 +1447,17 @@ export default function QuoteDetailPage() {
     void handleCreateMatch();
   }, [handleCancelMatch, handleCreateMatch, hasActiveQuoteMatch, isPostPaymentFlow]);
 
-  const bottomBar = !isBlockedByFetchState && matchHydrated ? (
+  const bottomBar = !isBlockedByFetchState ? (
     <View style={[styles.bottomBar, { paddingBottom: insets.bottom + spacing * 2 }]} onLayout={(e) => {
       const nextHeight = e?.nativeEvent?.layout?.height;
       if (!nextHeight) return;
       setBottomBarHeight((prev) => Math.max(prev, nextHeight));
     }}>
-{shouldUsePolicyActionBar ? (
+      {!matchHydrated ? (
+        <View style={styles.bottomPlaceholder}>
+          <AppText style={styles.bottomPlaceholderText}>상태 동기화 중...</AppText>
+        </View>
+      ) : shouldUsePolicyActionBar ? (
         <BottomActionRouter
           ctx={effectiveActionsContext}
           bottomBar={actionPolicy.bottomBar}
@@ -1485,7 +1519,7 @@ export default function QuoteDetailPage() {
             </View>
             {latestPaymentStatus ? (
               <AppText style={styles.paymentMetaText}>
-                {`결제 상태: ${latestPaymentStatus}${latestPaymentMethod ? ` · 수단: ${latestPaymentMethod}` : ""}`}
+                {`결제 상태: ${toPaymentStatusLabel(latestPaymentStatus)}${latestPaymentMethod ? ` · 수단: ${toPaymentMethodLabel(latestPaymentMethod)}` : ""}`}
               </AppText>
             ) : null}
             {view.commandCenter.cancelReasonText ? (

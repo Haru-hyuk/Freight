@@ -65,6 +65,48 @@ function formatKg(value: number) {
   return `${Math.max(0, Math.floor(safeNumber(value, 0))).toLocaleString("ko-KR")}kg`;
 }
 
+function toStatusToken(value: unknown): string {
+  return String(value ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "_")
+    .replace(/-/g, "_");
+}
+
+function formatOverallStatusLabel(value: unknown, isLoading: boolean): string {
+  if (isLoading) return "확인 중";
+  const token = toStatusToken(value);
+  if (token === "GOOD") return "양호";
+  if (token === "NORMAL") return "보통";
+  if (token === "RISKY") return "주의";
+  return token || "-";
+}
+
+function formatDispatchSpeedLabel(value: unknown, isLoading: boolean): string {
+  if (isLoading) return "확인 중";
+  const token = toStatusToken(value);
+  if (token === "FAST") return "빠름";
+  if (token === "NORMAL") return "보통";
+  if (token === "SLOW") return "느림";
+  return token || "-";
+}
+
+function formatPriceFitLabel(value: unknown): string {
+  const token = toStatusToken(value);
+  if (token === "LOW") return "낮음";
+  if (token === "NORMAL") return "적정";
+  if (token === "HIGH") return "높음";
+  return token || "-";
+}
+
+function formatLoadSafetyLabel(value: unknown): string {
+  const token = toStatusToken(value);
+  if (token === "SAFE") return "안전";
+  if (token === "WARN") return "주의";
+  if (token === "RISK") return "위험";
+  return token || "-";
+}
+
 const useStyles = createThemedStyles((theme: AppTheme) => {
   const c = theme.colors;
   const spacing = safeNumber(theme.layout.spacing.base, 4);
@@ -470,22 +512,22 @@ export function QuoteCreateStep3({ validationPreview = null, isValidationLoading
             <View style={styles.serverMetaRow}>
               <View style={styles.serverMetaChip}>
                 <AppText style={styles.serverMetaText}>
-                  {`overall ${validationPreview?.overallStatus ?? (isValidationLoading ? "LOADING" : "-")}`}
+                  {`종합 ${formatOverallStatusLabel(validationPreview?.overallStatus, isValidationLoading)}`}
                 </AppText>
               </View>
               <View style={styles.serverMetaChip}>
                 <AppText style={styles.serverMetaText}>
-                  {`dispatch ${validationPreview?.dispatchSpeed ?? (isValidationLoading ? "LOADING" : "-")}`}
+                  {`배차 속도 ${formatDispatchSpeedLabel(validationPreview?.dispatchSpeed, isValidationLoading)}`}
                 </AppText>
               </View>
               <View style={styles.serverMetaChip}>
                 <AppText style={styles.serverMetaText}>
-                  {`badge ${validationPreview?.badge ?? (isValidationLoading ? "LOADING" : "-")}`}
+                  {`배지 ${validationPreview?.badge ?? (isValidationLoading ? "확인 중" : "-")}`}
                 </AppText>
               </View>
               <View style={styles.serverMetaChip}>
                 <AppText style={styles.serverMetaText}>
-                  {`confidence ${Number.isFinite(validationPreview?.confidence ?? NaN) ? `${Math.round((validationPreview?.confidence ?? 0) * 100)}%` : "-"}`}
+                  {`신뢰도 ${Number.isFinite(validationPreview?.confidence ?? NaN) ? `${Math.round((validationPreview?.confidence ?? 0) * 100)}%` : "-"}`}
                 </AppText>
               </View>
             </View>
@@ -513,9 +555,19 @@ export function QuoteCreateStep3({ validationPreview = null, isValidationLoading
                 </AppText>
               </View>
               <View style={styles.serverBlockRow}>
+                <AppText style={styles.serverBlockLabel}>분석 최소/최대</AppText>
+                <AppText style={styles.serverBlockValue}>
+                  {`${formatKrw(safeNumber(priceAnalysis?.minPrice, 0))} / ${formatKrw(safeNumber(priceAnalysis?.maxPrice, 0))}`}
+                </AppText>
+              </View>
+              <View style={styles.serverBlockRow}>
+                <AppText style={styles.serverBlockLabel}>분석 가중가</AppText>
+                <AppText style={styles.serverBlockValue}>{formatKrw(safeNumber(priceAnalysis?.weightedPrice, 0))}</AppText>
+              </View>
+              <View style={styles.serverBlockRow}>
                 <AppText style={styles.serverBlockLabel}>적합도</AppText>
                 <AppText style={styles.serverBlockValue}>
-                  {priceAnalysis?.fit ?? "-"} {priceAnalysis?.label ? `(${priceAnalysis.label})` : ""}
+                  {formatPriceFitLabel(priceAnalysis?.fit)} {priceAnalysis?.label ? `(${priceAnalysis.label})` : ""}
                 </AppText>
               </View>
             </View>
@@ -535,7 +587,7 @@ export function QuoteCreateStep3({ validationPreview = null, isValidationLoading
               <View style={styles.serverBlockRow}>
                 <AppText style={styles.serverBlockLabel}>안전도</AppText>
                 <AppText style={styles.serverBlockValue}>
-                  {loadAnalysis?.safety ?? "-"} {loadAnalysis?.label ? `(${loadAnalysis.label})` : ""}
+                  {formatLoadSafetyLabel(loadAnalysis?.safety)} {loadAnalysis?.label ? `(${loadAnalysis.label})` : ""}
                 </AppText>
               </View>
             </View>

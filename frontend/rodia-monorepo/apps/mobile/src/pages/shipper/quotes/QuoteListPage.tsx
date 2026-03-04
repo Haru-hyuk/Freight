@@ -7,6 +7,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import type { QuoteListItem, QuoteStatusApi } from "@/entities/quote/model/quote.types";
 import { listShipperQuotes } from "@/features/quote/api";
 import { listMyShipperMatches, type ShipperMatchItem } from "@/features/matching/api";
+import { getMatchPaymentSnapshot } from "@/features/payment/api/payment-api";
 import {
   getQuoteActionPolicyByUiState,
   resolveTonePalette,
@@ -98,6 +99,7 @@ const SORT_OPTIONS: Array<{ key: QuoteListSort; label: string }> = [
   { key: "PRICE", label: "금액순" },
 ];
 const FOCUS_REFETCH_THROTTLE_MS = 1500;
+const PRE_PAYMENT_STATUS_SET = new Set<QuoteStatusApi>(["OPEN", "NEGOTIATING", "ASSIGNED", "ACCEPTED"]);
 
 const useStyles = createThemedStyles((theme) => {
   const c = theme.colors;
@@ -779,10 +781,11 @@ export default function QuoteListPage() {
       const rawQuotes = Array.isArray(quoteResponse) ? quoteResponse : [];
       const matches = Array.isArray(matchResponse) ? matchResponse : [];
 
-      const matchByQuoteId = new Map<number, { status: string; updatedAt: string; accepted: boolean }>();
+      const matchByQuoteId = new Map<number, { matchId: number; status: string; updatedAt: string; accepted: boolean }>();
       for (const m of matches as ShipperMatchItem[]) {
         const quoteId = typeof (m as any)?.quoteId === "number" ? (m as any).quoteId : 0;
         if (quoteId <= 0) continue;
+        const matchId = typeof (m as any)?.matchId === "number" ? (m as any).matchId : 0;
 
         const statusCandidate = typeof (m as any)?.status === "string" ? (m as any).status : "";
         const stateCandidate = typeof (m as any)?.state === "string" ? (m as any).state : "";
@@ -795,16 +798,57 @@ export default function QuoteListPage() {
         const nextTs = updatedAt ? Date.parse(updatedAt) : 0;
 
         if (!prev || (Number.isFinite(nextTs) && nextTs >= (Number.isFinite(prevTs) ? prevTs : 0))) {
-          matchByQuoteId.set(quoteId, { status, updatedAt, accepted });
+          matchByQuoteId.set(quoteId, { matchId, status, updatedAt, accepted });
         }
       }
 
+      const prePaymentMatchIds = Array.from(
+        new Set(
+          rawQuotes
+            .map((quote) => {
+              const match = matchByQuoteId.get(quote.quoteId);
+              if (!match || match.matchId <= 0) return 0;
+
+              const promoted = resolveEffectiveQuoteStatus({
+                quoteStatus: quote.status,
+                matchStatus: match.status,
+                matchAccepted: match.accepted,
+              });
+              return PRE_PAYMENT_STATUS_SET.has(promoted) ? match.matchId : 0;
+            })
+            .filter((matchId): matchId is number => matchId > 0)
+        )
+      );
+
+      const paymentStatusByMatchId = new Map<number, string>();
+      if (prePaymentMatchIds.length > 0) {
+        const snapshots = await Promise.all(
+          prePaymentMatchIds.map(async (matchId) => {
+            try {
+              const snapshot = await getMatchPaymentSnapshot(matchId);
+              return { matchId, status: snapshot.effectiveStatus };
+            } catch {
+              return { matchId, status: null };
+            }
+          })
+        );
+        for (const snapshot of snapshots) {
+          if (snapshot.status) {
+            paymentStatusByMatchId.set(snapshot.matchId, snapshot.status);
+          }
+        }
+      }
+
+      if (!isMountedRef.current) return;
+
       const effectiveQuotes = rawQuotes.map((q) => {
         const match = matchByQuoteId.get(q.quoteId);
+        const paymentStatus = match?.matchId ? paymentStatusByMatchId.get(match.matchId) : undefined;
         const effectiveStatus = resolveEffectiveQuoteStatus({
           quoteStatus: q.status,
           matchStatus: match?.status,
           matchAccepted: match?.accepted,
+          paymentStatus,
         });
         return effectiveStatus && effectiveStatus !== q.status ? { ...q, status: effectiveStatus as QuoteStatusApi } : q;
       });
