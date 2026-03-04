@@ -45,6 +45,9 @@ export type ParsedDriverOrderSource = {
   quoteId?: number;
   accepted?: boolean;
   status: string;
+  matchGroupKey?: string;
+  matchGroupType?: string;
+  matchGroupOrder?: number;
   createdAt?: string;
   updatedAt?: string;
   quote: ParsedDriverOrderQuote | null;
@@ -121,10 +124,7 @@ export function parseDriverOrderSource(input: {
   const quoteId = quoteIdFromMatch || quoteIdFromQuote || 0;
   const seed = matchId || quoteId || index + 1;
   const rawStatus = typeof match.status === "string" ? match.status.trim() : "";
-
-  // loadPlan / truckSpec은 ParsedMatchResponseItem에 포함된 필드이지만
-  // DriverMatchItem 타입 alias가 아직 그 확장을 모를 수 있으므로 as any로 접근
-  const rawMatch = match as any;
+  const matchGroupOrder = parseDriverOrderPositiveInt(match.matchGroupOrder);
 
   return {
     scope,
@@ -134,11 +134,14 @@ export function parseDriverOrderSource(input: {
     quoteId: quoteId > 0 ? quoteId : undefined,
     accepted: typeof match.accepted === "boolean" ? match.accepted : undefined,
     status: rawStatus,
+    matchGroupKey: toOptionalText(match.matchGroupKey),
+    matchGroupType: toOptionalText(match.matchGroupType),
+    matchGroupOrder: matchGroupOrder > 0 ? matchGroupOrder : undefined,
     createdAt: toOptionalText(match.createdAt),
     updatedAt: toOptionalText(match.updatedAt),
     quote: parseDriverOrderQuote(quote),
-    loadPlan: rawMatch.loadPlan as LoadPlanResponse | undefined,
-    truckSpec: rawMatch.truckSpec as TruckSpecReferenceResponse | undefined,
+    loadPlan: match.loadPlan,
+    truckSpec: match.truckSpec,
   };
 }
 

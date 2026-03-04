@@ -15,6 +15,9 @@ export type ParsedMatchResponseItem = {
   driverId?: number;
   accepted?: boolean;
   status?: string;
+  matchGroupKey?: string;
+  matchGroupType?: string;
+  matchGroupOrder?: number;
   acceptedAt?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -49,6 +52,11 @@ function toOptionalText(value: unknown): string | undefined {
 function toOptionalBoolean(value: unknown): boolean | undefined {
   if (typeof value !== "boolean") return undefined;
   return value;
+}
+
+function toOptionalPositiveInt(value: unknown): number | undefined {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
 }
 
 function toStatusToken(value: unknown): string {
@@ -103,6 +111,9 @@ function parseMatchResponseItem(value: unknown): ParsedMatchResponseItem | null 
     driverId: driverId > 0 ? driverId : undefined,
     accepted: toOptionalBoolean(source.accepted ?? source.isAccepted ?? source.is_accepted),
     status: toNormalizedMatchStatus(source.status ?? source.matchStatus ?? source.match_status),
+    matchGroupKey: toOptionalText(source.matchGroupKey ?? source.match_group_key),
+    matchGroupType: toOptionalText(source.matchGroupType ?? source.match_group_type),
+    matchGroupOrder: toOptionalPositiveInt(source.matchGroupOrder ?? source.match_group_order),
     acceptedAt: toOptionalText(source.acceptedAt ?? source.accepted_at),
     createdAt: toOptionalText(source.createdAt ?? source.created_at),
     updatedAt: toOptionalText(source.updatedAt ?? source.updated_at),

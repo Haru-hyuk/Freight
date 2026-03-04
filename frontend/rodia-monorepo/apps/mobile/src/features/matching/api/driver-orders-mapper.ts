@@ -49,6 +49,11 @@ function toSortTimestamp(value: unknown): number {
   return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
+function toOptionalPositiveInt(value: unknown): number | undefined {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
+}
+
 function resolveDriverOrderRawStatus(status: unknown, quote: ParsedDriverOrderQuote | null): string {
   const matchStatus = typeof status === "string" ? status.trim() : "";
   const quoteStatus =
@@ -136,7 +141,21 @@ export function buildDriverOrderTags(
 
 export function mapDriverOrderCard(input: DriverOrderCardMapperInput): DriverOrderCard {
   const { source, mode, filterLabels } = input;
-  const { matchId, quoteId, status, accepted, createdAt, updatedAt, quote, scope, index, seed } = source;
+  const {
+    matchId,
+    quoteId,
+    status,
+    accepted,
+    matchGroupKey,
+    matchGroupType,
+    matchGroupOrder,
+    createdAt,
+    updatedAt,
+    quote,
+    scope,
+    index,
+    seed,
+  } = source;
   const mockDecoration = mode === "mock" ? selectMockFlowDriverOrderDecoration(seed, scope) : null;
 
   const rawStatus = resolveDriverOrderRawStatus(status, quote);
@@ -174,6 +193,9 @@ export function mapDriverOrderCard(input: DriverOrderCardMapperInput): DriverOrd
     cardKey: `${scope}-${matchId}-${index}`,
     matchId,
     quoteId,
+    matchGroupKey: toOptionalText(matchGroupKey),
+    matchGroupType: toOptionalText(matchGroupType),
+    matchGroupOrder: toOptionalPositiveInt(matchGroupOrder),
     status: rawStatus,
     uiState,
     statusLabel,
