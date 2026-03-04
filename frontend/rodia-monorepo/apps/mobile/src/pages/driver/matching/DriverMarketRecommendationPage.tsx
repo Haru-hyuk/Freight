@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Canvas } from "@react-three/fiber/native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, StyleSheet, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as THREE from "three";
 
@@ -55,6 +55,160 @@ type ParsedRecommendationPlan = {
 
 const SCALE = 0.01;
 const PALETTE = ["#4F46E5", "#0EA5E9", "#22C55E", "#F59E0B", "#EF4444", "#EC4899"];
+
+// ── Spatial Awareness v2 상수 ─────────────────────────────────────────────────
+/** true: 도어가 z=0 쪽, 캡이 z=truckL 쪽 / false: 반전 */
+const DOOR_AT_Z0  = true;
+/** 패널·화살표를 컨테이너 경계에서 안쪽으로 띄우는 여유(world unit) */
+const EPS_INSIDE  = 0.006;
+/** 방향 패널이 EPS_INSIDE 기준 안쪽으로 추가 오프셋(항상 < EPS_INSIDE) */
+const PANEL_EPS   = 0.003;
+
+// ── 5×7 픽셀 폰트 (row-major, 1=white, 0=transparent) — 0~9 전체 정의 ─────
+const GW = 5, GH = 7, GGAP = 1;
+const PIXEL_FONT: Record<string, number[]> = {
+  "0": [0,1,1,1,0, 1,0,0,0,1, 1,0,0,1,1, 1,0,1,0,1, 1,1,0,0,1, 1,0,0,0,1, 0,1,1,1,0],
+  "1": [0,0,1,0,0, 0,1,1,0,0, 0,0,1,0,0, 0,0,1,0,0, 0,0,1,0,0, 0,0,1,0,0, 0,1,1,1,0],
+  "2": [0,1,1,1,0, 1,0,0,0,1, 0,0,0,0,1, 0,0,0,1,0, 0,0,1,0,0, 0,1,0,0,0, 1,1,1,1,1],
+  "3": [1,1,1,1,0, 0,0,0,0,1, 0,0,0,0,1, 0,1,1,1,0, 0,0,0,0,1, 0,0,0,0,1, 1,1,1,1,0],
+  "4": [0,0,0,1,0, 0,0,1,1,0, 0,1,0,1,0, 1,0,0,1,0, 1,1,1,1,1, 0,0,0,1,0, 0,0,0,1,0],
+  "5": [1,1,1,1,1, 1,0,0,0,0, 1,1,1,1,0, 0,0,0,0,1, 0,0,0,0,1, 1,0,0,0,1, 0,1,1,1,0],
+  "6": [0,1,1,1,0, 1,0,0,0,0, 1,0,0,0,0, 1,1,1,1,0, 1,0,0,0,1, 1,0,0,0,1, 0,1,1,1,0],
+  "7": [1,1,1,1,1, 0,0,0,0,1, 0,0,0,1,0, 0,0,1,0,0, 0,1,0,0,0, 0,1,0,0,0, 0,1,0,0,0],
+  "8": [0,1,1,1,0, 1,0,0,0,1, 1,0,0,0,1, 0,1,1,1,0, 1,0,0,0,1, 1,0,0,0,1, 0,1,1,1,0],
+  "9": [0,1,1,1,0, 1,0,0,0,1, 1,0,0,0,1, 0,1,1,1,1, 0,0,0,0,1, 1,0,0,0,1, 0,1,1,1,0],
+};
+
+/** SDF 라운드렉트 판별 (badge 배경 렌더링용) */
+function insideRR(px: number, py: number, x0: number, y0: number, x1: number, y1: number, r: number): boolean {
+  const cx = Math.max(x0 + r, Math.min(x1 - r, px));
+  const cy = Math.max(y0 + r, Math.min(y1 - r, py));
+  return (px - cx) ** 2 + (py - cy) ** 2 <= r * r;
+}
+
+/**
+ * 문자열(숫자)을 DataTexture에 렌더링한다. DOM canvas 불필요.
+ * - 최대 4자리까지: ≤3자 → 32×32, 4자 → 64×32
+ * - 라운드렉트 badge 배경 + 흰색 픽셀 폰트, 중앙 정렬
+ * - texW/texH 반환으로 Sprite에서 aspect 보정 가능
+ */
+function renderTextToDataTexture(
+  text: string,
+  bgR: number,
+  bgG: number,
+  bgB: number,
+): { texture: THREE.DataTexture; texW: number; texH: number } {
+  const chars = text.split("").filter((c) => PIXEL_FONT[c] != null);
+  const n = Math.max(1, chars.length);
+  const textPxW = n * GW + (n - 1) * GGAP;
+  // 3px 여백 포함 폭이 26px 이하면 32, 초과면 64
+  const texW = textPxW + 6 <= 26 ? 32 : 64;
+  const texH = 32;
+  const data = new Uint8Array(texW * texH * 4);
+
+  // badge: 2px margin from edges, r=5 corner
+  const bx0 = 2, by0 = 2, bx1 = texW - 2, by1 = texH - 2, br = 5;
+  for (let py = 0; py < texH; py++) {
+    for (let px = 0; px < texW; px++) {
+      const i = (py * texW + px) * 4;
+      if (insideRR(px, py, bx0, by0, bx1, by1, br)) {
+        data[i] = bgR; data[i + 1] = bgG; data[i + 2] = bgB; data[i + 3] = 215;
+      } else {
+        data[i + 3] = 0;
+      }
+    }
+  }
+
+  // 글리프: badge 내 중앙 배치
+  const badgeW = bx1 - bx0;
+  const badgeH = by1 - by0;
+  const startX = bx0 + Math.floor((badgeW - textPxW) / 2);
+  const startY = by0 + Math.floor((badgeH - GH) / 2);
+
+  chars.forEach((ch, ci) => {
+    const glyph = PIXEL_FONT[ch]!;
+    const charX = startX + ci * (GW + GGAP);
+    for (let row = 0; row < GH; row++) {
+      for (let col = 0; col < GW; col++) {
+        if (glyph[row * GW + col]) {
+          const px = charX + col, py = startY + row;
+          if (px >= 0 && px < texW && py >= 0 && py < texH) {
+            const i = (py * texW + px) * 4;
+            data[i] = 255; data[i + 1] = 255; data[i + 2] = 255; data[i + 3] = 255;
+          }
+        }
+      }
+    }
+  });
+
+  const texture = new THREE.DataTexture(data, texW, texH, THREE.RGBAFormat);
+  texture.flipY = true;
+  texture.generateMipmaps = false;
+  texture.magFilter = THREE.NearestFilter;
+  texture.minFilter = THREE.NearestFilter;
+  texture.needsUpdate = true;
+  return { texture, texW, texH };
+}
+
+type LabelSpriteProps = { text: string; color: string; boxW: number; boxH: number; boxL: number };
+
+/**
+ * 박스 중앙 레이블 스프라이트 (항상 카메라를 향함).
+ * - 박스 최소 치수에 비례한 scale (0.14~0.55 world unit)
+ * - texW:texH 비율로 sprite x-scale 보정 → 비율 왜곡 없음
+ */
+const LabelSprite = React.memo(({ text, color, boxW, boxH, boxL }: LabelSpriteProps) => {
+  const result = useMemo(() => {
+    const hex = color.replace(/^#/, "");
+    const r = parseInt(hex.slice(0, 2), 16) || 80;
+    const g = parseInt(hex.slice(2, 4), 16) || 80;
+    const b = parseInt(hex.slice(4, 6), 16) || 200;
+    return renderTextToDataTexture(text, r, g, b);
+  }, [text, color]);
+
+  useEffect(() => () => { result.texture.dispose(); }, [result.texture]);
+
+  const minDim = Math.min(boxW, boxH, boxL) * SCALE;
+  const s = Math.min(0.55, Math.max(0.14, minDim * 0.40));
+  const aspect = result.texW / result.texH; // 1.0 또는 2.0
+
+  return (
+    <sprite renderOrder={30} scale={[s * aspect, s, s]}>
+      <spriteMaterial map={result.texture} transparent depthTest={false} depthWrite={false} toneMapped={false} />
+    </sprite>
+  );
+});
+
+// ── 접촉 그림자 텍스처 (싱글턴) ───────────────────────────────────────────────
+let _shadowDiscTex: THREE.DataTexture | null = null;
+function getShadowDiscTexture(): THREE.DataTexture {
+  if (!_shadowDiscTex) {
+    const S = 64; const C = 31.5;
+    const data = new Uint8Array(S * S * 4);
+    for (let py = 0; py < S; py++) {
+      for (let px = 0; px < S; px++) {
+        const nx = (px - C) / C, ny = (py - C) / C;
+        const dist = Math.sqrt(nx * nx + ny * ny);
+        const t = Math.max(0, 1 - dist);
+        data[(py * S + px) * 4 + 3] = Math.round(Math.pow(t, 1.8) * 210);
+      }
+    }
+    _shadowDiscTex = new THREE.DataTexture(data, S, S, THREE.RGBAFormat);
+    _shadowDiscTex.needsUpdate = true;
+  }
+  return _shadowDiscTex;
+}
+
+type ShadowDiscProps = { boxWW: number; boxLW: number; boxHW: number };
+const ShadowDisc = React.memo(({ boxWW, boxLW, boxHW }: ShadowDiscProps) => {
+  const tex = useMemo(() => getShadowDiscTexture(), []);
+  return (
+    <mesh position={[0, -boxHW / 2 + 0.002, 0]} rotation={[-Math.PI / 2, 0, 0]} scale={[boxWW * 0.90, boxLW * 0.90, 1]}>
+      <planeGeometry args={[1, 1]} />
+      <meshBasicMaterial map={tex} transparent depthWrite={false} />
+    </mesh>
+  );
+});
 
 function toText(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -315,29 +469,163 @@ function buildFallbackPlacements(quotes: QuoteDetailResponse[], spec: TruckSpecR
   return placements;
 }
 
-const CargoMesh = ({ placement, color }: { placement: Placement; color: string }) => {
+type CargoMeshProps = {
+  placement: Placement;
+  color: string;
+  stopOrder: number;
+  isSelected: boolean;
+  isXray: boolean;
+  onSelect: () => void;
+};
+
+const CargoMesh = ({ placement, color, stopOrder, isSelected, isXray, onSelect }: CargoMeshProps) => {
   const x = toFiniteNumber(placement.x, 0);
   const y = toFiniteNumber(placement.y, 0);
   const z = toFiniteNumber(placement.z, 0);
   const w = Math.max(20, toFiniteNumber(placement.width, 80));
   const h = Math.max(20, toFiniteNumber(placement.height, 80));
   const l = Math.max(20, toFiniteNumber(placement.length, 80));
-  const position: [number, number, number] = [(x + w / 2) * SCALE, (y + h / 2) * SCALE, (z + l / 2) * SCALE];
+  const center: [number, number, number] = [(x + w / 2) * SCALE, (y + h / 2) * SCALE, (z + l / 2) * SCALE];
   const boxArgs: [number, number, number] = [w * SCALE, h * SCALE, l * SCALE];
 
   return (
-    <group position={position}>
-      <mesh>
+    <group position={center} onClick={onSelect}>
+      <mesh renderOrder={10}>
         <boxGeometry args={boxArgs} />
-        <meshStandardMaterial color={color} transparent opacity={0.72} />
+        <meshStandardMaterial
+          color={color}
+          transparent={isXray}
+          opacity={isXray ? 0.45 : 1}
+          depthWrite={!isXray}
+          alphaTest={isXray ? 0.02 : 0}
+          emissive={isSelected ? color : "#000000"}
+          emissiveIntensity={isSelected ? 0.40 : 0}
+        />
       </mesh>
-      <lineSegments>
+      {isSelected && (
+        <mesh renderOrder={20} scale={[1.07, 1.07, 1.07]}>
+          <boxGeometry args={boxArgs} />
+          <meshBasicMaterial color="#FFFFFF" wireframe transparent opacity={0.55} depthWrite={false} />
+        </mesh>
+      )}
+      <lineSegments renderOrder={20}>
         <edgesGeometry args={[new THREE.BoxGeometry(...boxArgs)]} />
-        <lineBasicMaterial color="#0F172A" />
+        <lineBasicMaterial color={isSelected ? "#FFFFFF" : "#1E293B"} />
       </lineSegments>
+      <LabelSprite text={String(stopOrder)} color={color} boxW={w} boxH={h} boxL={l} />
+      {/* 래디얼 그라디언트 접촉 그림자 — 바닥에 닿은 박스(y ≤ 1 cm)만 표시 */}
+      {y <= 1 && <ShadowDisc boxWW={w * SCALE} boxLW={l * SCALE} boxHW={h * SCALE} />}
     </group>
   );
 };
+
+// ─────────────────────────────────────────────────────────────
+// TruckSceneBase — 데크·레일·경계·도어프레임·방향마커·격자
+// ─────────────────────────────────────────────────────────────
+type TruckSceneBaseProps = { truckW: number; truckL: number; truckH: number; truckWCm: number; truckLCm: number };
+const TruckSceneBase = React.memo(({ truckW, truckL, truckH, truckWCm, truckLCm }: TruckSceneBaseProps) => {
+  const intDirDoor: 1 | -1 = DOOR_AT_Z0 ? 1 : -1;
+  const intDirCab:  1 | -1 = DOOR_AT_Z0 ? -1 : 1;
+  const doorEps    = DOOR_AT_Z0 ? EPS_INSIDE : truckL - EPS_INSIDE;
+  const cabEps     = DOOR_AT_Z0 ? truckL - EPS_INSIDE : EPS_INSIDE;
+  const doorPanelZ = doorEps + intDirDoor * PANEL_EPS;
+  const cabPanelZ  = cabEps  + intDirCab  * PANEL_EPS;
+  // 화살표: 도어는 바깥 방향, 캡은 안쪽 방향
+  const doorArrowDirZ = -intDirDoor;
+  const cabArrowDirZ  =  intDirCab;
+  const doorRotX = doorArrowDirZ > 0 ?  Math.PI / 2 : -Math.PI / 2;
+  const cabRotX  = cabArrowDirZ  > 0 ?  Math.PI / 2 : -Math.PI / 2;
+
+  const arrowSize = Math.min(0.28, Math.max(0.10, Math.min(truckW, truckL) * 0.06));
+  const markerW   = Math.min(0.70, Math.max(0.25, truckW * 0.18));
+  const markerH   = Math.min(0.35, Math.max(0.12, truckH * 0.12));
+  const railH  = 8  * SCALE;
+  const railD  = 3  * SCALE;
+  const bar    = 3  * SCALE;
+  const bdrH   = 0.006;
+  const bdrD   = 3  * SCALE;
+  const arrowY = railH + arrowSize * 0.6;
+
+  const gridGeo = useMemo(() => {
+    const spacingCm = truckWCm >= 200 && truckLCm >= 400 ? 100 : 50;
+    const step   = spacingCm * SCALE;
+    const stepsX = Math.floor(truckWCm / spacingCm);
+    const stepsZ = Math.floor(truckLCm / spacingCm);
+    const verts: number[] = [];
+    const Y = 0.0015;
+    for (let i = 1; i < stepsZ; i++) { const z = i * step; verts.push(0, Y, z, truckW, Y, z); }
+    for (let i = 1; i < stepsX; i++) { const x = i * step; verts.push(x, Y, 0, x, Y, truckL); }
+    const geo = new THREE.BufferGeometry();
+    if (verts.length > 0) geo.setAttribute("position", new THREE.Float32BufferAttribute(verts, 3));
+    return geo;
+  }, [truckW, truckL, truckWCm, truckLCm]);
+  useEffect(() => () => { gridGeo.dispose(); }, [gridGeo]);
+
+  return (
+    <>
+      {/* 바닥 데크 */}
+      <mesh renderOrder={1} position={[truckW / 2, 0, truckL / 2]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[truckW, truckL]} />
+        <meshStandardMaterial color="#CBD5E0" transparent opacity={0.90} depthWrite={false} side={THREE.DoubleSide} polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
+      </mesh>
+      {/* 좌우 사이드 레일 */}
+      <mesh position={[railD / 2, railH / 2, truckL / 2]}>
+        <boxGeometry args={[railD, railH, truckL]} />
+        <meshStandardMaterial color="#94A3B8" />
+      </mesh>
+      <mesh position={[truckW - railD / 2, railH / 2, truckL / 2]}>
+        <boxGeometry args={[railD, railH, truckL]} />
+        <meshStandardMaterial color="#94A3B8" />
+      </mesh>
+      {/* 데크 경계 스트립 (앞·뒤·좌·우) */}
+      <mesh renderOrder={2} position={[truckW / 2, bdrH / 2, bdrD / 2]}>
+        <boxGeometry args={[truckW, bdrH, bdrD]} />
+        <meshBasicMaterial color="#64748B" transparent opacity={0.6} depthWrite={false} />
+      </mesh>
+      <mesh renderOrder={2} position={[truckW / 2, bdrH / 2, truckL - bdrD / 2]}>
+        <boxGeometry args={[truckW, bdrH, bdrD]} />
+        <meshBasicMaterial color="#64748B" transparent opacity={0.6} depthWrite={false} />
+      </mesh>
+      <mesh renderOrder={2} position={[bdrD / 2, bdrH / 2, truckL / 2]}>
+        <boxGeometry args={[bdrD, bdrH, truckL]} />
+        <meshBasicMaterial color="#64748B" transparent opacity={0.6} depthWrite={false} />
+      </mesh>
+      <mesh renderOrder={2} position={[truckW - bdrD / 2, bdrH / 2, truckL / 2]}>
+        <boxGeometry args={[bdrD, bdrH, truckL]} />
+        <meshBasicMaterial color="#64748B" transparent opacity={0.6} depthWrite={false} />
+      </mesh>
+      {/* 도어 프레임 (황색) */}
+      <mesh position={[truckW / 2, truckH - bar / 2, doorEps]}><boxGeometry args={[truckW, bar, bar]} /><meshBasicMaterial color="#F59E0B" /></mesh>
+      <mesh position={[truckW / 2, bar / 2, doorEps]}><boxGeometry args={[truckW, bar, bar]} /><meshBasicMaterial color="#F59E0B" /></mesh>
+      <mesh position={[bar / 2, truckH / 2, doorEps]}><boxGeometry args={[bar, truckH, bar]} /><meshBasicMaterial color="#F59E0B" /></mesh>
+      <mesh position={[truckW - bar / 2, truckH / 2, doorEps]}><boxGeometry args={[bar, truckH, bar]} /><meshBasicMaterial color="#F59E0B" /></mesh>
+      {/* 도어 방향 마커 — 황색 화살표 + 반투명 패널 */}
+      <mesh position={[truckW / 2, arrowY, doorEps]} rotation={[doorRotX, 0, 0]}>
+        <coneGeometry args={[arrowSize * 0.55, arrowSize, 6]} />
+        <meshBasicMaterial color="#F59E0B" />
+      </mesh>
+      <mesh renderOrder={3} position={[truckW / 2, arrowY, doorPanelZ]}>
+        <planeGeometry args={[markerW, markerH]} />
+        <meshBasicMaterial color="#0F172A" transparent opacity={0.50} depthWrite={false} side={THREE.DoubleSide} />
+      </mesh>
+      {/* 캡 방향 마커 — 녹색 화살표 + 반투명 패널 */}
+      <mesh position={[truckW / 2, arrowY, cabEps]} rotation={[cabRotX, 0, 0]}>
+        <coneGeometry args={[arrowSize * 0.55, arrowSize, 6]} />
+        <meshBasicMaterial color="#22C55E" />
+      </mesh>
+      <mesh renderOrder={3} position={[truckW / 2, arrowY, cabPanelZ]}>
+        <planeGeometry args={[markerW, markerH]} />
+        <meshBasicMaterial color="#0F172A" transparent opacity={0.50} depthWrite={false} side={THREE.DoubleSide} />
+      </mesh>
+      {/* 내부 격자선 */}
+      {gridGeo.getAttribute("position") != null && (
+        <lineSegments geometry={gridGeo}>
+          <lineBasicMaterial color="#94A3B8" transparent opacity={0.45} />
+        </lineSegments>
+      )}
+    </>
+  );
+});
 
 const useStyles = createThemedStyles((theme) => {
   const spacing = safeNumber(theme?.layout?.spacing?.base, 4);
@@ -445,6 +733,23 @@ const useStyles = createThemedStyles((theme) => {
       padding: spacing * 4,
       gap: spacing * 2,
     },
+    loadHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: spacing * 2,
+    },
+    xrayToggle: {
+      borderRadius: 999,
+      paddingHorizontal: spacing * 2,
+      paddingVertical: spacing,
+      borderWidth: 1,
+      borderColor: cBorder,
+      backgroundColor: tint(cBorder, 0.24, theme.colors.bgSurfaceAlt),
+    },
+    xrayToggleText: {
+      color: theme.colors.textMain,
+    },
     canvasWrap: {
       height: 300,
       borderRadius: 12,
@@ -452,6 +757,58 @@ const useStyles = createThemedStyles((theme) => {
       backgroundColor: theme.colors.bgSurfaceAlt,
       borderWidth: 1,
       borderColor: cBorder,
+    },
+    selectedPanel: {
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: tint(cBorder, 0.8, cBorder),
+      backgroundColor: theme.colors.bgSurface,
+      paddingHorizontal: spacing * 3,
+      paddingVertical: spacing * 2.5,
+      gap: spacing * 1.5,
+    },
+    selectedPanelHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing * 1.5,
+    },
+    selectedPanelBadge: {
+      minWidth: 24,
+      height: 24,
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: spacing,
+    },
+    selectedRouteWrap: {
+      gap: spacing,
+    },
+    selectedMetaRow: {
+      flexDirection: "row",
+      gap: spacing * 1.5,
+    },
+    selectedMetaCell: {
+      flex: 1,
+      borderRadius: 10,
+      backgroundColor: tint(cBorder, 0.38, theme.colors.bgSurfaceAlt),
+      paddingHorizontal: spacing * 1.5,
+      paddingVertical: spacing * 1.2,
+      alignItems: "center",
+      gap: spacing * 0.5,
+    },
+    selectedItemsWrap: {
+      borderRadius: 10,
+      backgroundColor: tint(cBorder, 0.22, theme.colors.bgSurfaceAlt),
+      paddingHorizontal: spacing * 2,
+      paddingVertical: spacing * 1.5,
+      gap: spacing,
+    },
+    selectedItemRow: {
+      borderRadius: 8,
+      backgroundColor: theme.colors.bgSurface,
+      paddingHorizontal: spacing * 1.5,
+      paddingVertical: spacing,
+      gap: spacing * 0.5,
     },
     placementRow: {
       flexDirection: "row",
@@ -535,6 +892,8 @@ export default function DriverMarketRecommendationPage({
   const [isOfferOpen, setIsOfferOpen] = useState(false);
   const [isSubmittingOffer, setIsSubmittingOffer] = useState(false);
   const [offerErrorMessage, setOfferErrorMessage] = useState<string | null>(null);
+  const [selectedStopOrder, setSelectedStopOrder] = useState<number | null>(null);
+  const [isXray, setIsXray] = useState(true);
 
   const orderedOrders = useMemo(() => {
     if (!selection) return [] as DriverOrderCard[];
@@ -676,13 +1035,21 @@ export default function DriverMarketRecommendationPage({
     () => [...placements].sort((a, b) => (toPositiveInt(a.stopOrder) || 9999) - (toPositiveInt(b.stopOrder) || 9999)),
     [placements]
   );
-  const quoteStopLabelMap = useMemo(() => {
-    const map = new Map<number, string>();
-    quoteCards.forEach((_, index) => {
-      map.set(index + 1, `추천 오더 #${index + 1}`);
+  const cameraDir = useMemo(() => new THREE.Vector3(1, 0.75, 1).normalize(), []);
+  const renderPlacements = useMemo(() => {
+    if (!isXray) return orderedPlacements;
+    return [...orderedPlacements].sort((a, b) => {
+      const ax = (toFiniteNumber(a.x, 0) + Math.max(20, toFiniteNumber(a.width, 80)) / 2) * SCALE;
+      const ay = (toFiniteNumber(a.y, 0) + Math.max(20, toFiniteNumber(a.height, 80)) / 2) * SCALE;
+      const az = (toFiniteNumber(a.z, 0) + Math.max(20, toFiniteNumber(a.length, 80)) / 2) * SCALE;
+      const bx = (toFiniteNumber(b.x, 0) + Math.max(20, toFiniteNumber(b.width, 80)) / 2) * SCALE;
+      const by = (toFiniteNumber(b.y, 0) + Math.max(20, toFiniteNumber(b.height, 80)) / 2) * SCALE;
+      const bz = (toFiniteNumber(b.z, 0) + Math.max(20, toFiniteNumber(b.length, 80)) / 2) * SCALE;
+      const aKey = ax * cameraDir.x + ay * cameraDir.y + az * cameraDir.z;
+      const bKey = bx * cameraDir.x + by * cameraDir.y + bz * cameraDir.z;
+      return aKey - bKey;
     });
-    return map;
-  }, [quoteCards]);
+  }, [cameraDir, isXray, orderedPlacements]);
   const stopColorMap = useMemo(() => {
     const map = new Map<number, string>();
     let cursor = 0;
@@ -695,19 +1062,7 @@ export default function DriverMarketRecommendationPage({
     });
     return map;
   }, [orderedPlacements]);
-  const placementGroups = useMemo(() => {
-    const byStopOrder = new Map<number, Placement[]>();
-    orderedPlacements.forEach((placement) => {
-      const stopOrder = toPositiveInt(placement.stopOrder) || 1;
-      const bucket = byStopOrder.get(stopOrder) ?? [];
-      bucket.push(placement);
-      byStopOrder.set(stopOrder, bucket);
-    });
-
-    return Array.from(byStopOrder.entries())
-      .sort((a, b) => a[0] - b[0])
-      .map(([stopOrder, items]) => ({ stopOrder, items }));
-  }, [orderedPlacements]);
+  const selectedEntry = selectedStopOrder ? quoteCards[selectedStopOrder - 1] ?? null : null;
 
   const handleAccept = useCallback(async () => {
     if (isBusy || isSubmittingOffer) return;
@@ -964,11 +1319,183 @@ export default function DriverMarketRecommendationPage({
             </View>
           </AppCard>
 
+          <AppCard style={styles.loadCard}>
+            <View style={styles.loadHeader}>
+              <AppText variant="heading" weight="900" color="textMain">
+                3D 적재 시뮬레이션
+              </AppText>
+              <Pressable style={styles.xrayToggle} onPress={() => setIsXray((prev) => !prev)}>
+                <AppText variant="caption" weight="800" style={styles.xrayToggleText}>
+                  {`X-ray ${isXray ? "ON" : "OFF"}`}
+                </AppText>
+              </Pressable>
+            </View>
+            <AppText variant="caption" color="textMuted">
+              적재함 {dims.widthCm} × {dims.lengthCm} × {dims.heightCm} cm 기준 · {isGroupedRecommendation ? "다건 순서 적재" : "단건 적재"}
+            </AppText>
+            <View style={styles.canvasWrap}>
+              {(() => {
+                const sW = dims.widthCm * SCALE;
+                const sH = dims.heightCm * SCALE;
+                const sL = dims.lengthCm * SCALE;
+                return (
+                  <Canvas
+                    camera={{ position: [5, 4, 5], fov: 50 }}
+                    onCreated={({ camera }) => {
+                      // 트럭 컨테이너 + 전체 cargo를 포함하는 Box3 계산
+                      const box = new THREE.Box3();
+                      box.expandByPoint(new THREE.Vector3(0, 0, 0));
+                      box.expandByPoint(new THREE.Vector3(sW, sH, sL));
+                      orderedPlacements.forEach((p) => {
+                        const px = toFiniteNumber(p.x, 0) * SCALE;
+                        const py = toFiniteNumber(p.y, 0) * SCALE;
+                        const pz = toFiniteNumber(p.z, 0) * SCALE;
+                        const pw = Math.max(20, toFiniteNumber(p.width, 80)) * SCALE;
+                        const ph = Math.max(20, toFiniteNumber(p.height, 80)) * SCALE;
+                        const pl = Math.max(20, toFiniteNumber(p.length, 80)) * SCALE;
+                        box.expandByPoint(new THREE.Vector3(px, py, pz));
+                        box.expandByPoint(new THREE.Vector3(px + pw, py + ph, pz + pl));
+                      });
+                      const center = new THREE.Vector3();
+                      box.getCenter(center);
+                      const sphere = new THREE.Sphere();
+                      box.getBoundingSphere(sphere);
+                      const fovRad = (50 * Math.PI) / 180;
+                      const dist = (sphere.radius / Math.sin(fovRad / 2)) * 1.3;
+                      camera.position.copy(center).addScaledVector(cameraDir, dist);
+                      camera.lookAt(center);
+                      camera.updateProjectionMatrix();
+                    }}
+                  >
+                    <ambientLight intensity={0.85} />
+                    <directionalLight position={[5, 8, 5]} intensity={1.0} />
+                    <Suspense fallback={null}>
+                      {/* 트럭 적재함 베이스 (데크·레일·마커·격자) */}
+                      <TruckSceneBase truckW={sW} truckL={sL} truckH={sH} truckWCm={dims.widthCm} truckLCm={dims.lengthCm} />
+                      <mesh renderOrder={5} position={[sW / 2, sH / 2, sL / 2]}>
+                        <boxGeometry args={[sW, sH, sL]} />
+                        <meshStandardMaterial color="#E2E8F0" transparent opacity={0.07} depthWrite={false} />
+                      </mesh>
+                      {renderPlacements.map((placement) => {
+                        const so = toPositiveInt(placement.stopOrder) || 1;
+                        return (
+                          <CargoMesh
+                            key={placement.id ?? `cargo-${so}`}
+                            placement={placement}
+                            color={stopColorMap.get(so) ?? PALETTE[(so - 1) % PALETTE.length]}
+                            stopOrder={so}
+                            isSelected={selectedStopOrder === so}
+                            isXray={isXray}
+                            onSelect={() => setSelectedStopOrder((prev) => (prev === so ? null : so))}
+                          />
+                        );
+                      })}
+                    </Suspense>
+                  </Canvas>
+                );
+              })()}
+              {orderedPlacements.length <= 0 ? (
+                <View style={{ position: "absolute", inset: 0, alignItems: "center", justifyContent: "center" }}>
+                  <ActivityIndicator color={theme.colors.brandPrimary} />
+                </View>
+              ) : null}
+            </View>
+            {selectedEntry ? (
+              (() => {
+                const stopOrder = selectedStopOrder ?? 1;
+                const accentColor = stopColorMap.get(stopOrder) ?? PALETTE[(stopOrder - 1) % PALETTE.length];
+                const originAddress = selectedEntry.order?.originAddress || selectedEntry.quote?.originAddress || "-";
+                const destinationAddress = selectedEntry.order?.destinationAddress || selectedEntry.quote?.destinationAddress || "-";
+                const distanceText =
+                  selectedEntry.order?.routeDistanceText ||
+                  (toPositiveNumber(selectedEntry.quote?.distanceKm, 0) > 0
+                    ? `${toOneDecimalText(selectedEntry.quote?.distanceKm)}km`
+                    : "-");
+                const weightText =
+                  toPositiveNumber(selectedEntry.order?.weightKg ?? selectedEntry.quote?.weightKg, 0) > 0
+                    ? `${toOneDecimalText(selectedEntry.order?.weightKg ?? selectedEntry.quote?.weightKg)}kg`
+                    : "-";
+                const cbmText =
+                  toPositiveNumber(selectedEntry.order?.volumeCbm ?? selectedEntry.quote?.volumeCbm, 0) > 0
+                    ? toOneDecimalText(selectedEntry.order?.volumeCbm ?? selectedEntry.quote?.volumeCbm)
+                    : "-";
+                const quoteItems = Array.isArray(selectedEntry.quote?.quoteItems) ? selectedEntry.quote.quoteItems : [];
+                const cargoFallback = selectedEntry.order?.cargoText || selectedEntry.quote?.cargoName || "-";
+
+                return (
+                  <View style={styles.selectedPanel}>
+                    <View style={styles.selectedPanelHeader}>
+                      <View style={[styles.selectedPanelBadge, { backgroundColor: accentColor }]}>
+                        <AppText variant="caption" weight="900" color="#FFFFFF">
+                          {stopOrder}
+                        </AppText>
+                      </View>
+                      <AppText variant="detail" weight="900" color="textMain">
+                        선택된 추천 오더
+                      </AppText>
+                    </View>
+
+                    <View style={styles.selectedRouteWrap}>
+                      <AppText variant="caption" color="textSub">
+                        출발: {originAddress}
+                      </AppText>
+                      <AppText variant="caption" color="textSub">
+                        도착: {destinationAddress}
+                      </AppText>
+                    </View>
+
+                    <View style={styles.selectedMetaRow}>
+                      <View style={styles.selectedMetaCell}>
+                        <AppText variant="caption" color="textMuted">거리</AppText>
+                        <AppText variant="detail" weight="900" color="brandPrimary">{distanceText}</AppText>
+                      </View>
+                      <View style={styles.selectedMetaCell}>
+                        <AppText variant="caption" color="textMuted">중량</AppText>
+                        <AppText variant="detail" weight="900" color="textMain">{weightText}</AppText>
+                      </View>
+                      <View style={styles.selectedMetaCell}>
+                        <AppText variant="caption" color="textMuted">CBM</AppText>
+                        <AppText variant="detail" weight="900" color="textMain">{cbmText}</AppText>
+                      </View>
+                    </View>
+
+                    <View style={styles.selectedItemsWrap}>
+                      <AppText variant="caption" weight="800" color="textMuted">
+                        화물 품목
+                      </AppText>
+                      {quoteItems.length > 0 ? (
+                        quoteItems.map((item, itemIndex) => (
+                          <View key={`${item.quoteItemId}-${itemIndex}`} style={styles.selectedItemRow}>
+                            <AppText variant="caption" weight="800" color="textMain">
+                              {item.itemName || `화물 ${itemIndex + 1}`} · {Math.max(1, toPositiveInt(item.quantity) || 1)}개
+                            </AppText>
+                            <AppText variant="caption" color="textSub">
+                              {toPositiveNumber(item.widthCm, 0)}×{toPositiveNumber(item.lengthCm, 0)}×{toPositiveNumber(item.heightCm, 0)}cm · {toOneDecimalText(item.unitWeightKg)}kg
+                            </AppText>
+                          </View>
+                        ))
+                      ) : (
+                        <View style={styles.selectedItemRow}>
+                          <AppText variant="caption" color="textSub">
+                            {cargoFallback}
+                          </AppText>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                );
+              })()
+            ) : null}
+          </AppCard>
+
           <AppCard style={styles.quotesCard}>
             <AppText variant="heading" weight="900" color="textMain">
               추천 오더
             </AppText>
             {quoteCards.map((entry, index) => {
+              const stopOrder = index + 1;
+              const accentColor = stopColorMap.get(stopOrder) ?? PALETTE[(stopOrder - 1) % PALETTE.length];
+              const isCardSelected = selectedStopOrder === stopOrder;
               const priceValue = toPositiveNumber(entry.order?.priceValue ?? entry.quote?.finalPrice, 0);
               const originAddress = entry.order?.originAddress || entry.quote?.originAddress || "-";
               const destinationAddress = entry.order?.destinationAddress || entry.quote?.destinationAddress || "-";
@@ -992,12 +1519,25 @@ export default function DriverMarketRecommendationPage({
                 `${entry.quote?.loadMethod || "-"} · ${entry.quote?.unloadMethod || "-"}`;
 
               return (
-                <View key={`quote-${entry.quoteId}`} style={styles.quoteRow}>
+                <Pressable
+                  key={`quote-${entry.quoteId}`}
+                  onPress={() => setSelectedStopOrder((prev) => (prev === stopOrder ? null : stopOrder))}
+                  style={[
+                    styles.quoteRow,
+                    isCardSelected
+                      ? {
+                          borderColor: accentColor,
+                          borderWidth: 2,
+                          backgroundColor: tint(accentColor, 0.08, theme.colors.bgSurface),
+                        }
+                      : null,
+                  ]}
+                >
                   <View style={styles.quoteTop}>
                     <View style={styles.quoteSeqWrap}>
-                      <View style={styles.quoteSeqBadge}>
+                      <View style={[styles.quoteSeqBadge, isCardSelected ? { backgroundColor: accentColor } : null]}>
                         <AppText variant="caption" weight="900" color="#FFFFFF">
-                          {index + 1}
+                          {stopOrder}
                         </AppText>
                       </View>
                       <AppText variant="detail" weight="900" color="textMain">
@@ -1046,93 +1586,9 @@ export default function DriverMarketRecommendationPage({
                   <AppText variant="caption" color="textSub">
                     차량/작업: {vehicleText} · {methodText}
                   </AppText>
-                </View>
+                </Pressable>
               );
             })}
-          </AppCard>
-
-          <AppCard style={styles.loadCard}>
-            <AppText variant="heading" weight="900" color="textMain">
-              3D 적재 시뮬레이션
-            </AppText>
-            <AppText variant="caption" color="textMuted">
-              적재함 {dims.widthCm} × {dims.lengthCm} × {dims.heightCm} cm 기준 · {isGroupedRecommendation ? "다건 순서 적재" : "단건 적재"}
-            </AppText>
-            <View style={styles.canvasWrap}>
-              <Canvas camera={{ position: [4.2, 4, 4.2], fov: 45 }}>
-                <ambientLight intensity={0.7} />
-                <directionalLight position={[5, 8, 5]} intensity={1.1} />
-                <Suspense fallback={null}>
-                  <mesh
-                    position={[
-                      (dims.widthCm * SCALE) / 2,
-                      (dims.heightCm * SCALE) / 2,
-                      (dims.lengthCm * SCALE) / 2,
-                    ]}
-                  >
-                    <boxGeometry args={[dims.widthCm * SCALE, dims.heightCm * SCALE, dims.lengthCm * SCALE]} />
-                    <meshStandardMaterial color="#E2E8F0" transparent opacity={0.1} />
-                  </mesh>
-                  {orderedPlacements.map((placement, index) => (
-                    <CargoMesh
-                      key={placement.id ?? `cargo-${index}`}
-                      placement={placement}
-                      color={stopColorMap.get(toPositiveInt(placement.stopOrder) || 1) ?? PALETTE[index % PALETTE.length]}
-                    />
-                  ))}
-                </Suspense>
-              </Canvas>
-              {orderedPlacements.length <= 0 ? (
-                <View style={{ position: "absolute", inset: 0, alignItems: "center", justifyContent: "center" }}>
-                  <ActivityIndicator color={theme.colors.brandPrimary} />
-                </View>
-              ) : null}
-            </View>
-            {placementGroups.map((group) => (
-              <View key={`group-${group.stopOrder}`} style={styles.placementGroupWrap}>
-                <View style={styles.placementGroupHeader}>
-                  <View
-                    style={[
-                      styles.placementBadge,
-                      { backgroundColor: stopColorMap.get(group.stopOrder) ?? PALETTE[(group.stopOrder - 1) % PALETTE.length] },
-                    ]}
-                  >
-                    <AppText variant="caption" weight="900" color="#FFFFFF">
-                      {group.stopOrder}
-                    </AppText>
-                  </View>
-                  <AppText variant="detail" weight="800" color="textMain" style={styles.placementGroupTitle}>
-                    {quoteStopLabelMap.get(group.stopOrder) ?? `적재 순서 ${group.stopOrder}`}
-                  </AppText>
-                  <AppText variant="caption" style={styles.placementGroupCount}>
-                    {group.items.length}개
-                  </AppText>
-                </View>
-
-                {group.items.map((placement, index) => (
-                  <View key={`placement-${group.stopOrder}-${placement.id ?? index}`} style={styles.placementRow}>
-                    <View
-                      style={[
-                        styles.placementBadge,
-                        { backgroundColor: stopColorMap.get(group.stopOrder) ?? PALETTE[(group.stopOrder - 1) % PALETTE.length] },
-                      ]}
-                    >
-                      <AppText variant="caption" weight="900" color="#FFFFFF">
-                        {index + 1}
-                      </AppText>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <AppText variant="detail" weight="800" color="textMain">
-                        적재물 {index + 1}
-                      </AppText>
-                      <AppText variant="caption" color="textSub">
-                        {toPositiveNumber(placement.width, 0)}×{toPositiveNumber(placement.length, 0)}×{toPositiveNumber(placement.height, 0)}cm · 위치({toFiniteNumber(placement.x, 0)}, {toFiniteNumber(placement.y, 0)}, {toFiniteNumber(placement.z, 0)})
-                      </AppText>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            ))}
           </AppCard>
         </View>
       </PageScaffold>
