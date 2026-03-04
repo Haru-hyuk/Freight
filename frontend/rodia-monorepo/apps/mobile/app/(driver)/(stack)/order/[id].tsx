@@ -20,6 +20,7 @@ import {
   DRIVER_RUN_SYNC_EVENT,
   publishDriverRunSyncEvent,
 } from "@/features/matching/model/driverRunSyncEvents";
+import { DRIVER_ROUTE_PATH } from "@/features/matching/model/driverRunUiApiGrounding";
 import CounterOfferModal, { type CounterOfferSubmitPayload } from "@/features/matching/ui/CounterOfferModal";
 import DriverMarketRecommendationPage from "@/pages/driver/matching/DriverMarketRecommendationPage";
 import type { QuoteDetailResponse } from "@/entities/quote/model/quote.types";
@@ -28,8 +29,10 @@ import type { LoadPlanResponse, Placement, TruckSpecReferenceResponse } from "@/
 import { confirmLoading, confirmUnloading, startDriving } from "@/shared/lib/mock-flow";
 import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
 import {
+  API_ERROR_CODE,
   DRIVER_CTA_ID,
   DRIVER_UI_STATE,
+  getApiErrorCode,
   getDriverCta,
   getDriverUiStateFromStatusPayload,
   type DriverUiState,
@@ -1254,16 +1257,42 @@ function DriverOrderDetailContent({ params }: { params: DriverOrderRouteParams }
       { text: "취소", style: "cancel" },
       {
         text: "수락",
-        onPress: () => {
+        onPress: async () => {
           setIsBusy(true);
-          acceptDriverMatch(matchId)
-            .then(() => viewModel.refetch())
-            .catch(() => Alert.alert("배차 수락 실패", "잠시 후 다시 시도해 주세요."))
-            .finally(() => setIsBusy(false));
+          try {
+            const result = await acceptDriverMatch(matchId);
+            if (!result) {
+              Alert.alert("배차 수락 실패", "잠시 후 다시 시도해 주세요.");
+              return;
+            }
+
+            const safeQuoteId = toPositiveInt(viewModel.quoteId ?? result.quoteId);
+            publishDriverRunSyncEvent({
+              type: DRIVER_RUN_SYNC_EVENT.MATCH_ACCEPTED,
+              matchIds: [matchId],
+              quoteIds: safeQuoteId > 0 ? [safeQuoteId] : [],
+              source: "order_detail",
+            });
+
+            await viewModel.refetch();
+            if (routeSource === "market" || isQuoteMode) {
+              router.replace(DRIVER_ROUTE_PATH.RUN_TAB);
+              return;
+            }
+          } catch (error) {
+            const code = getApiErrorCode(error);
+            if (code === API_ERROR_CODE.CONFLICT) {
+              Alert.alert("배차 수락 실패", "이미 다른 기사에게 배차된 오더입니다.");
+              return;
+            }
+            Alert.alert("배차 수락 실패", readApiErrorMessage(error, "잠시 후 다시 시도해 주세요."));
+          } finally {
+            setIsBusy(false);
+          }
         },
       },
     ]);
-  }, [matchId, viewModel.refetch]);
+  }, [isQuoteMode, matchId, routeSource, router, viewModel.quoteId, viewModel.refetch]);
 
   const handleNegotiate = useCallback(() => {
     setOfferErrorMessage(null);

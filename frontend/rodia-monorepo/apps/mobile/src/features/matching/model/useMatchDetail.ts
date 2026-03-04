@@ -53,7 +53,12 @@ export function useMatchDetail(matchId: number, routeSnapshot?: MatchDetailRoute
     if (safeMatchId <= 0) return;
 
     return subscribeDriverRunSyncEvent((event) => {
-      if (event.type !== DRIVER_RUN_SYNC_EVENT.COUNTER_OFFER_SUBMITTED) return;
+      if (
+        event.type !== DRIVER_RUN_SYNC_EVENT.COUNTER_OFFER_SUBMITTED &&
+        event.type !== DRIVER_RUN_SYNC_EVENT.MATCH_ACCEPTED
+      ) {
+        return;
+      }
 
       const currentQuoteId = parseMatchPositiveInt(quote?.quoteId ?? match?.quoteId ?? bootstrapMatch?.quoteId);
       const hasMatch = event.matchIds.includes(safeMatchId);

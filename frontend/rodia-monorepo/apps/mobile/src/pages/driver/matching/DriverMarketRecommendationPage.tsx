@@ -9,6 +9,7 @@ import * as THREE from "three";
 import type { QuoteDetailResponse } from "@/entities/quote/model/quote.types";
 import {
   acceptDriverMatch,
+  acceptDriverMatchesBatch,
   getDriverQuoteSummaryDetail,
   postCounterOffer,
   type DriverOrderCard,
@@ -28,6 +29,7 @@ import { previewLoadPlan as previewLoadPlanGenerated } from "@/shared/api/genera
 import type { LoadPlanResponse, Placement, TruckSpecReferenceResponse } from "@/shared/api/generated/schemas";
 import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
 import { formatKrw } from "@/shared/lib/format/display";
+import { API_ERROR_CODE, getApiErrorCode } from "@/shared/lib/policy";
 import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppButton } from "@/shared/ui/kit/AppButton";
@@ -715,21 +717,30 @@ export default function DriverMarketRecommendationPage({
 
     setIsBusy(true);
     try {
-      let successCount = 0;
-      let failureCount = 0;
-      const successMatchIds: number[] = [];
-      for (const matchId of groupedMatchIds) {
-        try {
-          const result = await acceptDriverMatch(matchId);
-          if (result) {
-            successCount += 1;
-            successMatchIds.push(matchId);
-          }
-          else failureCount += 1;
-        } catch {
-          failureCount += 1;
+      let acceptedMatches: Awaited<ReturnType<typeof acceptDriverMatchesBatch>> = [];
+      if (groupedMatchIds.length > 1) {
+        acceptedMatches = await acceptDriverMatchesBatch({
+          matchIds: groupedMatchIds,
+          routeType: selection?.mode,
+          orderedQuoteIds: selection?.recommendation.quoteIds,
+        });
+      } else {
+        const singleMatchId = groupedMatchIds[0];
+        if (singleMatchId) {
+          const single = await acceptDriverMatch(singleMatchId);
+          acceptedMatches = single ? [single] : [];
         }
       }
+
+      const successMatchIds = Array.from(
+        new Set(
+          acceptedMatches
+            .map((item) => toPositiveInt(item.matchId))
+            .filter((matchId) => matchId > 0)
+        )
+      );
+      const successCount = successMatchIds.length;
+      const failureCount = Math.max(0, groupedMatchIds.length - successCount);
 
       if (successCount <= 0) {
         Alert.alert("오류", "배차 수락에 실패했습니다.");
@@ -752,6 +763,12 @@ export default function DriverMarketRecommendationPage({
           acceptedAt: Date.now(),
         });
       }
+      publishDriverRunSyncEvent({
+        type: DRIVER_RUN_SYNC_EVENT.MATCH_ACCEPTED,
+        matchIds: successMatchIds,
+        quoteIds: selection?.recommendation.quoteIds ?? [],
+        source: "market_recommendation",
+      });
       const nextMatchId = groupedMatchIds[0];
       Alert.alert("배차 수락 완료", message, [
         {
@@ -769,8 +786,13 @@ export default function DriverMarketRecommendationPage({
           },
         },
       ]);
-    } catch {
-      Alert.alert("오류", "배차 수락에 실패했습니다.");
+    } catch (error) {
+      const code = getApiErrorCode(error);
+      if (code === API_ERROR_CODE.CONFLICT) {
+        Alert.alert("배차 수락 실패", "이미 배차 처리된 오더가 포함되어 있습니다. 목록을 새로고침해 주세요.");
+        return;
+      }
+      Alert.alert("배차 수락 실패", readApiErrorMessage(error, "잠시 후 다시 시도해 주세요."));
     } finally {
       setIsBusy(false);
     }

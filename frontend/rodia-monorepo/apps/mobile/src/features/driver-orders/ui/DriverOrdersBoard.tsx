@@ -52,9 +52,11 @@ import {
 import { formatKrw } from "@/shared/lib/format/display";
 import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
 import {
+  API_ERROR_CODE,
   BADGE_TONE,
   DRIVER_CTA_ID,
   DRIVER_UI_STATE,
+  getApiErrorCode,
   type BadgeTone,
   type DriverUiState,
 } from "@/shared/lib/policy";
@@ -1007,7 +1009,12 @@ export function DriverOrdersBoard({
 
   useEffect(() => {
     return subscribeDriverRunSyncEvent((event) => {
-      if (event.type !== DRIVER_RUN_SYNC_EVENT.COUNTER_OFFER_SUBMITTED) return;
+      if (
+        event.type !== DRIVER_RUN_SYNC_EVENT.COUNTER_OFFER_SUBMITTED &&
+        event.type !== DRIVER_RUN_SYNC_EVENT.MATCH_ACCEPTED
+      ) {
+        return;
+      }
       void loadOrders("refresh");
     });
   }, [loadOrders]);
@@ -1263,11 +1270,22 @@ export function DriverOrdersBoard({
           return;
         }
 
+        publishDriverRunSyncEvent({
+          type: DRIVER_RUN_SYNC_EVENT.MATCH_ACCEPTED,
+          matchIds: [safeMatchId],
+          quoteIds: Number.isInteger(Number(card.quoteId)) && Number(card.quoteId) > 0 ? [Number(card.quoteId)] : [],
+          source: "order_board",
+        });
         await loadOrders("refresh");
         router.replace(DRIVER_ROUTE_PATH.RUN_TAB);
         showToast("오더를 수락했습니다.");
-      } catch {
-        showToast(NETWORK_ERROR_TEXT);
+      } catch (error) {
+        const code = getApiErrorCode(error);
+        if (code === API_ERROR_CODE.CONFLICT) {
+          showToast("이미 배차 처리된 오더입니다.");
+          return;
+        }
+        showToast(readApiErrorMessage(error, NETWORK_ERROR_TEXT));
       } finally {
         setAcceptingMatchId(null);
       }
