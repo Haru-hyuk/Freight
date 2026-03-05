@@ -1,5 +1,5 @@
 import React from "react";
-import { Alert, Image, ScrollView, StyleSheet, Switch, View } from "react-native";
+import { Alert, Image, Linking, Platform, ScrollView, StyleSheet, Switch, ToastAndroid, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useActiveOrder } from "@/entities/order/model/active-order.store";
 import type { ActiveRun } from "@/entities/order/model/types";
@@ -16,6 +16,7 @@ import {
 import { DRIVER_RUN_SYNC_EVENT, publishDriverRunSyncEvent } from "@/features/matching/model/driverRunSyncEvents";
 import { formatDateTime } from "@/shared/lib/format/display";
 import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
+import { useCurrentLocationOnce } from "@/shared/lib/location/useCurrentLocationOnce";
 import { BADGE_TONE, DRIVER_CTA_ID, DRIVER_UI_STATE, getDriverCta, getPhotoGateHint, type BadgeTone, type DriverUiState } from "@/shared/lib/policy";
 import type { DeliveryPhotoResponse } from "@/shared/api/generated/schemas/deliveryPhotoResponse";
 import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
@@ -58,7 +59,7 @@ type Props = {
   onRefetchRun?: () => Promise<void> | void;
 };
 
-const GPS_PROVIDER_MISSING_MESSAGE = "현재 위치 연동 모듈이 없어 위치 업데이트를 사용할 수 없습니다.";
+const KAKAO_MAP_WEB_URL = "https://map.kakao.com/";
 const IMAGE_PICKER_MISSING_MESSAGE = "이미지 선택 모듈(expo-image-picker)이 없어 사진 업로드를 사용할 수 없습니다.";
 
 const useStyles = createThemedStyles((theme) => {
@@ -168,6 +169,21 @@ const useStyles = createThemedStyles((theme) => {
       fontSize: safeNumber(theme?.typography?.scale?.caption?.size, 12),
       lineHeight: safeNumber(theme?.typography?.scale?.caption?.lineHeight, 16),
       fontWeight: "600",
+    },
+    routeFallbackAddresses: {
+      gap: spacing,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: cBorder,
+      backgroundColor: cSurface,
+      paddingHorizontal: spacing * 3,
+      paddingVertical: spacing * 2,
+    },
+    routeFallbackAddressText: {
+      color: cTextSub,
+      fontSize: safeNumber(theme?.typography?.scale?.caption?.size, 12) + 1,
+      lineHeight: safeNumber(theme?.typography?.scale?.caption?.lineHeight, 16) + 2,
+      fontWeight: "700",
     },
     infoCard: {
       borderRadius: 16,
@@ -368,6 +384,19 @@ function resolveStatusPalette(tone: BadgeTone, colors: Record<string, string>) {
   };
 }
 
+function showTransientMessage(message: string) {
+  if (Platform.OS === "android") {
+    ToastAndroid.show(message, ToastAndroid.SHORT);
+    return;
+  }
+  Alert.alert("안내", message);
+}
+
+function logDriverRunEvent(tag: string, payload: Record<string, unknown>) {
+  if (!__DEV__) return;
+  console.info(`[driver-run][${tag}]`, payload);
+}
+
 export function RunActiveDetails({
   activeRun,
   uiState,
@@ -390,6 +419,7 @@ export function RunActiveDetails({
   const [isPhotoSyncing, setIsPhotoSyncing] = React.useState(false);
   const [uploadingPhotoType, setUploadingPhotoType] = React.useState<DriverPhotoType | null>(null);
   const [isRouteMapVisible, setIsRouteMapVisible] = React.useState(true);
+  const location = useCurrentLocationOnce();
 
   const safeMatchId = parsePositiveInt(activeRun.match.matchId);
   const quoteId = parsePositiveInt(activeRun.summary?.quoteId ?? activeRun.match.quoteId);
@@ -412,14 +442,20 @@ export function RunActiveDetails({
   const photoGateHint = React.useMemo(() => getPhotoGateHint(uiState, photoGatePassed), [photoGatePassed, uiState]);
   const canCompleteTransit =
     safeMatchId > 0 && driverCta.id === DRIVER_CTA_ID.MARK_DROPOFF && driverCta.enabled;
+  const locationStatus = location.status;
+  const isLocationDenied = locationStatus === "denied";
+  const isLocationError = locationStatus === "error";
+  const isLocationRequesting = locationStatus === "requesting";
+  const isGpsActionDisabled = safeMatchId <= 0 || isLocationDenied || isLocationError;
   const isBusy =
     isSyncing ||
     isCompleting ||
     isTrackingSharingSubmitting ||
     isGpsSubmitting ||
+    isLocationRequesting ||
     isPhotoSyncing ||
     uploadingPhotoType !== null;
-  const hasLocationProvider = false;
+  const gpsHelperText = location.message;
   const trackingSharingUpdatedAtText = formatDateTime(activeRun.match.locationSharingUpdatedAt, "-");
 
   const routeStops = React.useMemo<NormalizedRouteStop[]>(() => {
@@ -506,6 +542,18 @@ export function RunActiveDetails({
     await loadPhotos({ showError: false });
   };
 
+  const handleOpenKakaoMap = React.useCallback(async () => {
+    try {
+      const supported = await Linking.canOpenURL(KAKAO_MAP_WEB_URL);
+      if (!supported) {
+        throw new Error("카카오맵 웹 주소를 열 수 없습니다.");
+      }
+      await Linking.openURL(KAKAO_MAP_WEB_URL);
+    } catch (error) {
+      Alert.alert("카카오맵 열기 실패", readApiErrorMessage(error));
+    }
+  }, []);
+
   const handleCompleteTransit = async () => {
     if (!canCompleteTransit || isCompleting) return;
 
@@ -525,8 +573,17 @@ export function RunActiveDetails({
         quoteIds: [quoteId],
         source: "driver-run:complete",
       });
+      logDriverRunEvent("completeTransit:success", {
+        matchId: safeMatchId,
+        quoteId,
+      });
       Alert.alert("운행 완료", "하차 완료 처리가 반영되었습니다.");
     } catch (error) {
+      logDriverRunEvent("completeTransit:failed", {
+        matchId: safeMatchId,
+        quoteId,
+        reason: readApiErrorMessage(error),
+      });
       Alert.alert("운행 완료 실패", readApiErrorMessage(error), [
         { text: "취소", style: "cancel" },
         { text: "다시 시도", onPress: () => void handleCompleteTransit() },
@@ -555,8 +612,19 @@ export function RunActiveDetails({
         quoteIds: [quoteId],
         source: "driver-run:tracking-share",
       });
+      logDriverRunEvent("trackingSharing:success", {
+        matchId: safeMatchId,
+        quoteId,
+        enabled,
+      });
       Alert.alert("위치 공유", enabled ? "위치 공유를 켰습니다." : "위치 공유를 껐습니다.");
     } catch (error) {
+      logDriverRunEvent("trackingSharing:failed", {
+        matchId: safeMatchId,
+        quoteId,
+        enabled,
+        reason: readApiErrorMessage(error),
+      });
       Alert.alert("위치 공유 변경 실패", readApiErrorMessage(error), [
         { text: "취소", style: "cancel" },
         { text: "다시 시도", onPress: () => void handleToggleTrackingSharing(enabled) },
@@ -567,18 +635,17 @@ export function RunActiveDetails({
   };
 
   const handleSubmitGps = async () => {
-    if (!hasLocationProvider) {
-      Alert.alert("위치 업데이트", GPS_PROVIDER_MISSING_MESSAGE);
-      return;
-    }
-    if (safeMatchId <= 0 || isGpsSubmitting) return;
+    if (safeMatchId <= 0 || isGpsSubmitting || isLocationDenied || isLocationError) return;
 
     try {
       setIsGpsSubmitting(true);
-      // TODO: 공용 위치 Provider(useLocation/hook) 연결 후 실제 현재 좌표를 주입한다.
-      const currentPosition: { lat: number; lng: number; speedKmh?: number; bearing?: number } | null = null;
-      if (!currentPosition) {
-        throw new Error("현재 위치를 읽을 수 없습니다.");
+      await location.request();
+      const currentPosition = location.coords;
+      if (
+        typeof currentPosition?.lat !== "number" ||
+        typeof currentPosition?.lng !== "number"
+      ) {
+        throw new Error(location.message || "현재 위치를 읽을 수 없습니다.");
       }
 
       const result = await submitDriverRunGps(safeMatchId, currentPosition);
@@ -588,8 +655,20 @@ export function RunActiveDetails({
       if (typeof onRefetchRun === "function") {
         await onRefetchRun();
       }
-      Alert.alert("위치 업데이트", "현재 위치를 전송했습니다.");
+      logDriverRunEvent("submitGps:success", {
+        matchId: safeMatchId,
+        quoteId,
+        lat: currentPosition.lat,
+        lng: currentPosition.lng,
+        loggedAt: result.loggedAt,
+      });
+      showTransientMessage("현재 위치를 전송했습니다.");
     } catch (error) {
+      logDriverRunEvent("submitGps:failed", {
+        matchId: safeMatchId,
+        quoteId,
+        reason: readApiErrorMessage(error),
+      });
       Alert.alert("위치 업데이트 실패", readApiErrorMessage(error), [
         { text: "취소", style: "cancel" },
         { text: "다시 시도", onPress: () => void handleSubmitGps() },
@@ -644,8 +723,20 @@ export function RunActiveDetails({
         quoteIds: [quoteId],
         source: "driver-run:photo-upload",
       });
+      logDriverRunEvent("uploadPhoto:success", {
+        matchId: safeMatchId,
+        quoteId,
+        type,
+        photoId: uploaded.photoId,
+      });
       Alert.alert("사진 업로드", `${resolvePhotoTypeLabel(type)} 사진이 업로드되었습니다.`);
     } catch (error) {
+      logDriverRunEvent("uploadPhoto:failed", {
+        matchId: safeMatchId,
+        quoteId,
+        type,
+        reason: readApiErrorMessage(error),
+      });
       Alert.alert("사진 업로드 실패", readApiErrorMessage(error), [
         { text: "취소", style: "cancel" },
         { text: "다시 시도", onPress: () => void handleUploadPhoto(type) },
@@ -708,9 +799,22 @@ export function RunActiveDetails({
               {hasRouteCoordinates ? (
                 isRouteMapVisible ? <RecoRouteWebView stops={routeStops} loading={false} /> : null
               ) : (
-                <AppText style={styles.routeMapHint}>
-                  좌표 정보가 없어 카카오 경로를 표시할 수 없습니다.
-                </AppText>
+                <>
+                  <AppText style={styles.routeMapHint}>
+                    좌표 정보가 없어 지도 미리보기를 표시할 수 없습니다.
+                  </AppText>
+                  <View style={styles.routeFallbackAddresses}>
+                    <AppText style={styles.routeFallbackAddressText}>{`출발: ${originAddress}`}</AppText>
+                    <AppText style={styles.routeFallbackAddressText}>{`도착: ${destinationAddress}`}</AppText>
+                  </View>
+                  <AppButton
+                    title="카카오맵에서 열기"
+                    variant="secondary"
+                    onPress={() => void handleOpenKakaoMap()}
+                    disabled={isBusy}
+                    style={styles.routeMapButton}
+                  />
+                </>
               )}
             </View>
           </AppCard>
@@ -743,14 +847,12 @@ export function RunActiveDetails({
                 title="위치 업데이트"
                 variant="secondary"
                 onPress={() => void handleSubmitGps()}
-                disabled={!hasLocationProvider || isBusy || safeMatchId <= 0}
-                loading={isGpsSubmitting}
+                disabled={isGpsActionDisabled || isBusy}
+                loading={isGpsSubmitting || isLocationRequesting}
                 style={styles.gpsButton}
               />
             </View>
-            {!hasLocationProvider ? (
-              <AppText style={styles.helperText}>{GPS_PROVIDER_MISSING_MESSAGE}</AppText>
-            ) : null}
+            {gpsHelperText ? <AppText style={styles.helperText}>{gpsHelperText}</AppText> : null}
             <View style={styles.infoRow}>
               <AppText style={styles.infoLabel}>추천 액션</AppText>
               <AppText style={styles.infoValue}>{driverCta?.label ?? "-"}</AppText>
