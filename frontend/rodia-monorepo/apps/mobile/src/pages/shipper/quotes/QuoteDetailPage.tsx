@@ -37,6 +37,11 @@ import {
 import { useQuoteDetail, type QuoteActionsContext } from "@/features/quote/model/useQuoteDetail";
 import { formatWorkMethodLabel } from "@/features/quote/model/workMethod";
 import { BottomActionRouter } from "@/features/quote/ui/actions/BottomActionRouter";
+import { RecoRouteWebView } from "@/features/driver-reco/ui/RecoRouteWebView";
+import type { NormalizedRouteStop } from "@/features/driver-reco/model/routeSummary";
+import { getShipperMatchPhotos as getShipperMatchPhotosGenerated } from "@/shared/api/generated/delivery-photo-controller/delivery-photo-controller";
+import type { DeliveryPhotoResponse } from "@/shared/api/generated/schemas/deliveryPhotoResponse";
+import { getApiBaseUrl } from "@/shared/lib/config/env";
 import { DriverVehicleInfo } from "@/features/quote/ui/DriverVehicleInfo";
 import { QuoteRouteInfo } from "@/features/quote/ui/QuoteRouteInfo";
 import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
@@ -587,6 +592,42 @@ function toText(value: unknown): string {
   return String(value ?? "").trim();
 }
 
+function withAbsoluteApiUrl(pathOrUrl: unknown): string {
+  const raw = toText(pathOrUrl);
+  if (!raw) return "";
+  if (/^https?:\/\//i.test(raw)) return raw;
+  const normalizedPath = raw.startsWith("/") ? raw : `/${raw}`;
+  return `${getApiBaseUrl().replace(/\/+$/, "")}${normalizedPath}`;
+}
+
+function resolvePhotoTypeToken(value: unknown): "PICKUP" | "DELIVERY" | "" {
+  const token = toStatusToken(value);
+  if (token === "PICKUP") return "PICKUP";
+  if (token === "DELIVERY") return "DELIVERY";
+  return "";
+}
+
+function toShipperPhotoUrisByType(photos: DeliveryPhotoResponse[]): {
+  pickup: string[];
+  delivery: string[];
+} {
+  const pickup: string[] = [];
+  const delivery: string[] = [];
+  photos.forEach((photo) => {
+    const uri = withAbsoluteApiUrl(photo.fileUrl);
+    if (!uri) return;
+    const type = resolvePhotoTypeToken(photo.type);
+    if (type === "PICKUP") {
+      pickup.push(uri);
+      return;
+    }
+    if (type === "DELIVERY") {
+      delivery.push(uri);
+    }
+  });
+  return { pickup, delivery };
+}
+
 function toDisplayText(value: unknown): string {
   const text = toText(value);
   return text || "-";
@@ -1016,6 +1057,10 @@ export default function QuoteDetailPage() {
   const [matchHydrated, setMatchHydrated] = React.useState(false);
   const [bottomBarHeight, setBottomBarHeight] = React.useState(140);
   const [pendingCounterOffer, setPendingCounterOffer] = React.useState<CounterOfferItem | null>(null);
+  const [trackingSnapshot, setTrackingSnapshot] = React.useState<ShipperTrackingSnapshot | null>(null);
+  const [isTrackingLoading, setIsTrackingLoading] = React.useState(false);
+  const [trackingErrorMessage, setTrackingErrorMessage] = React.useState<string | null>(null);
+  const [shipperPhotos, setShipperPhotos] = React.useState<DeliveryPhotoResponse[]>([]);
   const [isNavigatingReceipt, setIsNavigatingReceipt] = React.useState(false);
   const [isProgressRefreshing, setIsProgressRefreshing] = React.useState(false);
   const matchLoadTokenRef = React.useRef(0);
@@ -1040,14 +1085,22 @@ export default function QuoteDetailPage() {
     loadingPhotos?: string[];
     unloadingPhotos?: string[];
   }) | null;
-  const loadingPhotos = React.useMemo(
+  const legacyLoadingPhotos = React.useMemo(
     () => (Array.isArray(activeMatchWithPhotos?.loadingPhotos) ? activeMatchWithPhotos.loadingPhotos : []),
     [activeMatchWithPhotos?.loadingPhotos]
   );
-  const unloadingPhotos = React.useMemo(
+  const legacyUnloadingPhotos = React.useMemo(
     () => (Array.isArray(activeMatchWithPhotos?.unloadingPhotos) ? activeMatchWithPhotos.unloadingPhotos : []),
     [activeMatchWithPhotos?.unloadingPhotos]
   );
+  const loadingPhotos = React.useMemo(() => {
+    const byType = toShipperPhotoUrisByType(shipperPhotos);
+    return byType.pickup.length > 0 ? byType.pickup : legacyLoadingPhotos;
+  }, [legacyLoadingPhotos, shipperPhotos]);
+  const unloadingPhotos = React.useMemo(() => {
+    const byType = toShipperPhotoUrisByType(shipperPhotos);
+    return byType.delivery.length > 0 ? byType.delivery : legacyUnloadingPhotos;
+  }, [legacyUnloadingPhotos, shipperPhotos]);
   const hasActiveQuoteMatch = Boolean(activeQuoteMatch);
   const cancelTargetMatchId = React.useMemo(() => parsePositiveInt(activeQuoteMatch?.matchId), [activeQuoteMatch?.matchId]);
   const isCancelIdInvalid = hasActiveQuoteMatch && cancelTargetMatchId <= 0;
@@ -1115,6 +1168,20 @@ export default function QuoteDetailPage() {
   const shouldShowDeliveryTimeline = isPickupInProgress || isTransitInProgress;
   const shouldShowPostPaymentSummary = shouldShowDeliveryTimeline || isCompletedStatus;
 
+  const loadShipperPhotos = React.useCallback(async (targetMatchId: number) => {
+    const safeMatchId = parsePositiveInt(targetMatchId);
+    if (safeMatchId <= 0) {
+      setShipperPhotos([]);
+      return;
+    }
+    try {
+      const photos = await getShipperMatchPhotosGenerated(safeMatchId);
+      setShipperPhotos(Array.isArray(photos) ? photos : []);
+    } catch {
+      setShipperPhotos([]);
+    }
+  }, []);
+
   React.useEffect(() => {
     if (isRoutePayRequested) {
       setForcePaymentRequired(true);
@@ -1138,6 +1205,7 @@ export default function QuoteDetailPage() {
       setPaidMatchId(0);
       setLatestPaymentStatus(null);
       setLatestPaymentMethod(null);
+      setShipperPhotos([]);
     }
   }, [actionQuoteId]);
 
@@ -1223,12 +1291,14 @@ export default function QuoteDetailPage() {
         if (activeMatchId > 0) {
           tasks.push(loadPaymentCompletion(activeMatchId));
           tasks.push(loadShipperTracking(activeMatchId));
+          tasks.push(loadShipperPhotos(activeMatchId));
         } else {
           setHasCompletedPayment(false);
           setLatestPaymentStatus(null);
           setLatestPaymentMethod(null);
           setTrackingSnapshot(null);
           setTrackingErrorMessage(null);
+          setShipperPhotos([]);
         }
       }
       await Promise.all([quoteRefetchTask, ...tasks]);
@@ -1242,7 +1312,7 @@ export default function QuoteDetailPage() {
         refreshInFlightRef.current = null;
       }
     }
-  }, [actionQuoteId, loadMatchSnapshot, loadPaymentCompletion, loadPendingCounterOffer, loadShipperTracking, view.refetch]);
+  }, [actionQuoteId, loadMatchSnapshot, loadPaymentCompletion, loadPendingCounterOffer, loadShipperPhotos, loadShipperTracking, view.refetch]);
 
   React.useEffect(() => {
     const safeQuoteId = parsePositiveInt(actionQuoteId);
@@ -1280,12 +1350,14 @@ export default function QuoteDetailPage() {
         );
         if (activeMatchId > 0) {
           await loadPaymentCompletion(activeMatchId);
+          await loadShipperPhotos(activeMatchId);
         } else {
           setHasCompletedPayment(false);
           setLatestPaymentStatus(null);
           setLatestPaymentMethod(null);
           setTrackingSnapshot(null);
           setTrackingErrorMessage(null);
+          setShipperPhotos([]);
         }
       })().finally(() => {
         if (canceled || matchLoadTokenRef.current !== token) return;
@@ -1296,7 +1368,7 @@ export default function QuoteDetailPage() {
       canceled = true;
       task.cancel();
     };
-  }, [actionQuoteId, loadMatchSnapshot, loadPaymentCompletion, loadPendingCounterOffer]);
+  }, [actionQuoteId, loadMatchSnapshot, loadPaymentCompletion, loadPendingCounterOffer, loadShipperPhotos]);
 
   useFocusEffect(
     React.useCallback(() => {

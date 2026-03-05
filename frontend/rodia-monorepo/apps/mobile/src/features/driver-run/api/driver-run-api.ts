@@ -24,6 +24,8 @@ export type DriverPhotoUploadInput = {
   takenAt?: string;
   lat?: number;
   lng?: number;
+  stopOrder?: number;
+  stopLabel?: string;
 };
 
 function asObject(value: unknown): AnyObject {
@@ -124,6 +126,8 @@ function toDeliveryPhotoResponse(value: unknown): DeliveryPhotoResponse | null {
   const lng = toOptionalFiniteNumber(source.lng);
   const fileSize = toOptionalFiniteNumber(source.fileSize);
   const mimeType = toText(source.mimeType);
+  const stopOrder = parseMatchPositiveInt(source.stopOrder);
+  const stopLabel = toText(source.stopLabel);
   const createdAt = toText(source.createdAt);
 
   if (
@@ -137,6 +141,8 @@ function toDeliveryPhotoResponse(value: unknown): DeliveryPhotoResponse | null {
     typeof lng === "undefined" &&
     typeof fileSize === "undefined" &&
     !mimeType &&
+    stopOrder <= 0 &&
+    !stopLabel &&
     !createdAt
   ) {
     return null;
@@ -153,6 +159,8 @@ function toDeliveryPhotoResponse(value: unknown): DeliveryPhotoResponse | null {
     ...(typeof lng === "number" ? { lng } : {}),
     ...(typeof fileSize === "number" ? { fileSize } : {}),
     ...(mimeType ? { mimeType } : {}),
+    ...(stopOrder > 0 ? { stopOrder } : {}),
+    ...(stopLabel ? { stopLabel } : {}),
     ...(createdAt ? { createdAt } : {}),
   };
 }
@@ -262,6 +270,8 @@ export async function uploadDriverRunPhoto(
       takenAt: toText(payload.takenAt) || new Date().toISOString(),
       ...(typeof payload.lat === "number" ? { lat: payload.lat } : {}),
       ...(typeof payload.lng === "number" ? { lng: payload.lng } : {}),
+      ...(parseMatchPositiveInt(payload.stopOrder) > 0 ? { stopOrder: parseMatchPositiveInt(payload.stopOrder) } : {}),
+      ...(toText(payload.stopLabel) ? { stopLabel: toText(payload.stopLabel) } : {}),
     }
   );
 

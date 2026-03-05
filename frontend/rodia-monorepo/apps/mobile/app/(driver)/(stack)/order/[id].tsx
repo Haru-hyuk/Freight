@@ -4,7 +4,7 @@ import { Canvas } from "@react-three/fiber/native";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, Image, Pressable, StyleSheet, View } from "react-native";
+import { ActivityIndicator, Alert, Image, Modal, Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as THREE from "three";
 
@@ -13,6 +13,7 @@ import { DriverOrderDetailHeader } from "@/features/driver-orders/ui/detail/Driv
 import { DriverOrderNegotiatingCard } from "@/features/driver-orders/ui/detail/DriverOrderNegotiatingCard";
 import { DriverOrderPaymentPendingCard } from "@/features/driver-orders/ui/detail/DriverOrderPaymentPendingCard";
 import { getDriverMarketRecommendationSelection } from "@/features/driver-orders/model/marketRecommendationSelection";
+import { getDriverRunPhotos } from "@/features/driver-run/api/driver-run-api";
 import { acceptDriverMatch, postCounterOffer, uploadImage, type DriverPhotoUploadType } from "@/features/matching/api";
 import type { ParsedMatchResponseItem } from "@/features/matching/api/shipper-match-parser";
 import { useMatchDetail } from "@/features/matching/model/useMatchDetail";
@@ -28,6 +29,7 @@ import { previewLoadPlan as previewLoadPlanGenerated } from "@/shared/api/genera
 import type { LoadPlanResponse, Placement, TruckSpecReferenceResponse } from "@/shared/api/generated/schemas";
 import { confirmLoading, confirmUnloading, startDriving } from "@/shared/lib/mock-flow";
 import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
+import { getApiBaseUrl } from "@/shared/lib/config/env";
 import {
   API_ERROR_CODE,
   DRIVER_CTA_ID,
@@ -37,6 +39,7 @@ import {
   getDriverUiStateFromStatusPayload,
   type DriverUiState,
 } from "@/shared/lib/policy";
+import { tokenStorage } from "@/shared/lib/storage/tokenStorage";
 import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppButton } from "@/shared/ui/kit/AppButton";
@@ -95,6 +98,25 @@ function resolveWorkflowStepIndex(uiState: DriverUiState): number {
 function toPositiveInt(value: unknown): number {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function toPhotoTypeToken(value: unknown): "PICKUP" | "DELIVERY" | "" {
+  const token = String(value ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "_")
+    .replace(/-/g, "_");
+  if (token === "PICKUP") return "PICKUP";
+  if (token === "DELIVERY") return "DELIVERY";
+  return "";
+}
+
+function toAbsolutePhotoUri(value: string): string {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (!raw.startsWith("/")) return raw;
+  return `${getApiBaseUrl().replace(/\/+$/, "")}${raw}`;
 }
 
 type AnyObject = Record<string, unknown>;
@@ -601,37 +623,85 @@ const WorkflowStepper = ({ currentStep }: { currentStep: number }) => {
   );
 };
 
-const PhotoThumb = ({ uri, index }: { uri: string; index: number }) => {
+const PhotoThumb = ({
+  uri,
+  index,
+  onPress,
+}: {
+  uri: string;
+  index: number;
+  onPress?: () => void;
+}) => {
   const theme = useAppTheme();
   const [failed, setFailed] = useState(false);
-  if (!failed && uri.startsWith("http")) {
+  const [accessToken, setAccessToken] = useState<string>("");
+  const [tokenResolved, setTokenResolved] = useState(false);
+  const resolvedUri = useMemo(() => toAbsolutePhotoUri(uri), [uri]);
+  const requiresAuth = useMemo(
+    () => resolvedUri.includes("/api/delivery-photos/"),
+    [resolvedUri]
+  );
+
+  useEffect(() => {
+    let mounted = true;
+    void tokenStorage.getAccessToken().then((token) => {
+      if (!mounted) return;
+      setAccessToken(typeof token === "string" ? token.trim() : "");
+      setTokenResolved(true);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [accessToken, resolvedUri]);
+
+  if (requiresAuth && !tokenResolved) {
     return (
-      <Image
-        source={{ uri }}
-        style={wfStyles.photoThumb}
-        resizeMode="cover"
-        onError={() => setFailed(true)}
-      />
+      <Pressable style={wfStyles.photoThumb} onPress={onPress} disabled={!onPress}>
+        <ActivityIndicator size="small" color={theme.colors.brandPrimary} />
+      </Pressable>
+    );
+  }
+
+  if (!failed && /^https?:\/\//i.test(resolvedUri)) {
+    return (
+      <Pressable onPress={onPress} disabled={!onPress}>
+        <Image
+          source={
+            accessToken
+              ? { uri: resolvedUri, headers: { Authorization: `Bearer ${accessToken}` } }
+              : { uri: resolvedUri }
+          }
+          style={wfStyles.photoThumb}
+          resizeMode="cover"
+          onError={() => setFailed(true)}
+        />
+      </Pressable>
     );
   }
   return (
-    <View style={wfStyles.photoThumb}>
+    <Pressable style={wfStyles.photoThumb} onPress={onPress} disabled={!onPress}>
       <Ionicons name="image-outline" size={20} color={theme.colors.brandPrimary} />
       <AppText variant="caption" color={theme.colors.textMuted}>
         #{index + 1}
       </AppText>
-    </View>
+    </Pressable>
   );
 };
 
 const PhotoGrid = ({
   photos,
   onAdd,
+  onPressPhoto,
   readOnly = false,
   isUploading = false,
 }: {
   photos: string[];
   onAdd?: () => void;
+  onPressPhoto?: (uri: string) => void;
   readOnly?: boolean;
   isUploading?: boolean;
 }) => {
@@ -639,7 +709,12 @@ const PhotoGrid = ({
   return (
     <View style={wfStyles.photoRow}>
       {photos.map((uri, idx) => (
-        <PhotoThumb key={`${uri}-${idx}`} uri={uri} index={idx} />
+        <PhotoThumb
+          key={`${uri}-${idx}`}
+          uri={uri}
+          index={idx}
+          onPress={typeof onPressPhoto === "function" ? () => onPressPhoto(uri) : undefined}
+        />
       ))}
       {!readOnly ? (
         <Pressable style={wfStyles.photoAddBtn} onPress={onAdd} disabled={isUploading}>
@@ -705,6 +780,27 @@ const wfStyles = {
     borderWidth: 1,
     borderColor: "#CBD5E1",
     borderStyle: "dashed" as const,
+  },
+  photoViewerBackdrop: {
+    flex: 1,
+    backgroundColor: "#000000D0",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
+  photoViewerImage: {
+    width: "100%" as const,
+    height: "82%" as const,
+  },
+  photoViewerClose: {
+    position: "absolute" as const,
+    top: 48,
+    right: 20,
+    padding: 10,
+  },
+  photoViewerCloseText: {
+    color: "#FFFFFF",
+    fontSize: 28,
+    fontWeight: "700" as const,
   },
 } as const;
 
@@ -1050,6 +1146,46 @@ function DriverOrderDetailContent({ params }: { params: DriverOrderRouteParams }
   const [offerErrorMessage, setOfferErrorMessage] = useState<string | null>(null);
   const [previewPlan, setPreviewPlan] = useState<LoadPlanResponse | null>(null);
   const [previewTruckSpec, setPreviewTruckSpec] = useState<TruckSpecReferenceResponse | null>(null);
+  const [selectedPhotoUri, setSelectedPhotoUri] = useState<string | null>(null);
+  const [viewerAccessToken, setViewerAccessToken] = useState<string>("");
+
+  useEffect(() => {
+    let mounted = true;
+    void tokenStorage.getAccessToken().then((token) => {
+      if (!mounted) return;
+      setViewerAccessToken(typeof token === "string" ? token.trim() : "");
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const syncDriverPhotos = useCallback(async () => {
+    if (matchId <= 0) return;
+    try {
+      const photos = await getDriverRunPhotos(matchId);
+      const nextLoading: string[] = [];
+      const nextUnloading: string[] = [];
+      photos.forEach((photo) => {
+        const uri = typeof photo?.fileUrl === "string" ? photo.fileUrl.trim() : "";
+        if (!uri) return;
+        const type = toPhotoTypeToken(photo?.type);
+        if (type === "PICKUP") {
+          nextLoading.push(uri);
+          return;
+        }
+        if (type === "DELIVERY") {
+          nextUnloading.push(uri);
+        }
+      });
+      if (nextLoading.length > 0 || nextUnloading.length > 0) {
+        setLoadingPhotos(nextLoading);
+        setUnloadingPhotos(nextUnloading);
+      }
+    } catch {
+      // Keep legacy photo fields when photo API fails.
+    }
+  }, [matchId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -1113,6 +1249,7 @@ function DriverOrderDetailContent({ params }: { params: DriverOrderRouteParams }
           setter((prev) => [...prev, ...uploadedUrls]);
           // Background sync so the server reflects the new photos
           void viewModel.refetch();
+          void syncDriverPhotos();
         }
       } catch {
         Alert.alert("업로드 실패", "이미지 업로드에 실패했습니다. 잠시 후 다시 시도해 주세요.");
@@ -1120,14 +1257,16 @@ function DriverOrderDetailContent({ params }: { params: DriverOrderRouteParams }
         setIsUploadingPhoto(false);
       }
     }
-  }, [matchId]);
+  }, [matchId, syncDriverPhotos, viewModel.refetch]);
 
   useEffect(() => {
     const match = (viewModel.match as MatchWithWorkflowPayload | null) ?? null;
     if (!match) return;
     setLoadingPhotos(Array.isArray(match.loadingPhotos) ? [...match.loadingPhotos] : []);
     setUnloadingPhotos(Array.isArray(match.unloadingPhotos) ? [...match.unloadingPhotos] : []);
+    void syncDriverPhotos();
   }, [
+    syncDriverPhotos,
     viewModel.match ? (viewModel.match as MatchWithWorkflowPayload).matchId : 0,
     viewModel.match ? (viewModel.match as MatchWithWorkflowPayload).updatedAt : "",
   ]);
@@ -1418,6 +1557,7 @@ function DriverOrderDetailContent({ params }: { params: DriverOrderRouteParams }
           <PhotoGrid
             photos={loadingPhotos}
             onAdd={() => void handleAddPhoto("PICKUP", setLoadingPhotos)}
+            onPressPhoto={(uri) => setSelectedPhotoUri(uri)}
             isUploading={isUploadingPhoto}
           />
         </AppCard>
@@ -1436,6 +1576,7 @@ function DriverOrderDetailContent({ params }: { params: DriverOrderRouteParams }
           <PhotoGrid
             photos={unloadingPhotos}
             onAdd={() => void handleAddPhoto("DELIVERY", setUnloadingPhotos)}
+            onPressPhoto={(uri) => setSelectedPhotoUri(uri)}
             isUploading={isUploadingPhoto}
           />
         </AppCard>
@@ -1452,11 +1593,19 @@ function DriverOrderDetailContent({ params }: { params: DriverOrderRouteParams }
           <AppText variant="body" weight="bold">
             상차 사진
           </AppText>
-          {loadingPhotos.length > 0 ? <PhotoGrid photos={loadingPhotos} readOnly /> : <AppText style={themedStyles.workflowBodyText}>사진 대기 중</AppText>}
+          {loadingPhotos.length > 0 ? (
+            <PhotoGrid photos={loadingPhotos} onPressPhoto={(uri) => setSelectedPhotoUri(uri)} readOnly />
+          ) : (
+            <AppText style={themedStyles.workflowBodyText}>사진 대기 중</AppText>
+          )}
           <AppText variant="body" weight="bold">
             하차 사진
           </AppText>
-          {unloadingPhotos.length > 0 ? <PhotoGrid photos={unloadingPhotos} readOnly /> : <AppText style={themedStyles.workflowBodyText}>사진 대기 중</AppText>}
+          {unloadingPhotos.length > 0 ? (
+            <PhotoGrid photos={unloadingPhotos} onPressPhoto={(uri) => setSelectedPhotoUri(uri)} readOnly />
+          ) : (
+            <AppText style={themedStyles.workflowBodyText}>사진 대기 중</AppText>
+          )}
         </AppCard>
       );
     }
@@ -1716,6 +1865,27 @@ function DriverOrderDetailContent({ params }: { params: DriverOrderRouteParams }
       }}
       onSubmit={handleOfferSubmit}
     />
+
+    <Modal
+      visible={selectedPhotoUri !== null}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setSelectedPhotoUri(null)}
+    >
+      <Pressable style={wfStyles.photoViewerBackdrop} onPress={() => setSelectedPhotoUri(null)}>
+        {selectedPhotoUri ? (() => {
+          const resolvedUri = toAbsolutePhotoUri(selectedPhotoUri);
+          const source =
+            viewerAccessToken && resolvedUri.includes("/api/delivery-photos/")
+              ? { uri: resolvedUri, headers: { Authorization: `Bearer ${viewerAccessToken}` } }
+              : { uri: resolvedUri };
+          return <Image source={source} style={wfStyles.photoViewerImage} resizeMode="contain" />;
+        })() : null}
+        <Pressable style={wfStyles.photoViewerClose} onPress={() => setSelectedPhotoUri(null)}>
+          <AppText style={wfStyles.photoViewerCloseText}>✕</AppText>
+        </Pressable>
+      </Pressable>
+    </Modal>
   </>
   );
 }
