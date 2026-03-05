@@ -63,6 +63,16 @@ type Props = {
   onRefetchRun?: () => Promise<void> | void;
 };
 
+type PhotoStopType = "PICKUP" | "DELIVERY";
+
+type RoutePhotoStop = {
+  key: string;
+  type: PhotoStopType;
+  stopOrder: number;
+  label: string;
+  address: string;
+};
+
 const KAKAO_MAP_WEB_URL = "https://map.kakao.com/";
 const IMAGE_PICKER_MISSING_MESSAGE = "이미지 선택 모듈(expo-image-picker)이 없어 사진 업로드를 사용할 수 없습니다.";
 const AUTO_GPS_SUBMIT_INTERVAL_MS = 60_000;
@@ -233,11 +243,35 @@ const useStyles = createThemedStyles((theme) => {
     photoSection: {
       gap: spacing * 2,
     },
+    photoStopCard: {
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: cBorder,
+      backgroundColor: cSurface,
+      padding: spacing * 2.5,
+      gap: spacing * 2,
+    },
     photoHeaderRow: {
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
       gap: spacing * 2,
+    },
+    photoStopHeaderTextWrap: {
+      flex: 1,
+      gap: spacing * 0.5,
+    },
+    photoStopLabel: {
+      color: cTextSub,
+      fontSize: safeNumber(theme?.typography?.scale?.caption?.size, 12) + 1,
+      lineHeight: safeNumber(theme?.typography?.scale?.caption?.lineHeight, 16) + 2,
+      fontWeight: "800",
+    },
+    photoStopAddress: {
+      color: cTextMuted,
+      fontSize: safeNumber(theme?.typography?.scale?.caption?.size, 12),
+      lineHeight: safeNumber(theme?.typography?.scale?.caption?.lineHeight, 16),
+      fontWeight: "600",
     },
     photoSectionTitle: {
       color: cTextSub,
@@ -389,6 +423,11 @@ function resolvePhotoUri(photo: DeliveryPhotoResponse): string {
 function resolvePhotoTypeLabel(type: DriverPhotoType): string {
   if (type === "PICKUP") return "상차";
   return "하차";
+}
+
+function resolveStopTypeLabel(type: PhotoStopType): string {
+  if (type === "PICKUP") return "상차지";
+  return "하차지";
 }
 
 function resolvePhotoGatePassed(
@@ -545,7 +584,7 @@ export function RunActiveDetails({
   const [isGpsSubmitting, setIsGpsSubmitting] = React.useState(false);
   const [photos, setPhotos] = React.useState<DeliveryPhotoResponse[]>([]);
   const [isPhotoSyncing, setIsPhotoSyncing] = React.useState(false);
-  const [uploadingPhotoType, setUploadingPhotoType] = React.useState<DriverPhotoType | null>(null);
+  const [uploadingPhotoKey, setUploadingPhotoKey] = React.useState<string | null>(null);
   const [isRouteMapVisible, setIsRouteMapVisible] = React.useState(true);
   const [lastGpsSendResult, setLastGpsSendResult] = React.useState<"success" | "failure" | null>(null);
   const [selectedPhotoUri, setSelectedPhotoUri] = React.useState<string | null>(null);
@@ -585,7 +624,7 @@ export function RunActiveDetails({
     isGpsSubmitting ||
     isLocationRequesting ||
     isPhotoSyncing ||
-    uploadingPhotoType !== null;
+    uploadingPhotoKey !== null;
   const trackingSharingUpdatedAtText = formatDateTime(activeRun.match.locationSharingUpdatedAt, "-");
 
   const loadRouteSummaries = React.useCallback(async () => {
@@ -678,6 +717,65 @@ export function RunActiveDetails({
     originAddress,
     routeSummaries,
   ]);
+  const photoStops = React.useMemo<RoutePhotoStop[]>(() => {
+    const sourceSummaries =
+      routeSummaries.length > 0
+        ? routeSummaries
+        : activeRun.summary
+          ? [activeRun.summary]
+          : [];
+
+    if (sourceSummaries.length <= 0) {
+      return [
+        {
+          key: "pickup-1",
+          type: "PICKUP",
+          stopOrder: 1,
+          label: "상차지 1",
+          address: originAddress,
+        },
+        {
+          key: "delivery-1",
+          type: "DELIVERY",
+          stopOrder: 1,
+          label: "하차지 1",
+          address: destinationAddress,
+        },
+      ];
+    }
+
+    const pickupStops: RoutePhotoStop[] = sourceSummaries.map((summary, index) => ({
+      key: `pickup-${index + 1}`,
+      type: "PICKUP",
+      stopOrder: index + 1,
+      label: `상차지 ${index + 1}`,
+      address: toText(summary.originAddress) || originAddress,
+    }));
+    const deliveryStops: RoutePhotoStop[] = sourceSummaries.map((summary, index) => ({
+      key: `delivery-${index + 1}`,
+      type: "DELIVERY",
+      stopOrder: index + 1,
+      label: `하차지 ${index + 1}`,
+      address: toText(summary.destinationAddress) || destinationAddress,
+    }));
+    return [...pickupStops, ...deliveryStops];
+  }, [activeRun.summary, destinationAddress, originAddress, routeSummaries]);
+  const pickupPhotoStops = React.useMemo(
+    () => photoStops.filter((stop) => stop.type === "PICKUP"),
+    [photoStops]
+  );
+  const deliveryPhotoStops = React.useMemo(
+    () => photoStops.filter((stop) => stop.type === "DELIVERY"),
+    [photoStops]
+  );
+  const pickupPhotosWithoutStop = React.useMemo(
+    () => pickupPhotos.filter((photo) => parsePositiveInt(photo.stopOrder) <= 0),
+    [pickupPhotos]
+  );
+  const deliveryPhotosWithoutStop = React.useMemo(
+    () => deliveryPhotos.filter((photo) => parsePositiveInt(photo.stopOrder) <= 0),
+    [deliveryPhotos]
+  );
   const hasRouteCoordinates = routeStops.length >= 2;
   const kakaoDirectionsLink = React.useMemo(
     () => buildKakaoDirectionsUrl(routeStops).url,
@@ -945,8 +1043,12 @@ export function RunActiveDetails({
     uiState,
   ]);
 
-  const handleUploadPhoto = async (type: DriverPhotoType) => {
-    if (safeMatchId <= 0 || uploadingPhotoType !== null) return;
+  const handleUploadPhoto = async (
+    type: DriverPhotoType,
+    stopOrder?: number,
+    stopLabel?: string
+  ) => {
+    if (safeMatchId <= 0 || uploadingPhotoKey !== null) return;
 
     const picker = loadImagePickerModule();
     if (!picker?.launchImageLibraryAsync || !picker?.requestMediaLibraryPermissionsAsync) {
@@ -974,10 +1076,13 @@ export function RunActiveDetails({
         return;
       }
 
-      setUploadingPhotoType(type);
+      const uploadKey = `${type}-${parsePositiveInt(stopOrder) || 0}`;
+      setUploadingPhotoKey(uploadKey);
       const uploaded = await uploadDriverRunPhoto(safeMatchId, {
         localUri: selectedUri,
         type,
+        ...(parsePositiveInt(stopOrder) > 0 ? { stopOrder: parsePositiveInt(stopOrder) } : {}),
+        ...(toText(stopLabel) ? { stopLabel: toText(stopLabel) } : {}),
       });
       if (!uploaded) {
         throw new Error("사진 업로드 응답이 비어 있습니다.");
@@ -994,15 +1099,22 @@ export function RunActiveDetails({
         matchId: safeMatchId,
         quoteId,
         type,
+        stopOrder: parsePositiveInt(stopOrder) || undefined,
+        stopLabel: toText(stopLabel) || undefined,
         photoId: uploaded.photoId,
       });
-      Alert.alert("사진 업로드", `${resolvePhotoTypeLabel(type)} 사진이 업로드되었습니다.`);
+      Alert.alert(
+        "사진 업로드",
+        `${resolvePhotoTypeLabel(type)} 사진이 업로드되었습니다.${toText(stopLabel) ? `\n지점: ${toText(stopLabel)}` : ""}`
+      );
     } catch (error) {
       const errorReason = readApiErrorMessage(error);
       logDriverRunEvent("uploadPhoto:failed", {
         matchId: safeMatchId,
         quoteId,
         type,
+        stopOrder: parsePositiveInt(stopOrder) || undefined,
+        stopLabel: toText(stopLabel) || undefined,
         reason: errorReason,
       });
 
@@ -1027,10 +1139,10 @@ export function RunActiveDetails({
 
       Alert.alert("사진 업로드 실패", message, [
         { text: "취소", style: "cancel" },
-        { text: "다시 시도", onPress: () => void handleUploadPhoto(type) },
+        { text: "다시 시도", onPress: () => void handleUploadPhoto(type, stopOrder, stopLabel) },
       ]);
     } finally {
-      setUploadingPhotoType(null);
+      setUploadingPhotoKey(null);
     }
   };
 
@@ -1190,81 +1302,169 @@ export function RunActiveDetails({
             <AppText style={styles.infoCardTitle}>운행 사진</AppText>
 
             <View style={styles.photoSection}>
-              <View style={styles.photoHeaderRow}>
-                <AppText style={styles.photoSectionTitle}>상차 사진</AppText>
-                <AppButton
-                  title="업로드"
-                  variant="secondary"
-                  onPress={() => void handleUploadPhoto("PICKUP")}
-                  disabled={safeMatchId <= 0 || isBusy || uploadingPhotoType !== null}
-                  loading={uploadingPhotoType === "PICKUP"}
-                  style={styles.photoUploadButton}
-                />
-              </View>
-              {pickupPhotos.length > 0 ? (
-                <View style={styles.photoThumbRow}>
-                  {pickupPhotos.map((photo, index) => {
-                    const uri = resolvePhotoUri(photo);
-                    const key = parsePositiveInt(photo.photoId) || index + 1;
-                    return (
-                      <Pressable
-                        key={`pickup-photo-${key}`}
-                        style={styles.photoThumb}
-                        onPress={() => uri ? setSelectedPhotoUri(uri) : null}
-                      >
-                        {uri ? <Image source={{ uri }} style={styles.photoThumbImage} resizeMode="cover" /> : null}
-                        <View style={styles.photoThumbMeta}>
-                          <AppText style={styles.photoThumbType}>상차</AppText>
-                          <AppText style={styles.photoThumbTime}>
-                            {formatDateTime(photo.takenAt ?? photo.createdAt, "-")}
-                          </AppText>
-                        </View>
-                      </Pressable>
-                    );
-                  })}
+              <AppText style={styles.photoSectionTitle}>상차 사진</AppText>
+              {pickupPhotoStops.map((stop) => {
+                const stopPhotos = pickupPhotos.filter(
+                  (photo) => parsePositiveInt(photo.stopOrder) === stop.stopOrder
+                );
+                const uploadKey = `PICKUP-${stop.stopOrder}`;
+                return (
+                  <View key={stop.key} style={styles.photoStopCard}>
+                    <View style={styles.photoHeaderRow}>
+                      <View style={styles.photoStopHeaderTextWrap}>
+                        <AppText style={styles.photoStopLabel}>{`${stop.label} · 순번 ${stop.stopOrder}`}</AppText>
+                        <AppText style={styles.photoStopAddress} numberOfLines={1}>
+                          {stop.address}
+                        </AppText>
+                      </View>
+                      <AppButton
+                        title="업로드"
+                        variant="secondary"
+                        onPress={() => void handleUploadPhoto("PICKUP", stop.stopOrder, stop.label)}
+                        disabled={safeMatchId <= 0 || isBusy || uploadingPhotoKey !== null}
+                        loading={uploadingPhotoKey === uploadKey}
+                        style={styles.photoUploadButton}
+                      />
+                    </View>
+                    {stopPhotos.length > 0 ? (
+                      <View style={styles.photoThumbRow}>
+                        {stopPhotos.map((photo, index) => {
+                          const uri = resolvePhotoUri(photo);
+                          const key = parsePositiveInt(photo.photoId) || index + 1;
+                          return (
+                            <Pressable
+                              key={`pickup-photo-${stop.stopOrder}-${key}`}
+                              style={styles.photoThumb}
+                              onPress={() => uri ? setSelectedPhotoUri(uri) : null}
+                            >
+                              {uri ? <Image source={{ uri }} style={styles.photoThumbImage} resizeMode="cover" /> : null}
+                              <View style={styles.photoThumbMeta}>
+                                <AppText style={styles.photoThumbType}>
+                                  {toText(photo.stopLabel) || `${resolveStopTypeLabel(stop.type)} ${stop.stopOrder}`}
+                                </AppText>
+                                <AppText style={styles.photoThumbTime}>
+                                  {formatDateTime(photo.takenAt ?? photo.createdAt, "-")}
+                                </AppText>
+                              </View>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    ) : (
+                      <AppText style={styles.photoEmpty}>이 지점에 등록된 상차 사진이 없습니다.</AppText>
+                    )}
+                  </View>
+                );
+              })}
+              {pickupPhotosWithoutStop.length > 0 ? (
+                <View style={styles.photoStopCard}>
+                  <AppText style={styles.photoStopLabel}>상차지 미지정 사진</AppText>
+                  <View style={styles.photoThumbRow}>
+                    {pickupPhotosWithoutStop.map((photo, index) => {
+                      const uri = resolvePhotoUri(photo);
+                      const key = parsePositiveInt(photo.photoId) || index + 1;
+                      return (
+                        <Pressable
+                          key={`pickup-photo-unassigned-${key}`}
+                          style={styles.photoThumb}
+                          onPress={() => uri ? setSelectedPhotoUri(uri) : null}
+                        >
+                          {uri ? <Image source={{ uri }} style={styles.photoThumbImage} resizeMode="cover" /> : null}
+                          <View style={styles.photoThumbMeta}>
+                            <AppText style={styles.photoThumbType}>상차지 미지정</AppText>
+                            <AppText style={styles.photoThumbTime}>
+                              {formatDateTime(photo.takenAt ?? photo.createdAt, "-")}
+                            </AppText>
+                          </View>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
                 </View>
-              ) : (
-                <AppText style={styles.photoEmpty}>등록된 상차 사진이 없습니다.</AppText>
-              )}
+              ) : null}
             </View>
 
             <View style={styles.photoSection}>
-              <View style={styles.photoHeaderRow}>
-                <AppText style={styles.photoSectionTitle}>하차 사진</AppText>
-                <AppButton
-                  title="업로드"
-                  variant="secondary"
-                  onPress={() => void handleUploadPhoto("DELIVERY")}
-                  disabled={safeMatchId <= 0 || isBusy || uploadingPhotoType !== null}
-                  loading={uploadingPhotoType === "DELIVERY"}
-                  style={styles.photoUploadButton}
-                />
-              </View>
-              {deliveryPhotos.length > 0 ? (
-                <View style={styles.photoThumbRow}>
-                  {deliveryPhotos.map((photo, index) => {
-                    const uri = resolvePhotoUri(photo);
-                    const key = parsePositiveInt(photo.photoId) || index + 1;
-                    return (
-                      <Pressable
-                        key={`delivery-photo-${key}`}
-                        style={styles.photoThumb}
-                        onPress={() => uri ? setSelectedPhotoUri(uri) : null}
-                      >
-                        {uri ? <Image source={{ uri }} style={styles.photoThumbImage} resizeMode="cover" /> : null}
-                        <View style={styles.photoThumbMeta}>
-                          <AppText style={styles.photoThumbType}>하차</AppText>
-                          <AppText style={styles.photoThumbTime}>
-                            {formatDateTime(photo.takenAt ?? photo.createdAt, "-")}
-                          </AppText>
-                        </View>
-                      </Pressable>
-                    );
-                  })}
+              <AppText style={styles.photoSectionTitle}>하차 사진</AppText>
+              {deliveryPhotoStops.map((stop) => {
+                const stopPhotos = deliveryPhotos.filter(
+                  (photo) => parsePositiveInt(photo.stopOrder) === stop.stopOrder
+                );
+                const uploadKey = `DELIVERY-${stop.stopOrder}`;
+                return (
+                  <View key={stop.key} style={styles.photoStopCard}>
+                    <View style={styles.photoHeaderRow}>
+                      <View style={styles.photoStopHeaderTextWrap}>
+                        <AppText style={styles.photoStopLabel}>{`${stop.label} · 순번 ${stop.stopOrder}`}</AppText>
+                        <AppText style={styles.photoStopAddress} numberOfLines={1}>
+                          {stop.address}
+                        </AppText>
+                      </View>
+                      <AppButton
+                        title="업로드"
+                        variant="secondary"
+                        onPress={() => void handleUploadPhoto("DELIVERY", stop.stopOrder, stop.label)}
+                        disabled={safeMatchId <= 0 || isBusy || uploadingPhotoKey !== null}
+                        loading={uploadingPhotoKey === uploadKey}
+                        style={styles.photoUploadButton}
+                      />
+                    </View>
+                    {stopPhotos.length > 0 ? (
+                      <View style={styles.photoThumbRow}>
+                        {stopPhotos.map((photo, index) => {
+                          const uri = resolvePhotoUri(photo);
+                          const key = parsePositiveInt(photo.photoId) || index + 1;
+                          return (
+                            <Pressable
+                              key={`delivery-photo-${stop.stopOrder}-${key}`}
+                              style={styles.photoThumb}
+                              onPress={() => uri ? setSelectedPhotoUri(uri) : null}
+                            >
+                              {uri ? <Image source={{ uri }} style={styles.photoThumbImage} resizeMode="cover" /> : null}
+                              <View style={styles.photoThumbMeta}>
+                                <AppText style={styles.photoThumbType}>
+                                  {toText(photo.stopLabel) || `${resolveStopTypeLabel(stop.type)} ${stop.stopOrder}`}
+                                </AppText>
+                                <AppText style={styles.photoThumbTime}>
+                                  {formatDateTime(photo.takenAt ?? photo.createdAt, "-")}
+                                </AppText>
+                              </View>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    ) : (
+                      <AppText style={styles.photoEmpty}>이 지점에 등록된 하차 사진이 없습니다.</AppText>
+                    )}
+                  </View>
+                );
+              })}
+              {deliveryPhotosWithoutStop.length > 0 ? (
+                <View style={styles.photoStopCard}>
+                  <AppText style={styles.photoStopLabel}>하차지 미지정 사진</AppText>
+                  <View style={styles.photoThumbRow}>
+                    {deliveryPhotosWithoutStop.map((photo, index) => {
+                      const uri = resolvePhotoUri(photo);
+                      const key = parsePositiveInt(photo.photoId) || index + 1;
+                      return (
+                        <Pressable
+                          key={`delivery-photo-unassigned-${key}`}
+                          style={styles.photoThumb}
+                          onPress={() => uri ? setSelectedPhotoUri(uri) : null}
+                        >
+                          {uri ? <Image source={{ uri }} style={styles.photoThumbImage} resizeMode="cover" /> : null}
+                          <View style={styles.photoThumbMeta}>
+                            <AppText style={styles.photoThumbType}>하차지 미지정</AppText>
+                            <AppText style={styles.photoThumbTime}>
+                              {formatDateTime(photo.takenAt ?? photo.createdAt, "-")}
+                            </AppText>
+                          </View>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
                 </View>
-              ) : (
-                <AppText style={styles.photoEmpty}>등록된 하차 사진이 없습니다.</AppText>
-              )}
+              ) : null}
             </View>
           </AppCard>
         </ScrollView>

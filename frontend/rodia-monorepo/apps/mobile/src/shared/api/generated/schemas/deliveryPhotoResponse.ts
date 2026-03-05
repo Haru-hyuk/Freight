@@ -16,5 +16,7 @@ export interface DeliveryPhotoResponse {
   lng?: number;
   fileSize?: number;
   mimeType?: string;
+  stopOrder?: number;
+  stopLabel?: string;
   createdAt?: string;
 }

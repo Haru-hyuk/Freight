@@ -51,7 +51,7 @@ public class DeliveryPhotoService {
     @Value("${delivery-photo.storage-dir:uploads/delivery-photos}")
     private String storageDir;
 
-    /** 상하차 사진 업로드 (PICKUP: 운송시작, DELIVERY: 운송완료 트리거) */
+    /** 상하차 사진 업로드 (PICKUP: 운송시작 트리거, DELIVERY: 증빙만 저장) */
     @Transactional
     public DeliveryPhotoResponse uploadByDriver(
             Long driverId,
@@ -60,9 +60,14 @@ public class DeliveryPhotoService {
             MultipartFile file,
             LocalDateTime takenAt,
             BigDecimal lat,
-            BigDecimal lng
+            BigDecimal lng,
+            Integer stopOrder,
+            String stopLabel
     ) {
         if (type == null || file == null || file.isEmpty()) {
+            throw new CustomException(ErrorCode.INVALID_REQUEST);
+        }
+        if (stopOrder != null && stopOrder < 1) {
             throw new CustomException(ErrorCode.INVALID_REQUEST);
         }
         String mimeType = file.getContentType();
@@ -95,6 +100,8 @@ public class DeliveryPhotoService {
                 .lng(lng)
                 .fileSize(file.getSize())
                 .mimeType(mimeType)
+                .stopOrder(stopOrder)
+                .stopLabel(normalizeStopLabel(stopLabel))
                 .build();
         DeliveryPhoto saved = deliveryPhotoRepository.save(photo);
         saved.updateFileUrl("/api/delivery-photos/" + saved.getPhotoId() + "/file");
@@ -179,10 +186,6 @@ public class DeliveryPhotoService {
                 throw new CustomException(ErrorCode.MATCH_PAYMENT_REQUIRED);
             }
             match.startTransit();
-            return;
-        }
-        if (type == DeliveryPhoto.Type.DELIVERY && match.getStatus() == Match.Status.IN_TRANSIT) {
-            match.complete();
         }
     }
 
@@ -259,5 +262,19 @@ public class DeliveryPhotoService {
             return ".webp";
         }
         return ".jpg";
+    }
+
+    private String normalizeStopLabel(String stopLabel) {
+        if (stopLabel == null) {
+            return null;
+        }
+        String trimmed = stopLabel.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        if (trimmed.length() > 255) {
+            return trimmed.substring(0, 255);
+        }
+        return trimmed;
     }
 }

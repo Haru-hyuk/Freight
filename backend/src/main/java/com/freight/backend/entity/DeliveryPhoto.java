@@ -66,6 +66,12 @@ public class DeliveryPhoto {
     @Column(name = "mime_type", length = 100)
     private String mimeType;
 
+    @Column(name = "stop_order")
+    private Integer stopOrder;
+
+    @Column(name = "stop_label", length = 255)
+    private String stopLabel;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 

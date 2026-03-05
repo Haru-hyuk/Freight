@@ -11,4 +11,6 @@ type: UploadDriverPhotoType;
 takenAt?: string;
 lat?: number;
 lng?: number;
+stopOrder?: number;
+stopLabel?: string;
 };
