@@ -90,6 +90,9 @@ type ReviewOverride = Pick<CancellationRequestRow, "approvalStatus" | "reviewedA
 const REVIEWER_ID = "admin.web";
 const DERIVED_REASON_TEXT = "백엔드 취소 사유 필드가 없어 상태 기반으로 생성된 요청입니다.";
 const liveReviewOverrides = new Map<string, ReviewOverride>();
+const DEFAULT_ADMIN_ORDER_CANCELLATION_REQUESTS_PATH = "/api/admin/orders/cancellations";
+const DEFAULT_ADMIN_SHIPPERS_PATH = "/api/admin/users/shippers";
+const DEFAULT_ADMIN_DRIVERS_PATH = "/api/admin/users/drivers";
 
 function toRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
@@ -487,12 +490,17 @@ async function fetchAdminUsersByRole(role: "SHIPPER" | "DRIVER"): Promise<Map<nu
       params: { role, page: 1, size: 500 },
     });
     ingest(response.data);
-    if (users.size > 0) return users;
+    return users;
   } catch {
     // fallback to legacy split endpoints
   }
 
   const legacyPath = role === "SHIPPER" ? apiPaths.adminShippers : apiPaths.adminDrivers;
+  const defaultLegacyPath = role === "SHIPPER" ? DEFAULT_ADMIN_SHIPPERS_PATH : DEFAULT_ADMIN_DRIVERS_PATH;
+  if (legacyPath === defaultLegacyPath) {
+    return users;
+  }
+
   try {
     const response = await apiClient.get<unknown>(legacyPath);
     ingest(response.data);
@@ -517,6 +525,10 @@ function pickLatestByTimestamp<T>(values: T[], getKey: (value: T) => number | nu
 }
 
 async function fetchRemoteCancellationRequests(): Promise<CancellationRequestRow[] | null> {
+  if (apiPaths.adminOrderCancellationRequests === DEFAULT_ADMIN_ORDER_CANCELLATION_REQUESTS_PATH) {
+    return null;
+  }
+
   try {
     const response = await apiClient.get<unknown>(apiPaths.adminOrderCancellationRequests);
     return pickListPayload(response.data)
@@ -528,8 +540,10 @@ async function fetchRemoteCancellationRequests(): Promise<CancellationRequestRow
 }
 
 async function fetchDerivedCancellationRequests(): Promise<CancellationRequestRow[]> {
-  const [quotes, matches, shippers, drivers] = await Promise.all([
-    fetchAdminQuotes(),
+  const quotes = await fetchAdminQuotes();
+  if (quotes.length === 0) return [];
+
+  const [matches, shippers, drivers] = await Promise.all([
     fetchAdminMatches(),
     fetchAdminUsersByRole("SHIPPER"),
     fetchAdminUsersByRole("DRIVER"),
@@ -896,7 +910,5 @@ export async function fetchOrderMonitoringSnapshot(): Promise<OrderMonitoringSna
     summary: buildMonitoringSummary(rows),
   };
 }
-
-
 
 

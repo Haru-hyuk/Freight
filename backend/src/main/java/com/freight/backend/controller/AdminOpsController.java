@@ -28,7 +28,7 @@ public class AdminOpsController {
     @GetMapping("/dashboard")
     public ResponseEntity<Map<String, Object>> dashboard(
             @AuthenticationPrincipal UserDetails userDetails,
-            @RequestParam(required = false, defaultValue = "7d") String range
+            @RequestParam(name = "range", required = false, defaultValue = "7d") String range
     ) {
         requireAdmin(userDetails);
         return ResponseEntity.ok(adminOpsService.getDashboard(range));
@@ -37,11 +37,11 @@ public class AdminOpsController {
     @GetMapping("/users")
     public ResponseEntity<Map<String, Object>> users(
             @AuthenticationPrincipal UserDetails userDetails,
-            @RequestParam(required = false) String role,
-            @RequestParam(required = false) String status,
-            @RequestParam(required = false) String q,
-            @RequestParam(required = false) Integer page,
-            @RequestParam(required = false) Integer size
+            @RequestParam(name = "role", required = false) String role,
+            @RequestParam(name = "status", required = false) String status,
+            @RequestParam(name = "q", required = false) String q,
+            @RequestParam(name = "page", required = false) Integer page,
+            @RequestParam(name = "size", required = false) Integer size
     ) {
         requireAdmin(userDetails);
         return ResponseEntity.ok(adminOpsService.getUsers(role, status, q, page, size));

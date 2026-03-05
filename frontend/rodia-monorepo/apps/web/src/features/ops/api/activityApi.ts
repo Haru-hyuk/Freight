@@ -17,6 +17,8 @@ type BackendNotification = {
   createdAt: string | null;
 };
 
+const LEGACY_ADMIN_ACTIVITY_PATH = "/api/admin/ops/activity-logs";
+
 function toRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
 }
@@ -71,13 +73,15 @@ export async function fetchRemoteActivityLogs(): Promise<AdminActivityLog[]> {
     return [];
   }
 
-  try {
-    const response = await apiClient.get<BackendActivityPayload | unknown[]>(apiPaths.adminActivityLogs);
-    const payload = response.data;
-    const items = Array.isArray(payload) ? payload : Array.isArray(payload.items) ? payload.items : [];
-    return items.map(mapLiveActivity);
-  } catch {
-    // fallback below
+  if (apiPaths.adminActivityLogs !== LEGACY_ADMIN_ACTIVITY_PATH) {
+    try {
+      const response = await apiClient.get<BackendActivityPayload | unknown[]>(apiPaths.adminActivityLogs);
+      const payload = response.data;
+      const items = Array.isArray(payload) ? payload : Array.isArray(payload.items) ? payload.items : [];
+      return items.map(mapLiveActivity);
+    } catch {
+      // fallback below
+    }
   }
 
   try {

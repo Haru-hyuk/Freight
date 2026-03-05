@@ -128,6 +128,8 @@ type BackendMatch = {
   updatedAt: string | null;
 };
 
+const DEFAULT_ADMIN_DEVIATIONS_PATH = "/api/admin/ops/deviations";
+
 const SOURCE_PRIORITY: Record<DeviationSource, number> = {
   [DeviationSource.ADMIN]: 4,
   [DeviationSource.MATCH]: 3,
@@ -656,12 +658,38 @@ function mergeMatchSnapshots(rows: BackendMatch[]): BackendMatch[] {
 }
 
 async function fetchAdminDeviationRows(): Promise<Deviation[]> {
+  const rows: Deviation[] = [];
+
   try {
-    const response = await apiClient.get<unknown>(apiPaths.adminDeviations);
-    return pickListPayload(response.data).map(mapAdminDeviation);
+    const dashboardResponse = await apiClient.get<unknown>("/api/admin/dashboard");
+    const dashboard = toRecord(dashboardResponse.data);
+    const dashboardRows = pickListPayload(dashboard.deviations ?? dashboard.deviationEvents).map(mapAdminDeviation);
+    rows.push(...dashboardRows);
   } catch {
-    return [];
+    // fallback to dedicated endpoint handling below
   }
+
+  // Legacy default path is not implemented on current backend.
+  // Keep request only when user explicitly overrides it via env.
+  if (apiPaths.adminDeviations !== DEFAULT_ADMIN_DEVIATIONS_PATH) {
+    try {
+      const response = await apiClient.get<unknown>(apiPaths.adminDeviations);
+      rows.push(...pickListPayload(response.data).map(mapAdminDeviation));
+    } catch {
+      // ignore and keep already collected rows
+    }
+  }
+
+  if (rows.length <= 1) return rows;
+
+  const dedup = new Map<string, Deviation>();
+  for (const row of rows) {
+    const current = dedup.get(row.id);
+    if (!current || toTimestamp(row.updatedAt) >= toTimestamp(current.updatedAt)) {
+      dedup.set(row.id, row);
+    }
+  }
+  return Array.from(dedup.values());
 }
 
 async function fetchNotifications(): Promise<BackendNotification[]> {

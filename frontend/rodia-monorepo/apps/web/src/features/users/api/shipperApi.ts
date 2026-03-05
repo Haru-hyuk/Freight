@@ -65,7 +65,7 @@ export type ShipmentLog = {
   destination: string;
   weightKg: number;
   price: number;
-  status: "대기" | "진행중" | "완료" | "취소" | string;
+  status: "READY" | "IN_TRANSIT" | "COMPLETED" | "CANCELLED" | string;
   scheduledAt: string;
   completedAt?: string;
   distance: number;
@@ -86,6 +86,7 @@ type BackendMatch = {
 
 type BackendQuote = {
   quoteId: number | null;
+  shipperId: number | null;
   originAddress: string;
   destinationAddress: string;
   distanceKm: number | null;
@@ -113,7 +114,7 @@ type BackendNotification = {
 };
 
 const MOCK_GRADES = [ShipperGrade.PLATINUM, ShipperGrade.GOLD, ShipperGrade.SILVER, ShipperGrade.BRONZE] as const;
-const MOCK_SHIPMENT_STATUS: ReadonlyArray<ShipmentLog["status"]> = ["완료", "완료", "진행중", "대기", "취소"];
+const MOCK_SHIPMENT_STATUS: ReadonlyArray<ShipmentLog["status"]> = ["COMPLETED", "COMPLETED", "IN_TRANSIT", "READY", "CANCELLED"];
 const liveStatusOverrides = new Map<string, ShipperStatus>();
 
 const ALL_SHIPPERS: Shipper[] = Array.from({ length: 100 }, (_, index) => {
@@ -214,45 +215,41 @@ function toDateText(value: string | null | undefined): string {
   return new Date(parsed).toISOString().slice(0, 16).replace("T", " ");
 }
 
-function resolveSettlementMePath(basePath: string): string {
-  const base = basePath.replace(/\/$/, "");
-  return base.endsWith("/me") ? base : `${base}/me`;
-}
-
 function mapBackendMatch(raw: unknown): BackendMatch {
   const row = toRecord(raw);
   return {
-    matchId: toOptionalNumberValue(row.matchId ?? row.id) ?? null,
-    quoteId: toOptionalNumberValue(row.quoteId) ?? null,
-    driverId: toOptionalNumberValue(row.driverId) ?? null,
+    matchId: toOptionalNumberValue(row.matchId ?? row.match_id ?? row.id) ?? null,
+    quoteId: toOptionalNumberValue(row.quoteId ?? row.quote_id) ?? null,
+    driverId: toOptionalNumberValue(row.driverId ?? row.driver_id) ?? null,
     status: toStringValue(row.status, "READY"),
-    createdAt: toStringValue(row.createdAt, "") || null,
-    updatedAt: toStringValue(row.updatedAt, "") || null,
+    createdAt: toStringValue(row.createdAt ?? row.created_at, "") || null,
+    updatedAt: toStringValue(row.updatedAt ?? row.updated_at, "") || null,
   };
 }
 
 function mapBackendQuote(raw: unknown): BackendQuote {
   const row = toRecord(raw);
   return {
-    quoteId: toOptionalNumberValue(row.quoteId ?? row.id) ?? null,
-    originAddress: toStringValue(row.originAddress, "-"),
-    destinationAddress: toStringValue(row.destinationAddress, "-"),
-    distanceKm: toOptionalNumberValue(row.distanceKm) ?? null,
-    desiredPrice: toOptionalNumberValue(row.desiredPrice) ?? null,
-    finalPrice: toOptionalNumberValue(row.finalPrice) ?? null,
+    quoteId: toOptionalNumberValue(row.quoteId ?? row.quote_id ?? row.id) ?? null,
+    shipperId: toOptionalNumberValue(row.shipperId ?? row.shipper_id) ?? null,
+    originAddress: toStringValue(row.originAddress ?? row.origin_address, "-"),
+    destinationAddress: toStringValue(row.destinationAddress ?? row.destination_address, "-"),
+    distanceKm: toOptionalNumberValue(row.distanceKm ?? row.distance_km) ?? null,
+    desiredPrice: toOptionalNumberValue(row.desiredPrice ?? row.desired_price) ?? null,
+    finalPrice: toOptionalNumberValue(row.finalPrice ?? row.final_price) ?? null,
   };
 }
 
 function mapBackendSettlement(raw: unknown): BackendSettlement {
   const row = toRecord(raw);
   return {
-    settlementId: toOptionalNumberValue(row.settlementId ?? row.id) ?? null,
-    matchId: toOptionalNumberValue(row.matchId) ?? null,
-    shipperId: toOptionalNumberValue(row.shipperId) ?? null,
-    totalFare: toOptionalNumberValue(row.totalFare) ?? null,
-    settlementStatus: toStringValue(row.settlementStatus, "") || null,
-    completedAt: toStringValue(row.completedAt, "") || null,
-    createdAt: toStringValue(row.createdAt, "") || null,
+    settlementId: toOptionalNumberValue(row.settlementId ?? row.settlement_id ?? row.id) ?? null,
+    matchId: toOptionalNumberValue(row.matchId ?? row.match_id) ?? null,
+    shipperId: toOptionalNumberValue(row.shipperId ?? row.shipper_id) ?? null,
+    totalFare: toOptionalNumberValue(row.totalFare ?? row.total_fare) ?? null,
+    settlementStatus: toStringValue(row.settlementStatus ?? row.settlement_status, "") || null,
+    completedAt: toStringValue(row.completedAt ?? row.completed_at, "") || null,
+    createdAt: toStringValue(row.createdAt ?? row.created_at, "") || null,
   };
 }
 
@@ -301,7 +298,7 @@ function matchesShipperId(rowId: string, targetId: string): boolean {
 
 async function fetchMatches(): Promise<BackendMatch[]> {
   try {
-    const response = await apiClient.get<unknown>(apiPaths.shipperMatchesMe);
+    const response = await apiClient.get<unknown>(apiPaths.adminTransportMatches);
     return pickListPayload(response.data).map(mapBackendMatch);
   } catch {
     return [];
@@ -310,7 +307,7 @@ async function fetchMatches(): Promise<BackendMatch[]> {
 
 async function fetchQuotes(): Promise<BackendQuote[]> {
   try {
-    const response = await apiClient.get<unknown>(apiPaths.shipperQuotes);
+    const response = await apiClient.get<unknown>(apiPaths.adminTransportQuotes);
     return pickListPayload(response.data).map(mapBackendQuote);
   } catch {
     return [];
@@ -319,7 +316,7 @@ async function fetchQuotes(): Promise<BackendQuote[]> {
 
 async function fetchSettlements(): Promise<BackendSettlement[]> {
   try {
-    const response = await apiClient.get<unknown>(resolveSettlementMePath(apiPaths.shipperSettlements));
+    const response = await apiClient.get<unknown>(apiPaths.adminTransportSettlements);
     return pickListPayload(response.data).map(mapBackendSettlement);
   } catch {
     return [];
@@ -341,13 +338,15 @@ function deriveLiveShippers(
   matches: BackendMatch[],
   quotes: BackendQuote[],
   settlements: BackendSettlement[],
-  notifications: BackendNotification[],
 ): Shipper[] {
   const shipperIds = new Set<string>();
   for (const settlement of settlements) {
     if (typeof settlement.shipperId === "number") shipperIds.add(`S-${settlement.shipperId}`);
   }
-  if (shipperIds.size === 0) shipperIds.add("S-ME");
+  for (const quote of quotes) {
+    if (typeof quote.shipperId === "number") shipperIds.add(`S-${quote.shipperId}`);
+  }
+  if (shipperIds.size === 0) return [];
 
   const quoteById = new Map<number, BackendQuote>();
   for (const quote of quotes) {
@@ -360,33 +359,35 @@ function deriveLiveShippers(
   }
 
   const delayMatchIds = new Set<number>();
-  for (const notification of notifications) {
-    if (typeof notification.matchId !== "number") continue;
-    const text = `${notification.type ?? ""} ${notification.message}`.toLowerCase();
-    if (/(delay|late|지연)/i.test(text)) delayMatchIds.add(notification.matchId);
-  }
 
   const rows = Array.from(shipperIds).map((shipperId) => {
     const relevantMatches = matches.filter((match) => {
-      if (shipperId === "S-ME") return true;
-      if (typeof match.matchId !== "number") return false;
-      const settlement = settlementByMatchId.get(match.matchId);
-      return settlement?.shipperId ? `S-${settlement.shipperId}` === shipperId : false;
+      if (typeof match.matchId === "number") {
+        const settlement = settlementByMatchId.get(match.matchId);
+        if (settlement?.shipperId) return `S-${settlement.shipperId}` === shipperId;
+      }
+      if (typeof match.quoteId === "number") {
+        const quote = quoteById.get(match.quoteId);
+        if (quote?.shipperId) return `S-${quote.shipperId}` === shipperId;
+      }
+      return false;
     });
 
     const totalShipments = relevantMatches.length;
     const completedShipments = relevantMatches.filter((match) => normalizeMatchStatus(match.status) === "COMPLETED").length;
 
     const totalSpentFromSettlements = settlements
-      .filter((settlement) => (shipperId === "S-ME" ? true : settlement.shipperId !== null && `S-${settlement.shipperId}` === shipperId))
+      .filter((settlement) => settlement.shipperId !== null && `S-${settlement.shipperId}` === shipperId)
       .reduce((sum, settlement) => sum + (settlement.totalFare ?? 0), 0);
 
-    const totalSpentFromQuotes = quotes.reduce((sum, quote) => sum + (quote.finalPrice ?? quote.desiredPrice ?? 0), 0);
+    const totalSpentFromQuotes = quotes
+      .filter((quote) => quote.shipperId !== null && `S-${quote.shipperId}` === shipperId)
+      .reduce((sum, quote) => sum + (quote.finalPrice ?? quote.desiredPrice ?? 0), 0);
     const totalSpent = totalSpentFromSettlements > 0 ? totalSpentFromSettlements : totalSpentFromQuotes;
     const delayRate = totalShipments > 0 ? delayMatchIds.size / totalShipments : 0;
 
     const outstandingAmount = settlements
-      .filter((settlement) => (shipperId === "S-ME" ? true : settlement.shipperId !== null && `S-${settlement.shipperId}` === shipperId))
+      .filter((settlement) => settlement.shipperId !== null && `S-${settlement.shipperId}` === shipperId)
       .filter((settlement) => (settlement.settlementStatus ?? "").toUpperCase() !== "COMPLETED")
       .reduce((sum, settlement) => sum + (settlement.totalFare ?? 0), 0);
 
@@ -402,12 +403,12 @@ function deriveLiveShippers(
 
     return {
       id: shipperId,
-      name: shipperId === "S-ME" ? "화주 계정" : `화주-${shipperId.replace("S-", "")}`,
+      name: "Shipper-" + shipperId.replace("S-", ""),
       type: "COMPANY",
       phone: "-",
       email: "-",
       address: "-",
-      registeredAt: settlements[0]?.createdAt ?? quotes[0] ? new Date().toISOString() : new Date().toISOString(),
+      registeredAt: settlements[0]?.createdAt ?? new Date().toISOString(),
       status,
       grade: scoreToGrade(totalSpent),
       creditScore,
@@ -420,7 +421,7 @@ function deriveLiveShippers(
       },
       outstandingAmount,
       lastShipmentAt: Number.isFinite(latestMatchedAt) ? new Date(latestMatchedAt).toISOString() : undefined,
-      notes: outstandingAmount > 0 ? "미정산 금액 확인 필요" : undefined,
+      notes: outstandingAmount > 0 ? "Outstanding amount needs review" : undefined,
     } satisfies Shipper;
   });
 
@@ -428,14 +429,13 @@ function deriveLiveShippers(
 }
 
 async function fetchLiveShippers(filter: ShipperFilter): Promise<ShipperResponse> {
-  const [matches, quotes, settlements, notifications] = await Promise.all([
+  const [matches, quotes, settlements] = await Promise.all([
     fetchMatches(),
     fetchQuotes(),
     fetchSettlements(),
-    fetchNotifications(),
   ]);
 
-  const rows = deriveLiveShippers(matches, quotes, settlements, notifications);
+  const rows = deriveLiveShippers(matches, quotes, settlements);
   const page = filter.page ?? 1;
   const size = filter.size ?? 20;
   const filtered = applyShipperFilters(rows, filter);
@@ -456,7 +456,7 @@ function buildMockShipmentLogs(shipperId: string, totalShipments: number): Shipm
   return Array.from({ length: base }, (_, index) => {
     const status = MOCK_SHIPMENT_STATUS[index % MOCK_SHIPMENT_STATUS.length];
     const scheduledAt = new Date(Date.now() - (index + 1) * 86400000).toISOString();
-    const completedAt = status === "완료" ? new Date(Date.parse(scheduledAt) + 2 * 3600000).toISOString() : undefined;
+    const completedAt = status === "COMPLETED" ? new Date(Date.parse(scheduledAt) + 2 * 3600000).toISOString() : undefined;
 
     return {
       id: `${shipperId}-shipment-${index + 1}`,
@@ -472,9 +472,9 @@ function buildMockShipmentLogs(shipperId: string, totalShipments: number): Shipm
       completedAt,
       distance: 15 + (index % 120),
       duration: 40 + (index % 180),
-      actualDuration: status === "완료" ? 35 + (index % 200) : undefined,
-      rating: status === "완료" ? 4 + (index % 10) * 0.1 : undefined,
-      review: status === "완료" ? "Delivery completed safely." : undefined,
+      actualDuration: status === "COMPLETED" ? 35 + (index % 200) : undefined,
+      rating: status === "COMPLETED" ? 4 + (index % 10) * 0.1 : undefined,
+      review: status === "COMPLETED" ? "Delivery completed safely." : undefined,
     };
   });
 }
@@ -544,10 +544,10 @@ export async function fetchShipperCreditAnalysis(shipperId: string): Promise<{
 
 function toShipmentStatus(status: string): ShipmentLog["status"] {
   const normalized = normalizeMatchStatus(status);
-  if (normalized === "IN_TRANSIT") return "진행중";
-  if (normalized === "COMPLETED") return "완료";
-  if (normalized === "CANCELLED") return "취소";
-  return "대기";
+  if (normalized === "IN_TRANSIT") return "IN_TRANSIT";
+  if (normalized === "COMPLETED") return "COMPLETED";
+  if (normalized === "CANCELLED") return "CANCELLED";
+  return "READY";
 }
 
 export async function fetchShipperShipments(shipperId: string): Promise<ShipmentLog[]> {
@@ -573,15 +573,15 @@ export async function fetchShipperShipments(shipperId: string): Promise<Shipment
         const settlement = typeof match.matchId === "number" ? settlementByMatchId.get(match.matchId) : undefined;
         const status = toShipmentStatus(match.status);
         const scheduledAt = toDateText(match.createdAt);
-        const completedAt = status === "완료" ? toDateText(settlement?.completedAt ?? match.updatedAt) : undefined;
+        const completedAt = status === "COMPLETED" ? toDateText(settlement?.completedAt ?? match.updatedAt) : undefined;
         const distance = quote?.distanceKm ?? 0;
-        const duration = status === "완료" ? 120 : 0;
+        const duration = status === "COMPLETED" ? 120 : 0;
 
         return {
           id: `shipment-${match.matchId}`,
           quoteId: typeof match.quoteId === "number" ? `Q-${match.quoteId}` : "-",
           driverId: typeof match.driverId === "number" ? `D-${match.driverId}` : "-",
-          driverName: typeof match.driverId === "number" ? `기사-${match.driverId}` : "미배정",
+          driverName: typeof match.driverId === "number" ? `Driver-${match.driverId}` : "Unassigned",
           origin: quote?.originAddress ?? "-",
           destination: quote?.destinationAddress ?? "-",
           weightKg: 0,
@@ -591,9 +591,9 @@ export async function fetchShipperShipments(shipperId: string): Promise<Shipment
           completedAt,
           distance,
           duration,
-          actualDuration: status === "완료" ? duration : undefined,
-          rating: status === "완료" ? Number((4 + (distance % 10) * 0.05).toFixed(1)) : undefined,
-          review: status === "완료" ? "정상 배송 완료" : undefined,
+          actualDuration: status === "COMPLETED" ? duration : undefined,
+          rating: status === "COMPLETED" ? Number((4 + (distance % 10) * 0.05).toFixed(1)) : undefined,
+          review: status === "COMPLETED" ? "Delivery completed successfully" : undefined,
         } satisfies ShipmentLog;
       })
       .sort((a, b) => Date.parse(b.scheduledAt) - Date.parse(a.scheduledAt));
@@ -603,3 +603,4 @@ export async function fetchShipperShipments(shipperId: string): Promise<Shipment
   if (!shipper) return [];
   return buildMockShipmentLogs(shipperId, shipper.stats.totalShipments);
 }
+

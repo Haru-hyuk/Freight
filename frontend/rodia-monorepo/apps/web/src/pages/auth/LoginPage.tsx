@@ -25,7 +25,7 @@ export default function LoginPage() {
   const state = (location.state ?? {}) as LocationState;
 
   const [email, setEmail] = React.useState("admin@test.com");
-  const [password, setPassword] = React.useState("123456");
+  const [password, setPassword] = React.useState("admin");
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 

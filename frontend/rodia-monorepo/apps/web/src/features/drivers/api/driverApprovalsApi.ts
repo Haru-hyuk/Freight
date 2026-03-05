@@ -77,18 +77,18 @@ function parseDriverId(input: string): number | null {
 function mapBackendTruck(raw: unknown): BackendTruck {
   const row = toRecord(raw);
   return {
-    truckId: toNumberValue(row.truckId ?? row.id),
-    driverId: toNumberValue(row.driverId),
-    vehicleType: toStringValue(row.vehicleType, "") || null,
-    vehicleBodyType: toStringValue(row.vehicleBodyType, "") || null,
+    truckId: toNumberValue(row.truckId ?? row.truck_id ?? row.id),
+    driverId: toNumberValue(row.driverId ?? row.driver_id),
+    vehicleType: toStringValue(row.vehicleType ?? row.vehicle_type, "") || null,
+    vehicleBodyType: toStringValue(row.vehicleBodyType ?? row.vehicle_body_type, "") || null,
     name: toStringValue(row.name, "") || null,
     approved: typeof row.approved === "boolean" ? row.approved : null,
     insurance: toStringValue(row.insurance, "") || null,
     tonnage: toNumberValue(row.tonnage),
-    maxWeight: toNumberValue(row.maxWeight),
-    maxVolume: toNumberValue(row.maxVolume),
-    createdAt: toStringValue(row.createdAt, "") || null,
-    updatedAt: toStringValue(row.updatedAt, "") || null,
+    maxWeight: toNumberValue(row.maxWeight ?? row.max_weight),
+    maxVolume: toNumberValue(row.maxVolume ?? row.max_volume),
+    createdAt: toStringValue(row.createdAt ?? row.created_at, "") || null,
+    updatedAt: toStringValue(row.updatedAt ?? row.updated_at, "") || null,
   };
 }
 
@@ -164,7 +164,7 @@ function deriveRowsFromTrucks(trucks: BackendTruck[]): DriverApprovalRow[] {
 
 async function fetchBackendTrucks(): Promise<BackendTruck[]> {
   try {
-    const response = await apiClient.get<unknown>(apiPaths.driverTrucks);
+    const response = await apiClient.get<unknown>(apiPaths.adminTrucksPending);
     return pickListPayload(response.data).map(mapBackendTruck);
   } catch {
     return [];
@@ -172,19 +172,9 @@ async function fetchBackendTrucks(): Promise<BackendTruck[]> {
 }
 
 async function tryUpdateTruckApproval(truckId: number, approved: boolean): Promise<boolean> {
-  const basePath = apiPaths.driverTrucks.replace(/\/$/, "");
   try {
-    const currentResponse = await apiClient.get<unknown>(`${basePath}/${truckId}`);
-    const current = mapBackendTruck(currentResponse.data);
-    await apiClient.put(`${basePath}/${truckId}`, {
-      vehicleType: current.vehicleType,
-      vehicleBodyType: current.vehicleBodyType,
-      tonnage: current.tonnage,
-      maxWeight: current.maxWeight,
-      maxVolume: current.maxVolume,
-      name: current.name,
+    await apiClient.patch(apiPaths.adminTruckApproval(String(truckId)), {
       approved,
-      insurance: current.insurance,
     });
     return true;
   } catch {

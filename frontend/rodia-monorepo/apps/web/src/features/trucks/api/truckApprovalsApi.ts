@@ -136,23 +136,9 @@ function toTruckRow(truck: BackendTruck): TruckApprovalRow | null {
 async function fetchBackendTrucks(): Promise<BackendTruck[]> {
   try {
     const response = await apiClient.get<unknown>(apiPaths.adminTrucksPending);
-    const pending = pickListPayload(response.data).map(mapBackendTruck);
-    if (pending.length > 0) return pending;
-
-    // Fallback: some environments do not expose pending endpoint yet.
-    const allResponse = await apiClient.get<unknown>(apiPaths.driverTrucks);
-    return pickListPayload(allResponse.data)
-      .map(mapBackendTruck)
-      .filter((truck) => truck.approved !== true);
+    return pickListPayload(response.data).map(mapBackendTruck);
   } catch {
-    try {
-      const allResponse = await apiClient.get<unknown>(apiPaths.driverTrucks);
-      return pickListPayload(allResponse.data)
-        .map(mapBackendTruck)
-        .filter((truck) => truck.approved !== true);
-    } catch {
-      return [];
-    }
+    return [];
   }
 }
 
