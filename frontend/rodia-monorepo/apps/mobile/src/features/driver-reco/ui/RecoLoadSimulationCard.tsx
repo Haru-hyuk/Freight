@@ -1,11 +1,7 @@
 import React from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { ActivityIndicator, InteractionManager, Pressable, StyleSheet, useWindowDimensions, View } from "react-native";
 
-import {
-  type NormalizedRouteSummary,
-} from "@/features/driver-reco/model/routeSummary";
 import RecoLoadScene3D from "@/features/driver-reco/ui/RecoLoadScene3D";
-import RecoRouteMapCard from "@/features/driver-reco/ui/RecoRouteMapCard";
 import type { Placement } from "@/shared/api/generated/schemas";
 import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles } from "@/shared/theme/useAppTheme";
@@ -38,7 +34,7 @@ type RecoLoadSimulationCardProps = {
   isGroupedRecommendation: boolean;
   isXray: boolean;
   onToggleXray: () => void;
-  routeSummary: NormalizedRouteSummary;
+  routeLoading?: boolean;
   orderedPlacements: Placement[];
   stopColorMap: Map<number, string>;
   selectedStopOrder: number | null;
@@ -70,6 +66,23 @@ const useStyles = createThemedStyles((theme) => {
     },
     xrayToggleText: {
       color: theme.colors.textMain,
+    },
+    sceneViewport: {
+      borderRadius: 12,
+      overflow: "hidden",
+    },
+    scenePlaceholder: {
+      flex: 1,
+      height: "100%",
+      minHeight: 140,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: tint(cBorder, 0.72, cBorder),
+      backgroundColor: tint(cBorder, 0.18, theme.colors.bgSurfaceAlt),
+      alignItems: "center",
+      justifyContent: "center",
+      gap: spacing,
+      paddingHorizontal: spacing * 2,
     },
     selectedPanel: {
       borderRadius: 10,
@@ -131,7 +144,7 @@ export function RecoLoadSimulationCard({
   isGroupedRecommendation,
   isXray,
   onToggleXray,
-  routeSummary,
+  routeLoading = false,
   orderedPlacements,
   stopColorMap,
   selectedStopOrder,
@@ -139,6 +152,23 @@ export function RecoLoadSimulationCard({
   selectedOrderDetail,
 }: RecoLoadSimulationCardProps) {
   const styles = useStyles();
+  const { height: screenHeight } = useWindowDimensions();
+  const maxSceneHeight = Math.floor(screenHeight * 0.34);
+  const sceneViewportHeight = Math.max(140, Math.min(300, maxSceneHeight));
+  const [isSceneReady, setIsSceneReady] = React.useState(false);
+
+  React.useEffect(() => {
+    if (routeLoading) {
+      setIsSceneReady(false);
+      return undefined;
+    }
+
+    const task = InteractionManager.runAfterInteractions(() => {
+      setIsSceneReady(true);
+    });
+
+    return () => task.cancel();
+  }, [routeLoading]);
 
   return (
     <AppCard style={styles.loadCard}>
@@ -156,22 +186,31 @@ export function RecoLoadSimulationCard({
         적재함 {dims.widthCm} × {dims.lengthCm} × {dims.heightCm} cm 기준 · {isGroupedRecommendation ? "다건 순서 적재" : "단건 적재"}
       </AppText>
 
-      <RecoRouteMapCard summaryText={routeSummary.summary} stops={routeSummary.stops} />
-
-      <RecoLoadScene3D
-        dims={dims}
-        orderedPlacements={orderedPlacements}
-        stopColorMap={stopColorMap}
-        selectedStopOrder={selectedStopOrder}
-        isXray={isXray}
-        onSelectStopOrder={(stopOrder) => onSelectStopOrder(selectedStopOrder === stopOrder ? null : stopOrder)}
-      />
+      <View style={[styles.sceneViewport, { maxHeight: sceneViewportHeight, height: sceneViewportHeight }]}>
+        {isSceneReady ? (
+          <RecoLoadScene3D
+            dims={dims}
+            orderedPlacements={orderedPlacements}
+            stopColorMap={stopColorMap}
+            selectedStopOrder={selectedStopOrder}
+            isXray={isXray}
+            onSelectStopOrder={(stopOrder) => onSelectStopOrder(selectedStopOrder === stopOrder ? null : stopOrder)}
+          />
+        ) : (
+          <View style={styles.scenePlaceholder}>
+            <ActivityIndicator />
+            <AppText variant="caption" color="textMuted">
+              {routeLoading ? "경로를 계산한 뒤 적재 시뮬레이션을 준비합니다." : "적재 시뮬레이션을 불러오는 중입니다."}
+            </AppText>
+          </View>
+        )}
+      </View>
 
       {selectedOrderDetail ? (
         <View style={styles.selectedPanel}>
           <View style={styles.selectedPanelHeader}>
             <View style={[styles.selectedPanelBadge, { backgroundColor: selectedOrderDetail.accentColor }]}>
-              <AppText variant="caption" weight="900" color="#FFFFFF">
+              <AppText variant="caption" weight="900" color="textOnBrand">
                 {selectedOrderDetail.stopOrder}
               </AppText>
             </View>
