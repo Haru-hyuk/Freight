@@ -26,7 +26,7 @@ import type {
 } from "@/features/orders/model/types";
 import { appendActivityLog } from "@/shared/lib/activity-log";
 import { apiClient } from "@/shared/lib/api/client";
-import { apiPaths } from "@/shared/lib/api/endpoints";
+import { apiCapabilities, apiPaths } from "@/shared/lib/api/endpoints";
 import { isMockModeEnabled } from "@/shared/lib/mock-mode";
 
 type BackendQuote = {
@@ -413,45 +413,110 @@ function paginateCancellationRows(rows: CancellationRequestRow[], page: number, 
   };
 }
 
-async function fetchAdminQuotes(): Promise<BackendQuote[]> {
+function resolveMePath(path: string): string {
+  const base = path.replace(/\/$/, "");
+  return `${base}/me`;
+}
+
+async function fetchQuotesByPath(path: string): Promise<BackendQuote[]> {
   try {
-    const response = await apiClient.get<unknown>(apiPaths.adminTransportQuotes);
+    const response = await apiClient.get<unknown>(path);
     return pickListPayload(response.data).map(mapBackendQuote);
   } catch {
     return [];
   }
 }
 
-async function fetchAdminQuoteDetail(quoteId: number | null): Promise<BackendQuote | null> {
+async function fetchQuoteDetailByPath(path: string, quoteId: number | null): Promise<BackendQuote | null> {
   if (quoteId === null) return null;
   try {
-    const response = await apiClient.get<unknown>(`${apiPaths.adminTransportQuotes}/${encodeURIComponent(String(quoteId))}`);
+    const response = await apiClient.get<unknown>(`${path}/${encodeURIComponent(String(quoteId))}`);
     return mapBackendQuote(response.data);
   } catch {
     return null;
   }
 }
 
-async function fetchAdminMatches(): Promise<BackendMatch[]> {
+async function fetchMatchesByPath(path: string): Promise<BackendMatch[]> {
   try {
-    const response = await apiClient.get<unknown>(apiPaths.adminTransportMatches);
+    const response = await apiClient.get<unknown>(path);
     return pickListPayload(response.data).map(mapBackendMatch);
   } catch {
     return [];
   }
 }
 
-async function fetchAdminMatchDetail(matchId: number | null): Promise<BackendMatch | null> {
-  if (matchId === null) return null;
+async function fetchSettlementsByPath(path: string): Promise<BackendSettlement[]> {
   try {
-    const response = await apiClient.get<unknown>(`${apiPaths.adminTransportMatches}/${encodeURIComponent(String(matchId))}`);
-    return mapBackendMatch(response.data);
+    const response = await apiClient.get<unknown>(path);
+    return pickListPayload(response.data).map(mapBackendSettlement);
   } catch {
-    return null;
+    return [];
   }
 }
 
+async function fetchAdminQuotes(): Promise<BackendQuote[]> {
+  const primaryPath = apiCapabilities.useDerivedAdminData ? apiPaths.shipperQuotes : apiPaths.adminTransportQuotes;
+  const primaryRows = await fetchQuotesByPath(primaryPath);
+  if (primaryRows.length > 0 || apiCapabilities.useDerivedAdminData) {
+    return primaryRows;
+  }
+
+  return fetchQuotesByPath(apiPaths.shipperQuotes);
+}
+
+async function fetchAdminQuoteDetail(quoteId: number | null): Promise<BackendQuote | null> {
+  const primaryPath = apiCapabilities.useDerivedAdminData ? apiPaths.shipperQuotes : apiPaths.adminTransportQuotes;
+  const primaryDetail = await fetchQuoteDetailByPath(primaryPath, quoteId);
+  if (primaryDetail || apiCapabilities.useDerivedAdminData) {
+    return primaryDetail;
+  }
+
+  return fetchQuoteDetailByPath(apiPaths.shipperQuotes, quoteId);
+}
+
+async function fetchAdminMatches(): Promise<BackendMatch[]> {
+  if (!apiCapabilities.useDerivedAdminData) {
+    const rows = await fetchMatchesByPath(apiPaths.adminTransportMatches);
+    if (rows.length > 0) return rows;
+  }
+
+  const [shipperRows, driverOpenRows, driverRows] = await Promise.all([
+    fetchMatchesByPath(apiPaths.shipperMatchesMe),
+    fetchMatchesByPath(apiPaths.driverMatches),
+    fetchMatchesByPath(resolveMePath(apiPaths.driverMatches)),
+  ]);
+
+  const merged = pickLatestByTimestamp(
+    [...shipperRows, ...driverOpenRows, ...driverRows],
+    (item) => item.matchId,
+    (item) => Math.max(toTimestamp(item.updatedAt), toTimestamp(item.createdAt)),
+  );
+
+  return Array.from(merged.values());
+}
+
+async function fetchAdminMatchDetail(matchId: number | null): Promise<BackendMatch | null> {
+  if (matchId === null) return null;
+
+  if (!apiCapabilities.useDerivedAdminData) {
+    try {
+      const response = await apiClient.get<unknown>(`${apiPaths.adminTransportMatches}/${encodeURIComponent(String(matchId))}`);
+      return mapBackendMatch(response.data);
+    } catch {
+      // fallback below
+    }
+  }
+
+  const rows = await fetchAdminMatches();
+  return rows.find((row) => row.matchId === matchId) ?? null;
+}
+
 async function fetchAdminPayments(): Promise<BackendPayment[]> {
+  if (apiCapabilities.useDerivedAdminData) {
+    return [];
+  }
+
   try {
     const response = await apiClient.get<unknown>(apiPaths.adminTransportPayments);
     return pickListPayload(response.data).map(mapBackendPayment);
@@ -461,6 +526,21 @@ async function fetchAdminPayments(): Promise<BackendPayment[]> {
 }
 
 async function fetchAdminSettlements(): Promise<BackendSettlement[]> {
+  if (apiCapabilities.useDerivedAdminData) {
+    const [shipperRows, shipperMyRows, driverRows, driverMyRows] = await Promise.all([
+      fetchSettlementsByPath(apiPaths.shipperSettlements),
+      fetchSettlementsByPath(resolveMePath(apiPaths.shipperSettlements)),
+      fetchSettlementsByPath(apiPaths.driverSettlements),
+      fetchSettlementsByPath(resolveMePath(apiPaths.driverSettlements)),
+    ]);
+    const merged = pickLatestByTimestamp(
+      [...shipperRows, ...shipperMyRows, ...driverRows, ...driverMyRows],
+      (item) => item.settlementId,
+      (item) => Math.max(toTimestamp(item.completedAt), toTimestamp(item.createdAt)),
+    );
+    return Array.from(merged.values());
+  }
+
   try {
     const response = await apiClient.get<unknown>(apiPaths.adminTransportSettlements);
     return pickListPayload(response.data).map(mapBackendSettlement);
@@ -471,6 +551,9 @@ async function fetchAdminSettlements(): Promise<BackendSettlement[]> {
 
 async function fetchAdminUsersByRole(role: "SHIPPER" | "DRIVER"): Promise<Map<number, BackendUser>> {
   const users = new Map<number, BackendUser>();
+  if (apiCapabilities.useDerivedAdminData) {
+    return users;
+  }
 
   const ingest = (payload: unknown) => {
     for (const raw of pickListPayload(payload)) {
@@ -517,6 +600,10 @@ function pickLatestByTimestamp<T>(values: T[], getKey: (value: T) => number | nu
 }
 
 async function fetchRemoteCancellationRequests(): Promise<CancellationRequestRow[] | null> {
+  if (apiCapabilities.useDerivedAdminData) {
+    return null;
+  }
+
   try {
     const response = await apiClient.get<unknown>(apiPaths.adminOrderCancellationRequests);
     return pickListPayload(response.data)
@@ -854,14 +941,16 @@ export async function reviewCancellationRequest(payload: CancellationReviewPaylo
   }
 
   let remoteApplied = false;
-  try {
-    await apiClient.post(apiPaths.adminOrderCancellationReview(payload.requestId), {
-      action: payload.action,
-      reviewMemo,
-    });
-    remoteApplied = true;
-  } catch {
-    remoteApplied = false;
+  if (!apiCapabilities.useDerivedAdminData) {
+    try {
+      await apiClient.post(apiPaths.adminOrderCancellationReview(payload.requestId), {
+        action: payload.action,
+        reviewMemo,
+      });
+      remoteApplied = true;
+    } catch {
+      remoteApplied = false;
+    }
   }
 
   appendActivityLog({

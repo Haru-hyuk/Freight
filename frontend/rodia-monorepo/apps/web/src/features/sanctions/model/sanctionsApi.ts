@@ -1,7 +1,7 @@
 import type { SanctionRow, SanctionType } from "@/features/sanctions/model/types";
 import type { UserRole } from "@/features/users/model/types";
-import { apiPaths } from "@/shared/lib/api/endpoints";
 import { apiClient } from "@/shared/lib/api/client";
+import { apiCapabilities, apiPaths } from "@/shared/lib/api/endpoints";
 import { isMockModeEnabled } from "@/shared/lib/mock-mode";
 
 type BackendSanctionListPayload = {
@@ -57,18 +57,9 @@ function toRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
 }
 
-function toStringValue(value: unknown, fallback: string = ""): string {
+function toStringValue(value: unknown, fallback = ""): string {
   if (typeof value === "string") return value;
   if (typeof value === "number") return String(value);
-  return fallback;
-}
-
-function toNumberValue(value: unknown, fallback: number = 0): number {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string") {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : fallback;
-  }
   return fallback;
 }
 
@@ -121,7 +112,8 @@ function mapLiveSanction(raw: unknown): SanctionRow {
   const row = toRecord(raw);
   const content = `${toStringValue(row.reason)} ${toStringValue(row.title)} ${toStringValue(row.content)}`;
   const targetRoleRaw = toStringValue(row.targetRole).toUpperCase();
-  const targetRole: UserRole = targetRoleRaw === "SHIPPER" ? "SHIPPER" : targetRoleRaw === "DRIVER" ? "DRIVER" : inferRoleFromText(content);
+  const targetRole: UserRole =
+    targetRoleRaw === "SHIPPER" ? "SHIPPER" : targetRoleRaw === "DRIVER" ? "DRIVER" : inferRoleFromText(content);
   const typeRaw = toStringValue(row.type).toUpperCase();
   const type: SanctionType =
     typeRaw === "SUSPEND" || typeRaw === "DRIVE_BLOCK" || typeRaw === "FINE" || typeRaw === "WARNING"
@@ -162,31 +154,44 @@ function mapAnnouncementToSanction(row: BackendAnnouncement): SanctionRow {
   };
 }
 
+function filterAndSortSanctions(rows: BackendAnnouncement[]): SanctionRow[] {
+  return rows
+    .filter((row) => /(sanction|penalty|warning|suspend|violation|제재|정지|벌점)/i.test(`${row.title} ${row.content}`))
+    .map(mapAnnouncementToSanction)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
 export async function fetchSanctionRows(): Promise<SanctionRow[]> {
   if (isMockModeEnabled()) {
     return [...MOCK_ROWS].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
-  try {
-    const response = await apiClient.get<BackendSanctionListPayload | unknown[]>(apiPaths.adminSanctionsLogs);
-    const payload = response.data;
-    const rows = Array.isArray(payload) ? payload : Array.isArray(payload.items) ? payload.items : [];
-    return rows
-      .map(mapLiveSanction)
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  } catch {
-    // fallback below
+  if (!apiCapabilities.useDerivedAdminData) {
+    try {
+      const response = await apiClient.get<BackendSanctionListPayload | unknown[]>(apiPaths.adminSanctionsLogs);
+      const payload = response.data;
+      const rows = Array.isArray(payload) ? payload : Array.isArray(payload.items) ? payload.items : [];
+      return rows
+        .map(mapLiveSanction)
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    } catch {
+      // fall back to announcements below
+    }
   }
 
-  try {
-    const response = await apiClient.get<BackendAnnouncement[]>(apiPaths.adminAnnouncements);
-    if (!Array.isArray(response.data)) return [];
+  const announcementPaths = apiCapabilities.useDerivedAdminData
+    ? [apiPaths.publicAnnouncements]
+    : [apiPaths.adminAnnouncements, apiPaths.publicAnnouncements];
 
-    return response.data
-      .filter((row) => /(sanction|penalty|warning|suspend|violation|제재|정지|벌점)/i.test(`${row.title} ${row.content}`))
-      .map(mapAnnouncementToSanction)
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  } catch {
-    return [];
+  for (const path of announcementPaths) {
+    try {
+      const response = await apiClient.get<BackendAnnouncement[]>(path);
+      if (!Array.isArray(response.data)) continue;
+      return filterAndSortSanctions(response.data);
+    } catch {
+      // try next path
+    }
   }
+
+  return [];
 }

@@ -1,6 +1,6 @@
 import { TRUCK_APPROVAL_MOCK_ROWS } from "@/features/trucks/model/mockData";
 import type { TruckApprovalReviewPayload, TruckApprovalRow } from "@/features/trucks/model/types";
-import { apiPaths } from "@/shared/lib/api/endpoints";
+import { apiCapabilities, apiPaths } from "@/shared/lib/api/endpoints";
 import { apiClient } from "@/shared/lib/api/client";
 import { appendActivityLog } from "@/shared/lib/activity-log";
 import { isMockModeEnabled } from "@/shared/lib/mock-mode";
@@ -134,6 +134,17 @@ function toTruckRow(truck: BackendTruck): TruckApprovalRow | null {
 }
 
 async function fetchBackendTrucks(): Promise<BackendTruck[]> {
+  if (apiCapabilities.useDerivedAdminData) {
+    try {
+      const allResponse = await apiClient.get<unknown>(apiPaths.driverTrucks);
+      return pickListPayload(allResponse.data)
+        .map(mapBackendTruck)
+        .filter((truck) => truck.approved !== true);
+    } catch {
+      return [];
+    }
+  }
+
   try {
     const response = await apiClient.get<unknown>(apiPaths.adminTrucksPending);
     const pending = pickListPayload(response.data).map(mapBackendTruck);
@@ -157,6 +168,8 @@ async function fetchBackendTrucks(): Promise<BackendTruck[]> {
 }
 
 async function tryUpdateTruckApproval(truckId: number, approved: boolean): Promise<boolean> {
+  if (apiCapabilities.useDerivedAdminData) return false;
+
   try {
     await apiClient.patch(apiPaths.adminTruckApproval(String(truckId)), {
       approved,

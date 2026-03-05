@@ -1,5 +1,5 @@
 import type { AdminActivityAction, AdminActivityLog } from "@/shared/lib/activity-log";
-import { apiPaths } from "@/shared/lib/api/endpoints";
+import { apiCapabilities, apiPaths } from "@/shared/lib/api/endpoints";
 import { apiClient } from "@/shared/lib/api/client";
 import { isMockModeEnabled } from "@/shared/lib/mock-mode";
 
@@ -71,13 +71,15 @@ export async function fetchRemoteActivityLogs(): Promise<AdminActivityLog[]> {
     return [];
   }
 
-  try {
-    const response = await apiClient.get<BackendActivityPayload | unknown[]>(apiPaths.adminActivityLogs);
-    const payload = response.data;
-    const items = Array.isArray(payload) ? payload : Array.isArray(payload.items) ? payload.items : [];
-    return items.map(mapLiveActivity);
-  } catch {
-    // fallback below
+  if (!apiCapabilities.useDerivedAdminData) {
+    try {
+      const response = await apiClient.get<BackendActivityPayload | unknown[]>(apiPaths.adminActivityLogs);
+      const payload = response.data;
+      const items = Array.isArray(payload) ? payload : Array.isArray(payload.items) ? payload.items : [];
+      return items.map(mapLiveActivity);
+    } catch {
+      // fallback below
+    }
   }
 
   try {

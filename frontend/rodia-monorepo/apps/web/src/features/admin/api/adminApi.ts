@@ -5,7 +5,7 @@ import type {
   MatchStatus,
   MatchingDetail,
 } from "@/features/admin/model/types";
-import { apiPaths } from "@/shared/lib/api/endpoints";
+import { apiCapabilities, apiPaths } from "@/shared/lib/api/endpoints";
 import { apiClient } from "@/shared/lib/api/client";
 import { isMockModeEnabled } from "@/shared/lib/mock-mode";
 
@@ -235,11 +235,13 @@ function averageMatchingMinutes(matches: BackendMatch[]): number {
 }
 
 async function fetchAnnouncements(): Promise<BackendAnnouncement[]> {
-  try {
-    const response = await apiClient.get<BackendAnnouncement[]>(apiPaths.adminAnnouncements);
-    if (Array.isArray(response.data)) return response.data;
-  } catch {
-    // fall back to public announcements
+  if (!apiCapabilities.useDerivedAdminData) {
+    try {
+      const response = await apiClient.get<BackendAnnouncement[]>(apiPaths.adminAnnouncements);
+      if (Array.isArray(response.data)) return response.data;
+    } catch {
+      // fall back to public announcements
+    }
   }
 
   try {

@@ -1,4 +1,4 @@
-/* apps/web/src/shared/styles/index.css */
+﻿/* apps/web/src/shared/styles/index.css */
 @import "@rodia/tokens/dist/index.css";
 
 @tailwind base;
@@ -7,12 +7,7 @@
 
 @layer base {
   :root {
-    /*
-      shadcn이 기대하는 추가 변수들을 "토큰 변수에서 파생"시켜 정의합니다.
-      => 하드코딩 HSL/HEX 없이, tokens가 SoT인 상태 유지
-    */
-
-    /* ✅ 모바일 AppCard 배경(bgSurfaceAlt)과 동일 톤: tokens의 --secondary가 surfaceAlt로 매핑됨 */
+    /* Derive shadcn variables from design token variables only. */
     --card: var(--secondary);
     --card-foreground: var(--foreground);
 
@@ -27,25 +22,7 @@
     --input: var(--border);
     --ring: var(--primary);
 
-    /* shadcn radius는 토큰에서 생성되는 카드 radius를 그대로 연결 */
     --radius: var(--rd-radius-card);
-
-    /* Semantic colors for Alert/Badge components */
-    --success: #10B981;
-    --success-light: #ECFDF5;
-    --success-border: #A7F3D0;
-    
-    --warning: #F59E0B;
-    --warning-light: #FFFBEB;
-    --warning-border: #FDE68A;
-    
-    --error: #EF4444;
-    --error-light: #FEE2E2;
-    --error-border: #FECACA;
-    
-    --info: #3B82F6;
-    --info-light: #EFF6FF;
-    --info-border: #BFDBFE;
   }
 
   * {

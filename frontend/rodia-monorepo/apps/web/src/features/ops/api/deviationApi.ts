@@ -1,4 +1,4 @@
-import { apiPaths } from "@/shared/lib/api/endpoints";
+import { apiCapabilities, apiPaths } from "@/shared/lib/api/endpoints";
 import { apiClient } from "@/shared/lib/api/client";
 import { isMockModeEnabled } from "@/shared/lib/mock-mode";
 
@@ -656,6 +656,10 @@ function mergeMatchSnapshots(rows: BackendMatch[]): BackendMatch[] {
 }
 
 async function fetchAdminDeviationRows(): Promise<Deviation[]> {
+  if (apiCapabilities.useDerivedAdminData) {
+    return [];
+  }
+
   try {
     const response = await apiClient.get<unknown>(apiPaths.adminDeviations);
     return pickListPayload(response.data).map(mapAdminDeviation);
@@ -674,11 +678,13 @@ async function fetchNotifications(): Promise<BackendNotification[]> {
 }
 
 async function fetchAnnouncements(): Promise<BackendAnnouncement[]> {
-  try {
-    const response = await apiClient.get<BackendAnnouncement[]>(apiPaths.adminAnnouncements);
-    if (Array.isArray(response.data)) return response.data;
-  } catch {
-    // fallback
+  if (!apiCapabilities.useDerivedAdminData) {
+    try {
+      const response = await apiClient.get<BackendAnnouncement[]>(apiPaths.adminAnnouncements);
+      if (Array.isArray(response.data)) return response.data;
+    } catch {
+      // fallback
+    }
   }
 
   try {
@@ -808,6 +814,10 @@ function mapActionToStatus(action: DeviationAction["action"]): DeviationStatus {
 }
 
 async function tryExecuteAdminAction(action: DeviationAction): Promise<boolean> {
+  if (apiCapabilities.useDerivedAdminData) {
+    return false;
+  }
+
   try {
     await apiClient.post(`${apiPaths.adminDeviations}/${action.caseId}/actions`, action);
     return true;

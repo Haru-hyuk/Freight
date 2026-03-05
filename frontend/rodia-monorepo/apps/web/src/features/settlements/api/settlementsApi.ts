@@ -7,7 +7,7 @@ import type {
 } from "@/features/settlements/model/types";
 import { appendActivityLog } from "@/shared/lib/activity-log";
 import { apiClient } from "@/shared/lib/api/client";
-import { apiPaths } from "@/shared/lib/api/endpoints";
+import { apiCapabilities, apiPaths } from "@/shared/lib/api/endpoints";
 import { isMockModeEnabled } from "@/shared/lib/mock-mode";
 
 type SettlementListPayload = {
@@ -16,6 +16,10 @@ type SettlementListPayload = {
 };
 
 let settlementsStore: SettlementApprovalRow[] = [...SETTLEMENT_APPROVAL_MOCK_ROWS];
+const liveReviewOverrides = new Map<
+  string,
+  Pick<SettlementApprovalRow, "approvalStatus" | "settlementStatus" | "reviewMemo" | "updatedAt" | "completedAt">
+>();
 
 function toRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
@@ -151,6 +155,10 @@ async function fetchLiveSettlementRows(): Promise<SettlementApprovalRow[]> {
   const roleRows = await fetchRoleSettlementRows();
   if (roleRows.length > 0) return roleRows;
 
+  if (apiCapabilities.useDerivedAdminData) {
+    return [];
+  }
+
   const [approvals, history] = await Promise.all([
     fetchRowsByPath(apiPaths.adminSettlementApprovals),
     fetchRowsByPath(apiPaths.adminSettlementHistory),
@@ -184,12 +192,22 @@ function updateMockStore(payload: SettlementReviewPayload) {
   });
 }
 
+function applyLiveReviewOverride(row: SettlementApprovalRow): SettlementApprovalRow {
+  const override = liveReviewOverrides.get(row.settlementId);
+  if (!override) return row;
+
+  return {
+    ...row,
+    ...override,
+  };
+}
+
 export async function fetchSettlementApprovals(): Promise<SettlementApprovalRow[]> {
   if (isMockModeEnabled()) {
     return sortRows(settlementsStore.filter((row) => row.approvalStatus === "PENDING"));
   }
 
-  const rows = await fetchLiveSettlementRows();
+  const rows = (await fetchLiveSettlementRows()).map(applyLiveReviewOverride);
   return rows.filter((row) => row.approvalStatus === "PENDING");
 }
 
@@ -198,7 +216,7 @@ export async function fetchSettlementApprovalHistory(): Promise<SettlementApprov
     return sortRows(settlementsStore.filter((row) => row.approvalStatus !== "PENDING"));
   }
 
-  const rows = await fetchLiveSettlementRows();
+  const rows = (await fetchLiveSettlementRows()).map(applyLiveReviewOverride);
   return rows.filter((row) => row.approvalStatus !== "PENDING");
 }
 
@@ -207,7 +225,7 @@ export async function fetchSettlementById(settlementId: string): Promise<Settlem
     return settlementsStore.find((row) => row.settlementId === settlementId) ?? null;
   }
 
-  const rows = await fetchLiveSettlementRows();
+  const rows = (await fetchLiveSettlementRows()).map(applyLiveReviewOverride);
   return rows.find((row) => row.settlementId === settlementId) ?? null;
 }
 
@@ -225,14 +243,16 @@ export async function reviewSettlement(payload: SettlementReviewPayload): Promis
 
   let reviewed = false;
 
-  try {
-    await apiClient.post(apiPaths.adminSettlementReview(payload.settlementId), {
-      action: payload.action,
-      reason: payload.reason,
-    });
-    reviewed = true;
-  } catch {
-    // fallback below
+  if (!apiCapabilities.useDerivedAdminData) {
+    try {
+      await apiClient.post(apiPaths.adminSettlementReview(payload.settlementId), {
+        action: payload.action,
+        reason: payload.reason,
+      });
+      reviewed = true;
+    } catch {
+      // fallback below
+    }
   }
 
   if (!reviewed && payload.action === "APPROVE") {
@@ -248,7 +268,26 @@ export async function reviewSettlement(payload: SettlementReviewPayload): Promis
     }
   }
 
-  if (!reviewed) return;
+  if (!reviewed) {
+    const updatedAt = new Date().toISOString();
+    liveReviewOverrides.set(payload.settlementId, {
+      approvalStatus: payload.action === "APPROVE" ? "APPROVED" : "REJECTED",
+      settlementStatus: payload.action === "APPROVE" ? "COMPLETED" : "FAILED",
+      reviewMemo: payload.reason?.trim() || undefined,
+      completedAt: payload.action === "APPROVE" ? updatedAt : undefined,
+      updatedAt,
+    });
+
+    appendActivityLog({
+      action: "SETTLEMENT_REVIEWED",
+      targetId: payload.settlementId,
+      mode: "REAL",
+      message: `정산 ${payload.settlementId} 검토 ${payload.action === "APPROVE" ? "승인" : "반려"} (로컬 세션 반영)`,
+    });
+    return;
+  }
+
+  liveReviewOverrides.delete(payload.settlementId);
 
   appendActivityLog({
     action: "SETTLEMENT_REVIEWED",
