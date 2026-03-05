@@ -935,10 +935,6 @@ export function RunActiveDetails({
                 {lastGpsSendResult === "success" ? "마지막 전송: 성공" : "마지막 전송: 실패"}
               </AppText>
             ) : null}
-            <View style={styles.infoRow}>
-              <AppText style={styles.infoLabel}>추천 액션</AppText>
-              <AppText style={styles.infoValue}>{driverCta?.label ?? "-"}</AppText>
-            </View>
             {photoGateHint ? <AppText style={styles.helperText}>{photoGateHint}</AppText> : null}
           </AppCard>
 
@@ -1026,13 +1022,15 @@ export function RunActiveDetails({
         </ScrollView>
 
         <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
-          <AppButton
-            title={driverCta?.label ?? "하차 완료"}
-            onPress={() => void handleCompleteTransit()}
-            loading={isCompleting}
-            disabled={!canCompleteTransit || isSyncing || isBusy}
-            style={styles.completeButton}
-          />
+          {uiState === DRIVER_UI_STATE.TRANSIT_IN_PROGRESS ? (
+            <AppButton
+              title={driverCta.label}
+              onPress={() => void handleCompleteTransit()}
+              loading={isCompleting}
+              disabled={!canCompleteTransit || isBusy}
+              style={styles.completeButton}
+            />
+          ) : null}
           <AppButton
             title="새로고침"
             onPress={() => void handleRefetch()}
