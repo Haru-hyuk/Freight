@@ -32,14 +32,14 @@ function toSettlementStatusLabel(status: string): string {
   if (status === "COMPLETED") return "정산완료";
   if (status === "PENDING") return "정산대기";
   if (status === "FAILED") return "실패";
-  return status || "-";
+  return "상태 확인 필요";
 }
 
 function toPaymentStatusLabel(status: string): string {
   if (status === "PAID") return "결제완료";
   if (status === "PENDING") return "결제대기";
   if (status === "FAILED") return "결제실패";
-  return status || "-";
+  return "상태 확인 필요";
 }
 
 function filterByRange(items: SettlementItem[], range: RangeKey): SettlementItem[] {

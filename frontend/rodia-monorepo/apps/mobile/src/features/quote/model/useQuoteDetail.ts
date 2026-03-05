@@ -16,6 +16,7 @@ import { formatWorkMethodLabel } from "@/features/quote/model/workMethod";
 export type QuoteSectionRow = {
   label: string;
   value: string;
+  twoCol?: boolean;
 };
 
 export type QuoteSection = {
@@ -105,7 +106,8 @@ function toCargoTypeIcon(value: unknown): string {
 }
 
 function formatCargoHeadline(cargoName: unknown, cargoType: unknown): string {
-  const name = toDisplayText(cargoName, "화물");
+  const name = String(cargoName ?? "").trim();
+  if (!name) return "-";
   return `${toCargoTypeIcon(cargoType)} ${name}`;
 }
 
@@ -285,42 +287,75 @@ function formatPositiveVolumeCbm(value: unknown): string {
   return `${volume.toFixed(1)}cbm`;
 }
 
+function gridPair(
+  leftLabel: string,
+  leftValue: string,
+  rightLabel: string,
+  rightValue: string
+): QuoteSectionRow[] {
+  const leftOk = leftValue !== "-" && leftValue.trim().length > 0;
+  const rightOk = rightValue !== "-" && rightValue.trim().length > 0;
+  if (!leftOk && !rightOk) return [];
+  if (leftOk && rightOk) {
+    return [
+      { label: leftLabel, value: leftValue, twoCol: true },
+      { label: rightLabel, value: rightValue, twoCol: true },
+    ];
+  }
+  return [leftOk ? { label: leftLabel, value: leftValue } : { label: rightLabel, value: rightValue }];
+}
+
+function singleRow(label: string, value: string): QuoteSectionRow[] {
+  if (value === "-" || !value.trim()) return [];
+  return [{ label, value }];
+}
+
 function buildSpecificationArchive(quote: QuoteDetailResponse): QuoteSection[] {
-  const vehicleType = toVehicleTypeLabel(quote?.vehicleType);
-  const vehicleBodyType = toVehicleBodyTypeLabel(quote?.vehicleBodyType);
+  const vehicleTypeLabel = toVehicleTypeLabel(quote?.vehicleType);
+  const vehicleBodyTypeLabel = toVehicleBodyTypeLabel(quote?.vehicleBodyType);
   const uiState = getCustomerUiStateFromBackendStatus(quote?.status ?? "");
   const isCompleted = uiState === CUSTOMER_UI_STATE.COMPLETED;
   const finalAmountLabel = isCompleted ? "정산 금액" : "예상 금액";
 
-  return [
-    {
-      title: "차량/화물",
-      rows: [
-        { label: "톤수", value: toDisplayText(vehicleType) },
-        { label: "차종", value: toDisplayText(vehicleBodyType) },
-        { label: "화물", value: formatCargoHeadline(quote?.cargoName, quote?.cargoType) },
-        { label: "화물 설명", value: toDisplayText(quote?.cargoDesc) },
-        { label: "중량", value: formatPositiveWeightKg(quote?.weightKg) },
-        { label: "부피", value: formatPositiveVolumeCbm(quote?.volumeCbm) },
-      ],
-    },
-    {
-      title: "상차/하차",
-      rows: [
-        { label: "상차 방식", value: toDisplayText(formatWorkMethodLabel(quote?.loadMethod)) },
-        { label: "하차 방식", value: toDisplayText(formatWorkMethodLabel(quote?.unloadMethod)) },
-        { label: "합짐 여부", value: quote?.allowCombine ? "허용" : "단독 운송" },
-        { label: "추가 옵션/요청", value: formatChecklistItems(quote?.checklistItems) },
-      ],
-    },
-    {
-      title: "요금 내역",
-      rows: [
-        { label: "희망 운임", value: formatPositiveKrw(quote?.desiredPrice) },
-        { label: finalAmountLabel, value: formatPositiveKrw(quote?.finalPrice) },
-      ],
-    },
+  const vehicleCargoRows: QuoteSectionRow[] = [
+    ...gridPair("톤수", toDisplayText(vehicleTypeLabel), "차종", toDisplayText(vehicleBodyTypeLabel)),
+    ...gridPair("중량", formatPositiveWeightKg(quote?.weightKg), "부피", formatPositiveVolumeCbm(quote?.volumeCbm)),
+    ...singleRow("화물", formatCargoHeadline(quote?.cargoName, quote?.cargoType)),
+    ...singleRow("화물 설명", toDisplayText(quote?.cargoDesc)),
   ];
+
+  const loadUnloadRows: QuoteSectionRow[] = [
+    ...gridPair(
+      "상차 방식", toDisplayText(formatWorkMethodLabel(quote?.loadMethod)),
+      "하차 방식", toDisplayText(formatWorkMethodLabel(quote?.unloadMethod))
+    ),
+    { label: "합짐", value: quote?.allowCombine ? "허용" : "단독 운송" },
+    ...singleRow("추가 요청", formatChecklistItems(quote?.checklistItems)),
+  ];
+
+  const senderText = [quote?.senderName, quote?.senderPhone].filter(Boolean).join(" · ") || "-";
+  const receiverText = [quote?.receiverName, quote?.receiverPhone].filter(Boolean).join(" · ") || "-";
+  const contactRows: QuoteSectionRow[] = [
+    ...gridPair("보내는 분", senderText, "받는 분", receiverText),
+    ...singleRow("출발지 상세", toDisplayText(quote?.originAddressDetail)),
+    ...singleRow("도착지 상세", toDisplayText(quote?.destinationAddressDetail)),
+  ];
+
+  const fareRows: QuoteSectionRow[] = [
+    ...singleRow("기본 운임", formatPositiveKrw(quote?.basePrice)),
+    ...singleRow("거리 요금", formatPositiveKrw(quote?.distancePrice)),
+    ...singleRow("추가 요금", formatPositiveKrw(quote?.extraPrice)),
+    ...singleRow("희망 운임", formatPositiveKrw(quote?.desiredPrice)),
+    ...singleRow(finalAmountLabel, formatPositiveKrw(quote?.finalPrice)),
+  ];
+
+  const sections: QuoteSection[] = [];
+  if (vehicleCargoRows.length > 0) sections.push({ title: "차량/화물", rows: vehicleCargoRows });
+  if (loadUnloadRows.length > 0) sections.push({ title: "상차/하차", rows: loadUnloadRows });
+  if (contactRows.length > 0) sections.push({ title: "연락처", rows: contactRows });
+  if (fareRows.length > 0) sections.push({ title: "요금 내역", rows: fareRows });
+
+  return sections;
 }
 
 function buildWaypointAddresses(resolvedQuote: QuoteDetailResponse): string[] {
