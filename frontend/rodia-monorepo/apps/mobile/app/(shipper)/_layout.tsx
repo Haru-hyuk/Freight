@@ -14,8 +14,13 @@ function shouldHideBottomBar(segments: readonly string[] | undefined | null): bo
   const segs = Array.isArray(segments) ? segments : [];
   const isQuotesCreate = segs.includes("quotes") && segs.includes("create");
   const isQuotesDetail = segs.includes("quotes") && (segs.includes("[id]") || segs.includes("detail"));
+  const taxInvoicesIndex = segs.indexOf("tax-invoices");
+  const isTaxInvoiceDetail =
+    segs.includes("settings") &&
+    taxInvoicesIndex >= 0 &&
+    segs.length > taxInvoicesIndex + 1;
   const isVerification = segs.includes("verification");
-  return isQuotesCreate || isQuotesDetail || isVerification;
+  return isQuotesCreate || isQuotesDetail || isTaxInvoiceDetail || isVerification;
 }
 
 function pickActiveKey(segments: readonly string[] | undefined | null): BottomTabKey {
@@ -144,21 +149,30 @@ export default function ShipperLayout() {
             headerShown: false,
             contentStyle: { backgroundColor: cBgBase },
           }}
-        />
+        >
+          <Stack.Screen
+            name="settings/tax-invoices/[matchId]"
+            options={{
+              presentation: "modal",
+              animation: "slide_from_bottom",
+              headerShown: false,
+            }}
+          />
+        </Stack>
       </View>
 
       {!hideBottomBar ? (
-      <View style={styles.bottomWrap}>
-        <BottomTabBar
-          activeKey={activeKey}
-          onChange={onChangeTab}
-          items={[
-            { key: "home", label: "홈", iconActive: "home", iconInactive: "home-outline" },
-            { key: "quotes", label: "견적 내역", iconActive: "clipboard", iconInactive: "clipboard-outline" },
-            { key: "profile", label: "내 정보", iconActive: "person", iconInactive: "person-outline" },
-          ]}
-        />
-      </View>
+        <View style={styles.bottomWrap}>
+          <BottomTabBar
+            activeKey={activeKey}
+            onChange={onChangeTab}
+            items={[
+              { key: "home", label: "홈", iconActive: "home", iconInactive: "home-outline" },
+              { key: "quotes", label: "견적 내역", iconActive: "clipboard", iconInactive: "clipboard-outline" },
+              { key: "profile", label: "내 정보", iconActive: "person", iconInactive: "person-outline" },
+            ]}
+          />
+        </View>
       ) : null}
     </View>
   );
