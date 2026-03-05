@@ -1,11 +1,7 @@
 import React from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 
-import {
-  type NormalizedRouteSummary,
-} from "@/features/driver-reco/model/routeSummary";
 import RecoLoadScene3D from "@/features/driver-reco/ui/RecoLoadScene3D";
-import RecoRouteMapCard from "@/features/driver-reco/ui/RecoRouteMapCard";
 import type { Placement } from "@/shared/api/generated/schemas";
 import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles } from "@/shared/theme/useAppTheme";
@@ -38,7 +34,6 @@ type RecoLoadSimulationCardProps = {
   isGroupedRecommendation: boolean;
   isXray: boolean;
   onToggleXray: () => void;
-  routeSummary: NormalizedRouteSummary;
   orderedPlacements: Placement[];
   stopColorMap: Map<number, string>;
   selectedStopOrder: number | null;
@@ -131,7 +126,6 @@ export function RecoLoadSimulationCard({
   isGroupedRecommendation,
   isXray,
   onToggleXray,
-  routeSummary,
   orderedPlacements,
   stopColorMap,
   selectedStopOrder,
@@ -155,8 +149,6 @@ export function RecoLoadSimulationCard({
       <AppText variant="caption" color="textMuted">
         적재함 {dims.widthCm} × {dims.lengthCm} × {dims.heightCm} cm 기준 · {isGroupedRecommendation ? "다건 순서 적재" : "단건 적재"}
       </AppText>
-
-      <RecoRouteMapCard summaryText={routeSummary.summary} stops={routeSummary.stops} />
 
       <RecoLoadScene3D
         dims={dims}

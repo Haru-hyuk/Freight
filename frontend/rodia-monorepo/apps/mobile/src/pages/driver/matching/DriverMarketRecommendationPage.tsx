@@ -478,7 +478,6 @@ export default function DriverMarketRecommendationPage({
   const [isXray, setIsXray] = useState(true);
   const [routeSummary, setRouteSummary] = useState<NormalizedRouteSummary>(buildEmptyRouteSummary);
   const [routeLoading, setRouteLoading] = useState(false);
-  const [routeError, setRouteError] = useState<string | null>(null);
 
   const safeQuoteIds = useMemo(() => {
     if (!selection) return [] as number[];
@@ -539,7 +538,6 @@ export default function DriverMarketRecommendationPage({
       setIsLoading(true);
       setErrorMessage(null);
       setRouteSummary(buildEmptyRouteSummary());
-      setRouteError(null);
       try {
         const quoteEntries = await Promise.all(
           safeQuoteIds.map(async (quoteId) => {
@@ -562,10 +560,17 @@ export default function DriverMarketRecommendationPage({
 
         // fetchRouteSummary: passes candidateQuotes so server can resolve route geometry
         setRouteLoading(true);
-        const resolvedRouteSummary = await fetchRouteSummary({ selectedQuoteIds: safeQuoteIds, quotes: quoteList });
+        let resolvedRouteSummary: NormalizedRouteSummary;
+        try {
+          resolvedRouteSummary = await fetchRouteSummary({ selectedQuoteIds: safeQuoteIds, quotes: quoteList });
+        } catch {
+          resolvedRouteSummary = {
+            ...buildEmptyRouteSummary("경로 계산 실패"),
+            isError: true,
+          };
+        }
         if (cancelled) return;
         setRouteLoading(false);
-        if (resolvedRouteSummary.isError) setRouteError(resolvedRouteSummary.reason ?? "경로 계산 실패");
         const previewTruckId =
           toPositiveInt(selection?.selectedTruckId) || toPositiveInt(quoteList[0]?.truckId);
         let resolvedSpec: TruckSpecReferenceResponse | null = null;
@@ -630,14 +635,20 @@ export default function DriverMarketRecommendationPage({
   const refetchRoute = useCallback(async () => {
     if (routeLoading || safeQuoteIds.length === 0) return;
     setRouteLoading(true);
-    setRouteError(null);
-    const quotes = safeQuoteIds
-      .map((id) => quotesById[id])
-      .filter((q): q is QuoteDetailResponse => Boolean(q));
-    const summary = await fetchRouteSummary({ selectedQuoteIds: safeQuoteIds, quotes });
-    setRouteSummary(summary);
-    setRouteLoading(false);
-    if (summary.isError) setRouteError(summary.reason ?? "경로 계산 실패");
+    try {
+      const quotes = safeQuoteIds
+        .map((id) => quotesById[id])
+        .filter((q): q is QuoteDetailResponse => Boolean(q));
+      const summary = await fetchRouteSummary({ selectedQuoteIds: safeQuoteIds, quotes });
+      setRouteSummary(summary);
+    } catch {
+      setRouteSummary({
+        ...buildEmptyRouteSummary("경로 계산 실패"),
+        isError: true,
+      });
+    } finally {
+      setRouteLoading(false);
+    }
   }, [routeLoading, safeQuoteIds, quotesById]);
 
   const quoteCards = useMemo(() => {
@@ -987,19 +998,6 @@ export default function DriverMarketRecommendationPage({
             </View>
           </AppCard>
 
-          <RecoLoadSimulationCard
-            dims={dims}
-            isGroupedRecommendation={isGroupedRecommendation}
-            isXray={isXray}
-            onToggleXray={() => setIsXray((prev) => !prev)}
-            routeSummary={routeSummary}
-            orderedPlacements={orderedPlacements}
-            stopColorMap={stopColorMap}
-            selectedStopOrder={selectedStopOrder}
-            onSelectStopOrder={setSelectedStopOrder}
-            selectedOrderDetail={selectedOrderDetail}
-          />
-
           <RecoRouteMapCard
             summaryText={routeSummary.summary}
             stops={routeSummary.stops}
@@ -1007,6 +1005,18 @@ export default function DriverMarketRecommendationPage({
             isError={routeSummary.isError}
             routeLoading={routeLoading}
             onRetry={() => void refetchRoute()}
+          />
+
+          <RecoLoadSimulationCard
+            dims={dims}
+            isGroupedRecommendation={isGroupedRecommendation}
+            isXray={isXray}
+            onToggleXray={() => setIsXray((prev) => !prev)}
+            orderedPlacements={orderedPlacements}
+            stopColorMap={stopColorMap}
+            selectedStopOrder={selectedStopOrder}
+            onSelectStopOrder={setSelectedStopOrder}
+            selectedOrderDetail={selectedOrderDetail}
           />
 
           <AppCard style={styles.quotesCard}>
