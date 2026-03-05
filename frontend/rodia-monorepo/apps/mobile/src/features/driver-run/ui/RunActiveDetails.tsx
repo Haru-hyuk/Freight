@@ -459,16 +459,55 @@ function resolveGpsStatusMessage(status: CurrentLocationStatus): string {
   return "위치 정보를 가져오지 못했습니다.";
 }
 
+function isNetworkLikeError(error: unknown): boolean {
+  const raw = readApiErrorMessage(error, "").toLowerCase();
+  return (
+    !raw ||
+    raw.includes("network") ||
+    raw.includes("timeout") ||
+    raw.includes("econnrefused") ||
+    raw.includes("econnreset") ||
+    raw.includes("failed to fetch")
+  );
+}
+
+function buildUploadErrorMessage(uploadFailed: boolean, getProbeSucceeded: boolean | null): string {
+  const baseLines: string[] = ["사진 업로드에 실패했습니다."];
+
+  if (getProbeSucceeded === false) {
+    // GET도 실패 → 네트워크/cleartext/ATS 문제
+    baseLines.push(
+      "네트워크 또는 ATS/Cleartext 차단이 원인일 수 있습니다.",
+      "- Dev Client를 재빌드했는지 확인해주세요 (OTA로는 적용 불가).",
+      "- Android Emulator라면 EXPO_PUBLIC_API_BASE_URL을 10.0.2.2:{port}로 설정하세요.",
+      "- 같은 Wi-Fi 환경인지, 서버가 실행 중인지 확인해주세요."
+    );
+  } else if (getProbeSucceeded === true) {
+    // GET은 성공, 업로드만 실패 → payload/timeout 문제
+    baseLines.push(
+      "서버는 응답하지만 업로드에 실패했습니다.",
+      "- 이미지 파일이 너무 크거나 업로드 시간이 초과되었을 수 있습니다.",
+      "- 다른 사진으로 재시도해주세요."
+    );
+  } else {
+    // 진단 미실시
+    baseLines.push(
+      "- 서버 주소·포트(환경설정)를 확인해주세요.",
+      "- Android Emulator라면 EXPO_PUBLIC_API_BASE_URL을 10.0.2.2:{port}로 설정하세요.",
+      "- 개발 빌드(Dev Client)인지 확인 후 재시도해주세요."
+    );
+  }
+
+  return baseLines.join("\n");
+}
+
 function resolveUploadErrorMessage(error: unknown): string {
   const raw = readApiErrorMessage(error, "");
-  if (!raw) {
-    return "사진 업로드에 실패했습니다.\n같은 Wi-Fi/네트워크 환경인지, 서버가 실행 중인지 확인해주세요.";
+  if (raw && !isNetworkLikeError(error)) {
+    return raw;
   }
-  const lower = raw.toLowerCase();
-  if (lower.includes("network") || lower.includes("timeout") || lower.includes("econnrefused")) {
-    return `네트워크 오류로 업로드에 실패했습니다.\n- 서버 주소·포트(환경설정)를 확인해주세요.\n- Android 에뮬레이터라면 API_BASE_URL을 10.0.2.2:{port}로 설정하세요.\n- 개발 빌드(Dev Client)인지 확인 후 재시도해주세요.`;
-  }
-  return raw;
+  // 네트워크성 오류는 buildUploadErrorMessage가 진단 결과와 함께 조합하므로 여기선 기본만.
+  return buildUploadErrorMessage(true, null);
 }
 
 export function RunActiveDetails({
@@ -810,13 +849,34 @@ export function RunActiveDetails({
       });
       Alert.alert("사진 업로드", `${resolvePhotoTypeLabel(type)} 사진이 업로드되었습니다.`);
     } catch (error) {
+      const errorReason = readApiErrorMessage(error);
       logDriverRunEvent("uploadPhoto:failed", {
         matchId: safeMatchId,
         quoteId,
         type,
-        reason: readApiErrorMessage(error),
+        reason: errorReason,
       });
-      Alert.alert("사진 업로드 실패", resolveUploadErrorMessage(error), [
+
+      let getProbeSucceeded: boolean | null = null;
+      if (isNetworkLikeError(error)) {
+        // GET 진단: 동일 baseURL로 사진 목록 조회를 시도해 네트워크 자체 문제인지 확인
+        try {
+          await getDriverRunPhotos(safeMatchId);
+          getProbeSucceeded = true;
+        } catch {
+          getProbeSucceeded = false;
+        }
+        logDriverRunEvent("uploadPhoto:networkProbe", {
+          matchId: safeMatchId,
+          getProbeSucceeded,
+        });
+      }
+
+      const message = isNetworkLikeError(error)
+        ? buildUploadErrorMessage(true, getProbeSucceeded)
+        : resolveUploadErrorMessage(error);
+
+      Alert.alert("사진 업로드 실패", message, [
         { text: "취소", style: "cancel" },
         { text: "다시 시도", onPress: () => void handleUploadPhoto(type) },
       ]);
