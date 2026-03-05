@@ -1,5 +1,5 @@
 import React from "react";
-import { Alert, Image, Linking, Platform, ScrollView, StyleSheet, Switch, ToastAndroid, View } from "react-native";
+import { ActivityIndicator, Alert, Image, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, ToastAndroid, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useActiveOrder } from "@/entities/order/model/active-order.store";
 import type { ActiveRun } from "@/entities/order/model/types";
@@ -16,7 +16,7 @@ import {
 import { DRIVER_RUN_SYNC_EVENT, publishDriverRunSyncEvent } from "@/features/matching/model/driverRunSyncEvents";
 import { formatDateTime } from "@/shared/lib/format/display";
 import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
-import { useCurrentLocationOnce } from "@/shared/lib/location/useCurrentLocationOnce";
+import { useCurrentLocationOnce, type CurrentLocationStatus } from "@/shared/lib/location/useCurrentLocationOnce";
 import { BADGE_TONE, DRIVER_CTA_ID, DRIVER_UI_STATE, getDriverCta, getPhotoGateHint, type BadgeTone, type DriverUiState } from "@/shared/lib/policy";
 import type { DeliveryPhotoResponse } from "@/shared/api/generated/schemas/deliveryPhotoResponse";
 import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
@@ -305,6 +305,51 @@ const useStyles = createThemedStyles((theme) => {
     gpsButton: {
       minHeight: 40,
     },
+    syncRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing * 2,
+      flexWrap: "wrap",
+    },
+    syncTimeLabel: {
+      color: cTextMuted,
+      fontSize: safeNumber(theme?.typography?.scale?.caption?.size, 12),
+      lineHeight: safeNumber(theme?.typography?.scale?.caption?.lineHeight, 16),
+      fontWeight: "600",
+    },
+    syncingIndicatorText: {
+      color: cTextMuted,
+      fontSize: safeNumber(theme?.typography?.scale?.caption?.size, 12),
+      lineHeight: safeNumber(theme?.typography?.scale?.caption?.lineHeight, 16),
+      fontWeight: "600",
+    },
+    gpsLastSendText: {
+      color: cTextMuted,
+      fontSize: safeNumber(theme?.typography?.scale?.caption?.size, 12),
+      lineHeight: safeNumber(theme?.typography?.scale?.caption?.lineHeight, 16),
+      fontWeight: "600",
+    },
+    photoViewerBackdrop: {
+      flex: 1,
+      backgroundColor: "#000000CC",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    photoViewerImage: {
+      width: "100%",
+      height: "80%",
+    },
+    photoViewerClose: {
+      position: "absolute",
+      top: 48,
+      right: 20,
+      padding: spacing * 3,
+    },
+    photoViewerCloseText: {
+      color: "#FFFFFF",
+      fontSize: 28,
+      fontWeight: "700",
+    },
   });
 });
 
@@ -397,6 +442,23 @@ function logDriverRunEvent(tag: string, payload: Record<string, unknown>) {
   console.info(`[driver-run][${tag}]`, payload);
 }
 
+function formatHHMM(value: unknown): string {
+  const raw = typeof value === "string" ? value.trim() : "";
+  if (!raw) return "-";
+  const ts = Date.parse(raw);
+  if (!Number.isFinite(ts)) return "-";
+  const d = new Date(ts);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+function resolveGpsStatusMessage(status: CurrentLocationStatus): string {
+  if (status === "idle") return "현재 위치를 1회 전송합니다.";
+  if (status === "requesting") return "위치 권한 확인 중...";
+  if (status === "ready") return "좌표 확보됨. 전송 가능";
+  if (status === "denied") return "위치 권한이 필요합니다. 설정에서 허용해주세요.";
+  return "위치 정보를 가져오지 못했습니다.";
+}
+
 export function RunActiveDetails({
   activeRun,
   uiState,
@@ -419,6 +481,8 @@ export function RunActiveDetails({
   const [isPhotoSyncing, setIsPhotoSyncing] = React.useState(false);
   const [uploadingPhotoType, setUploadingPhotoType] = React.useState<DriverPhotoType | null>(null);
   const [isRouteMapVisible, setIsRouteMapVisible] = React.useState(true);
+  const [lastGpsSendResult, setLastGpsSendResult] = React.useState<"success" | "failure" | null>(null);
+  const [selectedPhotoUri, setSelectedPhotoUri] = React.useState<string | null>(null);
   const location = useCurrentLocationOnce();
 
   const safeMatchId = parsePositiveInt(activeRun.match.matchId);
@@ -455,7 +519,6 @@ export function RunActiveDetails({
     isLocationRequesting ||
     isPhotoSyncing ||
     uploadingPhotoType !== null;
-  const gpsHelperText = location.message;
   const trackingSharingUpdatedAtText = formatDateTime(activeRun.match.locationSharingUpdatedAt, "-");
 
   const routeStops = React.useMemo<NormalizedRouteStop[]>(() => {
@@ -495,6 +558,8 @@ export function RunActiveDetails({
     originAddress,
   ]);
   const hasRouteCoordinates = routeStops.length >= 2;
+  const syncTimeText = formatHHMM(activeRun.match.updatedAt ?? activeRun.match.createdAt);
+  const gpsStatusMessage = resolveGpsStatusMessage(locationStatus);
 
   const loadPhotos = React.useCallback(
     async (input?: { showError?: boolean }) => {
@@ -655,6 +720,7 @@ export function RunActiveDetails({
       if (typeof onRefetchRun === "function") {
         await onRefetchRun();
       }
+      setLastGpsSendResult("success");
       logDriverRunEvent("submitGps:success", {
         matchId: safeMatchId,
         quoteId,
@@ -664,6 +730,7 @@ export function RunActiveDetails({
       });
       showTransientMessage("현재 위치를 전송했습니다.");
     } catch (error) {
+      setLastGpsSendResult("failure");
       logDriverRunEvent("submitGps:failed", {
         matchId: safeMatchId,
         quoteId,
@@ -763,6 +830,15 @@ export function RunActiveDetails({
             </View>
             <AppText style={styles.idText}>{`매칭 #${safeMatchId || "-"}${quoteId > 0 ? ` · 견적 #${quoteId}` : ""}`}</AppText>
           </View>
+          <View style={styles.syncRow}>
+            <AppText style={styles.syncTimeLabel}>{`마지막 동기화 시각: ${syncTimeText}`}</AppText>
+            {isSyncing ? (
+              <>
+                <ActivityIndicator size="small" color={colors.textMuted} />
+                <AppText style={styles.syncingIndicatorText}>동기화 중...</AppText>
+              </>
+            ) : null}
+          </View>
 
           <AppCard outlined style={styles.routeCard}>
             <AppText style={styles.routeCardTitle}>운송 경로</AppText>
@@ -789,15 +865,16 @@ export function RunActiveDetails({
             </View>
 
             <View style={styles.routeMapWrap}>
-              <AppButton
-                title={isRouteMapVisible ? "카카오 경로 숨기기" : "카카오 경로 보기"}
-                variant="secondary"
-                onPress={() => setIsRouteMapVisible((prev) => !prev)}
-                disabled={!hasRouteCoordinates}
-                style={styles.routeMapButton}
-              />
               {hasRouteCoordinates ? (
-                isRouteMapVisible ? <RecoRouteWebView stops={routeStops} loading={false} /> : null
+                <>
+                  <AppButton
+                    title={isRouteMapVisible ? "카카오 경로 숨기기" : "카카오 경로 보기"}
+                    variant="secondary"
+                    onPress={() => setIsRouteMapVisible((prev) => !prev)}
+                    style={styles.routeMapButton}
+                  />
+                  {isRouteMapVisible ? <RecoRouteWebView stops={routeStops} loading={false} /> : null}
+                </>
               ) : (
                 <>
                   <AppText style={styles.routeMapHint}>
@@ -807,15 +884,15 @@ export function RunActiveDetails({
                     <AppText style={styles.routeFallbackAddressText}>{`출발: ${originAddress}`}</AppText>
                     <AppText style={styles.routeFallbackAddressText}>{`도착: ${destinationAddress}`}</AppText>
                   </View>
-                  <AppButton
-                    title="카카오맵에서 열기"
-                    variant="secondary"
-                    onPress={() => void handleOpenKakaoMap()}
-                    disabled={isBusy}
-                    style={styles.routeMapButton}
-                  />
                 </>
               )}
+              <AppButton
+                title={hasRouteCoordinates ? "카카오맵 열기 (좌표 기반)" : "카카오맵 열기"}
+                variant="secondary"
+                onPress={() => void handleOpenKakaoMap()}
+                disabled={isBusy}
+                style={styles.routeMapButton}
+              />
             </View>
           </AppCard>
 
@@ -842,9 +919,9 @@ export function RunActiveDetails({
               <AppText style={styles.infoValue}>{trackingSharingUpdatedAtText}</AppText>
             </View>
             <View style={styles.infoRow}>
-              <AppText style={styles.infoLabel}>위치 업데이트</AppText>
+              <AppText style={styles.infoLabel}>GPS 전송</AppText>
               <AppButton
-                title="위치 업데이트"
+                title="현재 위치 전송"
                 variant="secondary"
                 onPress={() => void handleSubmitGps()}
                 disabled={isGpsActionDisabled || isBusy}
@@ -852,7 +929,12 @@ export function RunActiveDetails({
                 style={styles.gpsButton}
               />
             </View>
-            {gpsHelperText ? <AppText style={styles.helperText}>{gpsHelperText}</AppText> : null}
+            <AppText style={styles.helperText}>{gpsStatusMessage}</AppText>
+            {lastGpsSendResult !== null ? (
+              <AppText style={styles.gpsLastSendText}>
+                {lastGpsSendResult === "success" ? "마지막 전송: 성공" : "마지막 전송: 실패"}
+              </AppText>
+            ) : null}
             <View style={styles.infoRow}>
               <AppText style={styles.infoLabel}>추천 액션</AppText>
               <AppText style={styles.infoValue}>{driverCta?.label ?? "-"}</AppText>
@@ -881,7 +963,11 @@ export function RunActiveDetails({
                     const uri = resolvePhotoUri(photo);
                     const key = parsePositiveInt(photo.photoId) || index + 1;
                     return (
-                      <View key={`pickup-photo-${key}`} style={styles.photoThumb}>
+                      <Pressable
+                        key={`pickup-photo-${key}`}
+                        style={styles.photoThumb}
+                        onPress={() => uri ? setSelectedPhotoUri(uri) : null}
+                      >
                         {uri ? <Image source={{ uri }} style={styles.photoThumbImage} resizeMode="cover" /> : null}
                         <View style={styles.photoThumbMeta}>
                           <AppText style={styles.photoThumbType}>상차</AppText>
@@ -889,7 +975,7 @@ export function RunActiveDetails({
                             {formatDateTime(photo.takenAt ?? photo.createdAt, "-")}
                           </AppText>
                         </View>
-                      </View>
+                      </Pressable>
                     );
                   })}
                 </View>
@@ -916,7 +1002,11 @@ export function RunActiveDetails({
                     const uri = resolvePhotoUri(photo);
                     const key = parsePositiveInt(photo.photoId) || index + 1;
                     return (
-                      <View key={`delivery-photo-${key}`} style={styles.photoThumb}>
+                      <Pressable
+                        key={`delivery-photo-${key}`}
+                        style={styles.photoThumb}
+                        onPress={() => uri ? setSelectedPhotoUri(uri) : null}
+                      >
                         {uri ? <Image source={{ uri }} style={styles.photoThumbImage} resizeMode="cover" /> : null}
                         <View style={styles.photoThumbMeta}>
                           <AppText style={styles.photoThumbType}>하차</AppText>
@@ -924,7 +1014,7 @@ export function RunActiveDetails({
                             {formatDateTime(photo.takenAt ?? photo.createdAt, "-")}
                           </AppText>
                         </View>
-                      </View>
+                      </Pressable>
                     );
                   })}
                 </View>
@@ -944,10 +1034,11 @@ export function RunActiveDetails({
             style={styles.completeButton}
           />
           <AppButton
-            title="상태 새로고침"
+            title="새로고침"
             onPress={() => void handleRefetch()}
             variant="secondary"
             disabled={typeof onRefetchRun !== "function" || isBusy}
+            loading={isSyncing}
             style={styles.refreshButton}
           />
           <AppButton
@@ -959,6 +1050,26 @@ export function RunActiveDetails({
           />
         </View>
       </View>
+
+      <Modal
+        visible={selectedPhotoUri !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedPhotoUri(null)}
+      >
+        <Pressable style={styles.photoViewerBackdrop} onPress={() => setSelectedPhotoUri(null)}>
+          {selectedPhotoUri ? (
+            <Image
+              source={{ uri: selectedPhotoUri }}
+              style={styles.photoViewerImage}
+              resizeMode="contain"
+            />
+          ) : null}
+          <Pressable style={styles.photoViewerClose} onPress={() => setSelectedPhotoUri(null)}>
+            <AppText style={styles.photoViewerCloseText}>✕</AppText>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </PageScaffold>
   );
 }

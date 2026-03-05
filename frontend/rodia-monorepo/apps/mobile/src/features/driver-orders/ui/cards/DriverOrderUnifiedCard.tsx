@@ -289,14 +289,16 @@ function DriverOrderUnifiedCardBase({
             ))}
           </View>
 
-          <View style={styles.priceWrap}>
-            <AppText variant="caption" weight="800" color="textMuted">
-              총 운임
-            </AppText>
-            <AppText variant="title" weight="900" color="brandPrimary">
-              {item.priceText || "-"}
-            </AppText>
-          </View>
+          {!showNegotiatingMeta ? (
+            <View style={styles.priceWrap}>
+              <AppText variant="caption" weight="800" color="textMuted">
+                총 운임
+              </AppText>
+              <AppText variant="title" weight="900" color="brandPrimary">
+                {item.priceText || "-"}
+              </AppText>
+            </View>
+          ) : null}
         </View>
 
         {showNegotiatingMeta ? (
