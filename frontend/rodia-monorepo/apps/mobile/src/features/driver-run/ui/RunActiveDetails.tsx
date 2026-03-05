@@ -65,6 +65,7 @@ type Props = {
 
 const KAKAO_MAP_WEB_URL = "https://map.kakao.com/";
 const IMAGE_PICKER_MISSING_MESSAGE = "이미지 선택 모듈(expo-image-picker)이 없어 사진 업로드를 사용할 수 없습니다.";
+const AUTO_GPS_SUBMIT_INTERVAL_MS = 60_000;
 
 const useStyles = createThemedStyles((theme) => {
   const spacing = safeNumber(theme?.layout?.spacing?.base, 4);
@@ -852,51 +853,97 @@ export function RunActiveDetails({
     }
   };
 
-  const handleSubmitGps = async () => {
-    if (safeMatchId <= 0 || isGpsSubmitting || isLocationDenied || isLocationError) return;
+  const submitGpsOnce = React.useCallback(
+    async (input?: { silent?: boolean; refreshAfterSend?: boolean }) => {
+      const silent = input?.silent === true;
+      const refreshAfterSend = input?.refreshAfterSend !== false;
+      if (safeMatchId <= 0 || isGpsSubmitting || isLocationDenied || isLocationError) return;
 
-    try {
-      setIsGpsSubmitting(true);
-      await location.request();
-      const currentPosition = location.coords;
-      if (
-        typeof currentPosition?.lat !== "number" ||
-        typeof currentPosition?.lng !== "number"
-      ) {
-        throw new Error(location.message || "현재 위치를 읽을 수 없습니다.");
-      }
+      try {
+        setIsGpsSubmitting(true);
+        await location.request();
+        const currentPosition = location.coords;
+        if (
+          typeof currentPosition?.lat !== "number" ||
+          typeof currentPosition?.lng !== "number"
+        ) {
+          throw new Error(location.message || "현재 위치를 읽을 수 없습니다.");
+        }
 
-      const result = await submitDriverRunGps(safeMatchId, currentPosition);
-      if (!result) {
-        throw new Error("위치 업데이트 응답이 비어 있습니다.");
+        const result = await submitDriverRunGps(safeMatchId, currentPosition);
+        if (!result) {
+          throw new Error("위치 업데이트 응답이 비어 있습니다.");
+        }
+        if (refreshAfterSend && typeof onRefetchRun === "function") {
+          await onRefetchRun();
+        }
+        setLastGpsSendResult("success");
+        logDriverRunEvent("submitGps:success", {
+          matchId: safeMatchId,
+          quoteId,
+          lat: currentPosition.lat,
+          lng: currentPosition.lng,
+          loggedAt: result.loggedAt,
+          silent,
+        });
+        if (!silent) {
+          showTransientMessage("현재 위치를 전송했습니다.");
+        }
+      } catch (error) {
+        setLastGpsSendResult("failure");
+        logDriverRunEvent("submitGps:failed", {
+          matchId: safeMatchId,
+          quoteId,
+          reason: readApiErrorMessage(error),
+          silent,
+        });
+        if (!silent) {
+          Alert.alert("위치 업데이트 실패", readApiErrorMessage(error), [
+            { text: "취소", style: "cancel" },
+            { text: "다시 시도", onPress: () => void submitGpsOnce({ silent: false }) },
+          ]);
+        }
+      } finally {
+        setIsGpsSubmitting(false);
       }
-      if (typeof onRefetchRun === "function") {
-        await onRefetchRun();
-      }
-      setLastGpsSendResult("success");
-      logDriverRunEvent("submitGps:success", {
-        matchId: safeMatchId,
-        quoteId,
-        lat: currentPosition.lat,
-        lng: currentPosition.lng,
-        loggedAt: result.loggedAt,
-      });
-      showTransientMessage("현재 위치를 전송했습니다.");
-    } catch (error) {
-      setLastGpsSendResult("failure");
-      logDriverRunEvent("submitGps:failed", {
-        matchId: safeMatchId,
-        quoteId,
-        reason: readApiErrorMessage(error),
-      });
-      Alert.alert("위치 업데이트 실패", readApiErrorMessage(error), [
-        { text: "취소", style: "cancel" },
-        { text: "다시 시도", onPress: () => void handleSubmitGps() },
-      ]);
-    } finally {
-      setIsGpsSubmitting(false);
-    }
-  };
+    },
+    [
+      isGpsSubmitting,
+      isLocationDenied,
+      isLocationError,
+      location,
+      onRefetchRun,
+      quoteId,
+      safeMatchId,
+    ]
+  );
+
+  const handleSubmitGps = React.useCallback(async () => {
+    await submitGpsOnce({ silent: false, refreshAfterSend: true });
+  }, [submitGpsOnce]);
+
+  React.useEffect(() => {
+    const shouldAutoSubmit =
+      uiState === DRIVER_UI_STATE.TRANSIT_IN_PROGRESS &&
+      trackingSharingEnabled &&
+      safeMatchId > 0 &&
+      !isLocationDenied &&
+      !isLocationError;
+    if (!shouldAutoSubmit) return;
+
+    const intervalId = setInterval(() => {
+      void submitGpsOnce({ silent: true, refreshAfterSend: false });
+    }, AUTO_GPS_SUBMIT_INTERVAL_MS);
+
+    return () => clearInterval(intervalId);
+  }, [
+    isLocationDenied,
+    isLocationError,
+    safeMatchId,
+    submitGpsOnce,
+    trackingSharingEnabled,
+    uiState,
+  ]);
 
   const handleUploadPhoto = async (type: DriverPhotoType) => {
     if (safeMatchId <= 0 || uploadingPhotoType !== null) return;
