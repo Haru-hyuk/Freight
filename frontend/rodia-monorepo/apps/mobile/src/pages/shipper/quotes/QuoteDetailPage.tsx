@@ -5,7 +5,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { cancelShipperMatch, createShipperMatch, listMyShipperMatches, type ShipperMatchItem } from "@/features/matching/api";
+import {
+  cancelShipperMatch,
+  createShipperMatch,
+  getShipperMatchTracking,
+  listMyShipperMatches,
+  type ShipperMatchItem,
+  type ShipperTrackingSnapshot,
+} from "@/features/matching/api";
 import {
   acceptShipperCounterOffer,
   isCounterOfferPending,
@@ -30,8 +37,10 @@ import {
 import { useQuoteDetail, type QuoteActionsContext } from "@/features/quote/model/useQuoteDetail";
 import { formatWorkMethodLabel } from "@/features/quote/model/workMethod";
 import { BottomActionRouter } from "@/features/quote/ui/actions/BottomActionRouter";
+import { RecoRouteWebView } from "@/features/driver-reco/ui/RecoRouteWebView";
+import type { NormalizedRouteStop } from "@/features/driver-reco/model/routeSummary";
 import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
-import { formatDistance, formatKrw } from "@/shared/lib/format/display";
+import { formatDateTime, formatDistance, formatKrw } from "@/shared/lib/format/display";
 import {
   CUSTOMER_UI_STATE,
   getCustomerUiStateFromBackendStatus,
@@ -264,6 +273,42 @@ const useStyles = createThemedStyles((theme) => {
       fontSize: safeNumber(theme.typography.scale.caption.size, 12) + 1,
       lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16) + 2,
       fontWeight: "700",
+    },
+    trackingCard: {
+      backgroundColor: c.bgSurface,
+      borderRadius: safeNumber(theme.layout.radii.card, 16),
+      borderWidth: 1,
+      borderColor: c.borderDefault,
+      padding: s * 4,
+      gap: s * 2,
+    },
+    trackingTitleRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: s * 2,
+    },
+    trackingTitle: {
+      color: c.textMain,
+      fontSize: safeNumber(theme.typography.scale.detail.size, 14) + 1,
+      lineHeight: safeNumber(theme.typography.scale.detail.lineHeight, 20) + 1,
+      fontWeight: "900",
+    },
+    trackingMeta: {
+      color: c.textMuted,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
+      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
+      fontWeight: "700",
+    },
+    trackingWarning: {
+      color: c.semanticWarning,
+      fontSize: safeNumber(theme.typography.scale.caption.size, 12),
+      lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
+      fontWeight: "800",
+    },
+    trackingRefreshButton: {
+      minHeight: 36,
+      minWidth: 84,
     },
 
     counterOfferSection: { marginBottom: s * 3 },
@@ -708,6 +753,45 @@ function buildRouteNodes(core: QuoteDetailCoreSummary): RouteNode[] {
   return nodes;
 }
 
+function buildShipperTrackingStops(
+  quote: QuoteDetailQuote,
+  tracking: ShipperTrackingSnapshot | null
+): NormalizedRouteStop[] {
+  const stops: NormalizedRouteStop[] = [];
+  const originLat = Number(quote.originLat);
+  const originLng = Number(quote.originLng);
+  const destinationLat = Number(quote.destinationLat);
+  const destinationLng = Number(quote.destinationLng);
+  const currentLat = Number(tracking?.currentLocation?.lat);
+  const currentLng = Number(tracking?.currentLocation?.lng);
+
+  if (Number.isFinite(originLat) && Number.isFinite(originLng)) {
+    stops.push({
+      name: toText(quote.originAddress) || "출발지",
+      lat: originLat,
+      lng: originLng,
+      type: "pickup",
+    });
+  }
+  if (Number.isFinite(currentLat) && Number.isFinite(currentLng)) {
+    stops.push({
+      name: "기사 현재 위치",
+      lat: currentLat,
+      lng: currentLng,
+      type: "waypoint",
+    });
+  }
+  if (Number.isFinite(destinationLat) && Number.isFinite(destinationLng)) {
+    stops.push({
+      name: toText(quote.destinationAddress) || "도착지",
+      lat: destinationLat,
+      lng: destinationLng,
+      type: "dropoff",
+    });
+  }
+  return stops.length >= 2 ? stops : [];
+}
+
 function CounterOfferCard({ offer }: { offer: CounterOfferItem }) {
   const styles = useStyles();
   return (
@@ -771,6 +855,63 @@ function RouteFlowCard({ coreSummary }: { coreSummary: QuoteDetailCoreSummary })
           })}
         </View>
       </AppCard>
+    </View>
+  );
+}
+
+function ShipperTrackingCard({
+  quote,
+  tracking,
+  loading,
+  errorMessage,
+  onRefresh,
+}: {
+  quote: QuoteDetailQuote;
+  tracking: ShipperTrackingSnapshot | null;
+  loading: boolean;
+  errorMessage: string | null;
+  onRefresh: () => void;
+}) {
+  const styles = useStyles();
+  const stops = React.useMemo(() => buildShipperTrackingStops(quote, tracking), [quote, tracking]);
+  const truckMarkerUri = React.useMemo(
+    () => Image.resolveAssetSource(require("../../../../assets/driver/trucks/truck_icon.png"))?.uri ?? "",
+    []
+  );
+  const lastLoggedAt = formatDateTime(tracking?.currentLocation?.loggedAt ?? tracking?.lastReceivedAt, "-");
+  const canShowMap = stops.length >= 2;
+
+  return (
+    <View style={styles.trackingCard}>
+      <View style={styles.trackingTitleRow}>
+        <AppText style={styles.trackingTitle}>실시간 기사 위치</AppText>
+        <AppButton
+          title="새로고침"
+          variant="secondary"
+          style={styles.trackingRefreshButton}
+          onPress={onRefresh}
+          loading={loading}
+        />
+      </View>
+
+      <AppText style={styles.trackingMeta}>{`마지막 수신: ${lastLoggedAt}`}</AppText>
+      {tracking?.locationSharingEnabled === false ? (
+        <AppText style={styles.trackingMeta}>기사 위치 공유가 비활성화되어 있습니다.</AppText>
+      ) : null}
+      {tracking?.missingSignalWarning ? (
+        <AppText style={styles.trackingWarning}>최근 위치 수신이 지연되고 있습니다.</AppText>
+      ) : null}
+      {errorMessage ? <AppText style={styles.trackingWarning}>{errorMessage}</AppText> : null}
+
+      {canShowMap ? (
+        <RecoRouteWebView
+          stops={stops}
+          loading={loading}
+          markerIconUriByType={truckMarkerUri ? { waypoint: truckMarkerUri } : undefined}
+        />
+      ) : (
+        <AppText style={styles.trackingMeta}>표시할 위치 좌표가 아직 없습니다.</AppText>
+      )}
     </View>
   );
 }
@@ -924,6 +1065,9 @@ export default function QuoteDetailPage() {
   const [matchHydrated, setMatchHydrated] = React.useState(false);
   const [bottomBarHeight, setBottomBarHeight] = React.useState(140);
   const [pendingCounterOffer, setPendingCounterOffer] = React.useState<CounterOfferItem | null>(null);
+  const [trackingSnapshot, setTrackingSnapshot] = React.useState<ShipperTrackingSnapshot | null>(null);
+  const [isTrackingLoading, setIsTrackingLoading] = React.useState(false);
+  const [trackingErrorMessage, setTrackingErrorMessage] = React.useState<string | null>(null);
   const matchLoadTokenRef = React.useRef(0);
   const focusRefetchMetaRef = React.useRef({ hasFocusedOnce: false, lastRefetchAt: 0 });
   const refreshInFlightRef = React.useRef<Promise<void> | null>(null);
@@ -1015,6 +1159,30 @@ export default function QuoteDetailPage() {
   const isPostPaymentFlow = React.useMemo(() => isPostPaymentQuoteStatus(effectiveQuoteStatus), [effectiveQuoteStatus]);
   const postPaymentSummary = React.useMemo(() => getPostPaymentSummary(effectiveQuoteStatus), [effectiveQuoteStatus]);
   const deliveryTimelineIndex = React.useMemo(() => resolveDeliveryTimelineIndex(effectiveQuoteStatus), [effectiveQuoteStatus]);
+  const canShowTrackingCard = statusUiState === CUSTOMER_UI_STATE.TRANSIT_IN_PROGRESS && cancelTargetMatchId > 0;
+
+  const loadShipperTracking = React.useCallback(
+    async (targetMatchId: number) => {
+      const safeMatchId = parsePositiveInt(targetMatchId);
+      if (safeMatchId <= 0) {
+        setTrackingSnapshot(null);
+        setTrackingErrorMessage(null);
+        return;
+      }
+      try {
+        setIsTrackingLoading(true);
+        setTrackingErrorMessage(null);
+        const snapshot = await getShipperMatchTracking(safeMatchId);
+        setTrackingSnapshot(snapshot);
+      } catch (error) {
+        setTrackingSnapshot(null);
+        setTrackingErrorMessage(readApiErrorMessage(error, "기사 위치를 불러오지 못했습니다."));
+      } finally {
+        setIsTrackingLoading(false);
+      }
+    },
+    []
+  );
 
   React.useEffect(() => {
     if (isRoutePayRequested) {
@@ -1123,10 +1291,13 @@ export default function QuoteDetailPage() {
         );
         if (activeMatchId > 0) {
           tasks.push(loadPaymentCompletion(activeMatchId));
+          tasks.push(loadShipperTracking(activeMatchId));
         } else {
           setHasCompletedPayment(false);
           setLatestPaymentStatus(null);
           setLatestPaymentMethod(null);
+          setTrackingSnapshot(null);
+          setTrackingErrorMessage(null);
         }
       }
       await Promise.all([quoteRefetchTask, ...tasks]);
@@ -1140,7 +1311,7 @@ export default function QuoteDetailPage() {
         refreshInFlightRef.current = null;
       }
     }
-  }, [actionQuoteId, loadMatchSnapshot, loadPaymentCompletion, loadPendingCounterOffer, view.refetch]);
+  }, [actionQuoteId, loadMatchSnapshot, loadPaymentCompletion, loadPendingCounterOffer, loadShipperTracking, view.refetch]);
 
   React.useEffect(() => {
     const safeQuoteId = parsePositiveInt(actionQuoteId);
@@ -1182,6 +1353,8 @@ export default function QuoteDetailPage() {
           setHasCompletedPayment(false);
           setLatestPaymentStatus(null);
           setLatestPaymentMethod(null);
+          setTrackingSnapshot(null);
+          setTrackingErrorMessage(null);
         }
       })().finally(() => {
         if (canceled || matchLoadTokenRef.current !== token) return;
@@ -1212,6 +1385,15 @@ export default function QuoteDetailPage() {
       return undefined;
     }, [actionQuoteId, refreshQuoteAndMatchData])
   );
+
+  React.useEffect(() => {
+    if (!canShowTrackingCard) {
+      setTrackingSnapshot(null);
+      setTrackingErrorMessage(null);
+      return;
+    }
+    void loadShipperTracking(cancelTargetMatchId);
+  }, [canShowTrackingCard, cancelTargetMatchId, loadShipperTracking]);
 
   const handleCreateMatch = React.useCallback(async () => {
     if (isMatchSubmitting) return;
@@ -1672,6 +1854,17 @@ export default function QuoteDetailPage() {
                 })}
               </View>
             </View>
+          ) : null}
+          {canShowTrackingCard ? (
+            <ShipperTrackingCard
+              quote={view.quote}
+              tracking={trackingSnapshot}
+              loading={isTrackingLoading}
+              errorMessage={trackingErrorMessage}
+              onRefresh={() => {
+                void loadShipperTracking(cancelTargetMatchId);
+              }}
+            />
           ) : null}
           {isPostPaymentFlow ? (
             <View style={styles.photoGallerySection}>
