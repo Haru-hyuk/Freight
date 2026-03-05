@@ -129,8 +129,41 @@ function createStyles(theme: AppTheme) {
 }
 
 function SettlementCard({ item }: { item: SettlementItem }) {
+  const router = useRouter();
   const theme = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const navLockRef = React.useRef(false);
+  const unlockTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (unlockTimerRef.current) {
+        clearTimeout(unlockTimerRef.current);
+      }
+    };
+  }, []);
+
+  const handlePressReceipt = () => {
+    if (navLockRef.current) return;
+    if (item.matchId <= 0) {
+      Alert.alert("영수증 보기", "매칭 정보가 없어 영수증을 열 수 없습니다.");
+      return;
+    }
+
+    navLockRef.current = true;
+    router.push({
+      pathname: "/(shipper)/settings/tax-invoices/[matchId]",
+      params: { matchId: String(item.matchId) },
+    } as never);
+
+    if (unlockTimerRef.current) {
+      clearTimeout(unlockTimerRef.current);
+    }
+    unlockTimerRef.current = setTimeout(() => {
+      navLockRef.current = false;
+      unlockTimerRef.current = null;
+    }, 300);
+  };
 
   return (
     <AppCard outlined elevated={false} style={styles.settlementCard}>
@@ -156,7 +189,7 @@ function SettlementCard({ item }: { item: SettlementItem }) {
         title="영수증 보기"
         size="sm"
         variant="secondary"
-        onPress={() => Alert.alert("영수증", `정산 #${item.settlementId} 영수증 기능은 준비 중입니다.`)}
+        onPress={handlePressReceipt}
       />
     </AppCard>
   );

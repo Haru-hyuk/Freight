@@ -1,6 +1,8 @@
 import {
+  getByMatch,
   getMySettlements,
 } from "@/shared/api/generated/shipper-settlement-controller/shipper-settlement-controller";
+import type { SettlementResponse } from "@/shared/api/generated/schemas/settlementResponse";
 import { isMockMode } from "@/shared/lib/config/env";
 
 type AnyObject = Record<string, unknown>;
@@ -95,4 +97,17 @@ export async function listMyShipperSettlements(): Promise<SettlementItem[]> {
   } catch {
     return [];
   }
+}
+
+export async function getShipperSettlementByMatch(matchId: number): Promise<SettlementResponse> {
+  const safeMatchId = toPositiveInt(matchId);
+  if (safeMatchId <= 0) {
+    throw new Error("유효하지 않은 매칭 ID입니다.");
+  }
+
+  if (isMockMode()) {
+    throw new Error("모의 환경에서는 정산 영수증 상세를 지원하지 않습니다.");
+  }
+
+  return getByMatch({ matchId: safeMatchId });
 }

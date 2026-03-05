@@ -163,6 +163,10 @@ const useStyles = createThemedStyles((theme) => {
       lineHeight: safeNumber(theme.typography.scale.caption.lineHeight, 16),
       fontWeight: "700",
     },
+    paymentReceiptButton: {
+      marginTop: s,
+      minHeight: 40,
+    },
     deliveryCard: {
       backgroundColor: c.bgSurface,
       borderRadius: safeNumber(theme.layout.radii.card, 16),
@@ -924,9 +928,11 @@ export default function QuoteDetailPage() {
   const [matchHydrated, setMatchHydrated] = React.useState(false);
   const [bottomBarHeight, setBottomBarHeight] = React.useState(140);
   const [pendingCounterOffer, setPendingCounterOffer] = React.useState<CounterOfferItem | null>(null);
+  const [isNavigatingReceipt, setIsNavigatingReceipt] = React.useState(false);
   const matchLoadTokenRef = React.useRef(0);
   const focusRefetchMetaRef = React.useRef({ hasFocusedOnce: false, lastRefetchAt: 0 });
   const refreshInFlightRef = React.useRef<Promise<void> | null>(null);
+  const receiptNavUnlockTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const quoteIdentifier = readRouteParamText(params.id);
   const routeQuoteId = parsePositiveIntParam(params.id);
@@ -1507,8 +1513,36 @@ export default function QuoteDetailPage() {
     void view.refetch();
   }, [router, view.isSessionExpired, view.refetch]);
 
+  const canOpenSettlementReceipt =
+    statusUiState === CUSTOMER_UI_STATE.COMPLETED && cancelTargetMatchId > 0;
+
+  const handleOpenSettlementReceipt = React.useCallback(() => {
+    if (!canOpenSettlementReceipt || isNavigatingReceipt) return;
+    setIsNavigatingReceipt(true);
+    router.push({
+      pathname: "/(shipper)/settings/tax-invoices/[matchId]",
+      params: { matchId: String(cancelTargetMatchId) },
+    } as never);
+
+    if (receiptNavUnlockTimerRef.current) {
+      clearTimeout(receiptNavUnlockTimerRef.current);
+    }
+    receiptNavUnlockTimerRef.current = setTimeout(() => {
+      setIsNavigatingReceipt(false);
+      receiptNavUnlockTimerRef.current = null;
+    }, 300);
+  }, [canOpenSettlementReceipt, cancelTargetMatchId, isNavigatingReceipt, router]);
+
   React.useEffect(() => {
     initLayoutAnimationForAndroid();
+  }, []);
+
+  React.useEffect(() => {
+    return () => {
+      if (receiptNavUnlockTimerRef.current) {
+        clearTimeout(receiptNavUnlockTimerRef.current);
+      }
+    };
   }, []);
 
   const spacing = safeNumber(theme.layout.spacing.base, 4);
@@ -1632,6 +1666,17 @@ export default function QuoteDetailPage() {
                   <AppText style={styles.paymentDoneTitle}>{postPaymentSummary.title}</AppText>
                 </View>
                 <AppText style={styles.paymentDoneDesc}>{postPaymentSummary.description}</AppText>
+                {canOpenSettlementReceipt ? (
+                  <AppButton
+                    title="영수증 보러가기"
+                    size="sm"
+                    variant="secondary"
+                    style={styles.paymentReceiptButton}
+                    loading={isNavigatingReceipt}
+                    disabled={isNavigatingReceipt}
+                    onPress={handleOpenSettlementReceipt}
+                  />
+                ) : null}
               </View>
             ) : null}
           </View>
