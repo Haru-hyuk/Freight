@@ -11,16 +11,36 @@ import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
 import {
   DRIVER_UI_STATE,
   getDriverBadge,
-  getDriverCta,
   getDriverStatusTitle,
   getDriverUiStateFromStatusPayload,
 } from "@/shared/lib/policy";
 
 const FOCUS_REFETCH_THROTTLE_MS = 1500;
+const RUN_AUTO_SYNC_INTERVAL_MS = 12_000;
+const RUN_AUTO_SYNC_STATUS_TOKENS: ReadonlySet<string> = new Set([
+  "NEGOTIATING",
+  "ASSIGNED",
+  "READY",
+  "MATCHED",
+  "ACCEPTED",
+  "PREPARING",
+]);
 
 function parsePositiveInt(value: unknown): number {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function toStatusToken(value: unknown): string {
+  return String(value ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "_")
+    .replace(/-/g, "_");
+}
+
+function shouldAutoSyncWhileFocused(status: unknown): boolean {
+  return RUN_AUTO_SYNC_STATUS_TOKENS.has(toStatusToken(status));
 }
 
 export default function DriverRunPage() {
@@ -78,20 +98,26 @@ export default function DriverRunPage() {
     React.useCallback(() => {
       const safeMatchId = parsePositiveInt(activeRun?.match?.matchId);
       if (safeMatchId <= 0) return undefined;
+      const shouldRunInterval = shouldAutoSyncWhileFocused(activeRun?.match?.status);
 
       const focusMeta = focusRefetchMetaRef.current;
       if (!focusMeta.hasFocusedOnce) {
         focusMeta.hasFocusedOnce = true;
-        return undefined;
+      } else {
+        const now = Date.now();
+        if (now - focusMeta.lastRefetchAt >= FOCUS_REFETCH_THROTTLE_MS) {
+          focusMeta.lastRefetchAt = now;
+          void refreshActiveRun({ showError: false });
+        }
       }
 
-      const now = Date.now();
-      if (now - focusMeta.lastRefetchAt < FOCUS_REFETCH_THROTTLE_MS) return undefined;
-      focusMeta.lastRefetchAt = now;
+      if (!shouldRunInterval) return undefined;
 
-      void refreshActiveRun({ showError: false });
-      return undefined;
-    }, [activeRun?.match?.matchId, refreshActiveRun])
+      const intervalId = setInterval(() => {
+        void refreshActiveRun({ showError: false });
+      }, RUN_AUTO_SYNC_INTERVAL_MS);
+      return () => clearInterval(intervalId);
+    }, [activeRun?.match?.matchId, activeRun?.match?.status, refreshActiveRun])
   );
 
   if (!activeRun) {
@@ -106,7 +132,6 @@ export default function DriverRunPage() {
   });
   const badge = getDriverBadge(uiState);
   const driverStatusTitle = getDriverStatusTitle(uiState);
-  const driverCta = getDriverCta(uiState, true);
 
   if (uiState === DRIVER_UI_STATE.ASSIGNED) {
     return (
@@ -125,7 +150,6 @@ export default function DriverRunPage() {
       driverBadgeLabel={badge.label}
       driverBadgeTone={badge.tone}
       driverStatusTitle={driverStatusTitle}
-      driverCta={driverCta}
       isSyncing={isRunSyncing}
       onRefetchRun={() => refreshActiveRun()}
     />

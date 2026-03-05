@@ -170,6 +170,23 @@ function safeMethod(method?: string): string {
   return (method ?? "GET").toUpperCase();
 }
 
+function isFormDataPayload(value: unknown): boolean {
+  if (typeof FormData === "undefined") return false;
+  return value instanceof FormData;
+}
+
+function normalizeMultipartHeaders(config: InternalAxiosRequestConfig): void {
+  if (!isFormDataPayload(config.data)) return;
+
+  const headers = (config.headers ?? {}) as AnyObj;
+  const contentType = String(headers["Content-Type"] ?? headers["content-type"] ?? "").toLowerCase();
+  if (!contentType.includes("application/json")) return;
+
+  delete headers["Content-Type"];
+  delete headers["content-type"];
+  config.headers = headers as any;
+}
+
 function shouldDebugLog(): boolean {
   try {
     return isApiDebugLogsEnabled();
@@ -290,6 +307,7 @@ export function createApiClient(): AxiosInstance {
 
   client.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
     const cfg = config as InternalConfig;
+    normalizeMultipartHeaders(cfg);
     const requestId = cfg.__timing?.requestId ?? makeRequestId();
     cfg.__timing = { startAt: Date.now(), requestId };
 

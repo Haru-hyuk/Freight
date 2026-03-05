@@ -1,11 +1,23 @@
 import React from "react";
-import { Alert, StyleSheet, Switch, View } from "react-native";
+import { Alert, Image, StyleSheet, Switch, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useActiveOrder } from "@/entities/order/model/active-order.store";
 import type { ActiveRun } from "@/entities/order/model/types";
-import { completeDriverTransit, submitDriverRunGps, updateDriverRunTrackingSharing } from "@/features/driver-run/api/driver-run-api";
+import type { NormalizedRouteStop } from "@/features/driver-reco/model/routeSummary";
+import { RecoRouteWebView } from "@/features/driver-reco/ui/RecoRouteWebView";
+import {
+  completeDriverTransit,
+  getDriverRunPhotos,
+  submitDriverRunGps,
+  type DriverPhotoType,
+  updateDriverRunTrackingSharing,
+  uploadDriverRunPhoto,
+} from "@/features/driver-run/api/driver-run-api";
+import { DRIVER_RUN_SYNC_EVENT, publishDriverRunSyncEvent } from "@/features/matching/model/driverRunSyncEvents";
+import { formatDateTime } from "@/shared/lib/format/display";
 import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
-import { BADGE_TONE, DRIVER_UI_STATE, type BadgeTone, type DriverCtaConfig, type DriverUiState } from "@/shared/lib/policy";
+import { BADGE_TONE, DRIVER_CTA_ID, DRIVER_UI_STATE, getDriverCta, getPhotoGateHint, type BadgeTone, type DriverUiState } from "@/shared/lib/policy";
+import type { DeliveryPhotoResponse } from "@/shared/api/generated/schemas/deliveryPhotoResponse";
 import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppButton } from "@/shared/ui/kit/AppButton";
@@ -13,18 +25,41 @@ import { AppCard } from "@/shared/ui/kit/AppCard";
 import { AppText } from "@/shared/ui/kit/AppText";
 import { PageScaffold } from "@/widgets/layout/PageScaffold";
 
+declare const require: ((name: string) => unknown) | undefined;
+
+type PickerPermissionResponse = {
+  granted?: boolean;
+};
+
+type PickerAsset = {
+  uri?: string | null;
+};
+
+type PickerResult = {
+  canceled?: boolean;
+  assets?: PickerAsset[];
+};
+
+type ImagePickerModule = {
+  MediaTypeOptions?: {
+    Images?: unknown;
+  };
+  requestMediaLibraryPermissionsAsync?: () => Promise<PickerPermissionResponse>;
+  launchImageLibraryAsync?: (options: Record<string, unknown>) => Promise<PickerResult>;
+};
+
 type Props = {
   activeRun: ActiveRun;
   uiState: DriverUiState;
   driverBadgeLabel: string;
   driverBadgeTone: BadgeTone;
   driverStatusTitle: string;
-  driverCta?: DriverCtaConfig;
   isSyncing?: boolean;
   onRefetchRun?: () => Promise<void> | void;
 };
 
 const GPS_PROVIDER_MISSING_MESSAGE = "현재 위치 연동 모듈이 없어 위치 업데이트를 사용할 수 없습니다.";
+const IMAGE_PICKER_MISSING_MESSAGE = "이미지 선택 모듈(expo-image-picker)이 없어 사진 업로드를 사용할 수 없습니다.";
 
 const useStyles = createThemedStyles((theme) => {
   const spacing = safeNumber(theme?.layout?.spacing?.base, 4);
@@ -119,6 +154,18 @@ const useStyles = createThemedStyles((theme) => {
       lineHeight: safeNumber(theme?.typography?.scale?.detail?.lineHeight, 20) + 2,
       fontWeight: "900",
     },
+    routeMapWrap: {
+      gap: spacing * 2,
+    },
+    routeMapButton: {
+      minHeight: 40,
+    },
+    routeMapHint: {
+      color: cTextMuted,
+      fontSize: safeNumber(theme?.typography?.scale?.caption?.size, 12),
+      lineHeight: safeNumber(theme?.typography?.scale?.caption?.lineHeight, 16),
+      fontWeight: "600",
+    },
     infoCard: {
       borderRadius: 16,
       padding: spacing * 4,
@@ -154,6 +201,71 @@ const useStyles = createThemedStyles((theme) => {
       lineHeight: safeNumber(theme?.typography?.scale?.caption?.lineHeight, 16),
       fontWeight: "600",
     },
+    photoCard: {
+      borderRadius: 16,
+      padding: spacing * 4,
+      gap: spacing * 3,
+    },
+    photoSection: {
+      gap: spacing * 2,
+    },
+    photoHeaderRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: spacing * 2,
+    },
+    photoSectionTitle: {
+      color: cTextSub,
+      fontSize: safeNumber(theme?.typography?.scale?.detail?.size, 14),
+      lineHeight: safeNumber(theme?.typography?.scale?.detail?.lineHeight, 20),
+      fontWeight: "800",
+    },
+    photoUploadButton: {
+      minHeight: 34,
+      minWidth: 92,
+    },
+    photoThumbRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: spacing * 2,
+    },
+    photoThumb: {
+      width: 88,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: cBorder,
+      backgroundColor: cSurface,
+      overflow: "hidden",
+    },
+    photoThumbImage: {
+      width: "100%",
+      height: 72,
+      backgroundColor: cSurfaceAlt,
+    },
+    photoThumbMeta: {
+      paddingHorizontal: spacing * 1.5,
+      paddingVertical: spacing,
+      gap: spacing * 0.5,
+    },
+    photoThumbType: {
+      color: cTextSub,
+      fontSize: safeNumber(theme?.typography?.scale?.caption?.size, 12),
+      lineHeight: safeNumber(theme?.typography?.scale?.caption?.lineHeight, 16),
+      fontWeight: "800",
+    },
+    photoThumbTime: {
+      color: cTextMuted,
+      fontSize: safeNumber(theme?.typography?.scale?.caption?.size, 12),
+      lineHeight: safeNumber(theme?.typography?.scale?.caption?.lineHeight, 16),
+      fontWeight: "600",
+    },
+    photoEmpty: {
+      color: cTextMuted,
+      fontSize: safeNumber(theme?.typography?.scale?.caption?.size, 12),
+      lineHeight: safeNumber(theme?.typography?.scale?.caption?.lineHeight, 16),
+      fontWeight: "600",
+    },
     bottomBar: {
       paddingHorizontal: spacing * 5,
       paddingTop: spacing * 3,
@@ -180,6 +292,48 @@ const useStyles = createThemedStyles((theme) => {
 function parsePositiveInt(value: unknown): number {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function toOptionalFiniteNumber(value: unknown): number | undefined {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function toText(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function resolvePhotoUri(photo: DeliveryPhotoResponse): string {
+  return toText(photo.fileUrl);
+}
+
+function resolvePhotoTypeLabel(type: DriverPhotoType): string {
+  if (type === "PICKUP") return "상차";
+  return "하차";
+}
+
+function resolvePhotoGatePassed(
+  uiState: DriverUiState,
+  pickupPhotos: DeliveryPhotoResponse[],
+  deliveryPhotos: DeliveryPhotoResponse[]
+): boolean {
+  if (uiState === DRIVER_UI_STATE.PICKUP_IN_PROGRESS) {
+    return pickupPhotos.length > 0;
+  }
+  if (uiState === DRIVER_UI_STATE.TRANSIT_IN_PROGRESS) {
+    return deliveryPhotos.length > 0;
+  }
+  return true;
+}
+
+function loadImagePickerModule(): ImagePickerModule | null {
+  if (typeof require !== "function") return null;
+
+  try {
+    return require("expo-image-picker") as ImagePickerModule;
+  } catch {
+    return null;
+  }
 }
 
 function resolveStatusPalette(tone: BadgeTone, colors: Record<string, string>) {
@@ -217,7 +371,6 @@ export function RunActiveDetails({
   driverBadgeLabel,
   driverBadgeTone,
   driverStatusTitle,
-  driverCta,
   isSyncing = false,
   onRefetchRun,
 }: Props) {
@@ -230,17 +383,112 @@ export function RunActiveDetails({
   const [isCompleting, setIsCompleting] = React.useState(false);
   const [isTrackingSharingSubmitting, setIsTrackingSharingSubmitting] = React.useState(false);
   const [isGpsSubmitting, setIsGpsSubmitting] = React.useState(false);
+  const [photos, setPhotos] = React.useState<DeliveryPhotoResponse[]>([]);
+  const [isPhotoSyncing, setIsPhotoSyncing] = React.useState(false);
+  const [uploadingPhotoType, setUploadingPhotoType] = React.useState<DriverPhotoType | null>(null);
+  const [isRouteMapVisible, setIsRouteMapVisible] = React.useState(true);
 
   const safeMatchId = parsePositiveInt(activeRun.match.matchId);
   const quoteId = parsePositiveInt(activeRun.summary?.quoteId ?? activeRun.match.quoteId);
   const originAddress = activeRun.summary?.originAddress || "-";
   const destinationAddress = activeRun.summary?.destinationAddress || "-";
   const trackingSharingEnabled = activeRun.match.locationSharingEnabled === true;
+  const pickupPhotos = React.useMemo(
+    () => photos.filter((photo) => toText(photo.type).toUpperCase() === "PICKUP"),
+    [photos]
+  );
+  const deliveryPhotos = React.useMemo(
+    () => photos.filter((photo) => toText(photo.type).toUpperCase() === "DELIVERY"),
+    [photos]
+  );
+  const photoGatePassed = React.useMemo(
+    () => resolvePhotoGatePassed(uiState, pickupPhotos, deliveryPhotos),
+    [deliveryPhotos, pickupPhotos, uiState]
+  );
+  const driverCta = React.useMemo(() => getDriverCta(uiState, photoGatePassed), [photoGatePassed, uiState]);
+  const photoGateHint = React.useMemo(() => getPhotoGateHint(uiState, photoGatePassed), [photoGatePassed, uiState]);
   const canCompleteTransit =
-    safeMatchId > 0 &&
-    (uiState === DRIVER_UI_STATE.PICKUP_IN_PROGRESS || uiState === DRIVER_UI_STATE.TRANSIT_IN_PROGRESS);
-  const isBusy = isSyncing || isCompleting || isTrackingSharingSubmitting || isGpsSubmitting;
+    safeMatchId > 0 && driverCta.id === DRIVER_CTA_ID.MARK_DROPOFF && driverCta.enabled;
+  const isBusy =
+    isSyncing ||
+    isCompleting ||
+    isTrackingSharingSubmitting ||
+    isGpsSubmitting ||
+    isPhotoSyncing ||
+    uploadingPhotoType !== null;
   const hasLocationProvider = false;
+  const trackingSharingUpdatedAtText = formatDateTime(activeRun.match.locationSharingUpdatedAt, "-");
+
+  const routeStops = React.useMemo<NormalizedRouteStop[]>(() => {
+    const originLat = toOptionalFiniteNumber(activeRun.summary?.originLat);
+    const originLng = toOptionalFiniteNumber(activeRun.summary?.originLng);
+    const destinationLat = toOptionalFiniteNumber(activeRun.summary?.destinationLat);
+    const destinationLng = toOptionalFiniteNumber(activeRun.summary?.destinationLng);
+    if (
+      typeof originLat !== "number" ||
+      typeof originLng !== "number" ||
+      typeof destinationLat !== "number" ||
+      typeof destinationLng !== "number"
+    ) {
+      return [];
+    }
+
+    return [
+      {
+        name: originAddress,
+        lat: originLat,
+        lng: originLng,
+        type: "pickup",
+      },
+      {
+        name: destinationAddress,
+        lat: destinationLat,
+        lng: destinationLng,
+        type: "dropoff",
+      },
+    ];
+  }, [
+    activeRun.summary?.destinationLat,
+    activeRun.summary?.destinationLng,
+    activeRun.summary?.originLat,
+    activeRun.summary?.originLng,
+    destinationAddress,
+    originAddress,
+  ]);
+  const hasRouteCoordinates = routeStops.length >= 2;
+
+  const loadPhotos = React.useCallback(
+    async (input?: { showError?: boolean }) => {
+      const showError = input?.showError !== false;
+      if (safeMatchId <= 0) {
+        setPhotos([]);
+        return;
+      }
+
+      try {
+        setIsPhotoSyncing(true);
+        const nextPhotos = await getDriverRunPhotos(safeMatchId);
+        setPhotos(nextPhotos);
+      } catch (error) {
+        if (!showError) return;
+        Alert.alert("사진 동기화 실패", readApiErrorMessage(error), [
+          { text: "취소", style: "cancel" },
+          { text: "다시 시도", onPress: () => void loadPhotos() },
+        ]);
+      } finally {
+        setIsPhotoSyncing(false);
+      }
+    },
+    [safeMatchId]
+  );
+
+  React.useEffect(() => {
+    if (safeMatchId <= 0) {
+      setPhotos([]);
+      return;
+    }
+    void loadPhotos({ showError: false });
+  }, [loadPhotos, safeMatchId]);
 
   const handleViewRunList = () => {
     if (isBusy) return;
@@ -248,8 +496,11 @@ export function RunActiveDetails({
   };
 
   const handleRefetch = async () => {
-    if (typeof onRefetchRun !== "function" || isBusy) return;
-    await onRefetchRun();
+    if (isBusy) return;
+    if (typeof onRefetchRun === "function") {
+      await onRefetchRun();
+    }
+    await loadPhotos({ showError: false });
   };
 
   const handleCompleteTransit = async () => {
@@ -264,6 +515,13 @@ export function RunActiveDetails({
       if (typeof onRefetchRun === "function") {
         await onRefetchRun();
       }
+      await loadPhotos({ showError: false });
+      publishDriverRunSyncEvent({
+        type: DRIVER_RUN_SYNC_EVENT.RUN_STATUS_UPDATED,
+        matchIds: [safeMatchId],
+        quoteIds: [quoteId],
+        source: "driver-run:complete",
+      });
       Alert.alert("운행 완료", "하차 완료 처리가 반영되었습니다.");
     } catch (error) {
       Alert.alert("운행 완료 실패", readApiErrorMessage(error), [
@@ -287,6 +545,13 @@ export function RunActiveDetails({
       if (typeof onRefetchRun === "function") {
         await onRefetchRun();
       }
+      await loadPhotos({ showError: false });
+      publishDriverRunSyncEvent({
+        type: DRIVER_RUN_SYNC_EVENT.RUN_STATUS_UPDATED,
+        matchIds: [safeMatchId],
+        quoteIds: [quoteId],
+        source: "driver-run:tracking-share",
+      });
       Alert.alert("위치 공유", enabled ? "위치 공유를 켰습니다." : "위치 공유를 껐습니다.");
     } catch (error) {
       Alert.alert("위치 공유 변경 실패", readApiErrorMessage(error), [
@@ -331,6 +596,62 @@ export function RunActiveDetails({
     }
   };
 
+  const handleUploadPhoto = async (type: DriverPhotoType) => {
+    if (safeMatchId <= 0 || uploadingPhotoType !== null) return;
+
+    const picker = loadImagePickerModule();
+    if (!picker?.launchImageLibraryAsync || !picker?.requestMediaLibraryPermissionsAsync) {
+      Alert.alert("사진 업로드", IMAGE_PICKER_MISSING_MESSAGE);
+      return;
+    }
+
+    try {
+      const permission = await picker.requestMediaLibraryPermissionsAsync();
+      if (!permission?.granted) {
+        Alert.alert("사진 업로드", "갤러리 접근 권한이 필요합니다.");
+        return;
+      }
+
+      const result = await picker.launchImageLibraryAsync({
+        mediaTypes: picker.MediaTypeOptions?.Images,
+        allowsEditing: false,
+        quality: 0.9,
+      });
+      if (result?.canceled) return;
+
+      const selectedUri = toText(result?.assets?.[0]?.uri);
+      if (!selectedUri) {
+        Alert.alert("사진 업로드", "선택한 이미지 정보를 읽을 수 없습니다.");
+        return;
+      }
+
+      setUploadingPhotoType(type);
+      const uploaded = await uploadDriverRunPhoto(safeMatchId, {
+        localUri: selectedUri,
+        type,
+      });
+      if (!uploaded) {
+        throw new Error("사진 업로드 응답이 비어 있습니다.");
+      }
+
+      await loadPhotos({ showError: false });
+      publishDriverRunSyncEvent({
+        type: DRIVER_RUN_SYNC_EVENT.RUN_STATUS_UPDATED,
+        matchIds: [safeMatchId],
+        quoteIds: [quoteId],
+        source: "driver-run:photo-upload",
+      });
+      Alert.alert("사진 업로드", `${resolvePhotoTypeLabel(type)} 사진이 업로드되었습니다.`);
+    } catch (error) {
+      Alert.alert("사진 업로드 실패", readApiErrorMessage(error), [
+        { text: "취소", style: "cancel" },
+        { text: "다시 시도", onPress: () => void handleUploadPhoto(type) },
+      ]);
+    } finally {
+      setUploadingPhotoType(null);
+    }
+  };
+
   return (
     <PageScaffold title="운행정보" scroll={false} padding={0}>
       <View style={styles.root}>
@@ -372,6 +693,23 @@ export function RunActiveDetails({
                 <AppText style={styles.routeAddress}>{destinationAddress}</AppText>
               </View>
             </View>
+
+            <View style={styles.routeMapWrap}>
+              <AppButton
+                title={isRouteMapVisible ? "카카오 경로 숨기기" : "카카오 경로 보기"}
+                variant="secondary"
+                onPress={() => setIsRouteMapVisible((prev) => !prev)}
+                disabled={!hasRouteCoordinates}
+                style={styles.routeMapButton}
+              />
+              {hasRouteCoordinates ? (
+                isRouteMapVisible ? <RecoRouteWebView stops={routeStops} loading={false} /> : null
+              ) : (
+                <AppText style={styles.routeMapHint}>
+                  좌표 정보가 없어 카카오 경로를 표시할 수 없습니다.
+                </AppText>
+              )}
+            </View>
           </AppCard>
 
           <AppCard outlined style={styles.infoCard}>
@@ -393,6 +731,10 @@ export function RunActiveDetails({
               />
             </View>
             <View style={styles.infoRow}>
+              <AppText style={styles.infoLabel}>위치 공유 변경 시각</AppText>
+              <AppText style={styles.infoValue}>{trackingSharingUpdatedAtText}</AppText>
+            </View>
+            <View style={styles.infoRow}>
               <AppText style={styles.infoLabel}>위치 업데이트</AppText>
               <AppButton
                 title="위치 업데이트"
@@ -410,6 +752,81 @@ export function RunActiveDetails({
               <AppText style={styles.infoLabel}>추천 액션</AppText>
               <AppText style={styles.infoValue}>{driverCta?.label ?? "-"}</AppText>
             </View>
+            {photoGateHint ? <AppText style={styles.helperText}>{photoGateHint}</AppText> : null}
+          </AppCard>
+
+          <AppCard outlined style={styles.photoCard}>
+            <AppText style={styles.infoCardTitle}>운행 사진</AppText>
+
+            <View style={styles.photoSection}>
+              <View style={styles.photoHeaderRow}>
+                <AppText style={styles.photoSectionTitle}>상차 사진</AppText>
+                <AppButton
+                  title="업로드"
+                  variant="secondary"
+                  onPress={() => void handleUploadPhoto("PICKUP")}
+                  disabled={safeMatchId <= 0 || isBusy || uploadingPhotoType !== null}
+                  loading={uploadingPhotoType === "PICKUP"}
+                  style={styles.photoUploadButton}
+                />
+              </View>
+              {pickupPhotos.length > 0 ? (
+                <View style={styles.photoThumbRow}>
+                  {pickupPhotos.map((photo, index) => {
+                    const uri = resolvePhotoUri(photo);
+                    const key = parsePositiveInt(photo.photoId) || index + 1;
+                    return (
+                      <View key={`pickup-photo-${key}`} style={styles.photoThumb}>
+                        {uri ? <Image source={{ uri }} style={styles.photoThumbImage} resizeMode="cover" /> : null}
+                        <View style={styles.photoThumbMeta}>
+                          <AppText style={styles.photoThumbType}>상차</AppText>
+                          <AppText style={styles.photoThumbTime}>
+                            {formatDateTime(photo.takenAt ?? photo.createdAt, "-")}
+                          </AppText>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              ) : (
+                <AppText style={styles.photoEmpty}>등록된 상차 사진이 없습니다.</AppText>
+              )}
+            </View>
+
+            <View style={styles.photoSection}>
+              <View style={styles.photoHeaderRow}>
+                <AppText style={styles.photoSectionTitle}>하차 사진</AppText>
+                <AppButton
+                  title="업로드"
+                  variant="secondary"
+                  onPress={() => void handleUploadPhoto("DELIVERY")}
+                  disabled={safeMatchId <= 0 || isBusy || uploadingPhotoType !== null}
+                  loading={uploadingPhotoType === "DELIVERY"}
+                  style={styles.photoUploadButton}
+                />
+              </View>
+              {deliveryPhotos.length > 0 ? (
+                <View style={styles.photoThumbRow}>
+                  {deliveryPhotos.map((photo, index) => {
+                    const uri = resolvePhotoUri(photo);
+                    const key = parsePositiveInt(photo.photoId) || index + 1;
+                    return (
+                      <View key={`delivery-photo-${key}`} style={styles.photoThumb}>
+                        {uri ? <Image source={{ uri }} style={styles.photoThumbImage} resizeMode="cover" /> : null}
+                        <View style={styles.photoThumbMeta}>
+                          <AppText style={styles.photoThumbType}>하차</AppText>
+                          <AppText style={styles.photoThumbTime}>
+                            {formatDateTime(photo.takenAt ?? photo.createdAt, "-")}
+                          </AppText>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              ) : (
+                <AppText style={styles.photoEmpty}>등록된 하차 사진이 없습니다.</AppText>
+              )}
+            </View>
           </AppCard>
         </View>
 
@@ -418,7 +835,7 @@ export function RunActiveDetails({
             title={driverCta?.label ?? "하차 완료"}
             onPress={() => void handleCompleteTransit()}
             loading={isCompleting}
-            disabled={!canCompleteTransit || isSyncing}
+            disabled={!canCompleteTransit || isSyncing || isBusy}
             style={styles.completeButton}
           />
           <AppButton
