@@ -217,8 +217,7 @@ function DriverOrderUnifiedCardBase({
   const showMarketActions = scope === "market" && item.uiState === DRIVER_UI_STATE.READY_TO_ACCEPT;
   const showPrepareAction =
     scope !== "market" &&
-    item.uiState === DRIVER_UI_STATE.ASSIGNED &&
-    item.cta?.id !== DRIVER_CTA_ID.START_DRIVE;
+    item.uiState === DRIVER_UI_STATE.ASSIGNED;
   const showNegotiatingMeta = scope !== "market" && item.uiState === DRIVER_UI_STATE.NEGOTIATING;
   const isAcceptingCurrent = acceptingMatchId === item.matchId;
   const isPreparingCurrent = preparingMatchId === item.matchId;
@@ -289,14 +288,16 @@ function DriverOrderUnifiedCardBase({
             ))}
           </View>
 
-          <View style={styles.priceWrap}>
-            <AppText variant="caption" weight="800" color="textMuted">
-              총 운임
-            </AppText>
-            <AppText variant="title" weight="900" color="brandPrimary">
-              {item.priceText || "-"}
-            </AppText>
-          </View>
+          {!showNegotiatingMeta ? (
+            <View style={styles.priceWrap}>
+              <AppText variant="caption" weight="800" color="textMuted">
+                총 운임
+              </AppText>
+              <AppText variant="title" weight="900" color="brandPrimary">
+                {item.priceText || "-"}
+              </AppText>
+            </View>
+          ) : null}
         </View>
 
         {showNegotiatingMeta ? (
