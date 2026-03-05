@@ -86,10 +86,6 @@ function normalizeMatchStatus(value: string): "READY" | "IN_TRANSIT" | "COMPLETE
   return "READY";
 }
 
-function resolveDriverMyMatchesPath(): string {
-  return `${apiPaths.driverMatches.replace(/\/$/, "")}/me`;
-}
-
 function toSeed(matchId: number): number {
   return Math.abs(matchId * 7919 + 104729);
 }
@@ -125,28 +121,28 @@ function statusToSpeed(status: ReturnType<typeof normalizeMatchStatus>, seed: nu
 function mapBackendMatch(raw: unknown): BackendMatch {
   const row = toRecord(raw);
   return {
-    matchId: toNumberValue(row.matchId ?? row.id),
-    quoteId: toNumberValue(row.quoteId),
-    driverId: toNumberValue(row.driverId),
+    matchId: toNumberValue(row.matchId ?? row.match_id ?? row.id),
+    quoteId: toNumberValue(row.quoteId ?? row.quote_id),
+    driverId: toNumberValue(row.driverId ?? row.driver_id),
     accepted: toBooleanValue(row.accepted),
     status: toStringValue(row.status, "READY"),
-    acceptedAt: toStringValue(row.acceptedAt, "") || null,
-    createdAt: toStringValue(row.createdAt, "") || null,
-    updatedAt: toStringValue(row.updatedAt, "") || null,
+    acceptedAt: toStringValue(row.acceptedAt ?? row.accepted_at, "") || null,
+    createdAt: toStringValue(row.createdAt ?? row.created_at, "") || null,
+    updatedAt: toStringValue(row.updatedAt ?? row.updated_at, "") || null,
   };
 }
 
 function mapBackendQuote(raw: unknown): BackendQuote {
   const row = toRecord(raw);
   return {
-    quoteId: toNumberValue(row.quoteId ?? row.id),
-    originAddress: toStringValue(row.originAddress, "-"),
-    destinationAddress: toStringValue(row.destinationAddress, "-"),
-    cargoName: toStringValue(row.cargoName, "") || null,
-    vehicleType: toStringValue(row.vehicleType, "") || null,
-    vehicleBodyType: toStringValue(row.vehicleBodyType, "") || null,
-    weightKg: toNumberValue(row.weightKg),
-    volumeCbm: toNumberValue(row.volumeCbm),
+    quoteId: toNumberValue(row.quoteId ?? row.quote_id ?? row.id),
+    originAddress: toStringValue(row.originAddress ?? row.origin_address, "-"),
+    destinationAddress: toStringValue(row.destinationAddress ?? row.destination_address, "-"),
+    cargoName: toStringValue(row.cargoName ?? row.cargo_name, "") || null,
+    vehicleType: toStringValue(row.vehicleType ?? row.vehicle_type, "") || null,
+    vehicleBodyType: toStringValue(row.vehicleBodyType ?? row.vehicle_body_type, "") || null,
+    weightKg: toNumberValue(row.weightKg ?? row.weight_kg),
+    volumeCbm: toNumberValue(row.volumeCbm ?? row.volume_cbm),
   };
 }
 
@@ -214,7 +210,7 @@ async function fetchNotifications(): Promise<BackendNotification[]> {
 
 async function fetchQuotes(): Promise<BackendQuote[]> {
   try {
-    const response = await apiClient.get<unknown>(apiPaths.shipperQuotes);
+    const response = await apiClient.get<unknown>(apiPaths.adminTransportQuotes);
     return pickListPayload(response.data).map(mapBackendQuote);
   } catch {
     return [];
@@ -281,8 +277,7 @@ function parseMatchIdText(matchId: string): number | null {
 
 async function fetchLiveMatchDetail(matchId: number): Promise<BackendMatch | null> {
   const paths = [
-    `${apiPaths.driverMatches.replace(/\/$/, "")}/${matchId}`,
-    `${apiPaths.shipperMatchesMe.replace(/\/me\/?$/, "").replace(/\/$/, "")}/${matchId}`,
+    `${apiPaths.adminTransportMatches.replace(/\/$/, "")}/${matchId}`,
   ];
 
   for (const path of paths) {
@@ -299,7 +294,7 @@ async function fetchLiveMatchDetail(matchId: number): Promise<BackendMatch | nul
 
 async function fetchQuoteDetailById(quoteId: number): Promise<BackendQuote | null> {
   try {
-    const response = await apiClient.get<unknown>(`${apiPaths.shipperQuotes.replace(/\/$/, "")}/${quoteId}`);
+    const response = await apiClient.get<unknown>(`${apiPaths.adminTransportQuotes.replace(/\/$/, "")}/${quoteId}`);
     return mapBackendQuote(response.data);
   } catch {
     return null;
@@ -318,15 +313,13 @@ function buildRoutePoints(baseLat: number, baseLng: number, span: number) {
 export async function fetchLiveDeliveryRows(): Promise<LiveDeliveryRow[]> {
   if (isMockModeEnabled()) return [...LIVE_DELIVERY_MOCK_ROWS];
 
-  const [shipperMatches, openDriverMatches, myDriverMatches, notifications, quotes] = await Promise.all([
-    fetchMatchesByPath(apiPaths.shipperMatchesMe),
-    fetchMatchesByPath(apiPaths.driverMatches),
-    fetchMatchesByPath(resolveDriverMyMatchesPath()),
+  const [adminMatches, notifications, quotes] = await Promise.all([
+    fetchMatchesByPath(apiPaths.adminTransportMatches),
     fetchNotifications(),
     fetchQuotes(),
   ]);
 
-  const mergedMatches = mergeMatches([...shipperMatches, ...openDriverMatches, ...myDriverMatches]);
+  const mergedMatches = mergeMatches(adminMatches);
   return buildRowsFromLive(mergedMatches, notifications, quotes);
 }
 

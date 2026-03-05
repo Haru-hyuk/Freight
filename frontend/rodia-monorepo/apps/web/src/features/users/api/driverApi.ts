@@ -150,6 +150,15 @@ type BackendNotification = {
   createdAt: string | null;
 };
 
+type BackendAdminDriverUser = {
+  id: string;
+  role: string;
+  name: string;
+  phone: string;
+  status: string;
+  createdAt: string | null;
+};
+
 const MOCK_DELIVERY_STATUSES: ReadonlyArray<DeliveryLog["status"]> = [
   "COMPLETED",
   "COMPLETED",
@@ -265,9 +274,12 @@ function normalizeRating(average: number): DriverRating {
   return DriverRating.POOR;
 }
 
-function resolveSettlementMePath(basePath: string): string {
-  const base = basePath.replace(/\/$/, "");
-  return base.endsWith("/me") ? base : `${base}/me`;
+function normalizeAdminDriverStatus(value: string | null | undefined, fallback: DriverStatus): DriverStatus {
+  const status = (value ?? "").trim().toUpperCase();
+  if (status === "ACTIVE") return DriverStatus.ACTIVE;
+  if (status === "SUSPENDED") return DriverStatus.SUSPENDED;
+  if (status === "DRIVING_BLOCKED") return DriverStatus.PENDING_APPROVAL;
+  return fallback;
 }
 
 function normalizeDriverToken(id: string): string {
@@ -290,105 +302,95 @@ function parseDriverNumber(id: string): number | null {
 function mapBackendMatch(raw: unknown): BackendMatch {
   const row = toRecord(raw);
   return {
-    matchId: toOptionalNumberValue(row.matchId ?? row.id),
-    quoteId: toOptionalNumberValue(row.quoteId),
-    driverId: toOptionalNumberValue(row.driverId),
+    matchId: toOptionalNumberValue(row.matchId ?? row.match_id ?? row.id),
+    quoteId: toOptionalNumberValue(row.quoteId ?? row.quote_id),
+    driverId: toOptionalNumberValue(row.driverId ?? row.driver_id),
     accepted: Boolean(row.accepted),
     status: toStringValue(row.status, "READY"),
-    createdAt: toStringValue(row.createdAt, "") || null,
-    updatedAt: toStringValue(row.updatedAt, "") || null,
+    createdAt: toStringValue(row.createdAt ?? row.created_at, "") || null,
+    updatedAt: toStringValue(row.updatedAt ?? row.updated_at, "") || null,
   };
 }
 
 function mapBackendQuote(raw: unknown): BackendQuote {
   const row = toRecord(raw);
   return {
-    quoteId: toOptionalNumberValue(row.quoteId ?? row.id),
-    shipperId: toOptionalNumberValue(row.shipperId),
-    originAddress: toStringValue(row.originAddress, "-"),
-    destinationAddress: toStringValue(row.destinationAddress, "-"),
-    distanceKm: toOptionalNumberValue(row.distanceKm),
-    weightKg: toOptionalNumberValue(row.weightKg),
-    desiredPrice: toOptionalNumberValue(row.desiredPrice),
-    finalPrice: toOptionalNumberValue(row.finalPrice),
-    createdAt: toStringValue(row.createdAt, "") || null,
+    quoteId: toOptionalNumberValue(row.quoteId ?? row.quote_id ?? row.id),
+    shipperId: toOptionalNumberValue(row.shipperId ?? row.shipper_id),
+    originAddress: toStringValue(row.originAddress ?? row.origin_address, "-"),
+    destinationAddress: toStringValue(row.destinationAddress ?? row.destination_address, "-"),
+    distanceKm: toOptionalNumberValue(row.distanceKm ?? row.distance_km),
+    weightKg: toOptionalNumberValue(row.weightKg ?? row.weight_kg),
+    desiredPrice: toOptionalNumberValue(row.desiredPrice ?? row.desired_price),
+    finalPrice: toOptionalNumberValue(row.finalPrice ?? row.final_price),
+    createdAt: toStringValue(row.createdAt ?? row.created_at, "") || null,
   };
 }
 
 function mapBackendSettlement(raw: unknown): BackendSettlement {
   const row = toRecord(raw);
   return {
-    settlementId: toOptionalNumberValue(row.settlementId ?? row.id),
-    matchId: toOptionalNumberValue(row.matchId),
-    driverId: toOptionalNumberValue(row.driverId),
-    totalFare: toOptionalNumberValue(row.totalFare),
-    driverPayout: toOptionalNumberValue(row.driverPayout),
-    settlementStatus: toStringValue(row.settlementStatus, "") || null,
-    completedAt: toStringValue(row.completedAt, "") || null,
-    createdAt: toStringValue(row.createdAt, "") || null,
+    settlementId: toOptionalNumberValue(row.settlementId ?? row.settlement_id ?? row.id),
+    matchId: toOptionalNumberValue(row.matchId ?? row.match_id),
+    driverId: toOptionalNumberValue(row.driverId ?? row.driver_id),
+    totalFare: toOptionalNumberValue(row.totalFare ?? row.total_fare),
+    driverPayout: toOptionalNumberValue(row.driverPayout ?? row.driver_payout),
+    settlementStatus: toStringValue(row.settlementStatus ?? row.settlement_status, "") || null,
+    completedAt: toStringValue(row.completedAt ?? row.completed_at, "") || null,
+    createdAt: toStringValue(row.createdAt ?? row.created_at, "") || null,
   };
 }
 
 function mapBackendTruck(raw: unknown): BackendTruck {
   const row = toRecord(raw);
   return {
-    truckId: toOptionalNumberValue(row.truckId ?? row.id),
-    driverId: toOptionalNumberValue(row.driverId),
-    vehicleType: toStringValue(row.vehicleType, "") || null,
-    vehicleBodyType: toStringValue(row.vehicleBodyType, "") || null,
-    maxWeight: toOptionalNumberValue(row.maxWeight),
-    maxVolume: toOptionalNumberValue(row.maxVolume),
+    truckId: toOptionalNumberValue(row.truckId ?? row.truck_id ?? row.id),
+    driverId: toOptionalNumberValue(row.driverId ?? row.driver_id),
+    vehicleType: toStringValue(row.vehicleType ?? row.vehicle_type, "") || null,
+    vehicleBodyType: toStringValue(row.vehicleBodyType ?? row.vehicle_body_type, "") || null,
+    maxWeight: toOptionalNumberValue(row.maxWeight ?? row.max_weight),
+    maxVolume: toOptionalNumberValue(row.maxVolume ?? row.max_volume),
     name: toStringValue(row.name, "") || null,
     approved: typeof row.approved === "boolean" ? row.approved : null,
     insurance: toStringValue(row.insurance, "") || null,
     tonnage: toOptionalNumberValue(row.tonnage),
-    createdAt: toStringValue(row.createdAt, "") || null,
-    updatedAt: toStringValue(row.updatedAt, "") || null,
+    createdAt: toStringValue(row.createdAt ?? row.created_at, "") || null,
+    updatedAt: toStringValue(row.updatedAt ?? row.updated_at, "") || null,
   };
 }
 
-function mapBackendNotification(raw: unknown): BackendNotification | null {
+function mapBackendAdminDriverUser(raw: unknown): BackendAdminDriverUser | null {
   const row = toRecord(raw);
-  const notificationId = toOptionalNumberValue(row.notificationId ?? row.id);
-  if (notificationId === null) return null;
+  const id = toStringValue(row.id, "").trim();
+  if (!id) return null;
   return {
-    notificationId,
-    matchId: toOptionalNumberValue(row.matchId),
-    type: toStringValue(row.type, "") || null,
-    message: toStringValue(row.message, ""),
-    isRead: Boolean(row.isRead),
-    createdAt: toStringValue(row.createdAt, "") || null,
+    id,
+    role: toStringValue(row.role, "").trim(),
+    name: toStringValue(row.name, "").trim(),
+    phone: toStringValue(row.phone, "").trim(),
+    status: toStringValue(row.status, "").trim(),
+    createdAt: toStringValue(row.createdAt ?? row.created_at, "") || null,
   };
+}
+
+function isDriverUser(row: BackendAdminDriverUser): boolean {
+  const role = row.role.trim().toUpperCase();
+  if (role === "DRIVER") return true;
+  return row.id.trim().toUpperCase().startsWith("D-");
 }
 
 async function fetchMatches(): Promise<BackendMatch[]> {
-  const driverMyPath = `${apiPaths.driverMatches.replace(/\/$/, "")}/me`;
-
-  const [shipperRows, driverOpenRows, driverRows] = await Promise.all([
-    apiClient.get<unknown>(apiPaths.shipperMatchesMe).then((res) => pickListPayload(res.data).map(mapBackendMatch)).catch(() => []),
-    apiClient.get<unknown>(apiPaths.driverMatches).then((res) => pickListPayload(res.data).map(mapBackendMatch)).catch(() => []),
-    apiClient.get<unknown>(driverMyPath).then((res) => pickListPayload(res.data).map(mapBackendMatch)).catch(() => []),
-  ]);
-
-  const merged = new Map<number, BackendMatch>();
-  for (const row of [...shipperRows, ...driverOpenRows, ...driverRows]) {
-    if (typeof row.matchId !== "number") continue;
-    const current = merged.get(row.matchId);
-    if (!current) {
-      merged.set(row.matchId, row);
-      continue;
-    }
-    const currentTime = Date.parse(current.updatedAt ?? current.createdAt ?? "");
-    const nextTime = Date.parse(row.updatedAt ?? row.createdAt ?? "");
-    merged.set(row.matchId, Number.isFinite(nextTime) && nextTime >= currentTime ? row : current);
+  try {
+    const response = await apiClient.get<unknown>(apiPaths.adminTransportMatches);
+    return pickListPayload(response.data).map(mapBackendMatch);
+  } catch {
+    return [];
   }
-
-  return Array.from(merged.values());
 }
 
 async function fetchQuotes(): Promise<BackendQuote[]> {
   try {
-    const response = await apiClient.get<unknown>(apiPaths.shipperQuotes);
+    const response = await apiClient.get<unknown>(apiPaths.adminTransportQuotes);
     return pickListPayload(response.data).map(mapBackendQuote);
   } catch {
     return [];
@@ -396,42 +398,25 @@ async function fetchQuotes(): Promise<BackendQuote[]> {
 }
 
 async function fetchSettlements(): Promise<BackendSettlement[]> {
-  const [shipperRows, driverRows] = await Promise.all([
-    apiClient
-      .get<unknown>(resolveSettlementMePath(apiPaths.shipperSettlements))
-      .then((res) => pickListPayload(res.data).map(mapBackendSettlement))
-      .catch(() => []),
-    apiClient
-      .get<unknown>(resolveSettlementMePath(apiPaths.driverSettlements))
-      .then((res) => pickListPayload(res.data).map(mapBackendSettlement))
-      .catch(() => []),
-  ]);
-
-  const merged = new Map<number, BackendSettlement>();
-  for (const row of [...shipperRows, ...driverRows]) {
-    if (typeof row.settlementId === "number") merged.set(row.settlementId, row);
+  try {
+    const response = await apiClient.get<unknown>(apiPaths.adminTransportSettlements);
+    return pickListPayload(response.data).map(mapBackendSettlement);
+  } catch {
+    return [];
   }
-  return Array.from(merged.values());
 }
 
 async function fetchTrucks(): Promise<BackendTruck[]> {
   try {
-    const response = await apiClient.get<unknown>(apiPaths.driverTrucks);
+    const response = await apiClient.get<unknown>(apiPaths.adminTrucksPending);
     return pickListPayload(response.data).map(mapBackendTruck);
   } catch {
     return [];
   }
 }
 
-async function fetchNotifications(): Promise<BackendNotification[]> {
-  try {
-    const response = await apiClient.get<unknown>(apiPaths.notificationsMe);
-    return pickListPayload(response.data)
-      .map(mapBackendNotification)
-      .filter((item): item is BackendNotification => item !== null);
-  } catch {
-    return [];
-  }
+async function fetchAdminDriverUsers(): Promise<BackendAdminDriverUser[]> {
+  return [];
 }
 
 function deriveLiveDrivers(
@@ -440,8 +425,15 @@ function deriveLiveDrivers(
   settlements: BackendSettlement[],
   trucks: BackendTruck[],
   notifications: BackendNotification[],
+  adminDrivers: BackendAdminDriverUser[],
 ): Driver[] {
   const driverIds = new Set<string>();
+  const adminDriverByToken = new Map<string, BackendAdminDriverUser>();
+
+  for (const adminDriver of adminDrivers) {
+    adminDriverByToken.set(normalizeDriverToken(adminDriver.id), adminDriver);
+    driverIds.add(adminDriver.id.trim().toUpperCase());
+  }
 
   for (const truck of trucks) {
     if (typeof truck.driverId === "number") driverIds.add(`D-${truck.driverId}`);
@@ -449,7 +441,9 @@ function deriveLiveDrivers(
   for (const match of matches) {
     if (typeof match.driverId === "number") driverIds.add(`D-${match.driverId}`);
   }
-  if (driverIds.size === 0) driverIds.add("D-ME");
+  for (const settlement of settlements) {
+    if (typeof settlement.driverId === "number") driverIds.add(`D-${settlement.driverId}`);
+  }
 
   const quoteById = new Map<number, BackendQuote>();
   for (const quote of quotes) {
@@ -464,6 +458,7 @@ function deriveLiveDrivers(
   return Array.from(driverIds)
     .map((driverId) => {
       const driverNumber = parseDriverNumber(driverId);
+      const adminDriver = adminDriverByToken.get(normalizeDriverToken(driverId));
 
       const relevantMatches = matches.filter((match) => {
         if (driverNumber === null) return true;
@@ -531,7 +526,7 @@ function deriveLiveDrivers(
             ? DriverStatus.PENDING_APPROVAL
             : DriverStatus.ACTIVE;
 
-      const status = liveStatusOverrides.get(driverId) ?? inferredStatus;
+      const status = liveStatusOverrides.get(driverId) ?? normalizeAdminDriverStatus(adminDriver?.status, inferredStatus);
       const licenseNo = driverNumber !== null ? `LIC-${String(driverNumber).padStart(8, "0")}` : "LIC-ME";
 
       const violations = delaySignals.slice(0, 5).map((signal) => {
@@ -546,16 +541,17 @@ function deriveLiveDrivers(
 
       return {
         id: driverId,
-        name: driverNumber !== null ? `Driver-${driverNumber}` : "Driver-ME",
+        name: adminDriver?.name || (driverNumber !== null ? `Driver-${driverNumber}` : driverId),
         licenseNo,
-        phone: "-",
+        phone: adminDriver?.phone || "-",
         birthDate: "-",
         address: "-",
-        registeredAt: latestTruck?.createdAt ?? settlements[0]?.createdAt ?? quotes[0]?.createdAt ?? new Date().toISOString(),
+        registeredAt:
+          adminDriver?.createdAt ?? latestTruck?.createdAt ?? settlements[0]?.createdAt ?? quotes[0]?.createdAt ?? new Date().toISOString(),
         status,
         rating: normalizeRating(averageRating),
         vehicle: {
-          plateNumber: latestTruck?.name ?? (driverNumber !== null ? `TRUCK-${driverNumber}` : "TRUCK-ME"),
+          plateNumber: latestTruck?.name ?? (driverNumber !== null ? `TRUCK-${driverNumber}` : "-"),
           type: normalizeVehicleType(latestTruck?.vehicleType ?? null),
           capacity: latestTruck?.maxVolume ?? latestTruck?.maxWeight ?? 0,
           insuranceExpiredAt: latestTruck?.updatedAt ?? new Date().toISOString(),
@@ -599,15 +595,15 @@ function paginate<T>(items: T[], page: number, size: number): T[] {
 }
 
 async function fetchLiveDrivers(filter: DriverFilter): Promise<DriverResponse> {
-  const [matches, quotes, settlements, trucks, notifications] = await Promise.all([
+  const [matches, quotes, settlements, trucks, adminDrivers] = await Promise.all([
     fetchMatches(),
     fetchQuotes(),
     fetchSettlements(),
     fetchTrucks(),
-    fetchNotifications(),
+    fetchAdminDriverUsers(),
   ]);
 
-  const rows = deriveLiveDrivers(matches, quotes, settlements, trucks, notifications);
+  const rows = deriveLiveDrivers(matches, quotes, settlements, trucks, [], adminDrivers);
   const filtered = applyDriverFilters(rows, filter);
   const page = filter.page ?? 1;
   const size = filter.size ?? 20;

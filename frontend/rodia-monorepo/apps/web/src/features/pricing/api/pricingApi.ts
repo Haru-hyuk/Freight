@@ -10,13 +10,13 @@ import { apiClient } from "@/shared/lib/api/client";
 import { appendActivityLog } from "@/shared/lib/activity-log";
 import { isMockModeEnabled } from "@/shared/lib/mock-mode";
 
-type BackendQuote = {
-  quoteId: number | null;
+type BackendPricingRate = {
+  rangeKey: string | null;
+  minDistanceKm: number | null;
+  maxDistanceKm: number | null;
   vehicleType: string | null;
-  vehicleBodyType: string | null;
-  desiredPrice: number | null;
-  finalPrice: number | null;
-  createdAt: string | null;
+  baseRateWon: number | null;
+  sourceName: string | null;
 };
 
 type BackendChecklist = {
@@ -25,6 +25,12 @@ type BackendChecklist = {
   name: string | null;
   hasExtraFee: boolean;
   baseExtraFee: number | null;
+};
+
+type BackendTruckSpec = {
+  vehicleType: string | null;
+  vehicleBodyType: string | null;
+  categoryKr: string | null;
 };
 
 const FALLBACK_VEHICLE_ROWS: VehiclePricingRow[] = [
@@ -75,6 +81,17 @@ const FALLBACK_ADDITIONAL_ROWS: AdditionalPricingRow[] = [
   },
 ];
 
+const MOBILE_STEP3_BODY_TYPES: VehiclePricingRow["bodyType"][] = ["일반카고", "윙바디", "탑차"];
+
+const BODY_TYPE_SORT_ORDER: Record<VehiclePricingRow["bodyType"], number> = {
+  일반카고: 0,
+  윙바디: 1,
+  탑차: 2,
+  냉장차: 3,
+  사다리차: 4,
+  추레라: 5,
+};
+
 const vehicleOverrides = new Map<string, VehiclePricingUpdatePayload>();
 const additionalOverrides = new Map<string, AdditionalPricingUpdatePayload>();
 
@@ -107,15 +124,15 @@ function pickListPayload(payload: unknown): unknown[] {
   return [];
 }
 
-function mapBackendQuote(raw: unknown): BackendQuote {
+function mapBackendPricingRate(raw: unknown): BackendPricingRate {
   const row = toRecord(raw);
   return {
-    quoteId: toNumberValue(row.quoteId ?? row.id),
-    vehicleType: toStringValue(row.vehicleType, "") || null,
-    vehicleBodyType: toStringValue(row.vehicleBodyType, "") || null,
-    desiredPrice: toNumberValue(row.desiredPrice),
-    finalPrice: toNumberValue(row.finalPrice),
-    createdAt: toStringValue(row.createdAt, "") || null,
+    rangeKey: toStringValue(row.rangeKey ?? row.range_key, "") || null,
+    minDistanceKm: toNumberValue(row.minDistanceKm ?? row.min_distance_km),
+    maxDistanceKm: toNumberValue(row.maxDistanceKm ?? row.max_distance_km),
+    vehicleType: toStringValue(row.vehicleType ?? row.vehicle_type, "") || null,
+    baseRateWon: toNumberValue(row.baseRateWon ?? row.base_rate_won),
+    sourceName: toStringValue(row.sourceName ?? row.source_name, "") || null,
   };
 }
 
@@ -127,6 +144,15 @@ function mapBackendChecklist(raw: unknown): BackendChecklist {
     name: toStringValue(row.name, "") || null,
     hasExtraFee: Boolean(row.hasExtraFee),
     baseExtraFee: toNumberValue(row.baseExtraFee),
+  };
+}
+
+function mapBackendTruckSpec(raw: unknown): BackendTruckSpec {
+  const row = toRecord(raw);
+  return {
+    vehicleType: toStringValue(row.vehicleType ?? row.vehicle_type, "") || null,
+    vehicleBodyType: toStringValue(row.vehicleBodyType ?? row.vehicle_body_type, "") || null,
+    categoryKr: toStringValue(row.categoryKr ?? row.category_kr, "") || null,
   };
 }
 
@@ -144,10 +170,10 @@ function inferScope(category: string | null): AdditionalPricingScope {
   return "TRANSPORT_OPTION";
 }
 
-async function fetchBackendQuotes(): Promise<BackendQuote[]> {
+async function fetchBackendPricingRates(): Promise<BackendPricingRate[]> {
   try {
-    const response = await apiClient.get<unknown>(apiPaths.shipperQuotes);
-    return pickListPayload(response.data).map(mapBackendQuote);
+    const response = await apiClient.get<unknown>("/api/reference/pricing-rates");
+    return pickListPayload(response.data).map(mapBackendPricingRate);
   } catch {
     return [];
   }
@@ -160,6 +186,31 @@ async function fetchBackendChecklistItems(): Promise<BackendChecklist[]> {
   } catch {
     return [];
   }
+}
+
+async function fetchBackendTruckSpecs(): Promise<BackendTruckSpec[]> {
+  try {
+    const response = await apiClient.get<unknown>("/api/reference/truck-specs");
+    return pickListPayload(response.data).map(mapBackendTruckSpec);
+  } catch {
+    return [];
+  }
+}
+
+function normalizeBodyType(
+  vehicleBodyType: string | null,
+  categoryKr: string | null
+): VehiclePricingRow["bodyType"] | null {
+  const body = (vehicleBodyType ?? "").trim().toUpperCase();
+  if (body === "CARGO") return "일반카고";
+  if (body === "WINGBODY") return "윙바디";
+  if (body === "TOP") return "탑차";
+
+  const category = (categoryKr ?? "").trim();
+  if (category.includes("카고")) return "일반카고";
+  if (category.includes("윙")) return "윙바디";
+  if (category.includes("탑") || category.includes("냉장") || category.includes("냉동")) return "탑차";
+  return null;
 }
 
 function applyVehicleOverrides(rows: VehiclePricingRow[]): VehiclePricingRow[] {
@@ -196,68 +247,81 @@ function applyAdditionalOverrides(rows: AdditionalPricingRow[]): AdditionalPrici
 export async function fetchVehiclePricingRows(): Promise<VehiclePricingRow[]> {
   if (isMockModeEnabled()) return applyVehicleOverrides([...FALLBACK_VEHICLE_ROWS]);
 
-  const quotes = await fetchBackendQuotes();
-  if (quotes.length === 0) return applyVehicleOverrides([...FALLBACK_VEHICLE_ROWS]);
+  const [pricingRates, truckSpecs] = await Promise.all([fetchBackendPricingRates(), fetchBackendTruckSpecs()]);
+  if (pricingRates.length === 0) return applyVehicleOverrides([...FALLBACK_VEHICLE_ROWS]);
 
   const grouped = new Map<
     string,
     {
       vehicleType: string;
-      vehicleBodyType: string;
-      prices: number[];
-      additional: number[];
-      latest: number;
+      baseFare: number;
+      minDistanceKm: number;
+      sourceName: string;
     }
   >();
 
-  for (const quote of quotes) {
-    const vehicleType = quote.vehicleType ?? "UNKNOWN";
-    const bodyType = quote.vehicleBodyType ?? "GENERAL";
-    const key = normalizeVehicleKey(vehicleType, bodyType);
-    const current = grouped.get(key) ?? {
-      vehicleType,
-      vehicleBodyType: bodyType,
-      prices: [],
-      additional: [],
-      latest: 0,
-    };
+  for (const rate of pricingRates) {
+    const vehicleType = (rate.vehicleType ?? "").trim().toUpperCase();
+    const baseRateWon = rate.baseRateWon;
+    if (!vehicleType || baseRateWon === null) continue;
 
-    const base = quote.desiredPrice ?? quote.finalPrice ?? 0;
-    const final = quote.finalPrice ?? quote.desiredPrice ?? base;
-    current.prices.push(base);
-    current.additional.push(Math.max(0, final - base));
-    current.latest = Math.max(current.latest, Date.parse(quote.createdAt ?? "") || 0);
-    grouped.set(key, current);
+    const current = grouped.get(vehicleType);
+    const minDistanceKm = rate.minDistanceKm ?? Number.MAX_SAFE_INTEGER;
+    if (!current || minDistanceKm < current.minDistanceKm) {
+      grouped.set(vehicleType, {
+        vehicleType,
+        baseFare: baseRateWon,
+        minDistanceKm,
+        sourceName: rate.sourceName ?? "pricing-rate-catalog",
+      });
+    }
   }
 
-  const rows: VehiclePricingRow[] = Array.from(grouped.entries()).map(([key, group]) => {
-    const avgBase = Math.round(group.prices.reduce((sum, value) => sum + value, 0) / Math.max(group.prices.length, 1));
-    const avgAdditional = Math.round(
-      group.additional.reduce((sum, value) => sum + value, 0) / Math.max(group.additional.length, 1),
-    );
-    const surchargeRate = avgBase > 0 ? Number((avgAdditional / avgBase).toFixed(2)) : 0;
+  if (grouped.size === 0) return applyVehicleOverrides([...FALLBACK_VEHICLE_ROWS]);
 
-    return {
-      vehiclePricingId: `VP-${key.replace(/[^A-Z0-9_]/g, "_")}`,
-      tonnageLabel: group.vehicleType,
-      bodyType: group.vehicleBodyType as VehiclePricingRow["bodyType"],
-      baseFare: avgBase,
-      additionalFare: avgAdditional,
-      surchargeRate,
-      active: true,
-      updatedBy: "quotes-aggregate",
-      updatedAt: group.latest > 0 ? new Date(group.latest).toISOString() : new Date().toISOString(),
-    };
+  const bodyTypesByVehicle = new Map<string, Set<VehiclePricingRow["bodyType"]>>();
+  for (const spec of truckSpecs) {
+    const vehicleType = (spec.vehicleType ?? "").trim().toUpperCase();
+    const bodyType = normalizeBodyType(spec.vehicleBodyType, spec.categoryKr);
+    if (!vehicleType || !bodyType) continue;
+    const bucket = bodyTypesByVehicle.get(vehicleType) ?? new Set<VehiclePricingRow["bodyType"]>();
+    bucket.add(bodyType);
+    bodyTypesByVehicle.set(vehicleType, bucket);
+  }
+
+  const rows: VehiclePricingRow[] = Array.from(grouped.values()).flatMap((group) => {
+    const resolvedBodyTypes = Array.from(bodyTypesByVehicle.get(group.vehicleType) ?? []);
+    const mobileStep3BodyTypes = resolvedBodyTypes.filter((bodyType) => MOBILE_STEP3_BODY_TYPES.includes(bodyType));
+    const bodyTypes = mobileStep3BodyTypes.length > 0 ? mobileStep3BodyTypes : [...MOBILE_STEP3_BODY_TYPES];
+
+    return bodyTypes.map((bodyType) => {
+      const bodyKey = bodyType === "일반카고" ? "CARGO" : bodyType === "윙바디" ? "WINGBODY" : "TOP";
+      return {
+        vehiclePricingId: `VP-${group.vehicleType.replace(/[^A-Z0-9_]/g, "_")}-${bodyKey}`,
+        tonnageLabel: group.vehicleType,
+        bodyType,
+        baseFare: group.baseFare,
+        additionalFare: 0,
+        surchargeRate: 0,
+        active: true,
+        updatedBy: group.sourceName,
+        updatedAt: new Date().toISOString(),
+      } satisfies VehiclePricingRow;
+    });
   });
 
-  return applyVehicleOverrides(rows);
+  return applyVehicleOverrides(rows).sort((a, b) => {
+    const tonnageCompare = a.tonnageLabel.localeCompare(b.tonnageLabel);
+    if (tonnageCompare !== 0) return tonnageCompare;
+    return (BODY_TYPE_SORT_ORDER[a.bodyType] ?? 999) - (BODY_TYPE_SORT_ORDER[b.bodyType] ?? 999);
+  });
 }
 
 export async function fetchAdditionalPricingRows(): Promise<AdditionalPricingRow[]> {
   if (isMockModeEnabled()) return applyAdditionalOverrides([...FALLBACK_ADDITIONAL_ROWS]);
 
   const items = await fetchBackendChecklistItems();
-  if (items.length === 0) return applyAdditionalOverrides([...FALLBACK_ADDITIONAL_ROWS]);
+  if (items.length === 0) return applyAdditionalOverrides([]);
 
   const rows = items
     .filter((item) => item.hasExtraFee || (item.baseExtraFee ?? 0) > 0)
@@ -275,7 +339,7 @@ export async function fetchAdditionalPricingRows(): Promise<AdditionalPricingRow
       } satisfies AdditionalPricingRow;
     });
 
-  if (rows.length === 0) return applyAdditionalOverrides([...FALLBACK_ADDITIONAL_ROWS]);
+  if (rows.length === 0) return applyAdditionalOverrides([]);
   return applyAdditionalOverrides(rows);
 }
 
