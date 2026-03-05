@@ -1167,6 +1167,30 @@ export default function QuoteDetailPage() {
   const isCompletedStatus = statusUiState === CUSTOMER_UI_STATE.COMPLETED;
   const shouldShowDeliveryTimeline = isPickupInProgress || isTransitInProgress;
   const shouldShowPostPaymentSummary = shouldShowDeliveryTimeline || isCompletedStatus;
+  const canShowTrackingCard = (isPickupInProgress || isTransitInProgress) && cancelTargetMatchId > 0;
+
+  const loadShipperTracking = React.useCallback(
+    async (targetMatchId: number) => {
+      const safeMatchId = parsePositiveInt(targetMatchId);
+      if (safeMatchId <= 0) {
+        setTrackingSnapshot(null);
+        setTrackingErrorMessage(null);
+        return;
+      }
+      try {
+        setIsTrackingLoading(true);
+        setTrackingErrorMessage(null);
+        const snapshot = await getShipperMatchTracking(safeMatchId);
+        setTrackingSnapshot(snapshot);
+      } catch (error) {
+        setTrackingSnapshot(null);
+        setTrackingErrorMessage(readApiErrorMessage(error, "기사 위치를 불러오지 못했습니다."));
+      } finally {
+        setIsTrackingLoading(false);
+      }
+    },
+    []
+  );
 
   const loadShipperPhotos = React.useCallback(async (targetMatchId: number) => {
     const safeMatchId = parsePositiveInt(targetMatchId);
