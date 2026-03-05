@@ -1525,7 +1525,14 @@ export function DriverOrdersBoard({
               : 0;
 
         const summary = resolvedQuoteId > 0 ? await getDriverQuoteSummaryByQuoteId(resolvedQuoteId) : null;
-        setActiveRun(summary ? { match, summary } : { match });
+        const matchForRun =
+          typeof match.status === "string" && match.status.trim()
+            ? match
+            : {
+                ...match,
+                status: card.status,
+              };
+        setActiveRun(summary ? { match: matchForRun, summary } : { match: matchForRun });
 
         await loadOrders("refresh");
         router.push(DRIVER_ROUTE_PATH.RUN_TAB);
