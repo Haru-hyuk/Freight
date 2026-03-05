@@ -1,6 +1,7 @@
 export const DRIVER_RUN_SYNC_EVENT = {
   COUNTER_OFFER_SUBMITTED: "COUNTER_OFFER_SUBMITTED",
   MATCH_ACCEPTED: "MATCH_ACCEPTED",
+  RUN_STATUS_UPDATED: "RUN_STATUS_UPDATED",
 } as const;
 
 export type DriverRunSyncEventType = (typeof DRIVER_RUN_SYNC_EVENT)[keyof typeof DRIVER_RUN_SYNC_EVENT];
@@ -58,4 +59,3 @@ export function subscribeDriverRunSyncEvent(listener: DriverRunSyncListener): ()
     listeners.delete(listener);
   };
 }
-

@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useActiveOrder } from "@/entities/order/model/active-order.store";
 import type { ActiveRun } from "@/entities/order/model/types";
 import { startDriverTransit } from "@/features/driver-run/api/driver-run-api";
+import { DRIVER_RUN_SYNC_EVENT, publishDriverRunSyncEvent } from "@/features/matching/model/driverRunSyncEvents";
 import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
 import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
@@ -163,6 +164,12 @@ export function PrepareForRunScreen({ activeRun, isSyncing = false, onRefetchRun
       if (typeof onRefetchRun === "function") {
         await onRefetchRun();
       }
+      publishDriverRunSyncEvent({
+        type: DRIVER_RUN_SYNC_EVENT.RUN_STATUS_UPDATED,
+        matchIds: [safeMatchId],
+        quoteIds: [parsePositiveInt(activeRun.match.quoteId ?? activeRun.summary?.quoteId)],
+        source: "driver-run:prepare-start",
+      });
       Alert.alert("운행 시작", "운행을 시작했습니다.");
     } catch (error) {
       Alert.alert("운행 시작 실패", readApiErrorMessage(error), [

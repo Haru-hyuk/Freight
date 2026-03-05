@@ -89,6 +89,7 @@ type ToastState = {
 const NETWORK_ERROR_TEXT = "네트워크 요청이 실패했습니다. 잠시 후 다시 시도해 주세요.";
 const TOAST_DURATION_MS = 2000;
 const FOCUS_REFETCH_THROTTLE_MS = 1500;
+const RUN_AUTO_SYNC_INTERVAL_MS = 12_000;
 const ROUTE_RECOMMEND_STEPS = [2, 3, 4, 5] as const;
 const ROUTE_RECOMMEND_STEP_HINT: Record<(typeof ROUTE_RECOMMEND_STEPS)[number], string> = {
   2: "빠른 운행",
@@ -96,7 +97,7 @@ const ROUTE_RECOMMEND_STEP_HINT: Record<(typeof ROUTE_RECOMMEND_STEPS)[number], 
   4: "수익 우선",
   5: "최대 탐색",
 };
-const RUN_STATUS_FILTER_ORDER = ["ALL", "ASSIGNED", "PICKUP", "TRANSIT", "COMPLETED"] as const;
+const RUN_STATUS_FILTER_ORDER = ["ALL", "NEGOTIATING", "ASSIGNED", "PICKUP", "TRANSIT", "COMPLETED"] as const;
 
 type RunStatusFilterKey = (typeof RUN_STATUS_FILTER_ORDER)[number];
 type DriverOrdersListItem =
@@ -113,6 +114,7 @@ type DriverOrdersListItem =
 
 const RUN_STATUS_FILTER_LABELS: Record<RunStatusFilterKey, string> = {
   ALL: "전체",
+  NEGOTIATING: "협의중",
   ASSIGNED: "배차완료",
   PICKUP: "상차중",
   TRANSIT: "운송중",
@@ -183,10 +185,22 @@ function buildServerGroupPathLabel(orders: DriverOrderCard[]): string {
 }
 
 function resolveRunStatusFilter(item: DriverOrderCard): RunStatusFilterKey {
+  if (item.uiState === DRIVER_UI_STATE.NEGOTIATING) return "NEGOTIATING";
   if (item.uiState === DRIVER_UI_STATE.PICKUP_IN_PROGRESS) return "PICKUP";
   if (item.uiState === DRIVER_UI_STATE.TRANSIT_IN_PROGRESS) return "TRANSIT";
   if (item.uiState === DRIVER_UI_STATE.COMPLETED) return "COMPLETED";
   return "ASSIGNED";
+}
+
+function shouldAutoSyncAssignedRunTab(overview: DriverOrdersOverview): boolean {
+  const syncTargetStates = new Set<DriverUiState>([
+    DRIVER_UI_STATE.NEGOTIATING,
+    DRIVER_UI_STATE.ASSIGNED,
+  ]);
+
+  return [...overview.myOrders, ...overview.runOrders].some((item) =>
+    syncTargetStates.has(item.uiState)
+  );
 }
 
 const EMPTY_OVERVIEW: DriverOrdersOverview = {
@@ -1170,7 +1184,8 @@ export function DriverOrdersBoard({
     return subscribeDriverRunSyncEvent((event) => {
       if (
         event.type !== DRIVER_RUN_SYNC_EVENT.COUNTER_OFFER_SUBMITTED &&
-        event.type !== DRIVER_RUN_SYNC_EVENT.MATCH_ACCEPTED
+        event.type !== DRIVER_RUN_SYNC_EVENT.MATCH_ACCEPTED &&
+        event.type !== DRIVER_RUN_SYNC_EVENT.RUN_STATUS_UPDATED
       ) {
         return;
       }
@@ -1183,19 +1198,24 @@ export function DriverOrdersBoard({
       const meta = focusRefetchMetaRef.current;
       if (!meta.hasFocusedOnce) {
         meta.hasFocusedOnce = true;
-        return undefined;
+      } else {
+        const now = Date.now();
+        if (now - meta.lastRefetchAt >= FOCUS_REFETCH_THROTTLE_MS) {
+          meta.lastRefetchAt = now;
+          void loadOrders("refresh");
+          void loadTruckOptions();
+        }
       }
 
-      const now = Date.now();
-      if (now - meta.lastRefetchAt < FOCUS_REFETCH_THROTTLE_MS) {
-        return undefined;
-      }
+      const shouldRunInterval = assignedOnly && shouldAutoSyncAssignedRunTab(overview);
+      if (!shouldRunInterval) return undefined;
 
-      meta.lastRefetchAt = now;
-      void loadOrders("refresh");
-      void loadTruckOptions();
-      return undefined;
-    }, [loadOrders, loadTruckOptions])
+      const intervalId = setInterval(() => {
+        void loadOrders("refresh");
+      }, RUN_AUTO_SYNC_INTERVAL_MS);
+
+      return () => clearInterval(intervalId);
+    }, [assignedOnly, loadOrders, loadTruckOptions, overview])
   );
 
   const baseMarketOrders = useMemo(
@@ -1220,6 +1240,7 @@ export function DriverOrdersBoard({
 
   const runOrderPool = useMemo(() => {
     const runStates = new Set<DriverUiState>([
+      DRIVER_UI_STATE.NEGOTIATING,
       DRIVER_UI_STATE.ASSIGNED,
       DRIVER_UI_STATE.PICKUP_IN_PROGRESS,
       DRIVER_UI_STATE.TRANSIT_IN_PROGRESS,

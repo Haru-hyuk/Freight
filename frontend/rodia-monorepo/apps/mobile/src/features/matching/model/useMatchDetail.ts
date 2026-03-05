@@ -55,7 +55,8 @@ export function useMatchDetail(matchId: number, routeSnapshot?: MatchDetailRoute
     return subscribeDriverRunSyncEvent((event) => {
       if (
         event.type !== DRIVER_RUN_SYNC_EVENT.COUNTER_OFFER_SUBMITTED &&
-        event.type !== DRIVER_RUN_SYNC_EVENT.MATCH_ACCEPTED
+        event.type !== DRIVER_RUN_SYNC_EVENT.MATCH_ACCEPTED &&
+        event.type !== DRIVER_RUN_SYNC_EVENT.RUN_STATUS_UPDATED
       ) {
         return;
       }

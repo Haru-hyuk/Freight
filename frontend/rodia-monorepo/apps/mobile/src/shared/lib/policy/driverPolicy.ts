@@ -179,12 +179,20 @@ export function getDriverUiStateFromRawStatus(rawStatus: string): DriverUiState 
 
   if (token === "OPEN") return DRIVER_UI_STATE.READY_TO_ACCEPT;
   if (token === "NEGOTIATING") return DRIVER_UI_STATE.NEGOTIATING;
+  if (token === "READY") return DRIVER_UI_STATE.ASSIGNED;
+  if (token === "MATCHED") return DRIVER_UI_STATE.ASSIGNED;
+  if (token === "ACCEPTED") return DRIVER_UI_STATE.ASSIGNED;
   if (token === "ASSIGNED") return DRIVER_UI_STATE.ASSIGNED;
   if (token === "PICKUP") return DRIVER_UI_STATE.PICKUP_IN_PROGRESS;
   if (token === "PREPARING") return DRIVER_UI_STATE.PICKUP_IN_PROGRESS;
   if (token === "DRIVING") return DRIVER_UI_STATE.TRANSIT_IN_PROGRESS;
   if (token === "TRANSIT") return DRIVER_UI_STATE.TRANSIT_IN_PROGRESS;
+  if (token === "IN_TRANSIT") return DRIVER_UI_STATE.TRANSIT_IN_PROGRESS;
   if (token === "DROPOFF") return DRIVER_UI_STATE.COMPLETED;
+  if (token === "DELIVERED") return DRIVER_UI_STATE.COMPLETED;
+  if (token === "COMPLETED") return DRIVER_UI_STATE.COMPLETED;
+  if (token === "CANCELED") return DRIVER_UI_STATE.CANCELED;
+  if (token === "CANCELLED") return DRIVER_UI_STATE.CANCELED;
 
   return getDriverUiStateFromBackendStatus(rawStatus);
 }
