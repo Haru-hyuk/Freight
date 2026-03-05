@@ -127,6 +127,11 @@ function parsePositiveInt(value: unknown): number {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
 }
 
+function logDriverRunStartEvent(tag: string, payload: Record<string, unknown>) {
+  if (!__DEV__) return;
+  console.info(`[driver-run][${tag}]`, payload);
+}
+
 export function PrepareForRunScreen({ activeRun, isSyncing = false, onRefetchRun }: Props) {
   const theme = useAppTheme();
   const styles = useStyles();
@@ -170,8 +175,15 @@ export function PrepareForRunScreen({ activeRun, isSyncing = false, onRefetchRun
         quoteIds: [parsePositiveInt(activeRun.match.quoteId ?? activeRun.summary?.quoteId)],
         source: "driver-run:prepare-start",
       });
+      logDriverRunStartEvent("startTransit:success", {
+        matchId: safeMatchId,
+      });
       Alert.alert("운행 시작", "운행을 시작했습니다.");
     } catch (error) {
+      logDriverRunStartEvent("startTransit:failed", {
+        matchId: safeMatchId,
+        reason: readApiErrorMessage(error),
+      });
       Alert.alert("운행 시작 실패", readApiErrorMessage(error), [
         { text: "취소", style: "cancel" },
         { text: "다시 시도", onPress: () => void handleStartDriving() },

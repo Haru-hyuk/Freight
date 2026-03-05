@@ -114,5 +114,10 @@ Priority:
 - On success: refetch current match (+ optional summary) and render by refreshed `match.status`.
 - On failure: show reason message + retry action.
 - GPS note:
-  - As of 2026-03-05, no shared location provider utility is wired in app code.
-  - GPS action remains disabled with explicit message until provider is integrated.
+  - Shared hook: `shared/lib/location/useCurrentLocationOnce()` (foreground-only current location).
+  - Permission denied/error state: GPS button disabled + reason message exposed.
+  - GPS submit success: minimal success notice + active run refetch for `loggedAt` sync.
+
+## 10) E2E Validation Guide
+
+- Run flow validation checklist: `apps/mobile/docs/driver-run-e2e-checklist.md`
