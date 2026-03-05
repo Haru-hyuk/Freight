@@ -313,6 +313,13 @@ function buildFallbackPlacements(quotes: QuoteDetailResponse[], spec: TruckSpecR
   return placements;
 }
 
+function shouldUseBundledFallbackStops(summary: NormalizedRouteSummary, quoteCount: number): boolean {
+  if (quoteCount <= 1) return false;
+  // Bundled recommendation should normally contain multiple pickup/dropoff points.
+  // If server returns only 2 points, keep map useful by switching to client fallback stops.
+  return summary.stops.length <= 2;
+}
+
 const useStyles = createThemedStyles((theme) => {
   const spacing = safeNumber(theme?.layout?.spacing?.base, 4);
   const cBorder = safeString(theme?.colors?.borderDefault, "#E2E8F0");
@@ -473,6 +480,7 @@ export default function DriverMarketRecommendationPage({
   const [isXray, setIsXray] = useState(true);
   const [routeSummary, setRouteSummary] = useState<NormalizedRouteSummary>(buildEmptyRouteSummary);
   const [routeLoading, setRouteLoading] = useState(false);
+  const [routeError, setRouteError] = useState<string | null>(null);
 
   const safeQuoteIds = useMemo(() => {
     if (!selection) return [] as number[];
@@ -563,8 +571,12 @@ export default function DriverMarketRecommendationPage({
         }
         if (cancelled) return;
         setRouteLoading(false);
-        const selectedTruckId = selection?.selectedTruckId ?? 0;
-        const previewTruckId = selectedTruckId > 0 ? selectedTruckId : (quoteList[0]?.truckId ?? 0);
+        const normalizedRouteSummary = shouldUseBundledFallbackStops(resolvedRouteSummary, quoteList.length)
+          ? buildEmptyRouteSummary("bundled route fallback")
+          : resolvedRouteSummary;
+        if (normalizedRouteSummary.isError) setRouteError(normalizedRouteSummary.reason ?? "경로 계산 실패");
+        const previewTruckId =
+          toPositiveInt(selection?.selectedTruckId) || toPositiveInt(quoteList[0]?.truckId);
         let resolvedSpec: TruckSpecReferenceResponse | null = null;
         let resolvedPlacements: Placement[] = [];
 
@@ -607,7 +619,7 @@ export default function DriverMarketRecommendationPage({
         if (cancelled) return;
         setTruckSpec(resolvedSpec);
         setPlacements(resolvedPlacements);
-        setRouteSummary(resolvedRouteSummary);
+        setRouteSummary(normalizedRouteSummary);
       } catch {
         if (cancelled) return;
         setErrorMessage("추천 상세를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
@@ -629,20 +641,25 @@ export default function DriverMarketRecommendationPage({
   const refetchRoute = useCallback(async () => {
     if (routeLoading || safeQuoteIds.length === 0) return;
     setRouteLoading(true);
+    setRouteError(null);
     try {
       const quotes = safeQuoteIds
         .map((id) => quotesById[id])
         .filter((q): q is QuoteDetailResponse => Boolean(q));
       const summary = await fetchRouteSummary({ selectedQuoteIds: safeQuoteIds, quotes });
-      setRouteSummary(summary);
+      const normalizedSummary = shouldUseBundledFallbackStops(summary, quotes.length)
+        ? buildEmptyRouteSummary("bundled route fallback")
+        : summary;
+      setRouteSummary(normalizedSummary);
+      if (normalizedSummary.isError) setRouteError(normalizedSummary.reason ?? "경로 계산 실패");
     } catch {
       setRouteSummary({
         ...buildEmptyRouteSummary("경로 계산 실패"),
         isError: true,
       });
-    } finally {
-      setRouteLoading(false);
+      setRouteError("경로 계산 실패");
     }
+    setRouteLoading(false);
   }, [routeLoading, safeQuoteIds, quotesById]);
 
   const quoteCards = useMemo(() => {
@@ -658,32 +675,29 @@ export default function DriverMarketRecommendationPage({
 
   // Fallback stops built from quote origin/destination coordinates.
   // Used when routeSummary.stops is empty (route-assembly unavailable).
-  // Kakao web calculates the polyline itself — only 2 valid coordinate points are needed.
+  // For bundled routes, preserve all pickup/dropoff points to avoid collapsing to 2 points.
   const directRouteStops = useMemo(() => {
     if (routeSummary.stops.length >= 2) return [];
     const quoteList = safeQuoteIds
       .map((id) => quotesById[id])
       .filter((q): q is QuoteDetailResponse => Boolean(q));
     if (quoteList.length === 0) return [];
-    const first = quoteList[0];
-    const last = quoteList[quoteList.length - 1];
-    const candidates = [
-      {
-        name: first.originAddress?.trim() || undefined,
-        lat: first.originLat,
-        lng: first.originLng,
-        type: "pickup" as const,
-      },
-      {
-        name: last.destinationAddress?.trim() || undefined,
-        lat: last.destinationLat,
-        lng: last.destinationLng,
-        type: "dropoff" as const,
-      },
-    ];
-    return candidates.every(
-      (s) => Number.isFinite(s.lat) && Number.isFinite(s.lng)
-    ) ? candidates : [];
+    const pickups = quoteList.map((quote) => ({
+      name: toOptionalText(quote.originAddress),
+      lat: quote.originLat,
+      lng: quote.originLng,
+      type: "pickup" as const,
+    }));
+    const dropoffs = quoteList.map((quote) => ({
+      name: toOptionalText(quote.destinationAddress),
+      lat: quote.destinationLat,
+      lng: quote.destinationLng,
+      type: "dropoff" as const,
+    }));
+    const candidates = [...pickups, ...dropoffs].filter(
+      (stop) => Number.isFinite(stop.lat) && Number.isFinite(stop.lng)
+    );
+    return candidates.length >= 2 ? candidates : [];
   }, [routeSummary.stops, safeQuoteIds, quotesById]);
 
   const orderedPlacements = useMemo(

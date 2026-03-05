@@ -1,8 +1,10 @@
 import React from "react";
+import { Ionicons } from "@expo/vector-icons";
 import { ActivityIndicator, Alert, Image, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, ToastAndroid, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useActiveOrder } from "@/entities/order/model/active-order.store";
 import type { ActiveRun } from "@/entities/order/model/types";
+import { buildKakaoDirectionsUrl } from "@/features/driver-reco/model/routeKakaoLink";
 import type { NormalizedRouteStop } from "@/features/driver-reco/model/routeSummary";
 import { RecoRouteWebView } from "@/features/driver-reco/ui/RecoRouteWebView";
 import {
@@ -13,12 +15,14 @@ import {
   updateDriverRunTrackingSharing,
   uploadDriverRunPhoto,
 } from "@/features/driver-run/api/driver-run-api";
+import { getDriverQuoteSummaryByQuoteId, listMyDriverMatches } from "@/features/matching/api";
 import { DRIVER_RUN_SYNC_EVENT, publishDriverRunSyncEvent } from "@/features/matching/model/driverRunSyncEvents";
 import { formatDateTime } from "@/shared/lib/format/display";
 import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
 import { useCurrentLocationOnce, type CurrentLocationStatus } from "@/shared/lib/location/useCurrentLocationOnce";
 import { BADGE_TONE, DRIVER_CTA_ID, DRIVER_UI_STATE, getDriverCta, getPhotoGateHint, type BadgeTone, type DriverUiState } from "@/shared/lib/policy";
 import type { DeliveryPhotoResponse } from "@/shared/api/generated/schemas/deliveryPhotoResponse";
+import type { DriverQuoteSummaryResponse } from "@/shared/api/generated/schemas/driverQuoteSummaryResponse";
 import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppButton } from "@/shared/ui/kit/AppButton";
@@ -302,6 +306,16 @@ const useStyles = createThemedStyles((theme) => {
     refreshButton: {
       minHeight: 48,
     },
+    headerIconButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: cBorder,
+      backgroundColor: cSurface,
+    },
     gpsButton: {
       minHeight: 40,
     },
@@ -534,6 +548,7 @@ export function RunActiveDetails({
   const [isRouteMapVisible, setIsRouteMapVisible] = React.useState(true);
   const [lastGpsSendResult, setLastGpsSendResult] = React.useState<"success" | "failure" | null>(null);
   const [selectedPhotoUri, setSelectedPhotoUri] = React.useState<string | null>(null);
+  const [routeSummaries, setRouteSummaries] = React.useState<DriverQuoteSummaryResponse[]>([]);
   const location = useCurrentLocationOnce();
 
   const safeMatchId = parsePositiveInt(activeRun.match.matchId);
@@ -572,43 +587,101 @@ export function RunActiveDetails({
     uploadingPhotoType !== null;
   const trackingSharingUpdatedAtText = formatDateTime(activeRun.match.locationSharingUpdatedAt, "-");
 
-  const routeStops = React.useMemo<NormalizedRouteStop[]>(() => {
-    const originLat = toOptionalFiniteNumber(activeRun.summary?.originLat);
-    const originLng = toOptionalFiniteNumber(activeRun.summary?.originLng);
-    const destinationLat = toOptionalFiniteNumber(activeRun.summary?.destinationLat);
-    const destinationLng = toOptionalFiniteNumber(activeRun.summary?.destinationLng);
-    if (
-      typeof originLat !== "number" ||
-      typeof originLng !== "number" ||
-      typeof destinationLat !== "number" ||
-      typeof destinationLng !== "number"
-    ) {
-      return [];
+  const loadRouteSummaries = React.useCallback(async () => {
+    const groupKey = toText(activeRun.match.matchGroupKey);
+    const currentQuoteId = parsePositiveInt(activeRun.summary?.quoteId ?? activeRun.match.quoteId);
+    const quoteIds: number[] = [];
+
+    if (groupKey) {
+      try {
+        const matches = await listMyDriverMatches();
+        const grouped = matches
+          .filter((match) => toText(match.matchGroupKey) === groupKey)
+          .sort((a, b) => {
+            const ao = parsePositiveInt(a.matchGroupOrder) || 9999;
+            const bo = parsePositiveInt(b.matchGroupOrder) || 9999;
+            if (ao !== bo) return ao - bo;
+            return parsePositiveInt(a.matchId) - parsePositiveInt(b.matchId);
+          });
+        grouped.forEach((match) => {
+          const qid = parsePositiveInt(match.quoteId);
+          if (qid > 0 && !quoteIds.includes(qid)) quoteIds.push(qid);
+        });
+      } catch {
+        // Fallback to current quote only
+      }
     }
 
-    return [
-      {
-        name: originAddress,
-        lat: originLat,
-        lng: originLng,
+    if (quoteIds.length <= 0 && currentQuoteId > 0) {
+      quoteIds.push(currentQuoteId);
+    }
+
+    if (quoteIds.length <= 0) {
+      setRouteSummaries([]);
+      return;
+    }
+
+    const summaries = await Promise.all(
+      quoteIds.map(async (quoteId) => {
+        const summary = await getDriverQuoteSummaryByQuoteId(quoteId);
+        return summary ?? null;
+      })
+    );
+
+    const safeSummaries = summaries.filter(
+      (summary): summary is DriverQuoteSummaryResponse => Boolean(summary)
+    );
+    setRouteSummaries(safeSummaries);
+  }, [activeRun.match.matchGroupKey, activeRun.match.quoteId, activeRun.summary?.quoteId]);
+
+  const routeStops = React.useMemo<NormalizedRouteStop[]>(() => {
+    const sourceSummaries =
+      routeSummaries.length > 0
+        ? routeSummaries
+        : activeRun.summary
+          ? [activeRun.summary]
+          : [];
+    if (sourceSummaries.length <= 0) return [];
+
+    const pickups: NormalizedRouteStop[] = [];
+    sourceSummaries.forEach((summary) => {
+      const lat = toOptionalFiniteNumber(summary.originLat);
+      const lng = toOptionalFiniteNumber(summary.originLng);
+      if (typeof lat !== "number" || typeof lng !== "number") return;
+      pickups.push({
+        name: toText(summary.originAddress) || originAddress,
+        lat,
+        lng,
         type: "pickup",
-      },
-      {
-        name: destinationAddress,
-        lat: destinationLat,
-        lng: destinationLng,
+      });
+    });
+
+    const dropoffs: NormalizedRouteStop[] = [];
+    sourceSummaries.forEach((summary) => {
+      const lat = toOptionalFiniteNumber(summary.destinationLat);
+      const lng = toOptionalFiniteNumber(summary.destinationLng);
+      if (typeof lat !== "number" || typeof lng !== "number") return;
+      dropoffs.push({
+        name: toText(summary.destinationAddress) || destinationAddress,
+        lat,
+        lng,
         type: "dropoff",
-      },
-    ];
+      });
+    });
+
+    const merged = [...pickups, ...dropoffs];
+    return merged.length >= 2 ? merged : [];
   }, [
-    activeRun.summary?.destinationLat,
-    activeRun.summary?.destinationLng,
-    activeRun.summary?.originLat,
-    activeRun.summary?.originLng,
+    activeRun.summary,
     destinationAddress,
     originAddress,
+    routeSummaries,
   ]);
   const hasRouteCoordinates = routeStops.length >= 2;
+  const kakaoDirectionsLink = React.useMemo(
+    () => buildKakaoDirectionsUrl(routeStops).url,
+    [routeStops]
+  );
   const syncTimeText = formatHHMM(activeRun.match.updatedAt ?? activeRun.match.createdAt);
   const gpsStatusMessage = resolveGpsStatusMessage(locationStatus);
 
@@ -645,6 +718,14 @@ export function RunActiveDetails({
     void loadPhotos({ showError: false });
   }, [loadPhotos, safeMatchId]);
 
+  React.useEffect(() => {
+    if (safeMatchId <= 0) {
+      setRouteSummaries([]);
+      return;
+    }
+    void loadRouteSummaries();
+  }, [loadRouteSummaries, safeMatchId]);
+
   const handleViewRunList = () => {
     if (isBusy) return;
     clearActiveRun();
@@ -656,19 +737,40 @@ export function RunActiveDetails({
       await onRefetchRun();
     }
     await loadPhotos({ showError: false });
+    await loadRouteSummaries();
   };
 
-  const handleOpenKakaoMap = React.useCallback(async () => {
+  const handleStartNavigation = React.useCallback(async () => {
+    let targetUrl = kakaoDirectionsLink || KAKAO_MAP_WEB_URL;
     try {
-      const supported = await Linking.canOpenURL(KAKAO_MAP_WEB_URL);
-      if (!supported) {
-        throw new Error("카카오맵 웹 주소를 열 수 없습니다.");
+      await location.request();
+
+      const currentLat = toOptionalFiniteNumber(location.coords?.lat);
+      const currentLng = toOptionalFiniteNumber(location.coords?.lng);
+      if (
+        typeof currentLat === "number" &&
+        typeof currentLng === "number" &&
+        hasRouteCoordinates
+      ) {
+        const stopsForNavigation: NormalizedRouteStop[] = [
+          { name: "현재 위치", lat: currentLat, lng: currentLng, type: "pickup" },
+          ...routeStops,
+        ];
+        const built = buildKakaoDirectionsUrl(stopsForNavigation);
+        if (built.url) {
+          targetUrl = built.url;
+        }
       }
-      await Linking.openURL(KAKAO_MAP_WEB_URL);
+
+      const supported = await Linking.canOpenURL(targetUrl);
+      if (!supported) {
+        throw new Error("길안내 URL을 열 수 없습니다.");
+      }
+      await Linking.openURL(targetUrl);
     } catch (error) {
-      Alert.alert("카카오맵 열기 실패", readApiErrorMessage(error));
+      Alert.alert("길안내 시작 실패", readApiErrorMessage(error));
     }
-  }, []);
+  }, [hasRouteCoordinates, kakaoDirectionsLink, location, routeStops]);
 
   const handleCompleteTransit = async () => {
     if (!canCompleteTransit || isCompleting) return;
@@ -885,8 +987,35 @@ export function RunActiveDetails({
     }
   };
 
+  const headerRight = (
+    <Pressable
+      onPress={() => void handleRefetch()}
+      disabled={typeof onRefetchRun !== "function" || isBusy}
+      style={({ pressed }) => [
+        styles.headerIconButton,
+        pressed ? { opacity: 0.75 } : null,
+        typeof onRefetchRun !== "function" || isBusy ? { opacity: 0.5 } : null,
+      ]}
+      accessibilityRole="button"
+      accessibilityLabel="새로고침"
+    >
+      {isSyncing ? (
+        <ActivityIndicator size="small" color={theme.colors.textMuted} />
+      ) : (
+        <Ionicons name="refresh" size={18} color={theme.colors.textMain} />
+      )}
+    </Pressable>
+  );
+
   return (
-    <PageScaffold title="운행정보" scroll={false} padding={0}>
+    <PageScaffold
+      title="운행정보"
+      scroll={false}
+      padding={0}
+      onPressBack={handleViewRunList}
+      backLabel="운행 목록"
+      headerRight={headerRight}
+    >
       <View style={styles.root}>
         <ScrollView style={styles.contentScroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <View style={styles.statusBadgeRow}>
@@ -959,9 +1088,9 @@ export function RunActiveDetails({
                 </>
               )}
               <AppButton
-                title={hasRouteCoordinates ? "카카오맵 열기 (좌표 기반)" : "카카오맵 열기"}
+                title="길안내 시작하기"
                 variant="secondary"
-                onPress={() => void handleOpenKakaoMap()}
+                onPress={() => void handleStartNavigation()}
                 disabled={isBusy}
                 style={styles.routeMapButton}
               />
@@ -1093,8 +1222,8 @@ export function RunActiveDetails({
           </AppCard>
         </ScrollView>
 
-        <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
-          {uiState === DRIVER_UI_STATE.TRANSIT_IN_PROGRESS ? (
+        {uiState === DRIVER_UI_STATE.TRANSIT_IN_PROGRESS ? (
+          <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
             <AppButton
               title={driverCta.label}
               onPress={() => void handleCompleteTransit()}
@@ -1102,23 +1231,8 @@ export function RunActiveDetails({
               disabled={!canCompleteTransit || isBusy}
               style={styles.completeButton}
             />
-          ) : null}
-          <AppButton
-            title="새로고침"
-            onPress={() => void handleRefetch()}
-            variant="secondary"
-            disabled={typeof onRefetchRun !== "function" || isBusy}
-            loading={isSyncing}
-            style={styles.refreshButton}
-          />
-          <AppButton
-            title="운행 목록 보기"
-            onPress={handleViewRunList}
-            variant="secondary"
-            disabled={isBusy}
-            style={styles.listButton}
-          />
-        </View>
+          </View>
+        ) : null}
       </View>
 
       <Modal
