@@ -84,12 +84,6 @@ function toPositiveInt(value: unknown): number {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
 }
 
-function toOneDecimalText(value: unknown): string {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return "0.0";
-  return parsed.toFixed(1);
-}
-
 function asObject(value: unknown): AnyObject {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as AnyObject) : {};
 }
@@ -359,6 +353,7 @@ const useStyles = createThemedStyles((theme) => {
       gap: spacing * 2,
     },
     quoteRow: {
+      minHeight: 44,
       borderRadius: 10,
       borderWidth: 1,
       borderColor: cBorder,
@@ -481,21 +476,19 @@ export default function DriverMarketRecommendationPage({
 
   const safeQuoteIds = useMemo(() => {
     if (!selection) return [] as number[];
-    return selection.recommendation.quoteIds
-      .map((quoteId) => toPositiveInt(quoteId))
-      .filter((quoteId) => quoteId > 0);
+    return selection.recommendation.quoteIds.filter((quoteId) => quoteId > 0);
   }, [selection]);
 
   const orderedOrders = useMemo(() => {
     if (!selection) return [] as DriverOrderCard[];
     const orderMap = new Map<number, DriverOrderCard>();
     selection.orders.forEach((order) => {
-      const quoteId = toPositiveInt(order.quoteId);
+      const quoteId = order.quoteId ?? 0;
       if (quoteId > 0) orderMap.set(quoteId, order);
     });
 
     const ordered = selection.recommendation.quoteIds
-      .map((quoteId) => orderMap.get(toPositiveInt(quoteId)))
+      .map((quoteId) => orderMap.get(quoteId))
       .filter((order): order is DriverOrderCard => Boolean(order));
     if (ordered.length > 0) return ordered;
     return [...selection.orders];
@@ -508,11 +501,10 @@ export default function DriverMarketRecommendationPage({
     const seen = new Set<number>();
     const ids: number[] = [];
     orderedOrders.forEach((order) => {
-      const safeMatchId = toPositiveInt(order.matchId);
-      if (safeMatchId <= 0) return;
-      if (seen.has(safeMatchId)) return;
-      seen.add(safeMatchId);
-      ids.push(safeMatchId);
+      if (order.matchId <= 0) return;
+      if (seen.has(order.matchId)) return;
+      seen.add(order.matchId);
+      ids.push(order.matchId);
     });
     return ids;
   }, [orderedOrders]);
@@ -571,8 +563,8 @@ export default function DriverMarketRecommendationPage({
         }
         if (cancelled) return;
         setRouteLoading(false);
-        const previewTruckId =
-          toPositiveInt(selection?.selectedTruckId) || toPositiveInt(quoteList[0]?.truckId);
+        const selectedTruckId = selection?.selectedTruckId ?? 0;
+        const previewTruckId = selectedTruckId > 0 ? selectedTruckId : (quoteList[0]?.truckId ?? 0);
         let resolvedSpec: TruckSpecReferenceResponse | null = null;
         let resolvedPlacements: Placement[] = [];
 
@@ -593,7 +585,9 @@ export default function DriverMarketRecommendationPage({
         if (expectedStopCount > 1 && resolvedPlacements.length > 0) {
           const distinctStopCount = new Set(
             resolvedPlacements
-              .map((placement) => toPositiveInt(placement.stopOrder))
+              .map((placement) =>
+                typeof placement.stopOrder === "number" && placement.stopOrder > 0 ? placement.stopOrder : 0
+              )
               .filter((stopOrder) => stopOrder > 0)
           ).size;
           const previewLooksPartial =
@@ -655,9 +649,9 @@ export default function DriverMarketRecommendationPage({
     if (!selection) return [];
     return selection.recommendation.quoteIds
       .map((quoteId) => ({
-        quoteId: toPositiveInt(quoteId),
-        order: orderedOrders.find((order) => toPositiveInt(order.quoteId) === toPositiveInt(quoteId)) ?? null,
-        quote: quotesById[toPositiveInt(quoteId)] ?? null,
+        quoteId,
+        order: orderedOrders.find((order) => order.quoteId === quoteId) ?? null,
+        quote: quotesById[quoteId] ?? null,
       }))
       .filter((entry) => entry.quoteId > 0);
   }, [orderedOrders, quotesById, selection]);
@@ -674,8 +668,18 @@ export default function DriverMarketRecommendationPage({
     const first = quoteList[0];
     const last = quoteList[quoteList.length - 1];
     const candidates = [
-      { name: toOptionalText(first.originAddress), lat: first.originLat, lng: first.originLng, type: "pickup" as const },
-      { name: toOptionalText(last.destinationAddress), lat: last.destinationLat, lng: last.destinationLng, type: "dropoff" as const },
+      {
+        name: first.originAddress?.trim() || undefined,
+        lat: first.originLat,
+        lng: first.originLng,
+        type: "pickup" as const,
+      },
+      {
+        name: last.destinationAddress?.trim() || undefined,
+        lat: last.destinationLat,
+        lng: last.destinationLng,
+        type: "dropoff" as const,
+      },
     ];
     return candidates.every(
       (s) => Number.isFinite(s.lat) && Number.isFinite(s.lng)
@@ -683,14 +687,19 @@ export default function DriverMarketRecommendationPage({
   }, [routeSummary.stops, safeQuoteIds, quotesById]);
 
   const orderedPlacements = useMemo(
-    () => [...placements].sort((a, b) => (toPositiveInt(a.stopOrder) || 9999) - (toPositiveInt(b.stopOrder) || 9999)),
+    () =>
+      [...placements].sort((a, b) => {
+        const firstStop = typeof a.stopOrder === "number" && a.stopOrder > 0 ? a.stopOrder : 9999;
+        const secondStop = typeof b.stopOrder === "number" && b.stopOrder > 0 ? b.stopOrder : 9999;
+        return firstStop - secondStop;
+      }),
     [placements]
   );
   const stopColorMap = useMemo(() => {
     const map = new Map<number, string>();
     let cursor = 0;
     orderedPlacements.forEach((placement) => {
-      const stopOrder = toPositiveInt(placement.stopOrder) || 1;
+      const stopOrder = typeof placement.stopOrder === "number" && placement.stopOrder > 0 ? placement.stopOrder : 1;
       if (!map.has(stopOrder)) {
         map.set(stopOrder, PALETTE[cursor % PALETTE.length]);
         cursor += 1;
@@ -701,31 +710,25 @@ export default function DriverMarketRecommendationPage({
   const selectedEntry = selectedStopOrder ? quoteCards[selectedStopOrder - 1] ?? null : null;
   const selectedOrderDetail = useMemo<RecoSelectedOrderDetail | null>(() => {
     if (!selectedEntry) return null;
+    const selectedQuote = selectedEntry.quote;
+    const selectedOrder = selectedEntry.order;
     const stopOrder = selectedStopOrder ?? 1;
     const accentColor = stopColorMap.get(stopOrder) ?? PALETTE[(stopOrder - 1) % PALETTE.length];
-    const originAddress = selectedEntry.order?.originAddress || selectedEntry.quote?.originAddress || "-";
-    const destinationAddress = selectedEntry.order?.destinationAddress || selectedEntry.quote?.destinationAddress || "-";
-    const distanceText =
-      selectedEntry.order?.routeDistanceText ||
-      (toPositiveNumber(selectedEntry.quote?.distanceKm, 0) > 0
-        ? `${toOneDecimalText(selectedEntry.quote?.distanceKm)}km`
-        : "-");
-    const weightText =
-      toPositiveNumber(selectedEntry.order?.weightKg ?? selectedEntry.quote?.weightKg, 0) > 0
-        ? `${toOneDecimalText(selectedEntry.order?.weightKg ?? selectedEntry.quote?.weightKg)}kg`
-        : "-";
-    const cbmText =
-      toPositiveNumber(selectedEntry.order?.volumeCbm ?? selectedEntry.quote?.volumeCbm, 0) > 0
-        ? toOneDecimalText(selectedEntry.order?.volumeCbm ?? selectedEntry.quote?.volumeCbm)
-        : "-";
-    const quoteItems = Array.isArray(selectedEntry.quote?.quoteItems) ? selectedEntry.quote.quoteItems : [];
-    const cargoFallback = selectedEntry.order?.cargoText || selectedEntry.quote?.cargoName || "-";
+    const originAddress = selectedOrder?.originAddress || selectedQuote?.originAddress || "-";
+    const destinationAddress = selectedOrder?.destinationAddress || selectedQuote?.destinationAddress || "-";
+    const distanceText = selectedOrder?.routeDistanceText || (selectedQuote ? `${selectedQuote.distanceKm.toFixed(1)}km` : "-");
+    const weightValue = selectedOrder?.weightKg ?? selectedQuote?.weightKg ?? 0;
+    const weightText = weightValue > 0 ? `${weightValue.toFixed(1)}kg` : "-";
+    const cbmValue = selectedOrder?.volumeCbm ?? selectedQuote?.volumeCbm ?? 0;
+    const cbmText = cbmValue > 0 ? cbmValue.toFixed(1) : "-";
+    const quoteItems = selectedQuote?.quoteItems ?? [];
+    const cargoFallback = selectedOrder?.cargoText || selectedQuote?.cargoName || "-";
     const items =
       quoteItems.length > 0
         ? quoteItems.map((item, itemIndex) => ({
             key: `${item.quoteItemId ?? "item"}-${itemIndex}`,
-            title: `${item.itemName || `화물 ${itemIndex + 1}`} · ${Math.max(1, toPositiveInt(item.quantity) || 1)}개`,
-            subtitle: `${toPositiveNumber(item.widthCm, 0)}×${toPositiveNumber(item.lengthCm, 0)}×${toPositiveNumber(item.heightCm, 0)}cm · ${toOneDecimalText(item.unitWeightKg)}kg`,
+            title: `${item.itemName || `화물 ${itemIndex + 1}`} · ${Math.max(1, item.quantity ?? 1)}개`,
+            subtitle: `${item.widthCm ?? 0}×${item.lengthCm ?? 0}×${item.heightCm ?? 0}cm · ${(item.unitWeightKg ?? 0).toFixed(1)}kg`,
           }))
         : [{ key: "fallback", title: cargoFallback }];
 
@@ -742,7 +745,7 @@ export default function DriverMarketRecommendationPage({
   }, [selectedEntry, selectedStopOrder, stopColorMap]);
 
   const handleAccept = useCallback(() => {
-    if (isBusy || isSubmittingOffer) return;
+    if (routeLoading || isBusy || isSubmittingOffer) return;
     if (groupedMatchIds.length <= 0) {
       Alert.alert("안내", "수락 가능한 매칭 정보가 없습니다.");
       return;
@@ -764,7 +767,7 @@ export default function DriverMarketRecommendationPage({
         const successMatchIds = Array.from(
           new Set(
             acceptedMatches
-              .map((item) => toPositiveInt(item.matchId))
+              .map((item) => item.matchId)
               .filter((matchId) => matchId > 0)
           )
         );
@@ -774,7 +777,13 @@ export default function DriverMarketRecommendationPage({
         if (successCount <= 0) {
           Alert.alert("배차 수락 실패", "배차 수락에 실패했습니다.", [
             { text: "취소", style: "cancel" },
-            { text: "다시 시도", onPress: () => void runAcceptBatch() },
+            {
+              text: "다시 시도",
+              onPress: () => {
+                setErrorMessage(null);
+                void runAcceptBatch();
+              },
+            },
           ]);
           return;
         }
@@ -827,7 +836,13 @@ export default function DriverMarketRecommendationPage({
         const message = readApiErrorMessage(error, "잠시 후 다시 시도해 주세요.");
         Alert.alert("배차 수락 실패", message, [
           { text: "취소", style: "cancel" },
-          { text: "다시 시도", onPress: () => void runAcceptBatch() },
+          {
+            text: "다시 시도",
+            onPress: () => {
+              setErrorMessage(null);
+              void runAcceptBatch();
+            },
+          },
         ]);
       } finally {
         setIsBusy(false);
@@ -838,13 +853,13 @@ export default function DriverMarketRecommendationPage({
       { text: "취소", style: "cancel", onPress: () => setIsBusy(false) },
       { text: "수락", onPress: () => void runAcceptBatch() },
     ]);
-  }, [groupedMatchIds, isBusy, isGroupedRecommendation, isSubmittingOffer, router, selection]);
+  }, [groupedMatchIds, isBusy, isGroupedRecommendation, isSubmittingOffer, routeLoading, router, selection]);
 
   const handleSubmitOffer = useCallback(
     async (payload: CounterOfferSubmitPayload) => {
-      if (!primaryOrder || isSubmittingOffer) return;
-      const safeMatchId = toPositiveInt(primaryOrder.matchId);
-      const safeQuoteId = toPositiveInt(primaryOrder.quoteId);
+      if (!primaryOrder || routeLoading || isBusy || isSubmittingOffer) return;
+      const safeMatchId = primaryOrder.matchId;
+      const safeQuoteId = primaryOrder.quoteId ?? 0;
       if (safeMatchId <= 0 || safeQuoteId <= 0) {
         setOfferErrorMessage("유효하지 않은 추천 항목입니다.");
         return;
@@ -876,8 +891,9 @@ export default function DriverMarketRecommendationPage({
         setIsSubmittingOffer(false);
       }
     },
-    [isSubmittingOffer, primaryOrder]
+    [isBusy, isSubmittingOffer, primaryOrder, routeLoading]
   );
+  const isActionLocked = isBusy || isSubmittingOffer || routeLoading;
 
   const bottomBar = (
     <View style={[styles.bottomWrap, { paddingBottom: (insets.bottom ?? 0) + 10 }]}>
@@ -886,7 +902,7 @@ export default function DriverMarketRecommendationPage({
         variant="secondary"
         style={styles.bottomBtn}
         loading={isSubmittingOffer}
-        disabled={!primaryOrder || isBusy || isSubmittingOffer}
+        disabled={!primaryOrder || isActionLocked}
         onPress={() => {
           setOfferErrorMessage(null);
           setIsOfferOpen(true);
@@ -897,7 +913,7 @@ export default function DriverMarketRecommendationPage({
         variant="primary"
         style={styles.bottomBtn}
         loading={isBusy}
-        disabled={groupedMatchIds.length <= 0 || isBusy || isSubmittingOffer}
+        disabled={groupedMatchIds.length <= 0 || isActionLocked}
         onPress={() => void handleAccept()}
       />
     </View>
@@ -1004,6 +1020,7 @@ export default function DriverMarketRecommendationPage({
             fallbackStops={directRouteStops}
             isError={routeSummary.isError}
             routeLoading={routeLoading}
+            selectedStopOrder={selectedStopOrder}
             onRetry={() => void refetchRoute()}
           />
 
@@ -1012,6 +1029,7 @@ export default function DriverMarketRecommendationPage({
             isGroupedRecommendation={isGroupedRecommendation}
             isXray={isXray}
             onToggleXray={() => setIsXray((prev) => !prev)}
+            routeLoading={routeLoading}
             orderedPlacements={orderedPlacements}
             stopColorMap={stopColorMap}
             selectedStopOrder={selectedStopOrder}
@@ -1027,32 +1045,29 @@ export default function DriverMarketRecommendationPage({
               const stopOrder = index + 1;
               const accentColor = stopColorMap.get(stopOrder) ?? PALETTE[(stopOrder - 1) % PALETTE.length];
               const isCardSelected = selectedStopOrder === stopOrder;
-              const priceValue = toPositiveNumber(entry.order?.priceValue ?? entry.quote?.finalPrice, 0);
-              const originAddress = entry.order?.originAddress || entry.quote?.originAddress || "-";
-              const destinationAddress = entry.order?.destinationAddress || entry.quote?.destinationAddress || "-";
+              const priceValue = entry.order?.priceValue ?? entry.quote?.finalPrice ?? 0;
+              const originAddress = entry.order?.originAddress ?? entry.quote?.originAddress ?? "-";
+              const destinationAddress = entry.order?.destinationAddress ?? entry.quote?.destinationAddress ?? "-";
+              const quoteDistanceKm = entry.quote?.distanceKm;
+              const weightValue = entry.order?.weightKg ?? entry.quote?.weightKg;
+              const cbmValue = entry.order?.volumeCbm ?? entry.quote?.volumeCbm;
               const distanceText =
-                entry.order?.routeDistanceText ||
-                (toPositiveNumber(entry.quote?.distanceKm, 0) > 0
-                  ? `${toOneDecimalText(entry.quote?.distanceKm)}km`
-                  : "-");
+                entry.order?.routeDistanceText ??
+                (typeof quoteDistanceKm === "number" && quoteDistanceKm > 0 ? `${quoteDistanceKm.toFixed(1)}km` : "-");
               const weightText =
-                toPositiveNumber(entry.order?.weightKg ?? entry.quote?.weightKg, 0) > 0
-                  ? `${toOneDecimalText(entry.order?.weightKg ?? entry.quote?.weightKg)}kg`
-                  : "-";
-              const cbmText =
-                toPositiveNumber(entry.order?.volumeCbm ?? entry.quote?.volumeCbm, 0) > 0
-                  ? toOneDecimalText(entry.order?.volumeCbm ?? entry.quote?.volumeCbm)
-                  : "-";
-              const cargoText = entry.order?.cargoText || entry.quote?.cargoName || "-";
-              const vehicleText = entry.order?.vehicleText || entry.quote?.vehicleType || "-";
+                typeof weightValue === "number" && weightValue > 0 ? `${weightValue.toFixed(1)}kg` : "-";
+              const cbmText = typeof cbmValue === "number" && cbmValue > 0 ? cbmValue.toFixed(1) : "-";
+              const cargoText = entry.order?.cargoText ?? entry.quote?.cargoName ?? "-";
+              const vehicleText = entry.order?.vehicleText ?? entry.quote?.vehicleType ?? "-";
               const methodText =
-                entry.order?.methodText ||
-                `${entry.quote?.loadMethod || "-"} · ${entry.quote?.unloadMethod || "-"}`;
+                entry.order?.methodText ??
+                `${entry.quote?.loadMethod ?? "-"} · ${entry.quote?.unloadMethod ?? "-"}`;
 
               return (
                 <Pressable
                   key={`quote-${entry.quoteId}`}
                   onPress={() => setSelectedStopOrder((prev) => (prev === stopOrder ? null : stopOrder))}
+                  hitSlop={{ top: 6, right: 6, bottom: 6, left: 6 }}
                   style={[
                     styles.quoteRow,
                     isCardSelected
@@ -1067,7 +1082,7 @@ export default function DriverMarketRecommendationPage({
                   <View style={styles.quoteTop}>
                     <View style={styles.quoteSeqWrap}>
                       <View style={[styles.quoteSeqBadge, isCardSelected ? { backgroundColor: accentColor } : null]}>
-                        <AppText variant="caption" weight="900" color="#FFFFFF">
+                        <AppText variant="caption" weight="900" color="textOnBrand">
                           {stopOrder}
                         </AppText>
                       </View>

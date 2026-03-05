@@ -1,5 +1,5 @@
-import React, { useMemo } from "react";
-import { ActivityIndicator, StyleSheet, TouchableOpacity, View } from "react-native";
+import React, { useMemo, useState } from "react";
+import { ActivityIndicator, Modal, Pressable, StyleSheet, TouchableOpacity, View } from "react-native";
 
 import {
   KAKAO_LINK_MAX_POINTS,
@@ -22,12 +22,14 @@ type RecoRouteMapCardProps = {
   /** true = server/network error → show retry. */
   isError?: boolean;
   routeLoading?: boolean;
+  selectedStopOrder?: number | null;
   onRetry?(): void;
 };
 
 const useStyles = createThemedStyles((theme) => {
   const spacing = safeNumber(theme?.layout?.spacing?.base, 4);
   const cBorder = safeString(theme?.colors?.borderDefault, "#E2E8F0");
+  const cTextMain = safeString(theme?.colors?.textMain, "#0F172A");
   return StyleSheet.create({
     card: {
       borderRadius: 10,
@@ -53,23 +55,89 @@ const useStyles = createThemedStyles((theme) => {
       backgroundColor: theme.colors.brandPrimary,
     },
     retryBtnText: {
-      color: "#fff",
+      color: theme.colors.textOnBrand,
     },
     limitCaption: {
       color: theme.colors.textMuted,
     },
+    mapPreviewWrap: {
+      position: "relative",
+    },
+    mapPreviewDim: {
+      opacity: 0.92,
+    },
+    mapExpandOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: tint(cTextMain, 0.22, cTextMain),
+    },
+    mapExpandChip: {
+      borderRadius: 999,
+      paddingHorizontal: spacing * 3,
+      paddingVertical: spacing * 1.2,
+      backgroundColor: tint(cTextMain, 0.78, cTextMain),
+    },
+    mapExpandChipText: {
+      color: theme.colors.textOnBrand,
+    },
     stopRow: {
       borderRadius: 8,
+      borderWidth: 1,
+      borderColor: "transparent",
       backgroundColor: theme.colors.bgSurface,
       paddingHorizontal: spacing * 1.5,
       paddingVertical: spacing,
       gap: spacing * 0.5,
     },
+    stopRowSelected: {
+      borderColor: tint(theme.colors.brandPrimary, 0.45, cBorder),
+      backgroundColor: tint(theme.colors.brandPrimary, 0.08, theme.colors.bgSurface),
+    },
     stopText: {
       color: theme.colors.textMain,
     },
+    stopTextSelected: {
+      color: theme.colors.brandPrimary,
+    },
     stopCoord: {
       color: theme.colors.textMuted,
+    },
+    modalRoot: {
+      flex: 1,
+      backgroundColor: theme.colors.bgSurfaceAlt,
+    },
+    modalHeader: {
+      paddingHorizontal: spacing * 4,
+      paddingTop: spacing * 4,
+      paddingBottom: spacing * 2,
+      borderBottomWidth: 1,
+      borderBottomColor: tint(cBorder, 0.72, cBorder),
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: spacing * 2,
+    },
+    modalTitle: {
+      flex: 1,
+    },
+    modalCloseBtn: {
+      minHeight: 36,
+      borderRadius: 999,
+      paddingHorizontal: spacing * 3,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: theme.colors.bgSurface,
+      borderWidth: 1,
+      borderColor: tint(cBorder, 0.8, cBorder),
+    },
+    modalCloseText: {
+      color: theme.colors.textMain,
+    },
+    modalMapWrap: {
+      flex: 1,
+      paddingHorizontal: spacing * 2,
+      paddingVertical: spacing * 2,
     },
   });
 });
@@ -80,9 +148,11 @@ export function RecoRouteMapCard({
   fallbackStops = [],
   isError = false,
   routeLoading = false,
+  selectedStopOrder = null,
   onRetry,
 }: RecoRouteMapCardProps) {
   const styles = useStyles();
+  const [isExpanded, setIsExpanded] = useState(false);
 
   // OpenAPI: route-assembly 스키마에 polyline/mapLink 없음 → client에서 Kakao link/by URL 생성.
   // stops(visitOrder 기반) 우선; 없으면 fallbackStops(quote origin/dest 기반) 사용.
@@ -137,13 +207,30 @@ export function RecoRouteMapCard({
           </AppText>
         ) : null}
 
-        <RecoRouteWebView
-          stops={effectiveStops}
-          loading={false}
-          externalUrl={kakaoRouteLink.url}
-        />
+        <View style={styles.mapPreviewWrap}>
+          <View pointerEvents="none" style={styles.mapPreviewDim}>
+            <RecoRouteWebView
+              stops={effectiveStops}
+              loading={false}
+              externalUrl={kakaoRouteLink.url}
+            />
+          </View>
+          <Pressable
+            style={styles.mapExpandOverlay}
+            onPress={() => setIsExpanded(true)}
+            hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+          >
+            <View style={styles.mapExpandChip}>
+              <AppText variant="caption" weight="900" style={styles.mapExpandChipText}>
+                지도 확대 보기
+              </AppText>
+            </View>
+          </Pressable>
+        </View>
 
         {displayStops.map((stop, index) => {
+          const stopOrder = index + 1;
+          const isSelected = selectedStopOrder === stopOrder;
           const hasLat = typeof stop.lat === "number" && Number.isFinite(stop.lat);
           const hasLng = typeof stop.lng === "number" && Number.isFinite(stop.lng);
           const typeLabel = stop.type ? `[${stop.type}] ` : "";
@@ -153,9 +240,9 @@ export function RecoRouteMapCard({
               ? `${Number(stop.lat).toFixed(5)}, ${Number(stop.lng).toFixed(5)}`
               : "";
           return (
-            <View key={`route-stop-${index + 1}`} style={styles.stopRow}>
-              <AppText variant="caption" weight="700" style={styles.stopText}>
-                {`${index + 1}. ${typeLabel}${title}`}
+            <View key={`route-stop-${stopOrder}`} style={[styles.stopRow, isSelected ? styles.stopRowSelected : null]}>
+              <AppText variant="caption" weight="700" style={[styles.stopText, isSelected ? styles.stopTextSelected : null]}>
+                {`${stopOrder}. ${typeLabel}${title}`}
               </AppText>
               {hasLat && hasLng ? (
                 <AppText variant="caption" style={styles.stopCoord}>
@@ -165,6 +252,33 @@ export function RecoRouteMapCard({
             </View>
           );
         })}
+
+        <Modal
+          visible={isExpanded}
+          animationType="slide"
+          presentationStyle="fullScreen"
+          onRequestClose={() => setIsExpanded(false)}
+        >
+          <View style={styles.modalRoot}>
+            <View style={styles.modalHeader}>
+              <AppText variant="detail" weight="800" color="textMain" style={styles.modalTitle}>
+                {displaySummary}
+              </AppText>
+              <Pressable style={styles.modalCloseBtn} onPress={() => setIsExpanded(false)}>
+                <AppText variant="caption" weight="800" style={styles.modalCloseText}>
+                  닫기
+                </AppText>
+              </Pressable>
+            </View>
+            <View style={styles.modalMapWrap}>
+              <RecoRouteWebView
+                stops={effectiveStops}
+                loading={false}
+                externalUrl={kakaoRouteLink.url}
+              />
+            </View>
+          </View>
+        </Modal>
       </View>
     );
   }
