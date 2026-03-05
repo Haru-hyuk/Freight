@@ -16,6 +16,7 @@ type DriverOrderUnifiedCardProps = {
   item: DriverOrderCard;
   scope: DriverOrderUnifiedCardScope;
   acceptingMatchId?: number | null;
+  preparingMatchId?: number | null;
   isSubmittingOffer: boolean;
   onPress: (card: DriverOrderCard) => void;
   onAcceptClick: (card: DriverOrderCard) => void;
@@ -185,6 +186,7 @@ function DriverOrderUnifiedCardBase({
   item,
   scope,
   acceptingMatchId,
+  preparingMatchId,
   isSubmittingOffer,
   onPress,
   onAcceptClick,
@@ -219,6 +221,8 @@ function DriverOrderUnifiedCardBase({
     item.cta?.id !== DRIVER_CTA_ID.START_DRIVE;
   const showNegotiatingMeta = scope !== "market" && item.uiState === DRIVER_UI_STATE.NEGOTIATING;
   const isAcceptingCurrent = acceptingMatchId === item.matchId;
+  const isPreparingCurrent = preparingMatchId === item.matchId;
+  const isPrepareBusy = preparingMatchId != null;
   const isMarketActionBusy = isSubmittingOffer || isAcceptingCurrent;
 
   return (
@@ -321,7 +325,8 @@ function DriverOrderUnifiedCardBase({
             <AppButton
               onPress={ctaPolicy.enabled ? () => onPrepareClick(item) : undefined}
               variant={ctaPolicy.enabled ? ctaVariant : "secondary"}
-              disabled={!ctaPolicy.enabled}
+              disabled={!ctaPolicy.enabled || isPrepareBusy}
+              loading={isPreparingCurrent}
               style={styles.prepareBtn}
               title={ctaPolicy.label}
               textStyle={{ fontWeight: "900" }}

@@ -6,6 +6,7 @@ import {
 } from "@/features/counter-offer/api";
 import { getQuoteSummary } from "@/shared/api/generated";
 import { recommendRoutes as recommendRoutesGenerated } from "@/shared/api/generated/driver-optimization-controller/driver-optimization-controller";
+import type { DriverQuoteSummaryResponse } from "@/shared/api/generated/schemas/driverQuoteSummaryResponse";
 import { getDriverMatchMode } from "@/shared/lib/config/env";
 import {
   BACKEND_STATUS,
@@ -741,6 +742,80 @@ function toQuoteDetailFromDriverSummary(
     checklistItems: [],
     stops: [],
   };
+}
+
+function toDriverQuoteSummaryResponse(
+  summary: AnyObject,
+  fallbackQuoteId: number
+): DriverQuoteSummaryResponse | null {
+  const candidates = collectCandidateObjects(summary);
+  const quoteId =
+    parseDriverOrderPositiveInt(pickFirstNumber(candidates, ["quoteId", "quote_id", "id"])) || fallbackQuoteId;
+  if (quoteId <= 0) return null;
+
+  const result: DriverQuoteSummaryResponse = { quoteId };
+
+  const originAddress = pickFirstText(candidates, ["originAddress", "origin_address", "startAddress"]);
+  const destinationAddress = pickFirstText(candidates, ["destinationAddress", "destination_address", "endAddress", "dropoffAddress"]);
+  const originLat = pickFirstNumber(candidates, ["originLat", "origin_lat", "startLat"]);
+  const originLng = pickFirstNumber(candidates, ["originLng", "origin_lng", "startLng"]);
+  const destinationLat = pickFirstNumber(candidates, ["destinationLat", "destination_lat", "endLat"]);
+  const destinationLng = pickFirstNumber(candidates, ["destinationLng", "destination_lng", "endLng"]);
+  const cargoName = pickFirstText(candidates, ["cargoName", "cargo_name", "itemName", "item_name", "cargo"]);
+  const cargoType = pickFirstText(candidates, ["cargoType", "cargo_type"]);
+  const cargoDesc = pickFirstText(candidates, ["cargoDesc", "cargo_desc", "cargoDescription", "description"]);
+  const finalPrice = pickFirstNumber(candidates, ["finalPrice", "final_price", "price", "amount"]);
+  const distanceKm = pickFirstNumber(candidates, ["distanceKm", "distance_km", "distance"]);
+  const weightKg = pickFirstNumber(candidates, ["weightKg", "weight_kg", "weight"]);
+  const volumeCbm = pickFirstNumber(candidates, ["volumeCbm", "volume_cbm", "volume"]);
+  const itemCount = pickFirstNumber(candidates, ["itemCount", "item_count", "cargoCount", "cargo_count"]);
+  const allowCombine = pickFirstBoolean(candidates, ["allowCombine", "allow_combine"]);
+  const vehicleType = pickFirstText(candidates, ["vehicleType", "vehicle_type", "tonType", "ton_type"]);
+  const vehicleBodyType = pickFirstText(candidates, ["vehicleBodyType", "vehicle_body_type", "bodyType", "body_type"]);
+  const loadMethod = pickFirstText(candidates, ["loadMethod", "load_method"]);
+  const unloadMethod = pickFirstText(candidates, ["unloadMethod", "unload_method"]);
+
+  if (originAddress) result.originAddress = originAddress;
+  if (destinationAddress) result.destinationAddress = destinationAddress;
+  if (Number.isFinite(originLat ?? NaN)) result.originLat = originLat;
+  if (Number.isFinite(originLng ?? NaN)) result.originLng = originLng;
+  if (Number.isFinite(destinationLat ?? NaN)) result.destinationLat = destinationLat;
+  if (Number.isFinite(destinationLng ?? NaN)) result.destinationLng = destinationLng;
+  if (cargoName) result.cargoName = cargoName;
+  if (cargoType) result.cargoType = cargoType;
+  if (cargoDesc) result.cargoDesc = cargoDesc;
+  if (Number.isFinite(finalPrice ?? NaN)) result.finalPrice = Math.max(0, finalPrice ?? 0);
+  if (Number.isFinite(distanceKm ?? NaN)) result.distanceKm = Math.max(0, distanceKm ?? 0);
+  if (Number.isFinite(weightKg ?? NaN)) result.weightKg = Math.max(0, weightKg ?? 0);
+  if (Number.isFinite(volumeCbm ?? NaN)) result.volumeCbm = Math.max(0, volumeCbm ?? 0);
+  if (Number.isFinite(itemCount ?? NaN)) result.itemCount = Math.max(0, Math.trunc(itemCount ?? 0));
+  if (typeof allowCombine === "boolean") result.allowCombine = allowCombine;
+  if (vehicleType) result.vehicleType = vehicleType;
+  if (vehicleBodyType) result.vehicleBodyType = vehicleBodyType;
+  if (loadMethod) result.loadMethod = loadMethod;
+  if (unloadMethod) result.unloadMethod = unloadMethod;
+
+  return result;
+}
+
+export async function getDriverQuoteSummaryByQuoteId(quoteId: number): Promise<DriverQuoteSummaryResponse | null> {
+  const safeQuoteId = parseDriverOrderPositiveInt(quoteId);
+  if (safeQuoteId <= 0) return null;
+
+  if (getDriverMatchMode() === "mock") {
+    const mockQuoteDetail = getMockFlowShipperQuoteDetail(safeQuoteId);
+    if (!mockQuoteDetail) return null;
+    return toDriverQuoteSummaryResponse(mockQuoteDetail as unknown as AnyObject, safeQuoteId);
+  }
+
+  try {
+    const raw = (await getQuoteSummary(safeQuoteId)) as unknown;
+    const summary = await parseDriverQuoteSummaryPayload(raw);
+    if (!summary) return null;
+    return toDriverQuoteSummaryResponse(summary, safeQuoteId);
+  } catch {
+    return null;
+  }
 }
 
 export async function getDriverQuoteSummaryDetail(quoteId: number): Promise<QuoteDetailResponse | null> {
