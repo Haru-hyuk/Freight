@@ -1,4 +1,4 @@
-﻿export type VehicleType = { n: string; p: number };
+export type VehicleType = { n: string; p: number };
 export type VehicleCategory = { name: string; limit: number; types: VehicleType[] };
 
 export const VEHICLE_DATA: VehicleCategory[] = [
@@ -331,7 +331,7 @@ export function computeQuotePricing(draft: QuoteCreateDraft) {
   const typeData = vehicleData?.types?.[safeTypeIdx] ?? vehicleData?.types?.[0] ?? { n: "카고", p: 0 };
 
   const basePriceRaw = typeData?.p ?? 0;
-  const basePrice = draft?.isPool ? Math.floor(basePriceRaw * 0.8) : basePriceRaw;
+  const basePrice = draft?.isPool ? Math.floor(basePriceRaw * 0.7) : basePriceRaw;
   const frozenPrice = draft?.isFrozen ? 30000 : 0;
 
   const optionPrice = (draft?.selectedOpts ?? []).reduce((acc, id) => {

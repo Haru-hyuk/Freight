@@ -41,6 +41,7 @@ const OPTION_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
 
 type AiStatus = "loading" | "ok" | "warn" | "danger" | "idle";
 type LoadLevel = "safe" | "warn" | "danger";
+type AutoBudgetMode = "min" | "avg";
 type QuoteCreateStep3Props = {
   validationPreview?: QuotePricePreview | null;
   isValidationLoading?: boolean;
@@ -193,14 +194,8 @@ const useStyles = createThemedStyles((theme: AppTheme) => {
     aiGaugeText: { color: c.textMuted, textAlign: "right" },
     aiPriceValue: { marginTop: 2 },
 
-    serverCard: {
-      ...flatCard,
-      padding: 18,
-      gap: 12,
-      backgroundColor: tint(c.brandPrimary, 0.04, c.bgSurface),
-      borderColor: tint(c.brandPrimary, 0.18, c.borderDefault),
-    },
-    serverTitleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+    serverSection: { gap: 12 },
+    serverDivider: { height: 1, backgroundColor: tint(c.brandPrimary, 0.2, c.borderDefault) },
     serverMetaRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
     serverMetaChip: {
       borderRadius: 999,
@@ -247,6 +242,7 @@ export function QuoteCreateStep3({ validationPreview = null, isValidationLoading
 
   const [modalMode, setModalMode] = useState<"TON" | "TYPE" | null>(null);
   const [isBudgetFocused, setIsBudgetFocused] = useState(false);
+  const [autoBudgetMode, setAutoBudgetMode] = useState<AutoBudgetMode | null>(null);
 
   useEffect(() => {
     initLayoutAnimationForAndroid();
@@ -263,7 +259,7 @@ export function QuoteCreateStep3({ validationPreview = null, isValidationLoading
 
     const loadFactor = pricing.limit > 0 ? Math.min((pricing.totalWeight / pricing.limit) * 100, 100) : 0;
     const isOverloaded = pricing.limit > 0 && pricing.totalWeight > pricing.limit;
-    const level: LoadLevel = loadFactor >= 90 ? "danger" : loadFactor >= 70 ? "warn" : "safe";
+    const level: LoadLevel = isOverloaded ? "danger" : loadFactor >= 70 ? "warn" : "safe";
 
     const desired = parseInt(digitsOnly(draft?.budget ?? ""), 10) || 0;
     const isLowBudget = desired > 0 && desired < Math.floor(pricing.minPrice * 0.85);
@@ -291,10 +287,15 @@ export function QuoteCreateStep3({ validationPreview = null, isValidationLoading
 
   const hasPriceRange = safeNumber(analysis?.minPrice, 0) > 0 && safeNumber(analysis?.maxPrice, 0) > 0;
   const isAiLoading = !analysis?.hasVehicleData || !hasPriceRange;
+  const suggestedMinPrice = Math.max(0, Math.trunc(safeNumber(analysis?.minPrice, 0)));
+  const suggestedMaxPrice = Math.max(0, Math.trunc(safeNumber(analysis?.maxPrice, 0)));
+  const suggestedAvgPrice = Math.max(0, Math.trunc(safeNumber(analysis?.avgPrice, 0)));
+  const extraCharge = Math.max(0, Math.trunc(safeNumber(analysis?.frozenPrice, 0) + safeNumber(analysis?.optionPrice, 0)));
+  const discountRate = draft?.isPool ? 30 : 0;
 
   const loadPercent = clamp(safeNumber(analysis?.loadFactor, 0), 0, 100);
   const loadColor = isAiLoading ? infoColor : analysis.level === "danger" ? dangerColor : analysis.level === "warn" ? warnColor : infoColor;
-  const levelLabel = isAiLoading ? "분석 중" : analysis.level === "danger" ? "적재 초과" : analysis.level === "warn" ? "무거움" : "적재 안전";
+  const levelLabel = isAiLoading ? "분석 중" : analysis.level === "danger" ? "적재 초과" : analysis.level === "warn" ? "주의" : "적재 안전";
 
   const aiContent = useMemo(() => {
     if (isAiLoading) return { status: "loading" as AiStatus, statusText: "분석 중", comment: "입력값을 기반으로 요금을 계산합니다." };
@@ -315,9 +316,33 @@ export function QuoteCreateStep3({ validationPreview = null, isValidationLoading
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     patchDraft(payload as any);
   };
-  const handleBudgetChange = (v: string) => patchDraft({ budget: digitsOnly(v) } as any);
-  const handleAutoFill = (amount: number) => animateAndPatch({ budget: String(Math.max(0, safeNumber(amount, 0))) });
+  const handleBudgetChange = (v: string) => {
+    setAutoBudgetMode(null);
+    patchDraft({ budget: digitsOnly(v) } as any);
+  };
+  const handleAutoFill = (mode: AutoBudgetMode) => {
+    setAutoBudgetMode(mode);
+    const amount = mode === "min" ? suggestedMinPrice : suggestedAvgPrice;
+    animateAndPatch({ budget: String(amount) });
+  };
   const budgetDisplay = formatDigitsWithComma(draft?.budget ?? "");
+
+  useEffect(() => {
+    if (!autoBudgetMode) return;
+    if (isAiLoading || !hasPriceRange) return;
+
+    const nextBudget = String(autoBudgetMode === "min" ? suggestedMinPrice : suggestedAvgPrice);
+    if (nextBudget === String(draft?.budget ?? "")) return;
+    patchDraft({ budget: nextBudget } as any);
+  }, [
+    autoBudgetMode,
+    draft?.budget,
+    hasPriceRange,
+    isAiLoading,
+    patchDraft,
+    suggestedAvgPrice,
+    suggestedMinPrice,
+  ]);
 
   const isFrozen = draft?.isFrozen === true;
   const isPool = draft?.isPool === true;
@@ -427,6 +452,9 @@ export function QuoteCreateStep3({ validationPreview = null, isValidationLoading
           <View style={styles.cardHeader}>
             <Ionicons name="wallet-outline" size={20} color={theme.colors.brandPrimary} />
             <AppText size={16} weight="800" color="textMain">희망 운임</AppText>
+            {isPool ? (
+              <AppText size={12} weight="800" color="brandPrimary">(알뜰배송 할인 적용중)</AppText>
+            ) : null}
           </View>
           <View style={styles.budgetRow}>
             <View style={[styles.budgetBox, isBudgetFocused && styles.budgetBoxActive]}>
@@ -455,10 +483,10 @@ export function QuoteCreateStep3({ validationPreview = null, isValidationLoading
           <View style={styles.suggestionRow}>
             <Ionicons name="sparkles-outline" size={12} color={theme.colors.brandPrimary} />
             <AppText size={11} weight="900" color="textMuted" style={styles.suggestionLabel}>AI 제안가:</AppText>
-            <Pressable style={({ pressed }) => [styles.suggestionChip, pressed && QUOTE_PRESS_EFFECT]} onPress={() => handleAutoFill(analysis.minPrice)}>
+            <Pressable style={({ pressed }) => [styles.suggestionChip, pressed && QUOTE_PRESS_EFFECT]} onPress={() => handleAutoFill("min")}>
               <AppText size={12} weight="900" color="brandPrimary" style={styles.suggestionText}>최저가 입력</AppText>
             </Pressable>
-            <Pressable style={({ pressed }) => [styles.suggestionChip, pressed && QUOTE_PRESS_EFFECT]} onPress={() => handleAutoFill(analysis.avgPrice)}>
+            <Pressable style={({ pressed }) => [styles.suggestionChip, pressed && QUOTE_PRESS_EFFECT]} onPress={() => handleAutoFill("avg")}>
               <AppText size={12} weight="900" color="brandPrimary" style={styles.suggestionText}>평균가 입력</AppText>
             </Pressable>
           </View>
@@ -500,120 +528,112 @@ export function QuoteCreateStep3({ validationPreview = null, isValidationLoading
               </AppText>
             </View>
           </View>
+          {hasValidationContent ? (
+            <View style={styles.serverSection}>
+              <View style={styles.serverDivider} />
+
+              <View style={styles.serverMetaRow}>
+                <View style={styles.serverMetaChip}>
+                  <AppText style={styles.serverMetaText}>
+                    {`종합 ${formatOverallStatusLabel(validationPreview?.overallStatus, isValidationLoading)}`}
+                  </AppText>
+                </View>
+                <View style={styles.serverMetaChip}>
+                  <AppText style={styles.serverMetaText}>
+                    {`배차 속도 ${formatDispatchSpeedLabel(validationPreview?.dispatchSpeed, isValidationLoading)}`}
+                  </AppText>
+                </View>
+                <View style={styles.serverMetaChip}>
+                  <AppText style={styles.serverMetaText}>
+                    {`배지 ${validationPreview?.badge ?? (isValidationLoading ? "확인 중" : "-")}`}
+                  </AppText>
+                </View>
+                <View style={styles.serverMetaChip}>
+                  <AppText style={styles.serverMetaText}>
+                    {`신뢰도 ${Number.isFinite(validationPreview?.confidence ?? NaN) ? `${Math.round((validationPreview?.confidence ?? 0) * 100)}%` : "-"}`}
+                  </AppText>
+                </View>
+              </View>
+
+              <AppText style={styles.serverSummary}>
+                {isValidationLoading ? "서버 검증 결과를 가져오는 중입니다." : validationPreview?.aiSummary ?? "AI 요약이 없습니다."}
+              </AppText>
+
+              <View style={styles.serverBlock}>
+                <AppText style={styles.serverBlockTitle}>가격 예측</AppText>
+                <View style={styles.serverBlockRow}>
+                  <AppText style={styles.serverBlockLabel}>최소/최대</AppText>
+                  <AppText style={styles.serverBlockValue}>
+                    {isAiLoading || !hasPriceRange
+                      ? "- ~ -"
+                      : `${formatKrw(suggestedMinPrice)} ~ ${formatKrw(suggestedMaxPrice)}`}
+                  </AppText>
+                </View>
+                <View style={styles.serverBlockRow}>
+                  <AppText style={styles.serverBlockLabel}>추가금액/할인율</AppText>
+                  <AppText style={styles.serverBlockValue}>
+                    {`${formatKrw(extraCharge)} / ${discountRate}%`}
+                  </AppText>
+                </View>
+                <View style={styles.serverBlockRow}>
+                  <AppText style={styles.serverBlockLabel}>희망운임(최소/평균)</AppText>
+                  <AppText style={styles.serverBlockValue}>
+                    {isAiLoading || !hasPriceRange
+                      ? "- / -"
+                      : `${formatKrw(suggestedMinPrice)} / ${formatKrw(suggestedAvgPrice)}`}
+                  </AppText>
+                </View>
+                <View style={styles.serverBlockRow}>
+                  <AppText style={styles.serverBlockLabel}>적합도</AppText>
+                  <AppText style={styles.serverBlockValue}>
+                    {formatPriceFitLabel(priceAnalysis?.fit)} {priceAnalysis?.label ? `(${priceAnalysis.label})` : ""}
+                  </AppText>
+                </View>
+              </View>
+
+              <View style={styles.serverBlock}>
+                <AppText style={styles.serverBlockTitle}>적재 분석</AppText>
+                <View style={styles.serverBlockRow}>
+                  <AppText style={styles.serverBlockLabel}>현재/한도</AppText>
+                  <AppText style={styles.serverBlockValue}>
+                    {`${safeNumber(loadAnalysis?.currentKg, 0)}kg / ${safeNumber(loadAnalysis?.capacityKg, 0)}kg`}
+                  </AppText>
+                </View>
+                <View style={styles.serverBlockRow}>
+                  <AppText style={styles.serverBlockLabel}>사용률</AppText>
+                  <AppText style={styles.serverBlockValue}>{`${safeNumber(loadAnalysis?.usagePercent, 0)}%`}</AppText>
+                </View>
+                <View style={styles.serverBlockRow}>
+                  <AppText style={styles.serverBlockLabel}>안전도</AppText>
+                  <AppText style={styles.serverBlockValue}>
+                    {formatLoadSafetyLabel(loadAnalysis?.safety)} {loadAnalysis?.label ? `(${loadAnalysis.label})` : ""}
+                  </AppText>
+                </View>
+              </View>
+
+              <View style={styles.serverBlock}>
+                <AppText style={styles.serverBlockTitle}>코멘트</AppText>
+                <View style={styles.serverList}>
+                  {(validationComments.length > 0 ? validationComments : ["-"]).map((item, index) => (
+                    <AppText key={`comment-${index}`} style={styles.serverListItem}>{`• ${item}`}</AppText>
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.serverBlock}>
+                <AppText style={styles.serverBlockTitle}>사유/권장 액션</AppText>
+                <View style={styles.serverList}>
+                  {(validationReasons.length > 0 ? validationReasons : ["-"]).map((item, index) => (
+                    <AppText key={`reason-${index}`} style={styles.serverListItem}>{`• ${item}`}</AppText>
+                  ))}
+                  {(validationActions.length > 0 ? validationActions : ["-"]).map((item, index) => (
+                    <AppText key={`action-${index}`} style={styles.serverListItem}>{`→ ${item}`}</AppText>
+                  ))}
+                </View>
+              </View>
+            </View>
+          ) : null}
         </View>
-
-        {hasValidationContent ? (
-          <View style={styles.serverCard}>
-            <View style={styles.serverTitleRow}>
-              <AppText size={15} weight="900" color="textMain">서버 검증 결과</AppText>
-              <Ionicons name="cloud-done-outline" size={16} color={theme.colors.brandPrimary} />
-            </View>
-
-            <View style={styles.serverMetaRow}>
-              <View style={styles.serverMetaChip}>
-                <AppText style={styles.serverMetaText}>
-                  {`종합 ${formatOverallStatusLabel(validationPreview?.overallStatus, isValidationLoading)}`}
-                </AppText>
-              </View>
-              <View style={styles.serverMetaChip}>
-                <AppText style={styles.serverMetaText}>
-                  {`배차 속도 ${formatDispatchSpeedLabel(validationPreview?.dispatchSpeed, isValidationLoading)}`}
-                </AppText>
-              </View>
-              <View style={styles.serverMetaChip}>
-                <AppText style={styles.serverMetaText}>
-                  {`배지 ${validationPreview?.badge ?? (isValidationLoading ? "확인 중" : "-")}`}
-                </AppText>
-              </View>
-              <View style={styles.serverMetaChip}>
-                <AppText style={styles.serverMetaText}>
-                  {`신뢰도 ${Number.isFinite(validationPreview?.confidence ?? NaN) ? `${Math.round((validationPreview?.confidence ?? 0) * 100)}%` : "-"}`}
-                </AppText>
-              </View>
-            </View>
-
-            <AppText style={styles.serverSummary}>
-              {isValidationLoading ? "서버 검증 결과를 가져오는 중입니다." : validationPreview?.aiSummary ?? "AI 요약이 없습니다."}
-            </AppText>
-
-            <View style={styles.serverBlock}>
-              <AppText style={styles.serverBlockTitle}>가격 예측</AppText>
-              <View style={styles.serverBlockRow}>
-                <AppText style={styles.serverBlockLabel}>최소/최대</AppText>
-                <AppText style={styles.serverBlockValue}>
-                  {`${formatKrw(safeNumber(validationPreview?.estimatedMinPrice, 0))} ~ ${formatKrw(safeNumber(validationPreview?.estimatedMaxPrice, 0))}`}
-                </AppText>
-              </View>
-              <View style={styles.serverBlockRow}>
-                <AppText style={styles.serverBlockLabel}>가중 예측</AppText>
-                <AppText style={styles.serverBlockValue}>{formatKrw(safeNumber(validationPreview?.estimatedWeightedPrice, 0))}</AppText>
-              </View>
-              <View style={styles.serverBlockRow}>
-                <AppText style={styles.serverBlockLabel}>희망/제안</AppText>
-                <AppText style={styles.serverBlockValue}>
-                  {`${formatKrw(safeNumber(priceAnalysis?.userDesiredPrice, 0))} / ${formatKrw(safeNumber(priceAnalysis?.suggestedPrice, 0))}`}
-                </AppText>
-              </View>
-              <View style={styles.serverBlockRow}>
-                <AppText style={styles.serverBlockLabel}>분석 최소/최대</AppText>
-                <AppText style={styles.serverBlockValue}>
-                  {`${formatKrw(safeNumber(priceAnalysis?.minPrice, 0))} / ${formatKrw(safeNumber(priceAnalysis?.maxPrice, 0))}`}
-                </AppText>
-              </View>
-              <View style={styles.serverBlockRow}>
-                <AppText style={styles.serverBlockLabel}>분석 가중가</AppText>
-                <AppText style={styles.serverBlockValue}>{formatKrw(safeNumber(priceAnalysis?.weightedPrice, 0))}</AppText>
-              </View>
-              <View style={styles.serverBlockRow}>
-                <AppText style={styles.serverBlockLabel}>적합도</AppText>
-                <AppText style={styles.serverBlockValue}>
-                  {formatPriceFitLabel(priceAnalysis?.fit)} {priceAnalysis?.label ? `(${priceAnalysis.label})` : ""}
-                </AppText>
-              </View>
-            </View>
-
-            <View style={styles.serverBlock}>
-              <AppText style={styles.serverBlockTitle}>적재 분석</AppText>
-              <View style={styles.serverBlockRow}>
-                <AppText style={styles.serverBlockLabel}>현재/한도</AppText>
-                <AppText style={styles.serverBlockValue}>
-                  {`${safeNumber(loadAnalysis?.currentKg, 0)}kg / ${safeNumber(loadAnalysis?.capacityKg, 0)}kg`}
-                </AppText>
-              </View>
-              <View style={styles.serverBlockRow}>
-                <AppText style={styles.serverBlockLabel}>사용률</AppText>
-                <AppText style={styles.serverBlockValue}>{`${safeNumber(loadAnalysis?.usagePercent, 0)}%`}</AppText>
-              </View>
-              <View style={styles.serverBlockRow}>
-                <AppText style={styles.serverBlockLabel}>안전도</AppText>
-                <AppText style={styles.serverBlockValue}>
-                  {formatLoadSafetyLabel(loadAnalysis?.safety)} {loadAnalysis?.label ? `(${loadAnalysis.label})` : ""}
-                </AppText>
-              </View>
-            </View>
-
-            <View style={styles.serverBlock}>
-              <AppText style={styles.serverBlockTitle}>코멘트</AppText>
-              <View style={styles.serverList}>
-                {(validationComments.length > 0 ? validationComments : ["-"]).map((item, index) => (
-                  <AppText key={`comment-${index}`} style={styles.serverListItem}>{`• ${item}`}</AppText>
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.serverBlock}>
-              <AppText style={styles.serverBlockTitle}>사유/권장 액션</AppText>
-              <View style={styles.serverList}>
-                {(validationReasons.length > 0 ? validationReasons : ["-"]).map((item, index) => (
-                  <AppText key={`reason-${index}`} style={styles.serverListItem}>{`• ${item}`}</AppText>
-                ))}
-                {(validationActions.length > 0 ? validationActions : ["-"]).map((item, index) => (
-                  <AppText key={`action-${index}`} style={styles.serverListItem}>{`→ ${item}`}</AppText>
-                ))}
-              </View>
-            </View>
-          </View>
-        ) : null}
 
       </ScrollView>
       
