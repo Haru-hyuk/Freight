@@ -134,3 +134,4 @@ Contract SoT: `apps/mobile/src/shared/api/generated/**`
 ### Recovery
 - 업로드 실패 시 원인 메시지 + 재시도 가능.
 - 권한 거절 시 갤러리 권한 허용 후 재시도.
+- 네트워크 오류(NETWORK_ERROR / Failed to fetch) 발생 시: [driver-photo-upload-troubleshooting.md](./driver-photo-upload-troubleshooting.md) 참고.
