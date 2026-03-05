@@ -54,6 +54,13 @@ route:
     single-flight-enabled: ${ROUTE_TRAFFIC_SINGLE_FLIGHT_ENABLED:true}
     single-flight-wait-ms: ${ROUTE_TRAFFIC_SINGLE_FLIGHT_WAIT_MS:4000}
 
+gps:
+  tracking:
+    min-log-interval-seconds: ${GPS_TRACKING_MIN_LOG_INTERVAL_SECONDS:60}
+    min-move-meters: ${GPS_TRACKING_MIN_MOVE_METERS:10}
+    missing-signal-seconds: ${GPS_TRACKING_MISSING_SIGNAL_SECONDS:120}
+    max-history-points: ${GPS_TRACKING_MAX_HISTORY_POINTS:100}
+
 toss:
   payments:
     secret-key: ${TOSS_PAYMENTS_SECRET_KEY}

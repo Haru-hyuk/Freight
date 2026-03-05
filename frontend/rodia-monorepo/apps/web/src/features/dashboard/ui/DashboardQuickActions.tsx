@@ -1,4 +1,5 @@
 import { AlertCircle, CheckCircle2, Clock } from "lucide-react";
+import { Link } from "react-router-dom";
 
 import type { KpiData } from "@/features/dashboard/model/types";
 import { Badge } from "@/shared/ui/shadcn/badge";
@@ -74,14 +75,14 @@ export function DashboardQuickActions({ loading, kpi, pendingApprovals }: Props)
             <Separator className="my-2" />
 
             <div className="grid grid-cols-1 gap-2">
-              <Button variant="default" className="text-base">
-                승인 대기 상세 보기
+              <Button asChild variant="default" className="text-base">
+                <Link to="/drivers/approvals">승인 대기 상세 보기</Link>
               </Button>
-              <Button variant="secondary" className="text-base">
-                이상 징후 검토
+              <Button asChild variant="secondary" className="text-base">
+                <Link to="/ops/deviations">이상 징후 검토</Link>
               </Button>
-              <Button variant="outline" className="text-base">
-                정산 내역 이동
+              <Button asChild variant="outline" className="text-base">
+                <Link to="/settlement/history">정산 내역 이동</Link>
               </Button>
             </div>
           </>

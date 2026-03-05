@@ -13,6 +13,7 @@ type RecoRouteWebViewProps = {
   stops: NormalizedRouteStop[];
   loading: boolean;
   externalUrl?: string | null;
+  markerIconUriByType?: Partial<Record<string, string>>;
 };
 
 type RouteStopPoint = {
@@ -112,9 +113,15 @@ function parseDirectionsVertices(raw: unknown): RoutePathPoint[] {
   }
 }
 
-function buildKakaoMapHtml(appKey: string, safeStops: RouteStopPoint[], routePath: RoutePathPoint[]): string {
+function buildKakaoMapHtml(
+  appKey: string,
+  safeStops: RouteStopPoint[],
+  routePath: RoutePathPoint[],
+  markerIconUriByType: Partial<Record<string, string>>
+): string {
   const pointsJson = JSON.stringify(safeStops);
   const routePathJson = JSON.stringify(routePath);
+  const markerIconUriByTypeJson = JSON.stringify(markerIconUriByType ?? {});
   const sdkUrl = `https://dapi.kakao.com/v2/maps/sdk.js?autoload=false&appkey=${encodeURIComponent(appKey)}`;
 
   return `<!doctype html>
@@ -134,6 +141,7 @@ function buildKakaoMapHtml(appKey: string, safeStops: RouteStopPoint[], routePat
       (function () {
         const points = ${pointsJson};
         const routePath = ${routePathJson};
+        const markerIconUriByType = ${markerIconUriByTypeJson};
         if (!window.kakao || !window.kakao.maps || points.length < 2) {
           document.getElementById("map").innerHTML = '<div class="msg">경로를 표시할 수 없습니다.</div>';
           return;
@@ -158,7 +166,17 @@ function buildKakaoMapHtml(appKey: string, safeStops: RouteStopPoint[], routePat
             const pos = new kakao.maps.LatLng(p.lat, p.lng);
             bounds.extend(pos);
 
-            new kakao.maps.Marker({ map: map, position: pos, title: p.name });
+            const markerOptions = { map: map, position: pos, title: p.name };
+            const markerType = typeof p.type === "string" ? p.type : "";
+            const iconUri = markerType ? String(markerIconUriByType[markerType] || "").trim() : "";
+            if (iconUri) {
+              markerOptions.image = new kakao.maps.MarkerImage(
+                iconUri,
+                new kakao.maps.Size(30, 30),
+                { offset: new kakao.maps.Point(15, 15) }
+              );
+            }
+            new kakao.maps.Marker(markerOptions);
             new kakao.maps.CustomOverlay({
               map: map,
               position: pos,
@@ -190,7 +208,12 @@ function buildKakaoMapHtml(appKey: string, safeStops: RouteStopPoint[], routePat
 </html>`;
 }
 
-export function RecoRouteWebView({ stops, loading, externalUrl }: RecoRouteWebViewProps) {
+export function RecoRouteWebView({
+  stops,
+  loading,
+  externalUrl,
+  markerIconUriByType = {},
+}: RecoRouteWebViewProps) {
   const theme = useAppTheme();
   const styles = useStyles();
   const [kakaoJsAppKey, setKakaoJsAppKey] = useState<string>("");
@@ -280,8 +303,8 @@ export function RecoRouteWebView({ stops, loading, externalUrl }: RecoRouteWebVi
 
   const html = useMemo(() => {
     if (!kakaoJsAppKey || safeStops.length < 2) return "";
-    return buildKakaoMapHtml(kakaoJsAppKey, safeStops, routePath);
-  }, [kakaoJsAppKey, routePath, safeStops]);
+    return buildKakaoMapHtml(kakaoJsAppKey, safeStops, routePath, markerIconUriByType);
+  }, [kakaoJsAppKey, markerIconUriByType, routePath, safeStops]);
 
   const showFallback = webViewFailed || !html;
 

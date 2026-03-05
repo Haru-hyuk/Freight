@@ -5,7 +5,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { cancelShipperMatch, createShipperMatch, listMyShipperMatches, type ShipperMatchItem } from "@/features/matching/api";
+import {
+  cancelShipperMatch,
+  createShipperMatch,
+  getShipperMatchTracking,
+  listMyShipperMatches,
+  type ShipperMatchItem,
+  type ShipperTrackingSnapshot,
+} from "@/features/matching/api";
 import {
   acceptShipperCounterOffer,
   isCounterOfferPending,
@@ -33,7 +40,7 @@ import { BottomActionRouter } from "@/features/quote/ui/actions/BottomActionRout
 import { DriverVehicleInfo } from "@/features/quote/ui/DriverVehicleInfo";
 import { QuoteRouteInfo } from "@/features/quote/ui/QuoteRouteInfo";
 import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
-import { formatDistance, formatKrw } from "@/shared/lib/format/display";
+import { formatDateTime, formatDistance, formatKrw } from "@/shared/lib/format/display";
 import {
   CUSTOMER_UI_STATE,
   getCustomerUiStateFromBackendStatus,
@@ -768,6 +775,45 @@ function groupRows(rows: SpecRow[]): RowGroup[] {
   return groups;
 }
 
+function buildShipperTrackingStops(
+  quote: QuoteDetailQuote,
+  tracking: ShipperTrackingSnapshot | null
+): NormalizedRouteStop[] {
+  const stops: NormalizedRouteStop[] = [];
+  const originLat = Number(quote.originLat);
+  const originLng = Number(quote.originLng);
+  const destinationLat = Number(quote.destinationLat);
+  const destinationLng = Number(quote.destinationLng);
+  const currentLat = Number(tracking?.currentLocation?.lat);
+  const currentLng = Number(tracking?.currentLocation?.lng);
+
+  if (Number.isFinite(originLat) && Number.isFinite(originLng)) {
+    stops.push({
+      name: toText(quote.originAddress) || "출발지",
+      lat: originLat,
+      lng: originLng,
+      type: "pickup",
+    });
+  }
+  if (Number.isFinite(currentLat) && Number.isFinite(currentLng)) {
+    stops.push({
+      name: "기사 현재 위치",
+      lat: currentLat,
+      lng: currentLng,
+      type: "waypoint",
+    });
+  }
+  if (Number.isFinite(destinationLat) && Number.isFinite(destinationLng)) {
+    stops.push({
+      name: toText(quote.destinationAddress) || "도착지",
+      lat: destinationLat,
+      lng: destinationLng,
+      type: "dropoff",
+    });
+  }
+  return stops.length >= 2 ? stops : [];
+}
+
 function CounterOfferCard({ offer }: { offer: CounterOfferItem }) {
   const styles = useStyles();
   return (
@@ -1176,10 +1222,13 @@ export default function QuoteDetailPage() {
         );
         if (activeMatchId > 0) {
           tasks.push(loadPaymentCompletion(activeMatchId));
+          tasks.push(loadShipperTracking(activeMatchId));
         } else {
           setHasCompletedPayment(false);
           setLatestPaymentStatus(null);
           setLatestPaymentMethod(null);
+          setTrackingSnapshot(null);
+          setTrackingErrorMessage(null);
         }
       }
       await Promise.all([quoteRefetchTask, ...tasks]);
@@ -1193,7 +1242,7 @@ export default function QuoteDetailPage() {
         refreshInFlightRef.current = null;
       }
     }
-  }, [actionQuoteId, loadMatchSnapshot, loadPaymentCompletion, loadPendingCounterOffer, view.refetch]);
+  }, [actionQuoteId, loadMatchSnapshot, loadPaymentCompletion, loadPendingCounterOffer, loadShipperTracking, view.refetch]);
 
   React.useEffect(() => {
     const safeQuoteId = parsePositiveInt(actionQuoteId);
@@ -1235,6 +1284,8 @@ export default function QuoteDetailPage() {
           setHasCompletedPayment(false);
           setLatestPaymentStatus(null);
           setLatestPaymentMethod(null);
+          setTrackingSnapshot(null);
+          setTrackingErrorMessage(null);
         }
       })().finally(() => {
         if (canceled || matchLoadTokenRef.current !== token) return;
@@ -1265,6 +1316,15 @@ export default function QuoteDetailPage() {
       return undefined;
     }, [actionQuoteId, refreshQuoteAndMatchData])
   );
+
+  React.useEffect(() => {
+    if (!canShowTrackingCard) {
+      setTrackingSnapshot(null);
+      setTrackingErrorMessage(null);
+      return;
+    }
+    void loadShipperTracking(cancelTargetMatchId);
+  }, [canShowTrackingCard, cancelTargetMatchId, loadShipperTracking]);
 
   const handleCreateMatch = React.useCallback(async () => {
     if (isMatchSubmitting) return;

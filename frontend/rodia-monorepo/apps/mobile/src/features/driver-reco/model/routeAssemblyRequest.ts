@@ -69,9 +69,12 @@ export function buildRouteAssemblyRequest(params: {
   const endLng = toFinite(lastQuote?.destinationLng);
   const truckId = Number(firstQuote?.truckId);
 
+  const routeMode: RouteAssemblyRequest["mode"] =
+    selectedQuoteIds.length > 1 ? "SMART" : "SIMPLE";
+
   return {
     selectedQuoteIds,
-    mode: "SIMPLE",
+    mode: routeMode,
     driverState: {
       currentLocation: {
         name: toOptionalStr(firstQuote?.originAddress),

@@ -86,7 +86,7 @@ export const apiPaths = {
   adminDrivers: resolvePath(env.VITE_API_ADMIN_DRIVERS_PATH, "/api/admin/users/drivers"),
   adminUsers: resolvePath(env.VITE_API_ADMIN_USERS_PATH, "/api/admin/users"),
   adminDeviations: resolvePath(env.VITE_API_ADMIN_DEVIATIONS_PATH, "/api/admin/ops/deviations"),
-  adminSanctionsLogs: resolvePath(env.VITE_API_ADMIN_SANCTIONS_LOGS_PATH, "/api/admin/ops/sanctions/logs"),
+  adminSanctionsLogs: resolvePath(env.VITE_API_ADMIN_SANCTIONS_LOGS_PATH, "/api/admin/sanctions"),
   adminActivityLogs: resolvePath(env.VITE_API_ADMIN_ACTIVITY_LOGS_PATH, "/api/admin/ops/activity-logs"),
   adminTrucksPending: resolvePath(env.VITE_API_ADMIN_TRUCKS_PENDING_PATH, "/api/admin/trucks/pending"),
   adminTruckApproval: (truckId: string) =>
@@ -96,8 +96,8 @@ export const apiPaths = {
       { truckId },
     ),
 
-  adminSettlementApprovals: resolvePath(env.VITE_API_ADMIN_SETTLEMENT_APPROVALS_PATH, "/api/admin/settlements/approvals"),
-  adminSettlementHistory: resolvePath(env.VITE_API_ADMIN_SETTLEMENT_HISTORY_PATH, "/api/admin/settlements/approval-history"),
+  adminSettlementApprovals: resolvePath(env.VITE_API_ADMIN_SETTLEMENT_APPROVALS_PATH, "/api/admin/settlements"),
+  adminSettlementHistory: resolvePath(env.VITE_API_ADMIN_SETTLEMENT_HISTORY_PATH, "/api/admin/settlements"),
   adminSettlementReview: (settlementId: string) =>
     resolveTemplate(
       adminSettlementReviewTemplate,

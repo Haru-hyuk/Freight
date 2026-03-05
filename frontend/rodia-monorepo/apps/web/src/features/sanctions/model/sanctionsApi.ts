@@ -53,6 +53,9 @@ const MOCK_ROWS: SanctionRow[] = [
   },
 ];
 
+const LEGACY_ADMIN_SANCTIONS_PATH = "/api/admin/ops/sanctions/logs";
+const CANONICAL_ADMIN_SANCTIONS_PATH = "/api/admin/sanctions";
+
 function toRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
 }
@@ -120,7 +123,7 @@ function parseAmount(text: string): number | undefined {
 function mapLiveSanction(raw: unknown): SanctionRow {
   const row = toRecord(raw);
   const content = `${toStringValue(row.reason)} ${toStringValue(row.title)} ${toStringValue(row.content)}`;
-  const targetRoleRaw = toStringValue(row.targetRole).toUpperCase();
+  const targetRoleRaw = toStringValue(row.targetRole ?? row.target_role).toUpperCase();
   const targetRole: UserRole = targetRoleRaw === "SHIPPER" ? "SHIPPER" : targetRoleRaw === "DRIVER" ? "DRIVER" : inferRoleFromText(content);
   const typeRaw = toStringValue(row.type).toUpperCase();
   const type: SanctionType =
@@ -131,13 +134,13 @@ function mapLiveSanction(raw: unknown): SanctionRow {
 
   return {
     id: toStringValue(row.id ?? row.sanctionId ?? row.logId, `S-${Date.now()}`),
-    targetId: toStringValue(row.targetId ?? row.userId, "-"),
+    targetId: toStringValue(row.targetId ?? row.target_id ?? row.userId, "-"),
     targetRole,
-    targetName: toStringValue(row.targetName ?? row.userName ?? row.title, "-"),
+    targetName: toStringValue(row.targetName ?? row.target_name ?? row.userName ?? row.title, "-"),
     type,
     status: toStatus(row.status),
-    createdAt: toDateText(toStringValue(row.createdAt ?? row.appliedAt, "")),
-    releasedAt: toDateText(toStringValue(row.releasedAt ?? row.released_date ?? row.resolvedAt, "")),
+    createdAt: toDateText(toStringValue(row.createdAt ?? row.created_at ?? row.appliedAt, "")),
+    releasedAt: toDateText(toStringValue(row.releasedAt ?? row.released_at ?? row.released_date ?? row.resolvedAt, "")),
     reason: toStringValue(row.reason ?? row.content ?? row.message, "-"),
     amount,
   };
@@ -167,8 +170,13 @@ export async function fetchSanctionRows(): Promise<SanctionRow[]> {
     return [...MOCK_ROWS].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
+  const primaryPath =
+    apiPaths.adminSanctionsLogs === LEGACY_ADMIN_SANCTIONS_PATH
+      ? CANONICAL_ADMIN_SANCTIONS_PATH
+      : apiPaths.adminSanctionsLogs;
+
   try {
-    const response = await apiClient.get<BackendSanctionListPayload | unknown[]>(apiPaths.adminSanctionsLogs);
+    const response = await apiClient.get<BackendSanctionListPayload | unknown[]>(primaryPath);
     const payload = response.data;
     const rows = Array.isArray(payload) ? payload : Array.isArray(payload.items) ? payload.items : [];
     return rows
@@ -176,6 +184,19 @@ export async function fetchSanctionRows(): Promise<SanctionRow[]> {
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   } catch {
     // fallback below
+  }
+
+  if (primaryPath !== CANONICAL_ADMIN_SANCTIONS_PATH) {
+    try {
+      const response = await apiClient.get<BackendSanctionListPayload | unknown[]>(CANONICAL_ADMIN_SANCTIONS_PATH);
+      const payload = response.data;
+      const rows = Array.isArray(payload) ? payload : Array.isArray(payload.items) ? payload.items : [];
+      return rows
+        .map(mapLiveSanction)
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    } catch {
+      // fallback below
+    }
   }
 
   try {

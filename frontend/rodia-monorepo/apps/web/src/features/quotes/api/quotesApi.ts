@@ -149,50 +149,51 @@ function extractQuoteIdentifier(value: string): string {
 function mapBackendQuoteList(raw: unknown): BackendQuoteList {
   const row = toRecord(raw);
   return {
-    quoteId: toNumberValue(row.quoteId ?? row.id),
-    quotePublicId: toStringValue(row.quotePublicId, "") || null,
-    originAddress: toStringValue(row.originAddress, "-"),
-    destinationAddress: toStringValue(row.destinationAddress, "-"),
-    distanceKm: toNumberValue(row.distanceKm),
-    vehicleType: toStringValue(row.vehicleType, "") || null,
-    vehicleBodyType: toStringValue(row.vehicleBodyType, "") || null,
-    cargoName: toStringValue(row.cargoName, "") || null,
-    desiredPrice: toNumberValue(row.desiredPrice),
-    finalPrice: toNumberValue(row.finalPrice),
+    quoteId: toNumberValue(row.quoteId ?? row.quote_id ?? row.id),
+    quotePublicId: toStringValue(row.quotePublicId ?? row.quote_public_id, "") || null,
+    originAddress: toStringValue(row.originAddress ?? row.origin_address, "-"),
+    destinationAddress: toStringValue(row.destinationAddress ?? row.destination_address, "-"),
+    distanceKm: toNumberValue(row.distanceKm ?? row.distance_km),
+    vehicleType: toStringValue(row.vehicleType ?? row.vehicle_type, "") || null,
+    vehicleBodyType: toStringValue(row.vehicleBodyType ?? row.vehicle_body_type, "") || null,
+    cargoName: toStringValue(row.cargoName ?? row.cargo_name, "") || null,
+    desiredPrice: toNumberValue(row.desiredPrice ?? row.desired_price),
+    finalPrice: toNumberValue(row.finalPrice ?? row.final_price),
     status: toStringValue(row.status, "") || null,
-    createdAt: toStringValue(row.createdAt, "") || null,
+    createdAt: toStringValue(row.createdAt ?? row.created_at, "") || null,
   };
 }
 
 function mapBackendQuoteDetail(raw: unknown): BackendQuoteDetail {
   const row = toRecord(raw);
   return {
-    quoteId: toNumberValue(row.quoteId ?? row.id),
-    quotePublicId: toStringValue(row.quotePublicId, "") || null,
-    truckId: toNumberValue(row.truckId),
-    originAddress: toStringValue(row.originAddress, "-"),
-    destinationAddress: toStringValue(row.destinationAddress, "-"),
-    originLat: toNumberValue(row.originLat),
-    originLng: toNumberValue(row.originLng),
-    destinationLat: toNumberValue(row.destinationLat),
-    destinationLng: toNumberValue(row.destinationLng),
-    distanceKm: toNumberValue(row.distanceKm),
-    weightKg: toNumberValue(row.weightKg),
-    volumeCbm: toNumberValue(row.volumeCbm),
-    vehicleType: toStringValue(row.vehicleType, "") || null,
-    vehicleBodyType: toStringValue(row.vehicleBodyType, "") || null,
-    cargoName: toStringValue(row.cargoName, "") || null,
-    cargoType: toStringValue(row.cargoType, "") || null,
-    cargoDesc: toStringValue(row.cargoDesc, "") || null,
-    desiredPrice: toNumberValue(row.desiredPrice),
-    finalPrice: toNumberValue(row.finalPrice),
-    allowCombine: typeof row.allowCombine === "boolean" ? row.allowCombine : null,
-    loadMethod: toStringValue(row.loadMethod, "") || null,
-    unloadMethod: toStringValue(row.unloadMethod, "") || null,
+    quoteId: toNumberValue(row.quoteId ?? row.quote_id ?? row.id),
+    quotePublicId: toStringValue(row.quotePublicId ?? row.quote_public_id, "") || null,
+    truckId: toNumberValue(row.truckId ?? row.truck_id),
+    originAddress: toStringValue(row.originAddress ?? row.origin_address, "-"),
+    destinationAddress: toStringValue(row.destinationAddress ?? row.destination_address, "-"),
+    originLat: toNumberValue(row.originLat ?? row.origin_lat),
+    originLng: toNumberValue(row.originLng ?? row.origin_lng),
+    destinationLat: toNumberValue(row.destinationLat ?? row.destination_lat),
+    destinationLng: toNumberValue(row.destinationLng ?? row.destination_lng),
+    distanceKm: toNumberValue(row.distanceKm ?? row.distance_km),
+    weightKg: toNumberValue(row.weightKg ?? row.weight_kg),
+    volumeCbm: toNumberValue(row.volumeCbm ?? row.volume_cbm),
+    vehicleType: toStringValue(row.vehicleType ?? row.vehicle_type, "") || null,
+    vehicleBodyType: toStringValue(row.vehicleBodyType ?? row.vehicle_body_type, "") || null,
+    cargoName: toStringValue(row.cargoName ?? row.cargo_name, "") || null,
+    cargoType: toStringValue(row.cargoType ?? row.cargo_type, "") || null,
+    cargoDesc: toStringValue(row.cargoDesc ?? row.cargo_desc, "") || null,
+    desiredPrice: toNumberValue(row.desiredPrice ?? row.desired_price),
+    finalPrice: toNumberValue(row.finalPrice ?? row.final_price),
+    allowCombine:
+      typeof row.allowCombine === "boolean" ? row.allowCombine : typeof row.allow_combine === "boolean" ? row.allow_combine : null,
+    loadMethod: toStringValue(row.loadMethod ?? row.load_method, "") || null,
+    unloadMethod: toStringValue(row.unloadMethod ?? row.unload_method, "") || null,
     status: toStringValue(row.status, "") || null,
-    createdAt: toStringValue(row.createdAt, "") || null,
-    updatedAt: toStringValue(row.updatedAt, "") || null,
-    checklistItems: Array.isArray(row.checklistItems) ? row.checklistItems : [],
+    createdAt: toStringValue(row.createdAt ?? row.created_at, "") || null,
+    updatedAt: toStringValue(row.updatedAt ?? row.updated_at, "") || null,
+    checklistItems: Array.isArray(row.checklistItems) ? row.checklistItems : Array.isArray(row.checklist_items) ? row.checklist_items : [],
     stops: Array.isArray(row.stops) ? row.stops : [],
   };
 }
@@ -209,7 +210,7 @@ function toRowFromList(list: BackendQuoteList): QuoteRow {
     weightKg: 0,
     volumeCbm: 0,
     cargoType: list.cargoName ?? "화물",
-    desiredPrice: list.desiredPrice ?? 0,
+    desiredPrice: list.desiredPrice ?? list.finalPrice ?? 0,
     finalPrice: list.finalPrice ?? undefined,
     status: normalizeQuoteStatus(list.status),
     allowCombine: false,
@@ -306,7 +307,7 @@ function paginateRows(rows: QuoteRow[], page: number, size: number): QuoteRespon
 
 async function fetchQuoteList(): Promise<BackendQuoteList[]> {
   try {
-    const response = await apiClient.get<unknown>(apiPaths.shipperQuotes);
+    const response = await apiClient.get<unknown>(apiPaths.adminTransportQuotes);
     return pickListPayload(response.data).map(mapBackendQuoteList);
   } catch {
     return [];
@@ -315,7 +316,7 @@ async function fetchQuoteList(): Promise<BackendQuoteList[]> {
 
 async function fetchQuoteDetail(identifier: string): Promise<BackendQuoteDetail | null> {
   try {
-    const response = await apiClient.get<unknown>(`${apiPaths.shipperQuotes.replace(/\/$/, "")}/${identifier}`);
+    const response = await apiClient.get<unknown>(`${apiPaths.adminTransportQuotes.replace(/\/$/, "")}/${identifier}`);
     return mapBackendQuoteDetail(response.data);
   } catch {
     return null;
@@ -414,7 +415,7 @@ export async function updateQuoteByAdmin(payload: QuoteUpdatePayload): Promise<Q
   };
 
   try {
-    const response = await apiClient.put<unknown>(`${apiPaths.shipperQuotes.replace(/\/$/, "")}/${identifier}`, requestBody);
+    const response = await apiClient.put<unknown>(`${apiPaths.adminTransportQuotes.replace(/\/$/, "")}/${identifier}`, requestBody);
     const updatedDetail = mapBackendQuoteDetail(response.data);
     const base = toRowFromList({
       quoteId: updatedDetail.quoteId,
