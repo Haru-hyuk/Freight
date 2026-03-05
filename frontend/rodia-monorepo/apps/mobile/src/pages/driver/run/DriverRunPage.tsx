@@ -43,6 +43,28 @@ function shouldAutoSyncWhileFocused(status: unknown): boolean {
   return RUN_AUTO_SYNC_STATUS_TOKENS.has(toStatusToken(status));
 }
 
+function mergeMatchWithPrevious(input: {
+  previousMatch: NonNullable<ReturnType<typeof useActiveOrder>["activeRun"]>["match"] | undefined;
+  nextMatch: NonNullable<ReturnType<typeof useActiveOrder>["activeRun"]>["match"];
+}) {
+  const { previousMatch, nextMatch } = input;
+  if (!previousMatch) return nextMatch;
+
+  return {
+    ...nextMatch,
+    ...(typeof nextMatch.status === "string" && nextMatch.status.trim()
+      ? {}
+      : { status: previousMatch.status }),
+    ...(typeof nextMatch.accepted === "boolean" ? {} : { accepted: previousMatch.accepted }),
+    ...(typeof nextMatch.locationSharingEnabled === "boolean"
+      ? {}
+      : { locationSharingEnabled: previousMatch.locationSharingEnabled }),
+    ...(typeof nextMatch.locationSharingUpdatedAt === "string" && nextMatch.locationSharingUpdatedAt.trim()
+      ? {}
+      : { locationSharingUpdatedAt: previousMatch.locationSharingUpdatedAt }),
+  };
+}
+
 export default function DriverRunPage() {
   const { activeRun, setActiveRun, clearActiveRun } = useActiveOrder();
   const [isRunSyncing, setIsRunSyncing] = React.useState(false);
@@ -73,8 +95,12 @@ export default function DriverRunPage() {
         const quoteIdFromRunMatch = parsePositiveInt(currentRun?.match?.quoteId);
         const resolvedQuoteId = quoteIdFromMatch || quoteIdFromSummary || quoteIdFromRunMatch;
         const nextSummary = resolvedQuoteId > 0 ? await getDriverQuoteSummaryByQuoteId(resolvedQuoteId) : currentRun?.summary ?? undefined;
+        const mergedMatch = mergeMatchWithPrevious({
+          previousMatch: currentRun?.match,
+          nextMatch: latestMatch,
+        });
 
-        setActiveRun(nextSummary ? { match: latestMatch, summary: nextSummary } : { match: latestMatch });
+        setActiveRun(nextSummary ? { match: mergedMatch, summary: nextSummary } : { match: mergedMatch });
       } catch (error) {
         if (!showError) return;
         Alert.alert("운행 상태 동기화 실패", readApiErrorMessage(error), [

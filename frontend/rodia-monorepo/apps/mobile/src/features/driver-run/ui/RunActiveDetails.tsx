@@ -1,5 +1,5 @@
 import React from "react";
-import { Alert, Image, StyleSheet, Switch, View } from "react-native";
+import { Alert, Image, ScrollView, StyleSheet, Switch, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useActiveOrder } from "@/entities/order/model/active-order.store";
 import type { ActiveRun } from "@/entities/order/model/types";
@@ -76,10 +76,13 @@ const useStyles = createThemedStyles((theme) => {
       backgroundColor: cSurfaceAlt,
     },
     content: {
-      flex: 1,
       paddingHorizontal: spacing * 5,
       paddingTop: spacing * 4,
+      paddingBottom: spacing * 4,
       gap: spacing * 4,
+    },
+    contentScroll: {
+      flex: 1,
     },
     statusBadgeRow: {
       flexDirection: "row",
@@ -655,7 +658,7 @@ export function RunActiveDetails({
   return (
     <PageScaffold title="운행정보" scroll={false} padding={0}>
       <View style={styles.root}>
-        <View style={styles.content}>
+        <ScrollView style={styles.contentScroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <View style={styles.statusBadgeRow}>
             <View
               style={[
@@ -828,7 +831,7 @@ export function RunActiveDetails({
               )}
             </View>
           </AppCard>
-        </View>
+        </ScrollView>
 
         <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
           <AppButton
