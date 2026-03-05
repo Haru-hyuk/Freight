@@ -459,6 +459,18 @@ function resolveGpsStatusMessage(status: CurrentLocationStatus): string {
   return "위치 정보를 가져오지 못했습니다.";
 }
 
+function resolveUploadErrorMessage(error: unknown): string {
+  const raw = readApiErrorMessage(error, "");
+  if (!raw) {
+    return "사진 업로드에 실패했습니다.\n같은 Wi-Fi/네트워크 환경인지, 서버가 실행 중인지 확인해주세요.";
+  }
+  const lower = raw.toLowerCase();
+  if (lower.includes("network") || lower.includes("timeout") || lower.includes("econnrefused")) {
+    return `네트워크 오류로 업로드에 실패했습니다.\n- 서버 주소·포트(환경설정)를 확인해주세요.\n- Android 에뮬레이터라면 API_BASE_URL을 10.0.2.2:{port}로 설정하세요.\n- 개발 빌드(Dev Client)인지 확인 후 재시도해주세요.`;
+  }
+  return raw;
+}
+
 export function RunActiveDetails({
   activeRun,
   uiState,
@@ -804,7 +816,7 @@ export function RunActiveDetails({
         type,
         reason: readApiErrorMessage(error),
       });
-      Alert.alert("사진 업로드 실패", readApiErrorMessage(error), [
+      Alert.alert("사진 업로드 실패", resolveUploadErrorMessage(error), [
         { text: "취소", style: "cancel" },
         { text: "다시 시도", onPress: () => void handleUploadPhoto(type) },
       ]);
