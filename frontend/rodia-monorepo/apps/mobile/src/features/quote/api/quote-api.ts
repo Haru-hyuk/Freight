@@ -269,6 +269,8 @@ function mapChecklistItems(input: unknown): QuoteDetailResponse["checklistItems"
         checklistItemId,
         extraInput: safeString(source.extraInput, ""),
         extraFee: Math.max(0, safeInt(source.extraFee, 0)),
+        name: safeString(source.name, ""),
+        category: safeString(source.category, ""),
       };
     });
 
@@ -352,6 +354,8 @@ function sanitizeChecklistItems(input: unknown): QuoteChecklistItemRequest[] {
         checklistItemId,
         extraInput: safeString(source.extraInput, ""),
         extraFee: Math.max(0, safeInt(source.extraFee, 0)),
+        name: safeString(source.name, ""),
+        category: safeString(source.category, ""),
       };
     });
 
@@ -450,6 +454,8 @@ async function resolveChecklistItemsForRequest(input: unknown): Promise<QuoteChe
         checklistItemId,
         extraInput: safeString(source.extraInput, ""),
         extraFee: Math.max(0, safeInt(source.extraFee, 0)),
+        name: safeString(source.name, ""),
+        category: safeString(source.category, ""),
       };
     });
 
