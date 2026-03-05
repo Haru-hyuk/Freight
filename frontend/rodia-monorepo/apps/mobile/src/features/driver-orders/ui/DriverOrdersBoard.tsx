@@ -1474,6 +1474,43 @@ export function DriverOrdersBoard({
           pathname: DRIVER_ROUTE_PATH.ORDER_DETAIL,
           params: { id: String(card.matchId), source: "market" },
         });
+      } else if (
+        assignedOnly &&
+        (card.uiState === DRIVER_UI_STATE.TRANSIT_IN_PROGRESS ||
+          card.uiState === DRIVER_UI_STATE.PICKUP_IN_PROGRESS ||
+          card.uiState === DRIVER_UI_STATE.ASSIGNED)
+      ) {
+        const safeCardMatchId = Number(card.matchId);
+        if (!Number.isInteger(safeCardMatchId) || safeCardMatchId <= 0) {
+          showToast("유효하지 않은 매칭입니다.");
+          cardNavLockRef.current = false;
+          return;
+        }
+        try {
+          const runMatch = await getDriverMatch(safeCardMatchId);
+          if (!runMatch) {
+            showToast("매칭 정보를 불러오지 못했습니다.");
+            cardNavLockRef.current = false;
+            return;
+          }
+          const resolvedQuoteIdForRun =
+            Number.isInteger(Number(runMatch.quoteId)) && Number(runMatch.quoteId) > 0
+              ? Number(runMatch.quoteId)
+              : Number.isInteger(Number(card.quoteId)) && Number(card.quoteId) > 0
+                ? Number(card.quoteId)
+                : 0;
+          const runSummary =
+            resolvedQuoteIdForRun > 0 ? await getDriverQuoteSummaryByQuoteId(resolvedQuoteIdForRun) : null;
+          const matchForRunEntry =
+            typeof runMatch.status === "string" && runMatch.status.trim()
+              ? runMatch
+              : { ...runMatch, status: card.status };
+          setActiveRun(runSummary ? { match: matchForRunEntry, summary: runSummary } : { match: matchForRunEntry });
+          router.replace(DRIVER_ROUTE_PATH.RUN_TAB);
+        } catch {
+          showToast(NETWORK_ERROR_TEXT);
+          cardNavLockRef.current = false;
+        }
       } else {
         const detailParams = buildDriverOrderDetailParams(card);
         const source = assignedOnly ? "run" : "my";
@@ -1491,7 +1528,7 @@ export function DriverOrdersBoard({
         cardNavLockRef.current = false;
       }, 450);
     },
-    [assignedOnly, resolvedActiveTab, router, showToast]
+    [assignedOnly, resolvedActiveTab, router, setActiveRun, showToast]
   );
 
   const handlePrepareForDrive = useCallback(

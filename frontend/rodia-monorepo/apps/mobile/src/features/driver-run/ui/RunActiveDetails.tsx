@@ -631,7 +631,6 @@ export function RunActiveDetails({
       if (typeof onRefetchRun === "function") {
         await onRefetchRun();
       }
-      await loadPhotos({ showError: false });
       publishDriverRunSyncEvent({
         type: DRIVER_RUN_SYNC_EVENT.RUN_STATUS_UPDATED,
         matchIds: [safeMatchId],
@@ -642,7 +641,8 @@ export function RunActiveDetails({
         matchId: safeMatchId,
         quoteId,
       });
-      Alert.alert("운행 완료", "하차 완료 처리가 반영되었습니다.");
+      showTransientMessage("운행을 완료했습니다.");
+      clearActiveRun();
     } catch (error) {
       logDriverRunEvent("completeTransit:failed", {
         matchId: safeMatchId,
