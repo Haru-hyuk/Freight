@@ -19,6 +19,7 @@ public class QuoteItemRequest {
     private Double maxStackWeightKg;
     private String handlingTags;
     private Integer sortOrder;
+    private Integer dropStopSeq;
 
     public String getItemName() { return itemName; }
     public void setItemName(String itemName) { this.itemName = itemName; }
@@ -56,4 +57,6 @@ public class QuoteItemRequest {
     public void setHandlingTags(String handlingTags) { this.handlingTags = handlingTags; }
     public Integer getSortOrder() { return sortOrder; }
     public void setSortOrder(Integer sortOrder) { this.sortOrder = sortOrder; }
+    public Integer getDropStopSeq() { return dropStopSeq; }
+    public void setDropStopSeq(Integer dropStopSeq) { this.dropStopSeq = dropStopSeq; }
 }
