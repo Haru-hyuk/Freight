@@ -2,7 +2,10 @@ package com.freight.backend.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
@@ -16,7 +19,13 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 @Entity
-@Table(name = "trucks")
+@Table(
+        name = "trucks",
+        indexes = {
+                @Index(name = "idx_trucks_driver_id", columnList = "driver_id"),
+                @Index(name = "idx_trucks_approved_created_at", columnList = "approved, created_at")
+        }
+)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
@@ -24,6 +33,7 @@ import lombok.NoArgsConstructor;
 public class Truck {
 
     @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "truck_id")
     private Long truckId;
 
@@ -63,6 +73,12 @@ public class Truck {
     @Column(name = "approved", nullable = false)
     private Boolean approved;
 
+    @Column(name = "approval_status")
+    private String approvalStatus;
+
+    @Column(name = "review_memo", length = 1000)
+    private String reviewMemo;
+
     @Column(name = "insurance")
     private String insurance;
 
@@ -85,6 +101,9 @@ public class Truck {
         if (approved == null) {
             approved = Boolean.FALSE;
         }
+        if (approvalStatus == null || approvalStatus.isBlank()) {
+            approvalStatus = Boolean.TRUE.equals(approved) ? "APPROVED" : "PENDING";
+        }
     }
 
     @PreUpdate
@@ -103,7 +122,6 @@ public class Truck {
             BigDecimal cargoHeight,
             String name,
             String imageUrl,
-            Boolean approved,
             String insurance,
             BigDecimal odometerKm,
             LocalDate lastInspectionDate
@@ -118,7 +136,10 @@ public class Truck {
         this.cargoHeight = cargoHeight;
         this.name = name;
         this.imageUrl = imageUrl;
-        this.approved = approved;
+        // 기사 정보 수정 후에는 관리자 재심사를 거치도록 강제한다.
+        this.approved = Boolean.FALSE;
+        this.approvalStatus = "PENDING";
+        this.reviewMemo = null;
         this.insurance = insurance;
         this.odometerKm = odometerKm;
         this.lastInspectionDate = lastInspectionDate;
@@ -126,6 +147,15 @@ public class Truck {
 
     public void setApprovedStatus(Boolean approved) {
         this.approved = approved;
+        this.approvalStatus = Boolean.TRUE.equals(approved) ? "APPROVED" : "PENDING";
+        this.reviewMemo = null;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    public void reviewForAdmin(boolean approved, String reviewMemo) {
+        this.approved = approved;
+        this.approvalStatus = approved ? "APPROVED" : "REJECTED";
+        this.reviewMemo = reviewMemo;
         this.updatedAt = LocalDateTime.now();
     }
 }
