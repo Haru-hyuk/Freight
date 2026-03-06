@@ -26,7 +26,7 @@ public class JwtAccessDeniedHandler implements AccessDeniedHandler {
                 .success(false)
                 .code(ErrorCode.AUTH_FORBIDDEN.name())
                 .status(HttpServletResponse.SC_FORBIDDEN)
-                .message("Access denied.")
+                .message(ErrorCode.AUTH_FORBIDDEN.getMessage())
                 .path(request.getRequestURI())
                 .timestamp(LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME))
                 .requestId(resolveRequestId(request))
