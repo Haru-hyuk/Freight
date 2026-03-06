@@ -31,6 +31,7 @@ public class DriverQuoteSummaryResponse {
     private final LocalDateTime createdAt;
     private final LocalDateTime updatedAt;
     private final List<QuoteItemResponse> quoteItems;
+    private final List<QuoteChecklistItemResponse> checklistItems;
     private final List<QuoteStopResponse> stops;
 
     public DriverQuoteSummaryResponse(
@@ -61,6 +62,7 @@ public class DriverQuoteSummaryResponse {
             LocalDateTime createdAt,
             LocalDateTime updatedAt,
             List<QuoteItemResponse> quoteItems,
+            List<QuoteChecklistItemResponse> checklistItems,
             List<QuoteStopResponse> stops
     ) {
         this.quoteId = quoteId;
@@ -90,6 +92,7 @@ public class DriverQuoteSummaryResponse {
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
         this.quoteItems = quoteItems;
+        this.checklistItems = checklistItems;
         this.stops = stops;
     }
 
@@ -120,5 +123,6 @@ public class DriverQuoteSummaryResponse {
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public List<QuoteItemResponse> getQuoteItems() { return quoteItems; }
+    public List<QuoteChecklistItemResponse> getChecklistItems() { return checklistItems; }
     public List<QuoteStopResponse> getStops() { return stops; }
 }
