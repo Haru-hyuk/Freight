@@ -116,6 +116,19 @@ export default function DriverSettingsHomePage() {
           ] as MenuItem[],
         },
         {
+          id: "group-settlement",
+          title: "정산",
+          description: "지급 내역 및 정산서 확인",
+          items: [
+            {
+              id: "menu-settlement",
+              title: "정산 내역",
+              subtitle: "지급 상태 및 정산서 확인",
+              path: "/(driver)/settlement",
+            },
+          ] as MenuItem[],
+        },
+        {
           id: "group-support",
           title: "고객 지원",
           description: "문의/정책 안내",

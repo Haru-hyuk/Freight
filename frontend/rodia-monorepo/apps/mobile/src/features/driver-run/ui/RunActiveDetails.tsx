@@ -1,5 +1,6 @@
 import React from "react";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { ActivityIndicator, Alert, Image, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, ToastAndroid, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useActiveOrder } from "@/entities/order/model/active-order.store";
@@ -493,7 +494,7 @@ function showTransientMessage(message: string) {
 
 function logDriverRunEvent(tag: string, payload: Record<string, unknown>) {
   if (!__DEV__) return;
-  console.info(`[driver-run][${tag}]`, payload);
+  console.warn(`[driver-run][${tag}]`, payload);
 }
 
 function formatHHMM(value: unknown): string {
@@ -573,6 +574,7 @@ export function RunActiveDetails({
   isSyncing = false,
   onRefetchRun,
 }: Props) {
+  const router = useRouter();
   const theme = useAppTheme();
   const styles = useStyles();
   const { clearActiveRun } = useActiveOrder();
@@ -582,6 +584,7 @@ export function RunActiveDetails({
   const [isCompleting, setIsCompleting] = React.useState(false);
   const [isTrackingSharingSubmitting, setIsTrackingSharingSubmitting] = React.useState(false);
   const [isGpsSubmitting, setIsGpsSubmitting] = React.useState(false);
+  const [isNavigatingSettlement, setIsNavigatingSettlement] = React.useState(false);
   const [photos, setPhotos] = React.useState<DeliveryPhotoResponse[]>([]);
   const [isPhotoSyncing, setIsPhotoSyncing] = React.useState(false);
   const [uploadingPhotoKey, setUploadingPhotoKey] = React.useState<string | null>(null);
@@ -589,6 +592,7 @@ export function RunActiveDetails({
   const [lastGpsSendResult, setLastGpsSendResult] = React.useState<"success" | "failure" | null>(null);
   const [selectedPhotoUri, setSelectedPhotoUri] = React.useState<string | null>(null);
   const [routeSummaries, setRouteSummaries] = React.useState<DriverQuoteSummaryResponse[]>([]);
+  const settlementNavUnlockTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const location = useCurrentLocationOnce();
 
   const safeMatchId = parsePositiveInt(activeRun.match.matchId);
@@ -622,6 +626,7 @@ export function RunActiveDetails({
     isCompleting ||
     isTrackingSharingSubmitting ||
     isGpsSubmitting ||
+    isNavigatingSettlement ||
     isLocationRequesting ||
     isPhotoSyncing ||
     uploadingPhotoKey !== null;
@@ -1021,6 +1026,14 @@ export function RunActiveDetails({
   }, [submitGpsOnce]);
 
   React.useEffect(() => {
+    return () => {
+      if (settlementNavUnlockTimerRef.current) {
+        clearTimeout(settlementNavUnlockTimerRef.current);
+      }
+    };
+  }, []);
+
+  React.useEffect(() => {
     const shouldAutoSubmit =
       uiState === DRIVER_UI_STATE.TRANSIT_IN_PROGRESS &&
       trackingSharingEnabled &&
@@ -1042,6 +1055,24 @@ export function RunActiveDetails({
     trackingSharingEnabled,
     uiState,
   ]);
+
+  const handleOpenSettlement = React.useCallback(() => {
+    if (safeMatchId <= 0 || isBusy || isNavigatingSettlement) return;
+
+    setIsNavigatingSettlement(true);
+    router.push({
+      pathname: "/(driver)/settlement/[matchId]",
+      params: { matchId: String(safeMatchId) },
+    });
+
+    if (settlementNavUnlockTimerRef.current) {
+      clearTimeout(settlementNavUnlockTimerRef.current);
+    }
+    settlementNavUnlockTimerRef.current = setTimeout(() => {
+      setIsNavigatingSettlement(false);
+      settlementNavUnlockTimerRef.current = null;
+    }, 600);
+  }, [isBusy, isNavigatingSettlement, router, safeMatchId]);
 
   const handleUploadPhoto = async (
     type: DriverPhotoType,
@@ -1477,6 +1508,17 @@ export function RunActiveDetails({
               loading={isCompleting}
               disabled={!canCompleteTransit || isBusy}
               style={styles.completeButton}
+            />
+          </View>
+        ) : uiState === DRIVER_UI_STATE.COMPLETED && safeMatchId > 0 ? (
+          <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
+            <AppButton
+              title="정산서 보기"
+              variant="primary"
+              onPress={handleOpenSettlement}
+              loading={isNavigatingSettlement}
+              disabled={isBusy || safeMatchId <= 0}
+              style={styles.listButton}
             />
           </View>
         ) : null}

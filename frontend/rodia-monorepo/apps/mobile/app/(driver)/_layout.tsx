@@ -11,7 +11,9 @@ type BottomTabKey = "home" | "quotes" | "run" | "settlement" | "profile";
 
 function shouldHideBottomBar(segments: readonly string[] | undefined | null): boolean {
   const segs = Array.isArray(segments) ? segments : [];
-  return segs.includes("verification") || segs.includes("(stack)");
+  const settlementIndex = segs.indexOf("settlement");
+  const isSettlementDetail = settlementIndex >= 0 && segs.length > settlementIndex + 1;
+  return segs.includes("verification") || segs.includes("(stack)") || isSettlementDetail;
 }
 
 function pickActiveKey(segments: readonly string[] | undefined | null): BottomTabKey {
@@ -145,7 +147,14 @@ export default function DriverLayout() {
             headerShown: false,
             contentStyle: { backgroundColor: cBgBase },
           }}
-        />
+        >
+          <Stack.Screen
+            name="settlement/[matchId]"
+            options={{
+              headerShown: false,
+            }}
+          />
+        </Stack>
       </View>
 
       {!hideBottomBar ? (
