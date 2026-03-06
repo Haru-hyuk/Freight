@@ -2,9 +2,11 @@ package com.freight.backend.service;
 import com.freight.backend.dto.algorithm.LoadPlanPreviewRequest;
 import com.freight.backend.dto.algorithm.RouteRecommendRequest;
 import com.freight.backend.dto.algorithm.RouteSelectionPreviewRequest;
+import com.freight.backend.entity.ChecklistItem;
 import com.freight.backend.entity.Driver;
 import com.freight.backend.entity.Match;
 import com.freight.backend.entity.Quote;
+import com.freight.backend.entity.QuoteChecklistItem;
 import com.freight.backend.entity.QuoteItem;
 import com.freight.backend.entity.QuoteStop;
 import com.freight.backend.entity.Truck;
@@ -25,11 +27,14 @@ import com.freight.backend.gpsload.routeassembly.model.DriverState;
 import com.freight.backend.gpsload.routeassembly.model.RouteAssemblyRequest;
 import com.freight.backend.gpsload.routeassembly.service.RouteAssemblyService;
 import com.freight.backend.repository.MatchRepository;
+import com.freight.backend.repository.ChecklistItemRepository;
 import com.freight.backend.repository.DriverRepository;
+import com.freight.backend.repository.QuoteChecklistItemRepository;
 import com.freight.backend.repository.QuoteItemRepository;
 import com.freight.backend.repository.QuoteRepository;
 import com.freight.backend.repository.QuoteStopRepository;
 import com.freight.backend.repository.TruckRepository;
+import com.freight.backend.service.ChecklistHandlingMapper;
 import com.freight.backend.util.StopOrderUtils;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -38,6 +43,7 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -68,6 +74,8 @@ public class AlgorithmGatewayService {
 
     private final QuoteRepository quoteRepository;
     private final QuoteItemRepository quoteItemRepository;
+    private final QuoteChecklistItemRepository quoteChecklistItemRepository;
+    private final ChecklistItemRepository checklistItemRepository;
     private final TruckRepository truckRepository;
     private final DriverRepository driverRepository;
     private final MatchRepository matchRepository;
@@ -76,6 +84,7 @@ public class AlgorithmGatewayService {
     private final LoadPlanService loadPlanService;
     private final GeocodingService geocodingService;
     private final TruckSpecCatalogRepository truckSpecCatalogRepository;
+    private final ChecklistHandlingMapper checklistHandlingMapper;
 
     @Value("${algorithm.gateway.default-max-pickup-distance-km:25.0}")
     private double defaultMaxPickupDistanceKm;
@@ -114,6 +123,7 @@ public class AlgorithmGatewayService {
         }
 
         Map<Long, List<QuoteItem>> itemsByQuoteId = fetchQuoteItems(openQuotes.stream().map(Quote::getQuoteId).toList());
+        Map<Long, Set<String>> checklistHandlingByQuoteId = fetchChecklistHandlingTags(openQuotes.stream().map(Quote::getQuoteId).toList());
         Map<Long, List<Place>> waypointsByQuoteId = fetchQuoteWaypoints(openQuotes.stream().map(Quote::getQuoteId).toList());
 
         List<Map<String, Object>> candidates = new ArrayList<>();
@@ -184,9 +194,11 @@ public class AlgorithmGatewayService {
             quote.put("finalPrice", safeDouble(q.getFinalPrice(), 0.0));
             LocalDateTime pickupScheduleStart = resolvePickupScheduleStart(q);
             LocalDateTime deliveryDeadline = resolveDeliveryDeadline(q);
+            LocalDateTime deliverySchedule = resolveDeliverySchedule(q);
             quote.put("pickupScheduleStart", pickupScheduleStart);
             quote.put("deliveryDeadline", deliveryDeadline);
-            quote.put("deliverySchedule", deliveryDeadline);
+            quote.put("deliverySchedule", deliverySchedule);
+            quote.put("handling", checklistHandlingByQuoteId.getOrDefault(q.getQuoteId(), Set.of()));
             quote.put("status", q.getStatus());
             quote.put("pickupDistanceKm", pickupDistanceKm);
             quote.put("itemCount", Math.max(1, totalItemCount(quoteItems)));
@@ -304,6 +316,19 @@ public class AlgorithmGatewayService {
                 return simpleResponse;
             }
         }
+        // SIMPLE 모드에서 결과가 없으면 SMART 모드로도 한 번 더 평가해 모드 오입력/호환 이슈를 완화한다.
+        if (requestedMode == RouteAssemblyRequest.RouteMode.SIMPLE) {
+            RouteAssemblyRequest smartRequest = new RouteAssemblyRequest(
+                    driverStateRecord, quoteList, effectiveParams, selectedQuoteIds, RouteAssemblyRequest.RouteMode.SMART
+            );
+            RouteAssemblyResponse smartResponse = applyMaxVisitCountLimit(
+                    routeAssemblyService.recommend(smartRequest),
+                    request.getMaxVisitCount()
+            );
+            if (smartResponse.hasRecommendations()) {
+                return smartResponse;
+            }
+        }
 
         return primaryResponse;
     }
@@ -401,7 +426,7 @@ public class AlgorithmGatewayService {
         response.put("success", true);
         response.put("accepted", false);
         response.put("acceptanceRequired", true);
-        response.put("mode", parseRouteMode(request.getMode()).name());
+        response.put("mode", toClientMode(parseRouteMode(request.getMode())));
         response.put("requestedQuoteIds", requestedQuoteIds);
         response.put("selectedQuoteIds", selectedQuoteIds);
         response.put("selectedRouteRank", selectedRoute != null ? selectedRoute.rank() : null);
@@ -423,6 +448,9 @@ public class AlgorithmGatewayService {
 
         Map<Long, Quote> quoteMap = quotes.stream().collect(Collectors.toMap(Quote::getQuoteId, Function.identity()));
         Map<Long, List<QuoteItem>> itemsByQuoteId = fetchQuoteItems(request.getQuoteIds());
+        Map<Long, Set<String>> checklistHandlingByQuoteId = fetchChecklistHandlingTags(request.getQuoteIds());
+        Map<Long, Map<Integer, Set<String>>> checklistHandlingByQuoteIdAndStopSeq =
+                fetchChecklistHandlingTagsByQuoteAndStopSeq(request.getQuoteIds());
 
         int[] dims = inferTruckDimensionsCm(truck);
         List<Map<String, Object>> items = new ArrayList<>();
@@ -434,10 +462,13 @@ public class AlgorithmGatewayService {
                 continue;
             }
             List<QuoteItem> quoteItems = itemsByQuoteId.getOrDefault(quoteId, List.of());
+            Set<String> checklistHandling = checklistHandlingByQuoteId.getOrDefault(quoteId, Set.of());
+            Map<Integer, Set<String>> checklistHandlingByStopSeq =
+                    checklistHandlingByQuoteIdAndStopSeq.getOrDefault(quoteId, Map.of());
             if (quoteItems.isEmpty()) {
-                items.addAll(expandQuoteToEstimatedItems(q, stopOrder, dims));
+                items.addAll(expandQuoteToEstimatedItems(q, checklistHandling, checklistHandlingByStopSeq, stopOrder, dims));
             } else {
-                items.addAll(expandQuoteItems(q, quoteItems, stopOrder, dims));
+                items.addAll(expandQuoteItems(q, quoteItems, checklistHandling, checklistHandlingByStopSeq, stopOrder, dims));
             }
             stopOrder++;
         }
@@ -520,6 +551,8 @@ public class AlgorithmGatewayService {
     private List<Map<String, Object>> expandQuoteItems(
             Quote quote,
             List<QuoteItem> quoteItems,
+            Set<String> checklistHandlingTags,
+            Map<Integer, Set<String>> checklistHandlingByStopSeq,
             int stopOrder,
             int[] truckDims
     ) {
@@ -533,6 +566,18 @@ public class AlgorithmGatewayService {
             boolean fragile = Boolean.TRUE.equals(qi.getFragile()) || containsHandlingTag(qi.getHandlingTags(), "FRAGILE")
                     || containsHandlingTag(qi.getHandlingTags(), "EASY_BREAK");
             boolean upright = Boolean.TRUE.equals(qi.getUpright()) || containsHandlingTag(qi.getHandlingTags(), "UPRIGHT");
+            Set<String> effectiveChecklistHandling = resolveChecklistHandlingForItem(
+                    checklistHandlingTags,
+                    checklistHandlingByStopSeq,
+                    qi.getDropStopSeq()
+            );
+            if (containsChecklistHandlingTag(effectiveChecklistHandling, "FRAGILE")
+                    || containsChecklistHandlingTag(effectiveChecklistHandling, "EASY_BREAK")) {
+                fragile = true;
+            }
+            if (containsChecklistHandlingTag(effectiveChecklistHandling, "UPRIGHT")) {
+                upright = true;
+            }
             boolean noStack = Boolean.TRUE.equals(qi.getNoStack());
             boolean bottomOnly = Boolean.TRUE.equals(qi.getBottomOnly());
             boolean rotatable = upright ? false : !Boolean.FALSE.equals(qi.getRotatable());
@@ -559,12 +604,24 @@ public class AlgorithmGatewayService {
             }
         }
         if (items.isEmpty()) {
-            items.addAll(expandQuoteToEstimatedItems(quote, stopOrder, truckDims));
+            items.addAll(expandQuoteToEstimatedItems(
+                    quote,
+                    checklistHandlingTags,
+                    checklistHandlingByStopSeq,
+                    stopOrder,
+                    truckDims
+            ));
         }
         return items;
     }
 
-    private List<Map<String, Object>> expandQuoteToEstimatedItems(Quote quote, int stopOrder, int[] truckDims) {
+    private List<Map<String, Object>> expandQuoteToEstimatedItems(
+            Quote quote,
+            Set<String> checklistHandlingTags,
+            Map<Integer, Set<String>> checklistHandlingByStopSeq,
+            int stopOrder,
+            int[] truckDims
+    ) {
         double totalCbm = Math.max(0.05, safeDouble(quote.getVolumeCbm(), 1.0));
         double totalWeight = Math.max(5.0, safeDouble(quote.getWeightKg(), 50.0));
         int pieces = Math.max(1, (int) Math.ceil(totalCbm / 2.0));
@@ -576,6 +633,17 @@ public class AlgorithmGatewayService {
         double pieceWeight = Math.max(estimatedItemsSoftMode ? 2.0 : 5.0, totalWeight / pieces);
 
         List<Map<String, Object>> items = new ArrayList<>();
+        Set<String> effectiveChecklistHandling = new LinkedHashSet<>();
+        if (checklistHandlingTags != null && !checklistHandlingTags.isEmpty()) {
+            effectiveChecklistHandling.addAll(checklistHandlingTags);
+        }
+        if (checklistHandlingByStopSeq != null && !checklistHandlingByStopSeq.isEmpty()) {
+            for (Set<String> stopSpecific : checklistHandlingByStopSeq.values()) {
+                if (stopSpecific != null && !stopSpecific.isEmpty()) {
+                    effectiveChecklistHandling.addAll(stopSpecific);
+                }
+            }
+        }
         for (int i = 0; i < pieces; i++) {
             int[] cargoDims = inferCargoDimensionsFromCbm(pieceCbm, truckDims, estimatedItemsSoftMode);
             Map<String, Object> item = new LinkedHashMap<>();
@@ -587,13 +655,37 @@ public class AlgorithmGatewayService {
             item.put("stopOrder", stopOrder);
             item.put("rotatable", true);
             item.put("stackable", true);
-            item.put("fragile", false);
+            item.put("fragile", containsChecklistHandlingTag(effectiveChecklistHandling, "FRAGILE")
+                    || containsChecklistHandlingTag(effectiveChecklistHandling, "EASY_BREAK"));
             item.put("noStack", false);
             item.put("bottomOnly", false);
             item.put("approximate", true);
             items.add(item);
         }
         return items;
+    }
+
+    private Set<String> resolveChecklistHandlingForItem(
+            Set<String> globalChecklistHandling,
+            Map<Integer, Set<String>> checklistHandlingByStopSeq,
+            Integer itemDropStopSeq
+    ) {
+        Set<String> merged = new LinkedHashSet<>();
+        if (globalChecklistHandling != null && !globalChecklistHandling.isEmpty()) {
+            merged.addAll(globalChecklistHandling);
+        }
+        if (checklistHandlingByStopSeq == null || checklistHandlingByStopSeq.isEmpty()) {
+            return merged;
+        }
+        Integer normalizedDropStopSeq = StopOrderUtils.normalizeDropStopSeq(itemDropStopSeq);
+        if (normalizedDropStopSeq == null) {
+            return merged;
+        }
+        Set<String> stopSpecific = checklistHandlingByStopSeq.get(normalizedDropStopSeq);
+        if (stopSpecific != null && !stopSpecific.isEmpty()) {
+            merged.addAll(stopSpecific);
+        }
+        return merged;
     }
 
     private int[] resolveDimensionsFromQuoteItem(QuoteItem item, int[] truckDims) {
@@ -620,6 +712,13 @@ public class AlgorithmGatewayService {
             return false;
         }
         return tags.toUpperCase(Locale.ROOT).contains(target.toUpperCase(Locale.ROOT));
+    }
+
+    private boolean containsChecklistHandlingTag(Set<String> tags, String target) {
+        if (tags == null || tags.isEmpty() || target == null || target.isBlank()) {
+            return false;
+        }
+        return tags.contains(target.trim().toUpperCase(Locale.ROOT));
     }
 
     private boolean isQuoteLocationValid(Quote q) {
@@ -1244,12 +1343,136 @@ public class AlgorithmGatewayService {
 
         LocalDateTime effectiveDeadline = deliveryDeadline != null ? deliveryDeadline : deliverySchedule;
         LocalDateTime effectivePickupStart = pickupScheduleStart != null ? pickupScheduleStart : deliverySchedule;
+        List<com.freight.backend.gpsload.loadplan.model.CargoHandling> handling = parseHandlingList(map.get("handling"));
 
         return new com.freight.backend.gpsload.routeassembly.model.Quote(
                 quoteId, origin, destination, waypoints, volumeCbm, weightKg, allowCombine, finalPrice,
-                effectivePickupStart, effectiveDeadline, effectiveDeadline,
-                null, null, null, null, null, null, null, null, null, status, null
+                effectivePickupStart, effectiveDeadline, deliverySchedule,
+                null, null, null, null, null, null, null, null, null, status, handling
         );
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<com.freight.backend.gpsload.loadplan.model.CargoHandling> parseHandlingList(Object value) {
+        if (!(value instanceof Collection<?> raw) || raw.isEmpty()) {
+            return List.of();
+        }
+        List<com.freight.backend.gpsload.loadplan.model.CargoHandling> parsed = new ArrayList<>();
+        for (Object item : raw) {
+            String token = item == null ? null : String.valueOf(item);
+            if (token == null || token.isBlank()) {
+                continue;
+            }
+            String normalized = token.trim().toUpperCase(Locale.ROOT);
+            try {
+                parsed.add(com.freight.backend.gpsload.loadplan.model.CargoHandling.valueOf(normalized));
+            } catch (IllegalArgumentException ignored) {
+                // ignore unknown values
+            }
+        }
+        return parsed;
+    }
+
+    private Map<Long, Set<String>> fetchChecklistHandlingTags(Collection<Long> quoteIds) {
+        if (quoteIds == null || quoteIds.isEmpty()) {
+            return Map.of();
+        }
+        List<Long> safeIds = quoteIds.stream()
+                .filter(id -> id != null && id > 0)
+                .distinct()
+                .toList();
+        if (safeIds.isEmpty()) {
+            return Map.of();
+        }
+
+        List<QuoteChecklistItem> quoteChecklistItems = quoteChecklistItemRepository.findByQuoteIdIn(safeIds);
+        if (quoteChecklistItems.isEmpty()) {
+            return Map.of();
+        }
+
+        Set<Long> checklistItemIds = quoteChecklistItems.stream()
+                .map(QuoteChecklistItem::getChecklistItemId)
+                .filter(id -> id != null && id > 0)
+                .collect(Collectors.toSet());
+        if (checklistItemIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Long, ChecklistItem> checklistItemById = new HashMap<>();
+        checklistItemRepository.findAllById(checklistItemIds)
+                .forEach(item -> checklistItemById.put(item.getChecklistItemId(), item));
+
+        Map<Long, Set<String>> byQuoteId = new HashMap<>();
+        for (QuoteChecklistItem qci : quoteChecklistItems) {
+            if (qci == null || qci.getQuoteId() == null) {
+                continue;
+            }
+            if (StopOrderUtils.normalizeDropStopSeq(qci.getStopSeq()) != null) {
+                continue;
+            }
+            ChecklistItem item = checklistItemById.get(qci.getChecklistItemId());
+            Set<String> mapped = mapChecklistItemToHandlingTags(item);
+            if (mapped.isEmpty()) {
+                continue;
+            }
+            byQuoteId.computeIfAbsent(qci.getQuoteId(), ignored -> new HashSet<>()).addAll(mapped);
+        }
+        return byQuoteId;
+    }
+
+    private Map<Long, Map<Integer, Set<String>>> fetchChecklistHandlingTagsByQuoteAndStopSeq(Collection<Long> quoteIds) {
+        if (quoteIds == null || quoteIds.isEmpty()) {
+            return Map.of();
+        }
+        List<Long> safeIds = quoteIds.stream()
+                .filter(id -> id != null && id > 0)
+                .distinct()
+                .toList();
+        if (safeIds.isEmpty()) {
+            return Map.of();
+        }
+
+        List<QuoteChecklistItem> quoteChecklistItems = quoteChecklistItemRepository.findByQuoteIdIn(safeIds);
+        if (quoteChecklistItems.isEmpty()) {
+            return Map.of();
+        }
+
+        Set<Long> checklistItemIds = quoteChecklistItems.stream()
+                .map(QuoteChecklistItem::getChecklistItemId)
+                .filter(id -> id != null && id > 0)
+                .collect(Collectors.toSet());
+        if (checklistItemIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Long, ChecklistItem> checklistItemById = new HashMap<>();
+        checklistItemRepository.findAllById(checklistItemIds)
+                .forEach(item -> checklistItemById.put(item.getChecklistItemId(), item));
+
+        Map<Long, Map<Integer, Set<String>>> byQuoteAndStop = new HashMap<>();
+        for (QuoteChecklistItem qci : quoteChecklistItems) {
+            if (qci == null || qci.getQuoteId() == null) {
+                continue;
+            }
+            Integer stopSeq = StopOrderUtils.normalizeDropStopSeq(qci.getStopSeq());
+            if (stopSeq == null) {
+                continue;
+            }
+            ChecklistItem item = checklistItemById.get(qci.getChecklistItemId());
+            Set<String> mapped = mapChecklistItemToHandlingTags(item);
+            if (mapped.isEmpty()) {
+                continue;
+            }
+            byQuoteAndStop
+                    .computeIfAbsent(qci.getQuoteId(), ignored -> new HashMap<>())
+                    .computeIfAbsent(stopSeq, ignored -> new HashSet<>())
+                    .addAll(mapped);
+        }
+        return byQuoteAndStop;
+    }
+
+    private Set<String> mapChecklistItemToHandlingTags(ChecklistItem item) {
+        return checklistHandlingMapper.mapToHandlingTags(item);
     }
 
     @SuppressWarnings("unchecked")
@@ -1315,6 +1538,16 @@ public class AlgorithmGatewayService {
             return quote.getDeliveryDeadline();
         }
         return quote.getDeliverySchedule();
+    }
+
+    private LocalDateTime resolveDeliverySchedule(Quote quote) {
+        if (quote == null) {
+            return null;
+        }
+        if (quote.getDeliverySchedule() != null) {
+            return quote.getDeliverySchedule();
+        }
+        return quote.getDeliveryDeadline();
     }
 
     private LocalDateTime resolvePickupScheduleStart(Quote quote) {
@@ -1388,6 +1621,8 @@ public class AlgorithmGatewayService {
         }
         String normalized = raw.trim().toUpperCase(Locale.ROOT);
         return switch (normalized) {
+            case "SINGLE" -> DriverState.CombinePreference.DISALLOW;
+            case "BUNDLED" -> DriverState.CombinePreference.ALLOW;
             case "DISALLOW" -> DriverState.CombinePreference.DISALLOW;
             case "HOME_ROUTE" -> DriverState.CombinePreference.HOME_ROUTE;
             default -> DriverState.CombinePreference.ALLOW;
@@ -1399,7 +1634,18 @@ public class AlgorithmGatewayService {
             return RouteAssemblyRequest.RouteMode.SMART;
         }
         String normalized = raw.trim().toUpperCase(Locale.ROOT);
-        return "SIMPLE".equals(normalized) ? RouteAssemblyRequest.RouteMode.SIMPLE : RouteAssemblyRequest.RouteMode.SMART;
+        return switch (normalized) {
+            case "SIMPLE", "SINGLE" -> RouteAssemblyRequest.RouteMode.SIMPLE;
+            case "SMART", "BUNDLED" -> RouteAssemblyRequest.RouteMode.SMART;
+            default -> RouteAssemblyRequest.RouteMode.SMART;
+        };
+    }
+
+    private String toClientMode(RouteAssemblyRequest.RouteMode mode) {
+        if (mode == RouteAssemblyRequest.RouteMode.SIMPLE) {
+            return "SINGLE";
+        }
+        return "BUNDLED";
     }
 
     private RouteAssemblyResponse applyMaxVisitCountLimit(RouteAssemblyResponse response, Integer maxVisitCount) {

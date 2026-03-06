@@ -1,5 +1,7 @@
 package com.freight.backend.gpsload.routeassembly.service;
 
+import com.freight.backend.entity.ChecklistItem;
+import com.freight.backend.entity.QuoteChecklistItem;
 import com.freight.backend.entity.QuoteItem;
 import com.freight.backend.entity.QuoteStop;
 import com.freight.backend.gpsload.loadplan.model.CargoHandling;
@@ -8,8 +10,12 @@ import com.freight.backend.gpsload.route.model.Place;
 import com.freight.backend.gpsload.routeassembly.model.DriverState;
 import com.freight.backend.gpsload.routeassembly.model.Quote;
 import com.freight.backend.gpsload.loadplan.repository.TruckDimensionRepository;
+import com.freight.backend.repository.ChecklistItemRepository;
+import com.freight.backend.repository.QuoteChecklistItemRepository;
 import com.freight.backend.repository.QuoteItemRepository;
 import com.freight.backend.repository.QuoteStopRepository;
+import com.freight.backend.service.ChecklistHandlingMapper;
+import com.freight.backend.util.StopOrderUtils;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -26,6 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class QuoteCandidateService {
@@ -36,17 +43,26 @@ public class QuoteCandidateService {
     private final TruckDimensionRepository truckDimensionRepository;
     private final QuoteItemRepository quoteItemRepository;
     private final QuoteStopRepository quoteStopRepository;
+    private final QuoteChecklistItemRepository quoteChecklistItemRepository;
+    private final ChecklistItemRepository checklistItemRepository;
+    private final ChecklistHandlingMapper checklistHandlingMapper;
 
     public QuoteCandidateService(
             JdbcTemplate jdbcTemplate,
             TruckDimensionRepository truckDimensionRepository,
             QuoteItemRepository quoteItemRepository,
-            QuoteStopRepository quoteStopRepository
+            QuoteStopRepository quoteStopRepository,
+            QuoteChecklistItemRepository quoteChecklistItemRepository,
+            ChecklistItemRepository checklistItemRepository,
+            ChecklistHandlingMapper checklistHandlingMapper
     ) {
         this.jdbcTemplate = jdbcTemplate;
         this.truckDimensionRepository = truckDimensionRepository;
         this.quoteItemRepository = quoteItemRepository;
         this.quoteStopRepository = quoteStopRepository;
+        this.quoteChecklistItemRepository = quoteChecklistItemRepository;
+        this.checklistItemRepository = checklistItemRepository;
+        this.checklistHandlingMapper = checklistHandlingMapper;
     }
 
     public List<Quote> findOpenCandidates(DriverState driverState, int limit) {
@@ -313,21 +329,68 @@ public class QuoteCandidateService {
             }
             itemsByQuoteId.computeIfAbsent(item.getQuoteId(), ignored -> new ArrayList<>()).add(item);
         }
+        Map<Long, Set<CargoHandling>> checklistHandlingByQuoteId = resolveChecklistHandlingByQuoteId(quoteIds);
+        Map<Long, Map<Integer, Set<CargoHandling>>> checklistHandlingByQuoteIdAndStopSeq =
+                resolveChecklistHandlingByQuoteIdAndStopSeq(quoteIds);
 
         List<Quote> enriched = new ArrayList<>(quotes.size());
         for (Quote quote : quotes) {
             List<QuoteItem> quoteItems = itemsByQuoteId.getOrDefault(quote.quoteId(), List.of());
+            Set<CargoHandling> checklistHandling =
+                    checklistHandlingByQuoteId.getOrDefault(quote.quoteId(), Set.of());
+            Map<Integer, Set<CargoHandling>> checklistHandlingByStopSeq =
+                    checklistHandlingByQuoteIdAndStopSeq.getOrDefault(quote.quoteId(), Map.of());
             if (quoteItems.isEmpty()) {
-                // Keep base quote candidates even when quote_items rows do not exist yet.
-                enriched.add(quote);
+                // quote_items가 없어도 체크리스트 기반 취급속성을 실어 보낸다.
+                Set<CargoHandling> mergedHandling = new LinkedHashSet<>();
+                if (quote.handling() != null) {
+                    mergedHandling.addAll(quote.handling());
+                }
+                mergedHandling.addAll(checklistHandling);
+                for (Set<CargoHandling> stopSpecific : checklistHandlingByStopSeq.values()) {
+                    if (stopSpecific != null && !stopSpecific.isEmpty()) {
+                        mergedHandling.addAll(stopSpecific);
+                    }
+                }
+                boolean fragileFromHandling =
+                        mergedHandling.contains(CargoHandling.FRAGILE) || mergedHandling.contains(CargoHandling.EASY_BREAK);
+                enriched.add(new Quote(
+                        quote.quoteId(),
+                        quote.origin(),
+                        quote.destination(),
+                        quote.waypoints(),
+                        quote.volumeCbm(),
+                        quote.weightKg(),
+                        quote.allowCombine(),
+                        quote.finalPrice(),
+                        quote.pickupScheduleStart(),
+                        quote.deliveryDeadline(),
+                        quote.deliverySchedule(),
+                        quote.lengthCm(),
+                        quote.widthCm(),
+                        quote.heightCm(),
+                        quote.rotatable(),
+                        quote.stackable(),
+                        Boolean.TRUE.equals(quote.fragile()) || fragileFromHandling,
+                        quote.noStack(),
+                        quote.bottomOnly(),
+                        quote.maxStackWeight(),
+                        quote.status(),
+                        new ArrayList<>(mergedHandling)
+                ));
                 continue;
             }
-            enriched.add(toAggregatedQuote(quote, quoteItems));
+            enriched.add(toAggregatedQuote(quote, quoteItems, checklistHandling, checklistHandlingByStopSeq));
         }
         return enriched;
     }
 
-    private Quote toAggregatedQuote(Quote quote, List<QuoteItem> items) {
+    private Quote toAggregatedQuote(
+            Quote quote,
+            List<QuoteItem> items,
+            Set<CargoHandling> checklistHandling,
+            Map<Integer, Set<CargoHandling>> checklistHandlingByStopSeq
+    ) {
         double totalWeightKg = 0.0;
         double totalVolumeCbm = 0.0;
 
@@ -386,6 +449,22 @@ public class QuoteCandidateService {
                 handlingSet.add(CargoHandling.FRAGILE);
             }
             handlingSet.addAll(parseHandlingTags(item.getHandlingTags()));
+
+            Set<CargoHandling> checklistForItem = resolveChecklistHandlingForItem(
+                    item,
+                    checklistHandling,
+                    checklistHandlingByStopSeq
+            );
+            if (!checklistForItem.isEmpty()) {
+                handlingSet.addAll(checklistForItem);
+                if (checklistForItem.contains(CargoHandling.FRAGILE) || checklistForItem.contains(CargoHandling.EASY_BREAK)) {
+                    anyFragile = true;
+                }
+            }
+        }
+
+        if (checklistHandling != null && !checklistHandling.isEmpty()) {
+            handlingSet.addAll(checklistHandling);
         }
 
         if (totalWeightKg <= 0 && quote.weightKg() != null) {
@@ -396,6 +475,9 @@ public class QuoteCandidateService {
         }
 
         boolean effectiveNoStack = anyNoStack || !allStackable;
+
+        boolean fragileFromHandling = handlingSet.contains(CargoHandling.FRAGILE)
+                || handlingSet.contains(CargoHandling.EASY_BREAK);
 
         return new Quote(
                 quote.quoteId(),
@@ -414,13 +496,122 @@ public class QuoteCandidateService {
                 maxHeight,
                 allRotatable,
                 !effectiveNoStack,
-                anyFragile,
+                anyFragile || fragileFromHandling,
                 effectiveNoStack,
                 anyBottomOnly,
                 minMaxStackWeight,
                 quote.status(),
                 new ArrayList<>(handlingSet)
         );
+    }
+
+    private Set<CargoHandling> resolveChecklistHandlingForItem(
+            QuoteItem item,
+            Set<CargoHandling> globalChecklistHandling,
+            Map<Integer, Set<CargoHandling>> checklistHandlingByStopSeq
+    ) {
+        Set<CargoHandling> merged = new LinkedHashSet<>();
+        if (globalChecklistHandling != null && !globalChecklistHandling.isEmpty()) {
+            merged.addAll(globalChecklistHandling);
+        }
+        if (item == null || checklistHandlingByStopSeq == null || checklistHandlingByStopSeq.isEmpty()) {
+            return merged;
+        }
+        Integer stopSeq = StopOrderUtils.normalizeDropStopSeq(item.getDropStopSeq());
+        if (stopSeq == null) {
+            return merged;
+        }
+        Set<CargoHandling> stopSpecific = checklistHandlingByStopSeq.get(stopSeq);
+        if (stopSpecific != null && !stopSpecific.isEmpty()) {
+            merged.addAll(stopSpecific);
+        }
+        return merged;
+    }
+
+    private Map<Long, Set<CargoHandling>> resolveChecklistHandlingByQuoteId(List<Long> quoteIds) {
+        if (quoteIds == null || quoteIds.isEmpty()) {
+            return Map.of();
+        }
+
+        List<QuoteChecklistItem> quoteChecklistItems = quoteChecklistItemRepository.findByQuoteIdIn(quoteIds);
+        if (quoteChecklistItems.isEmpty()) {
+            return Map.of();
+        }
+
+        Set<Long> checklistItemIds = quoteChecklistItems.stream()
+                .map(QuoteChecklistItem::getChecklistItemId)
+                .filter(id -> id != null && id > 0)
+                .collect(Collectors.toSet());
+        if (checklistItemIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Long, ChecklistItem> checklistItemById = new HashMap<>();
+        checklistItemRepository.findAllById(checklistItemIds).forEach(item -> checklistItemById.put(item.getChecklistItemId(), item));
+
+        Map<Long, Set<CargoHandling>> byQuoteId = new HashMap<>();
+        for (QuoteChecklistItem qci : quoteChecklistItems) {
+            if (qci == null || qci.getQuoteId() == null) {
+                continue;
+            }
+            if (StopOrderUtils.normalizeDropStopSeq(qci.getStopSeq()) != null) {
+                continue;
+            }
+            ChecklistItem item = checklistItemById.get(qci.getChecklistItemId());
+            Set<CargoHandling> mapped = mapChecklistItemToHandling(item);
+            if (mapped.isEmpty()) {
+                continue;
+            }
+            byQuoteId.computeIfAbsent(qci.getQuoteId(), ignored -> new LinkedHashSet<>()).addAll(mapped);
+        }
+        return byQuoteId;
+    }
+
+    private Map<Long, Map<Integer, Set<CargoHandling>>> resolveChecklistHandlingByQuoteIdAndStopSeq(List<Long> quoteIds) {
+        if (quoteIds == null || quoteIds.isEmpty()) {
+            return Map.of();
+        }
+
+        List<QuoteChecklistItem> quoteChecklistItems = quoteChecklistItemRepository.findByQuoteIdIn(quoteIds);
+        if (quoteChecklistItems.isEmpty()) {
+            return Map.of();
+        }
+
+        Set<Long> checklistItemIds = quoteChecklistItems.stream()
+                .map(QuoteChecklistItem::getChecklistItemId)
+                .filter(id -> id != null && id > 0)
+                .collect(Collectors.toSet());
+        if (checklistItemIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Long, ChecklistItem> checklistItemById = new HashMap<>();
+        checklistItemRepository.findAllById(checklistItemIds).forEach(item -> checklistItemById.put(item.getChecklistItemId(), item));
+
+        Map<Long, Map<Integer, Set<CargoHandling>>> byQuoteAndStop = new HashMap<>();
+        for (QuoteChecklistItem qci : quoteChecklistItems) {
+            if (qci == null || qci.getQuoteId() == null) {
+                continue;
+            }
+            Integer stopSeq = StopOrderUtils.normalizeDropStopSeq(qci.getStopSeq());
+            if (stopSeq == null) {
+                continue;
+            }
+            ChecklistItem item = checklistItemById.get(qci.getChecklistItemId());
+            Set<CargoHandling> mapped = mapChecklistItemToHandling(item);
+            if (mapped.isEmpty()) {
+                continue;
+            }
+            byQuoteAndStop
+                    .computeIfAbsent(qci.getQuoteId(), ignored -> new HashMap<>())
+                    .computeIfAbsent(stopSeq, ignored -> new LinkedHashSet<>())
+                    .addAll(mapped);
+        }
+        return byQuoteAndStop;
+    }
+
+    private Set<CargoHandling> mapChecklistItemToHandling(ChecklistItem item) {
+        return checklistHandlingMapper.mapToCargoHandling(item);
     }
 
     private List<CargoHandling> parseHandlingTags(String handlingTags) {
