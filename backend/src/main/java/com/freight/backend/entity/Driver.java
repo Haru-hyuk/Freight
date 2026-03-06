@@ -52,6 +52,9 @@ public class Driver {
     @Column(name = "bank_account")
     private String bankAccount;
 
+    @Column(name = "selected_truck_id")
+    private Long selectedTruckId;
+
     @Column(name = "license_verified", nullable = false)
     private Boolean licenseVerified;
 
@@ -60,6 +63,10 @@ public class Driver {
 
     @Column(name = "status", nullable = false)
     private String status;
+
+    @Column(name = "on_duty", nullable = false)
+    @Builder.Default
+    private Boolean onDuty = true;
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
@@ -86,10 +93,39 @@ public class Driver {
         this.updatedAt = LocalDateTime.now();
     }
 
-    public void updateProfile(String name, String email, String phone) {
-        this.name = name;
-        this.email = email;
-        this.phone = phone;
+    public void reviewApproval(boolean approved, String nextStatus) {
+        this.licenseVerified = approved;
+        if (nextStatus != null && !nextStatus.isBlank()) {
+            this.status = nextStatus;
+        }
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    public void selectTruck(Long truckId) {
+        this.selectedTruckId = truckId;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    public void clearSelectedTruck() {
+        this.selectedTruckId = null;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    public void updateOnDuty(boolean onDuty) {
+        this.onDuty = onDuty;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    public void updateProfile(String nextName, String nextEmail, String nextPhone) {
+        if (nextName != null && !nextName.isBlank()) {
+            this.name = nextName.trim();
+        }
+        if (nextEmail != null && !nextEmail.isBlank()) {
+            this.email = nextEmail.trim();
+        }
+        if (nextPhone != null && !nextPhone.isBlank()) {
+            this.phone = nextPhone.trim();
+        }
         this.updatedAt = LocalDateTime.now();
     }
 }
