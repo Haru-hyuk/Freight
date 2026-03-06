@@ -8,11 +8,6 @@ server:
 spring:
   application:
     name: backend
-  devtools:
-    restart:
-      enabled: false
-    livereload:
-      enabled: false
   servlet:
     encoding:
       enabled: true
@@ -25,27 +20,70 @@ spring:
     password: ${DB_PASSWORD}
   jpa:
     hibernate:
-      ddl-auto: update
-    show-sql: true
+      ddl-auto: ${JPA_DDL_AUTO:update}
+    show-sql: ${JPA_SHOW_SQL:false}
     properties:
       hibernate:
         format_sql: true
+        jdbc:
+          time_zone: ${JDBC_TIME_ZONE:Asia/Seoul}
+  jackson:
+    time-zone: ${JACKSON_TIME_ZONE:Asia/Seoul}
+  flyway:
+    enabled: ${FLYWAY_ENABLED:true}
+    baseline-on-migrate: ${FLYWAY_BASELINE_ON_MIGRATE:true}
+    locations: classpath:db/migration
   data:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
 
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173,http://localhost:8081,http://localhost:8082,http://localhost:8083,http://localhost:19006,http://127.0.0.1:3000,http://127.0.0.1:5173,http://127.0.0.1:8081,http://127.0.0.1:8082,http://127.0.0.1:8083,http://127.0.0.1:19006,https://localhost:3000,https://localhost:5173,https://localhost:8081,https://localhost:8082,https://localhost:8083,https://localhost:19006,https://127.0.0.1:3000,https://127.0.0.1:5173,https://127.0.0.1:8081,https://127.0.0.1:8082,https://127.0.0.1:8083,https://127.0.0.1:19006}
+
+external:
+  http:
+    connect-timeout-ms: ${EXTERNAL_HTTP_CONNECT_TIMEOUT_MS:3000}
+    read-timeout-ms: ${EXTERNAL_HTTP_READ_TIMEOUT_MS:5000}
+
+app:
+  security:
+    require-https: ${APP_SECURITY_REQUIRE_HTTPS:false}
+  rate-limit:
+    enabled: ${APP_RATE_LIMIT_ENABLED:true}
+    redis-enabled: ${APP_RATE_LIMIT_REDIS_ENABLED:true}
+    auth-max-per-minute: ${APP_RATE_LIMIT_AUTH_PER_MINUTE:20}
+    payment-max-per-minute: ${APP_RATE_LIMIT_PAYMENT_PER_MINUTE:10}
+    eta-max-per-minute: ${APP_RATE_LIMIT_ETA_PER_MINUTE:30}
+    api-max-per-minute: ${APP_RATE_LIMIT_API_PER_MINUTE:240}
+
+admin:
+  integration:
+    dispatch-snapshot-limit: ${ADMIN_INTEGRATION_DISPATCH_SNAPSHOT_LIMIT:500}
+
 jwt:
   secret: ${JWT_SECRET}
 
 kakao:
-  rest-api-key: ${KAKAO_REST_API_KEY:}
-  javascript-appkey: ${KAKAO_JAVASCRIPT_APPKEY:}
-  mobility-base-url: ${KAKAO_MOBILITY_BASE_URL:https://apis-navi.kakaomobility.com}
+   rest-api-key: ${KAKAO_REST_API_KEY:}
+   javascript-appkey: ${KAKAO_JAVASCRIPT_APPKEY:}
+   mobility-base-url: ${KAKAO_MOBILITY_BASE_URL:https://apis-navi.kakaomobility.com}
 
 route:
   assembly:
     top-n-real-distance: ${ROUTE_ASSEMBLY_TOP_N_REAL_DISTANCE:10}
+    loadplan:
+      fail-open-enabled: ${ROUTE_ASSEMBLY_LOADPLAN_FAIL_OPEN_ENABLED:true}
+      fail-open-max-consecutive: ${ROUTE_ASSEMBLY_LOADPLAN_FAIL_OPEN_MAX_CONSECUTIVE:3}
+  candidate-filter:
+    speed:
+      default-kmh: ${ROUTE_CANDIDATE_FILTER_SPEED_DEFAULT_KMH:40.0}
+      rush-kmh: ${ROUTE_CANDIDATE_FILTER_SPEED_RUSH_KMH:28.0}
+      night-kmh: ${ROUTE_CANDIDATE_FILTER_SPEED_NIGHT_KMH:48.0}
+    distance:
+      factor: ${ROUTE_CANDIDATE_FILTER_DISTANCE_FACTOR:1.30}
+    pickup-handling-minutes: ${ROUTE_CANDIDATE_FILTER_PICKUP_HANDLING_MINUTES:20}
+    waypoint-handling-minutes: ${ROUTE_CANDIDATE_FILTER_WAYPOINT_HANDLING_MINUTES:6}
   traffic:
     live-enabled: ${ROUTE_TRAFFIC_LIVE_ENABLED:false}
     live-cache-ttl-seconds: ${ROUTE_TRAFFIC_LIVE_CACHE_TTL_SECONDS:180}
@@ -81,17 +119,31 @@ deepseek:
 
 fcm:
   enabled: ${FCM_ENABLED:false}
-  service-account-path: ${FCM_SERVICE_ACCOUNT_PATH:classpath:firebase/service-account.json}
+  service-account-path: ${FCM_SERVICE_ACCOUNT_PATH:}
 
 delivery-photo:
-  storage-dir: ${DELIVERY_PHOTO_STORAGE_DIR:uploads/delivery-photos}
+  storage-dir: ${DELIVERY_PHOTO_STORAGE_DIR:${user.home}/freight/uploads/delivery-photos}
 
 springdoc:
   api-docs:
     path: /api-docs
-operations:
   swagger-ui:
     path: /swagger-ui
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  health:
+    redis:
+      enabled: ${MANAGEMENT_HEALTH_REDIS_ENABLED:false}
+
+operations:
   scheduler:
     enabled: ${OPERATIONS_SCHEDULER_ENABLED:true}
   match:
@@ -105,17 +157,32 @@ algorithm:
   gateway:
     default-max-pickup-distance-km: ${ALGORITHM_MAX_PICKUP_KM:25.0}
     max-candidate-quotes: ${ALGORITHM_MAX_CANDIDATES:80}
+    open-quote-scan-limit: ${ALGORITHM_OPEN_QUOTE_SCAN_LIMIT:500}
+    estimated-items-soft-mode: ${ALGORITHM_ESTIMATED_ITEMS_SOFT_MODE:true}
+    estimated-items-max-pieces: ${ALGORITHM_ESTIMATED_ITEMS_MAX_PIECES:3}
+    estimated-items-max-dimension-ratio: ${ALGORITHM_ESTIMATED_ITEMS_MAX_DIMENSION_RATIO:0.65}
 
 geocoding:
   kakao:
     base-url: ${GEOCODING_KAKAO_BASE_URL:https://dapi.kakao.com}
-    api-key: ${KAKAO_REST_API_KEY:}
+    api-key: ${GEOCODING_KAKAO_API_KEY:${kakao.rest-api-key}}
   timeout-ms: ${GEOCODING_TIMEOUT_MS:2000}
   cache:
     ttl-seconds: ${GEOCODING_CACHE_TTL_SECONDS:86400}
+    redis-ttl-seconds: ${GEOCODING_CACHE_REDIS_TTL_SECONDS:86400}
 
 routing:
   kakao:
     base-url: ${ROUTING_KAKAO_BASE_URL:https://apis-navi.kakaomobility.com}
-    api-key: ${KAKAO_REST_API_KEY:}
+    api-key: ${ROUTING_KAKAO_API_KEY:${kakao.rest-api-key}}
   timeout-ms: ${ROUTING_TIMEOUT_MS:3000}
+  cache:
+    ttl-hours: ${ROUTING_CACHE_TTL_HOURS:720}
+    redis-ttl-hours: ${ROUTING_CACHE_REDIS_TTL_HOURS:24}
+
+quote:
+  eta:
+    avg-speed-kmh: ${QUOTE_ETA_AVG_SPEED_KMH:50}
+    base-buffer-seconds: ${QUOTE_ETA_BASE_BUFFER_SECONDS:1200}
+    per-stop-buffer-seconds: ${QUOTE_ETA_PER_STOP_BUFFER_SECONDS:300}
+    max-buffer-seconds: ${QUOTE_ETA_MAX_BUFFER_SECONDS:1800}

@@ -177,9 +177,7 @@ public class AuthService {
                 refreshTokenHash,
                 refreshJti,
                 issuedAt,
-                expiresAt,
-                null,
-                null
+                expiresAt
         );
         jwtRefreshTokenRepository.save(token);
     }
