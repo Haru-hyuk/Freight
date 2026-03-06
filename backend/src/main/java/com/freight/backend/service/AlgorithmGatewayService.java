@@ -1,6 +1,8 @@
 package com.freight.backend.service;
 import com.freight.backend.dto.algorithm.LoadPlanPreviewRequest;
 import com.freight.backend.dto.algorithm.RouteRecommendRequest;
+import com.freight.backend.dto.algorithm.RouteSelectionPreviewRequest;
+import com.freight.backend.entity.Driver;
 import com.freight.backend.entity.Match;
 import com.freight.backend.entity.Quote;
 import com.freight.backend.entity.QuoteItem;
@@ -8,18 +10,27 @@ import com.freight.backend.entity.QuoteStop;
 import com.freight.backend.entity.Truck;
 import com.freight.backend.exception.CustomException;
 import com.freight.backend.exception.ErrorCode;
+import com.freight.backend.geocoding.GeocodingResult;
+import com.freight.backend.geocoding.GeocodingService;
 import com.freight.backend.gpsload.loadplan.model.CargoItem;
 import com.freight.backend.gpsload.loadplan.model.LoadPlanRequest;
+import com.freight.backend.gpsload.loadplan.repository.TruckSpecCatalogRepository;
 import com.freight.backend.gpsload.loadplan.service.LoadPlanService;
 import com.freight.backend.gpsload.route.model.Place;
+import com.freight.backend.gpsload.routeassembly.model.AssemblyParameters;
+import com.freight.backend.gpsload.routeassembly.model.CargoVisit;
+import com.freight.backend.gpsload.routeassembly.model.RecommendedRoute;
+import com.freight.backend.gpsload.routeassembly.model.RouteAssemblyResponse;
 import com.freight.backend.gpsload.routeassembly.model.DriverState;
 import com.freight.backend.gpsload.routeassembly.model.RouteAssemblyRequest;
 import com.freight.backend.gpsload.routeassembly.service.RouteAssemblyService;
 import com.freight.backend.repository.MatchRepository;
+import com.freight.backend.repository.DriverRepository;
 import com.freight.backend.repository.QuoteItemRepository;
 import com.freight.backend.repository.QuoteRepository;
 import com.freight.backend.repository.QuoteStopRepository;
 import com.freight.backend.repository.TruckRepository;
+import com.freight.backend.util.StopOrderUtils;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -34,9 +45,12 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -50,14 +64,18 @@ import org.springframework.stereotype.Service;
 public class AlgorithmGatewayService {
 
     private static final Logger log = LoggerFactory.getLogger(AlgorithmGatewayService.class);
+    private static final int MAX_COORDINATE_REPAIR_PER_REQUEST = 5;
 
     private final QuoteRepository quoteRepository;
     private final QuoteItemRepository quoteItemRepository;
     private final TruckRepository truckRepository;
+    private final DriverRepository driverRepository;
     private final MatchRepository matchRepository;
     private final QuoteStopRepository quoteStopRepository;
     private final RouteAssemblyService routeAssemblyService;
     private final LoadPlanService loadPlanService;
+    private final GeocodingService geocodingService;
+    private final TruckSpecCatalogRepository truckSpecCatalogRepository;
 
     @Value("${algorithm.gateway.default-max-pickup-distance-km:25.0}")
     private double defaultMaxPickupDistanceKm;
@@ -65,23 +83,38 @@ public class AlgorithmGatewayService {
     @Value("${algorithm.gateway.max-candidate-quotes:80}")
     private int maxCandidateQuotes;
 
+    @Value("${algorithm.gateway.open-quote-scan-limit:500}")
+    private int openQuoteScanLimit;
+
+    @Value("${algorithm.gateway.estimated-items-soft-mode:true}")
+    private boolean estimatedItemsSoftMode;
+
+    @Value("${algorithm.gateway.estimated-items-max-pieces:3}")
+    private int estimatedItemsMaxPieces;
+
+    @Value("${algorithm.gateway.estimated-items-max-dimension-ratio:0.65}")
+    private double estimatedItemsMaxDimensionRatio;
+
     /** 기사 위치 기반 최적 경로/합짐 추천 */
     public Object recommendRoutes(Long driverId, RouteRecommendRequest request) {
-        Truck truck = resolveDriverTruck(driverId);
-        List<Quote> openQuotes = quoteRepository.findByStatus("OPEN");
-
+        Truck truck = resolveTruck(driverId, request.getTruckId());
         List<Long> selectedQuoteIds = normalizeSelectedQuoteIds(request.getSelectedQuoteIds());
-        if (!selectedQuoteIds.isEmpty()) {
-            Set<Long> selectedIdSet = new HashSet<>(selectedQuoteIds);
-            openQuotes = openQuotes.stream()
-                    .filter(q -> q.getQuoteId() != null && selectedIdSet.contains(q.getQuoteId()))
-                    .toList();
-            if (openQuotes.isEmpty()) {
-                throw new CustomException(ErrorCode.INVALID_REQUEST);
-            }
+        double maxPickupDistanceKm = request.getMaxPickupDistanceKm() != null
+                ? Math.max(0.0, request.getMaxPickupDistanceKm())
+                : defaultMaxPickupDistanceKm;
+
+        List<Quote> openQuotes = fetchOpenQuotesForRecommendation(
+                request.getCurrentLat(),
+                request.getCurrentLng(),
+                maxPickupDistanceKm,
+                selectedQuoteIds
+        );
+        if (!selectedQuoteIds.isEmpty() && openQuotes.isEmpty()) {
+            throw new CustomException(ErrorCode.INVALID_REQUEST);
         }
 
         Map<Long, List<QuoteItem>> itemsByQuoteId = fetchQuoteItems(openQuotes.stream().map(Quote::getQuoteId).toList());
+        Map<Long, List<Place>> waypointsByQuoteId = fetchQuoteWaypoints(openQuotes.stream().map(Quote::getQuoteId).toList());
 
         List<Map<String, Object>> candidates = new ArrayList<>();
         double loadedWeight = request.getLoadedWeightKg() == null ? 0.0 : Math.max(0.0, request.getLoadedWeightKg());
@@ -90,15 +123,26 @@ public class AlgorithmGatewayService {
         double truckMaxVolume = safeBigDecimal(truck.getMaxVolume(), 10.0);
         double remainingWeight = Math.max(0.0, truckMaxWeight - loadedWeight);
         double remainingCbm = Math.max(0.0, truckMaxVolume - loadedVolume);
-        double maxPickupDistanceKm = request.getMaxPickupDistanceKm() != null
-                ? Math.max(0.0, request.getMaxPickupDistanceKm())
-                : defaultMaxPickupDistanceKm;
+        int invalidLocationCount = 0;
+        int vehicleMismatchCount = 0;
+        int missingLoadSpecCount = 0;
+        int truckDimensionMismatchCount = 0;
+        int overCapacityCount = 0;
+        int outOfRadiusCount = 0;
+        int coordinateRepairAttemptedCount = 0;
 
-        for (Quote q : openQuotes) {
+        for (Quote rawQuote : openQuotes) {
+            Quote q = rawQuote;
+            if (!isQuoteLocationValid(q) && coordinateRepairAttemptedCount < MAX_COORDINATE_REPAIR_PER_REQUEST) {
+                coordinateRepairAttemptedCount++;
+                q = tryRepairQuoteCoordinates(q);
+            }
             if (!isQuoteLocationValid(q)) {
+                invalidLocationCount++;
                 continue;
             }
             if (!isVehicleCompatible(truck, q)) {
+                vehicleMismatchCount++;
                 continue;
             }
 
@@ -106,12 +150,15 @@ public class AlgorithmGatewayService {
             double quoteWeight = deriveQuoteWeightKg(q, quoteItems);
             double quoteCbm = deriveQuoteVolumeCbm(q, quoteItems);
             if (quoteWeight <= 0 || quoteCbm <= 0) {
+                missingLoadSpecCount++;
                 continue;
             }
             if (!isQuoteLoadCompatibleWithTruck(truck, q, quoteItems)) {
+                truckDimensionMismatchCount++;
                 continue;
             }
             if (quoteWeight > remainingWeight || quoteCbm > remainingCbm) {
+                overCapacityCount++;
                 continue;
             }
 
@@ -122,6 +169,7 @@ public class AlgorithmGatewayService {
                     q.getOriginLng()
             );
             if (pickupDistanceKm > maxPickupDistanceKm) {
+                outOfRadiusCount++;
                 continue;
             }
 
@@ -129,15 +177,42 @@ public class AlgorithmGatewayService {
             quote.put("quoteId", q.getQuoteId());
             quote.put("origin", toPlacePayload(q.getOriginLat(), q.getOriginLng(), q.getOriginAddress()));
             quote.put("destination", toPlacePayload(q.getDestinationLat(), q.getDestinationLng(), q.getDestinationAddress()));
+            quote.put("waypoints", waypointsByQuoteId.getOrDefault(q.getQuoteId(), List.of()));
             quote.put("volumeCbm", quoteCbm);
             quote.put("weightKg", quoteWeight);
             quote.put("allowCombine", Boolean.TRUE.equals(q.getAllowCombine()));
             quote.put("finalPrice", safeDouble(q.getFinalPrice(), 0.0));
+            LocalDateTime pickupScheduleStart = resolvePickupScheduleStart(q);
+            LocalDateTime deliveryDeadline = resolveDeliveryDeadline(q);
+            quote.put("pickupScheduleStart", pickupScheduleStart);
+            quote.put("deliveryDeadline", deliveryDeadline);
+            quote.put("deliverySchedule", deliveryDeadline);
             quote.put("status", q.getStatus());
             quote.put("pickupDistanceKm", pickupDistanceKm);
             quote.put("itemCount", Math.max(1, totalItemCount(quoteItems)));
             quote.put("dataQuality", evaluateDataQuality(q, quoteItems));
             candidates.add(quote);
+        }
+
+        if (candidates.isEmpty()) {
+            String emptyReason = buildEmptyCandidateReason(
+                    openQuotes.size(),
+                    invalidLocationCount,
+                    vehicleMismatchCount,
+                    missingLoadSpecCount,
+                    truckDimensionMismatchCount,
+                    overCapacityCount,
+                    outOfRadiusCount
+            );
+            return new com.freight.backend.gpsload.routeassembly.model.RouteAssemblyResponse(
+                    true,
+                    emptyReason,
+                    List.of(),
+                    openQuotes.size(),
+                    0,
+                    0,
+                    0
+            );
         }
 
         candidates.sort(Comparator.comparingDouble(c -> safeDouble((Number) c.get("pickupDistanceKm"), Double.MAX_VALUE)));
@@ -183,13 +258,159 @@ public class AlgorithmGatewayService {
                 truck.getTruckId()
         );
 
-        // RouteAssemblyRequest 생성 및 직접 호출
+        AssemblyParameters effectiveParams = buildEffectiveAssemblyParameters(request);
+        RouteAssemblyRequest.RouteMode requestedMode = parseRouteMode(request.getMode());
+
+        // RouteAssemblyRequest 생성 및 호출
         RouteAssemblyRequest assemblyRequest = new RouteAssemblyRequest(
-                driverStateRecord, quoteList, null, selectedQuoteIds,
-                parseRouteMode(request.getMode())
+                driverStateRecord, quoteList, effectiveParams, selectedQuoteIds, requestedMode
         );
 
-        return routeAssemblyService.recommend(assemblyRequest);
+        RouteAssemblyResponse primaryResponse = applyMaxVisitCountLimit(
+                routeAssemblyService.recommend(assemblyRequest),
+                request.getMaxVisitCount()
+        );
+        if (primaryResponse.hasRecommendations()) {
+            return primaryResponse;
+        }
+
+        // 사용자가 선택한 견적이 있으면 선택 견적 자체를 우선 평가해 경로 공백을 줄인다.
+        if (!selectedQuoteIds.isEmpty()) {
+            Set<Long> selectedIdSet = new HashSet<>(selectedQuoteIds);
+            List<com.freight.backend.gpsload.routeassembly.model.Quote> selectedQuotes = quoteList.stream()
+                    .filter(q -> q != null && q.quoteId() != null && selectedIdSet.contains(q.quoteId()))
+                    .toList();
+            if (!selectedQuotes.isEmpty()) {
+                RouteAssemblyResponse selectedEvaluation = applyMaxVisitCountLimit(
+                        routeAssemblyService.evaluateSelectedQuotes(driverStateRecord, selectedQuotes, effectiveParams),
+                        request.getMaxVisitCount()
+                );
+                if (selectedEvaluation.hasRecommendations()) {
+                    return selectedEvaluation;
+                }
+            }
+        }
+
+        // SMART 모드에서 결과가 없으면 SIMPLE 모드로 한 번 더 평가한다.
+        if (requestedMode == RouteAssemblyRequest.RouteMode.SMART) {
+            RouteAssemblyRequest simpleRequest = new RouteAssemblyRequest(
+                    driverStateRecord, quoteList, effectiveParams, selectedQuoteIds, RouteAssemblyRequest.RouteMode.SIMPLE
+            );
+            RouteAssemblyResponse simpleResponse = applyMaxVisitCountLimit(
+                    routeAssemblyService.recommend(simpleRequest),
+                    request.getMaxVisitCount()
+            );
+            if (simpleResponse.hasRecommendations()) {
+                return simpleResponse;
+            }
+        }
+
+        return primaryResponse;
+    }
+
+    private List<Quote> fetchOpenQuotesForRecommendation(
+            double currentLat,
+            double currentLng,
+            double maxPickupDistanceKm,
+            List<Long> selectedQuoteIds
+    ) {
+        if (selectedQuoteIds != null && !selectedQuoteIds.isEmpty()) {
+            Set<Long> selectedIdSet = new HashSet<>(selectedQuoteIds);
+            return quoteRepository.findByQuoteIdInAndStatus(selectedQuoteIds, "OPEN").stream()
+                    .filter(q -> q != null && q.getQuoteId() != null && selectedIdSet.contains(q.getQuoteId()))
+                    .sorted(Comparator.comparingInt(q -> selectedQuoteIds.indexOf(q.getQuoteId())))
+                    .toList();
+        }
+
+        BoundingBox bbox = buildBoundingBox(currentLat, currentLng, maxPickupDistanceKm);
+        int scanLimit = Math.max(Math.max(openQuoteScanLimit, maxCandidateQuotes), 100);
+        return quoteRepository.findOpenCandidatesByOriginBoundingBox(
+                "OPEN",
+                bbox.minLat(),
+                bbox.maxLat(),
+                bbox.minLng(),
+                bbox.maxLng(),
+                PageRequest.of(0, scanLimit)
+        );
+    }
+
+    private BoundingBox buildBoundingBox(double centerLat, double centerLng, double radiusKm) {
+        double safeRadiusKm = Math.max(0.1, radiusKm);
+        double latDelta = safeRadiusKm / 111.0;
+        double cosLat = Math.cos(Math.toRadians(centerLat));
+        double lngDelta = safeRadiusKm / (111.0 * Math.max(cosLat, 0.1));
+        return new BoundingBox(
+                centerLat - latDelta,
+                centerLat + latDelta,
+                centerLng - lngDelta,
+                centerLng + lngDelta
+        );
+    }
+
+    private record BoundingBox(double minLat, double maxLat, double minLng, double maxLng) {
+    }
+
+    /** 노선 선택 미리보기 (수락 없음) */
+    public Object previewRouteSelection(Long driverId, RouteSelectionPreviewRequest request) {
+        List<Long> requestedQuoteIds = normalizeSelectedQuoteIds(request.getQuoteIds());
+        if (requestedQuoteIds.isEmpty()) {
+            throw new CustomException(ErrorCode.INVALID_REQUEST);
+        }
+
+        RouteRecommendRequest recommendRequest = new RouteRecommendRequest();
+        recommendRequest.setCurrentLat(request.getCurrentLat());
+        recommendRequest.setCurrentLng(request.getCurrentLng());
+        recommendRequest.setEndLat(request.getEndLat());
+        recommendRequest.setEndLng(request.getEndLng());
+        recommendRequest.setCombinePreference(request.getCombinePreference());
+        recommendRequest.setMode(request.getMode());
+        recommendRequest.setLoadedWeightKg(request.getLoadedWeightKg());
+        recommendRequest.setLoadedVolumeCbm(request.getLoadedVolumeCbm());
+        recommendRequest.setMaxPickupDistanceKm(request.getMaxPickupDistanceKm());
+        recommendRequest.setMaxCombineCount(request.getMaxCombineCount());
+        recommendRequest.setMaxRecommendations(request.getMaxRecommendations());
+        recommendRequest.setMaxVisitCount(request.getMaxVisitCount());
+        recommendRequest.setSelectedQuoteIds(requestedQuoteIds);
+        recommendRequest.setTruckId(request.getTruckId());
+
+        Object recommended = recommendRoutes(driverId, recommendRequest);
+        if (!(recommended instanceof RouteAssemblyResponse routeSummary)) {
+            throw new CustomException(ErrorCode.INTERNAL_ERROR);
+        }
+
+        RecommendedRoute selectedRoute = null;
+        if (routeSummary.hasRecommendations()) {
+            int selectedRank = request.getSelectedRouteRank() != null ? request.getSelectedRouteRank() : 1;
+            selectedRoute = routeSummary.recommendations().stream()
+                    .filter(route -> route != null && route.rank() == selectedRank)
+                    .findFirst()
+                    .orElse(routeSummary.topRecommendation());
+        }
+
+        List<Long> selectedQuoteIds = requestedQuoteIds;
+        if (selectedRoute != null && selectedRoute.quoteIds() != null && !selectedRoute.quoteIds().isEmpty()) {
+            selectedQuoteIds = normalizeSelectedQuoteIds(selectedRoute.quoteIds());
+        }
+
+        LoadPlanPreviewRequest loadPlanRequest = new LoadPlanPreviewRequest();
+        loadPlanRequest.setTruckId(request.getTruckId());
+        loadPlanRequest.setQuoteIds(selectedQuoteIds);
+        Object loadPlan = previewLoadPlan(driverId, loadPlanRequest);
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("success", true);
+        response.put("accepted", false);
+        response.put("acceptanceRequired", true);
+        response.put("mode", parseRouteMode(request.getMode()).name());
+        response.put("requestedQuoteIds", requestedQuoteIds);
+        response.put("selectedQuoteIds", selectedQuoteIds);
+        response.put("selectedRouteRank", selectedRoute != null ? selectedRoute.rank() : null);
+        response.put("selectedRoute", selectedRoute);
+        response.put("routeSummary", routeSummary);
+        response.put("loadPlan", loadPlan);
+        response.put("nextAction", "/api/route-assembly/accept");
+        response.put("nextActionDescription", "노선 미리보기 후 사용자가 최종 확인하면 수락 API를 호출하세요.");
+        return response;
     }
 
     /** 3D 적재 계획 미리보기 (LIFO 순서 기반) */
@@ -214,9 +435,9 @@ public class AlgorithmGatewayService {
             }
             List<QuoteItem> quoteItems = itemsByQuoteId.getOrDefault(quoteId, List.of());
             if (quoteItems.isEmpty()) {
-                items.addAll(expandQuoteToEstimatedItems(q, stopOrder));
+                items.addAll(expandQuoteToEstimatedItems(q, stopOrder, dims));
             } else {
-                items.addAll(expandQuoteItems(q, quoteItems, stopOrder));
+                items.addAll(expandQuoteItems(q, quoteItems, stopOrder, dims));
             }
             stopOrder++;
         }
@@ -238,7 +459,25 @@ public class AlgorithmGatewayService {
         );
 
         LoadPlanRequest loadRequest = new LoadPlanRequest(truckModel, cargoItems);
-        return loadPlanService.plan(loadRequest);
+        com.freight.backend.gpsload.loadplan.model.LoadPlanResponse loadPlan = loadPlanService.plan(loadRequest);
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("placements", loadPlan.placements());
+        response.put("unplaced", loadPlan.unplaced());
+        response.put("stats", loadPlan.stats());
+
+        Map<String, Object> truckMeta = new LinkedHashMap<>();
+        truckMeta.put("truckId", truck.getTruckId());
+        truckMeta.put("vehicleType", truck.getVehicleType());
+        truckMeta.put("vehicleBodyType", truck.getVehicleBodyType());
+        truckMeta.put("doorPosition", inferDoorPosition(truck.getVehicleBodyType()));
+        truckMeta.put("length", dims[0]);
+        truckMeta.put("width", dims[1]);
+        truckMeta.put("height", dims[2]);
+        truckMeta.put("maxWeightKg", safeBigDecimal(truck.getMaxWeight(), 0.0));
+        response.put("truck", truckMeta);
+
+        return response;
     }
 
     private Map<Long, List<QuoteItem>> fetchQuoteItems(Collection<Long> quoteIds) {
@@ -253,11 +492,41 @@ public class AlgorithmGatewayService {
         return grouped;
     }
 
-    private List<Map<String, Object>> expandQuoteItems(Quote quote, List<QuoteItem> quoteItems, int stopOrder) {
+    private Map<Long, List<Place>> fetchQuoteWaypoints(Collection<Long> quoteIds) {
+        if (quoteIds == null || quoteIds.isEmpty()) {
+            return Map.of();
+        }
+
+        List<Long> safeQuoteIds = quoteIds.stream()
+                .filter(id -> id != null && id > 0)
+                .distinct()
+                .toList();
+        if (safeQuoteIds.isEmpty()) {
+            return Map.of();
+        }
+
+        List<QuoteStop> stops = quoteStopRepository.findByQuoteIdInOrderByQuoteIdAscSeqAsc(safeQuoteIds);
+        Map<Long, List<Place>> grouped = new LinkedHashMap<>();
+        for (QuoteStop stop : stops) {
+            if (stop == null || stop.getQuoteId() == null || stop.getLat() == null || stop.getLng() == null) {
+                continue;
+            }
+            grouped.computeIfAbsent(stop.getQuoteId(), ignored -> new ArrayList<>())
+                    .add(new Place(null, stop.getAddress(), stop.getLat(), stop.getLng()));
+        }
+        return grouped;
+    }
+
+    private List<Map<String, Object>> expandQuoteItems(
+            Quote quote,
+            List<QuoteItem> quoteItems,
+            int stopOrder,
+            int[] truckDims
+    ) {
         List<Map<String, Object>> items = new ArrayList<>();
         for (QuoteItem qi : quoteItems) {
             int quantity = Math.max(1, qi.getQuantity() == null ? 1 : qi.getQuantity());
-            int[] dims = resolveDimensionsFromQuoteItem(qi);
+            int[] dims = resolveDimensionsFromQuoteItem(qi, truckDims);
             double unitWeight = qi.getUnitWeightKg() != null && qi.getUnitWeightKg() > 0
                     ? qi.getUnitWeightKg()
                     : deriveWeightFromDimensions(dims);
@@ -268,6 +537,7 @@ public class AlgorithmGatewayService {
             boolean bottomOnly = Boolean.TRUE.equals(qi.getBottomOnly());
             boolean rotatable = upright ? false : !Boolean.FALSE.equals(qi.getRotatable());
             boolean stackable = noStack ? false : !Boolean.FALSE.equals(qi.getStackable());
+            int itemStopOrder = StopOrderUtils.mergeStopOrder(stopOrder, qi.getDropStopSeq());
 
             for (int i = 0; i < quantity; i++) {
                 Map<String, Object> item = new LinkedHashMap<>();
@@ -276,7 +546,7 @@ public class AlgorithmGatewayService {
                 item.put("width", dims[1]);
                 item.put("height", dims[2]);
                 item.put("weight", unitWeight);
-                item.put("stopOrder", stopOrder);
+                item.put("stopOrder", itemStopOrder);
                 item.put("rotatable", rotatable);
                 item.put("stackable", stackable);
                 item.put("fragile", fragile);
@@ -289,21 +559,25 @@ public class AlgorithmGatewayService {
             }
         }
         if (items.isEmpty()) {
-            items.addAll(expandQuoteToEstimatedItems(quote, stopOrder));
+            items.addAll(expandQuoteToEstimatedItems(quote, stopOrder, truckDims));
         }
         return items;
     }
 
-    private List<Map<String, Object>> expandQuoteToEstimatedItems(Quote quote, int stopOrder) {
-        double totalCbm = safeDouble(quote.getVolumeCbm(), 1.0);
-        double totalWeight = safeDouble(quote.getWeightKg(), 50.0);
+    private List<Map<String, Object>> expandQuoteToEstimatedItems(Quote quote, int stopOrder, int[] truckDims) {
+        double totalCbm = Math.max(0.05, safeDouble(quote.getVolumeCbm(), 1.0));
+        double totalWeight = Math.max(5.0, safeDouble(quote.getWeightKg(), 50.0));
         int pieces = Math.max(1, (int) Math.ceil(totalCbm / 2.0));
-        double pieceCbm = Math.max(0.2, totalCbm / pieces);
-        double pieceWeight = Math.max(5.0, totalWeight / pieces);
+        if (estimatedItemsSoftMode) {
+            pieces = Math.min(pieces, Math.max(1, estimatedItemsMaxPieces));
+        }
+
+        double pieceCbm = Math.max(estimatedItemsSoftMode ? 0.05 : 0.2, totalCbm / pieces);
+        double pieceWeight = Math.max(estimatedItemsSoftMode ? 2.0 : 5.0, totalWeight / pieces);
 
         List<Map<String, Object>> items = new ArrayList<>();
         for (int i = 0; i < pieces; i++) {
-            int[] cargoDims = inferCargoDimensionsFromCbm(pieceCbm);
+            int[] cargoDims = inferCargoDimensionsFromCbm(pieceCbm, truckDims, estimatedItemsSoftMode);
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("id", "Q-" + quote.getQuoteId() + "-" + (i + 1));
             item.put("length", cargoDims[0]);
@@ -316,12 +590,13 @@ public class AlgorithmGatewayService {
             item.put("fragile", false);
             item.put("noStack", false);
             item.put("bottomOnly", false);
+            item.put("approximate", true);
             items.add(item);
         }
         return items;
     }
 
-    private int[] resolveDimensionsFromQuoteItem(QuoteItem item) {
+    private int[] resolveDimensionsFromQuoteItem(QuoteItem item, int[] truckDims) {
         Integer l = item.getLengthCm();
         Integer w = item.getWidthCm();
         Integer h = item.getHeightCm();
@@ -329,9 +604,10 @@ public class AlgorithmGatewayService {
             return new int[]{l, w, h};
         }
         if (item.getUnitVolumeCbm() != null && item.getUnitVolumeCbm() > 0) {
-            return inferCargoDimensionsFromCbm(item.getUnitVolumeCbm());
+            return inferCargoDimensionsFromCbm(item.getUnitVolumeCbm(), truckDims, estimatedItemsSoftMode);
         }
-        return new int[]{100, 80, 60};
+        int[] fallback = estimatedItemsSoftMode ? new int[]{90, 70, 50} : new int[]{100, 80, 60};
+        return clampEstimatedDimensions(fallback, truckDims);
     }
 
     private double deriveWeightFromDimensions(int[] dimsCm) {
@@ -351,6 +627,58 @@ public class AlgorithmGatewayService {
                 && q.getOriginLng() != null
                 && q.getDestinationLat() != null
                 && q.getDestinationLng() != null;
+    }
+
+    private Quote tryRepairQuoteCoordinates(Quote quote) {
+        if (quote == null) {
+            return null;
+        }
+
+        Double originLat = quote.getOriginLat();
+        Double originLng = quote.getOriginLng();
+        Double destinationLat = quote.getDestinationLat();
+        Double destinationLng = quote.getDestinationLng();
+        boolean updated = false;
+
+        if (!geocodingService.isValidCoordinate(originLat, originLng) && canGeocodeAddress(quote.getOriginAddress())) {
+            try {
+                GeocodingResult result = geocodingService.geocode(quote.getOriginAddress());
+                originLat = result.lat();
+                originLng = result.lng();
+                updated = true;
+            } catch (RuntimeException ex) {
+                log.debug("origin geocode repair failed. quoteId={}, message={}", quote.getQuoteId(), ex.getMessage());
+            }
+        }
+
+        if (!geocodingService.isValidCoordinate(destinationLat, destinationLng) && canGeocodeAddress(quote.getDestinationAddress())) {
+            try {
+                GeocodingResult result = geocodingService.geocode(quote.getDestinationAddress());
+                destinationLat = result.lat();
+                destinationLng = result.lng();
+                updated = true;
+            } catch (RuntimeException ex) {
+                log.debug("destination geocode repair failed. quoteId={}, message={}", quote.getQuoteId(), ex.getMessage());
+            }
+        }
+
+        if (!updated) {
+            return quote;
+        }
+
+        quote.updateResolvedCoordinates(originLat, originLng, destinationLat, destinationLng);
+        return quoteRepository.save(quote);
+    }
+
+    private boolean canGeocodeAddress(String address) {
+        if (address == null || address.isBlank()) {
+            return false;
+        }
+        if (address.contains("�")) {
+            return false;
+        }
+        long questionCount = address.chars().filter(ch -> ch == '?').count();
+        return questionCount < 2;
     }
 
     private boolean isVehicleCompatible(Truck truck, Quote quote) {
@@ -440,20 +768,35 @@ public class AlgorithmGatewayService {
                 return itemWeight;
             }
         }
-        return safeDouble(q.getWeightKg(), 0.0);
+
+        double quoteWeight = safeDouble(q.getWeightKg(), 0.0);
+        return quoteWeight > 0 ? quoteWeight : 0.0;
     }
 
     private double deriveQuoteVolumeCbm(Quote q, List<QuoteItem> quoteItems) {
         if (quoteItems != null && !quoteItems.isEmpty()) {
             double itemCbm = quoteItems.stream()
-                    .filter(item -> item.getUnitVolumeCbm() != null && item.getUnitVolumeCbm() > 0)
-                    .mapToDouble(item -> item.getUnitVolumeCbm() * Math.max(1, item.getQuantity() == null ? 1 : item.getQuantity()))
+                    .mapToDouble(item -> {
+                        int quantity = Math.max(1, item.getQuantity() == null ? 1 : item.getQuantity());
+                        if (item.getUnitVolumeCbm() != null && item.getUnitVolumeCbm() > 0) {
+                            return item.getUnitVolumeCbm() * quantity;
+                        }
+                        if (item.getLengthCm() != null && item.getLengthCm() > 0
+                                && item.getWidthCm() != null && item.getWidthCm() > 0
+                                && item.getHeightCm() != null && item.getHeightCm() > 0) {
+                            double volume = (item.getLengthCm() * item.getWidthCm() * item.getHeightCm()) / 1_000_000.0;
+                            return volume * quantity;
+                        }
+                        return 0.0;
+                    })
                     .sum();
             if (itemCbm > 0) {
                 return itemCbm;
             }
         }
-        return safeDouble(q.getVolumeCbm(), 0.0);
+
+        double quoteVolume = safeDouble(q.getVolumeCbm(), 0.0);
+        return quoteVolume > 0 ? quoteVolume : 0.0;
     }
 
     private int totalItemCount(List<QuoteItem> quoteItems) {
@@ -466,8 +809,34 @@ public class AlgorithmGatewayService {
     }
 
     private Truck resolveDriverTruck(Long driverId) {
-        return truckRepository.findByDriverId(driverId).stream().findFirst()
+        Driver driver = driverRepository.findById(driverId)
+                .orElseThrow(() -> new CustomException(ErrorCode.AUTH_FORBIDDEN));
+
+        Long selectedTruckId = driver.getSelectedTruckId();
+        if (selectedTruckId != null) {
+            Truck selected = truckRepository.findById(selectedTruckId).orElse(null);
+            if (selected != null) {
+                if (!driverId.equals(selected.getDriverId())) {
+                    throw new CustomException(ErrorCode.AUTH_FORBIDDEN);
+                }
+                if (isApprovedTruck(selected)) {
+                    return selected;
+                }
+            }
+            driver.clearSelectedTruck();
+            driverRepository.save(driver);
+        }
+
+        Truck fallback = truckRepository.findByDriverId(driverId).stream()
+                .filter(this::isApprovedTruck)
+                .findFirst()
                 .orElseThrow(() -> new CustomException(ErrorCode.DRIVER_TRUCK_REQUIRED));
+
+        if (!fallback.getTruckId().equals(driver.getSelectedTruckId())) {
+            driver.selectTruck(fallback.getTruckId());
+            driverRepository.save(driver);
+        }
+        return fallback;
     }
 
     private Truck resolveTruck(Long driverId, Long truckId) {
@@ -477,9 +846,23 @@ public class AlgorithmGatewayService {
             if (!truck.getDriverId().equals(driverId)) {
                 throw new CustomException(ErrorCode.AUTH_FORBIDDEN);
             }
+            if (!isApprovedTruck(truck)) {
+                throw new CustomException(ErrorCode.DRIVER_TRUCK_REQUIRED);
+            }
             return truck;
         }
         return resolveDriverTruck(driverId);
+    }
+
+    private boolean isApprovedTruck(Truck truck) {
+        if (truck == null || !Boolean.TRUE.equals(truck.getApproved())) {
+            return false;
+        }
+        String approvalStatus = truck.getApprovalStatus();
+        if (approvalStatus == null || approvalStatus.isBlank()) {
+            return true;
+        }
+        return "APPROVED".equalsIgnoreCase(approvalStatus.trim());
     }
 
     private double safeDouble(Number value, double fallback) {
@@ -501,21 +884,54 @@ public class AlgorithmGatewayService {
         return "ALLOW";
     }
 
-    private String normalizeMode(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return "SMART";
-        }
-        String normalized = raw.trim().toUpperCase(Locale.ROOT);
-        return "SIMPLE".equals(normalized) ? "SIMPLE" : "SMART";
+    private AssemblyParameters buildEffectiveAssemblyParameters(RouteRecommendRequest request) {
+        AssemblyParameters defaults = AssemblyParameters.defaults();
+        double radiusKm = request.getMaxPickupDistanceKm() != null && request.getMaxPickupDistanceKm() > 0
+                ? request.getMaxPickupDistanceKm()
+                : defaults.radiusKm();
+        int maxCombineCount = request.getMaxCombineCount() != null && request.getMaxCombineCount() > 0
+                ? request.getMaxCombineCount()
+                : defaults.maxCombineCount();
+        int maxRecommendations = request.getMaxRecommendations() != null && request.getMaxRecommendations() > 0
+                ? request.getMaxRecommendations()
+                : defaults.maxRecommendations();
+
+        return new AssemblyParameters(
+                radiusKm,
+                defaults.directionAngleDegrees(),
+                maxCombineCount,
+                defaults.consolidationWeight(),
+                defaults.profitWeight(),
+                defaults.routeWeight(),
+                defaults.fuelCostPerKm(),
+                defaults.baseHourlyCost(),
+                maxRecommendations
+        );
     }
 
-    private int[] inferCargoDimensionsFromCbm(double cbm) {
+    private int[] inferCargoDimensionsFromCbm(double cbm, int[] truckDims, boolean softMode) {
         double cm3 = Math.max(0.05, cbm) * 1_000_000.0;
-        double base = Math.cbrt(cm3 / 1.2);
-        int l = Math.max(35, (int) Math.round(base * 1.3));
-        int w = Math.max(30, (int) Math.round(base * 1.0));
-        int h = Math.max(25, (int) Math.round(base * 0.8));
-        return new int[]{l, w, h};
+        double divider = softMode ? 1.8 : 1.2;
+        double base = Math.cbrt(cm3 / divider);
+        int l = Math.max(35, (int) Math.round(base * (softMode ? 1.8 : 1.3)));
+        int w = Math.max(30, (int) Math.round(base * (softMode ? 1.2 : 1.0)));
+        int h = Math.max(20, (int) Math.round(base * (softMode ? 0.45 : 0.8)));
+        return clampEstimatedDimensions(new int[]{l, w, h}, truckDims);
+    }
+
+    private int[] clampEstimatedDimensions(int[] dims, int[] truckDims) {
+        if (!estimatedItemsSoftMode || truckDims == null || truckDims.length < 3 || dims == null || dims.length < 3) {
+            return dims;
+        }
+        double ratio = Math.max(0.3, Math.min(0.95, estimatedItemsMaxDimensionRatio));
+        int maxL = Math.max(35, (int) Math.floor(truckDims[0] * ratio));
+        int maxW = Math.max(30, (int) Math.floor(truckDims[1] * ratio));
+        int maxH = Math.max(20, (int) Math.floor(truckDims[2] * ratio));
+        return new int[]{
+                Math.min(dims[0], maxL),
+                Math.min(dims[1], maxW),
+                Math.min(dims[2], maxH)
+        };
     }
 
     private int[] inferTruckDimensionsCm(Truck truck) {
@@ -535,9 +951,10 @@ public class AlgorithmGatewayService {
     private String inferDoorPosition(String bodyType) {
         if (bodyType == null) return "rear";
         String normalized = normalizeBodyType(bodyType);
-        if ("wingbody".equals(normalized)) return "side_both";
-        if ("cargo".equals(normalized)) return "top";
-        if ("left".equals(normalized) || "right".equals(normalized) || "top".equals(normalized) || "side_both".equals(normalized)) {
+        if ("wingbody".equals(normalized) || "side_both".equals(normalized) || "sideboth".equals(normalized)) return "side_both";
+        if ("cargo".equals(normalized) || "top".equals(normalized)) return "rear";
+        if ("flat".equals(normalized) || "flatbed".equals(normalized)) return "top";
+        if ("left".equals(normalized) || "right".equals(normalized) || "rear".equals(normalized)) {
             return normalized;
         }
         return "rear";
@@ -552,7 +969,7 @@ public class AlgorithmGatewayService {
         }
 
         for (QuoteItem qi : quoteItems) {
-            int[] dims = resolveDimensionsFromQuoteItem(qi);
+            int[] dims = resolveDimensionsFromQuoteItem(qi, truckDims);
             boolean upright = Boolean.TRUE.equals(qi.getUpright()) || containsHandlingTag(qi.getHandlingTags(), "UPRIGHT");
             boolean rotatable = upright ? false : !Boolean.FALSE.equals(qi.getRotatable());
             if (!canFitInTruck(dims, truckDims, rotatable)) {
@@ -724,13 +1141,55 @@ public class AlgorithmGatewayService {
             return null;
         }
 
-        String normalized = vehicleType.toLowerCase(Locale.ROOT);
-        if (normalized.contains("25") || normalized.contains("2.5")) return 2.5;
-        if (normalized.contains("11") || normalized.contains("1.1")) return 1.1;
-        if (normalized.contains("15") || normalized.contains("1.5")) return 1.5;
-        if (normalized.contains("35") || normalized.contains("3.5")) return 3.5;
-        if (normalized.contains("50") || normalized.contains("5.0")) return 5.0;
-        if (normalized.contains("1")) return 1.0;
+        String normalized = vehicleType.trim()
+                .toUpperCase(Locale.ROOT)
+                .replace('-', '_')
+                .replace(' ', '_');
+        String compact = normalized.replace("_", "");
+        BigDecimal tonnageFromCatalog = resolveTonnageFromCatalog(normalized, compact);
+        if (tonnageFromCatalog != null) {
+            return tonnageFromCatalog.doubleValue();
+        }
+
+        if (normalized.startsWith("TON_")) {
+            String token = normalized.substring(4);
+            if (token.matches("\\d+_\\d+")) {
+                try {
+                    return Double.parseDouble(token.replace('_', '.'));
+                } catch (NumberFormatException ignored) {
+                    return null;
+                }
+            }
+            if (token.matches("\\d+")) {
+                try {
+                    return Double.parseDouble(token);
+                } catch (NumberFormatException ignored) {
+                    return null;
+                }
+            }
+        }
+
+        Matcher matcher = Pattern.compile("(\\d+(?:[\\.,]\\d+)?)").matcher(normalized);
+        if (matcher.find()) {
+            try {
+                return Double.parseDouble(matcher.group(1).replace(',', '.'));
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private BigDecimal resolveTonnageFromCatalog(String normalizedVehicleType, String compactVehicleType) {
+        List<BigDecimal> exactMatched = truckSpecCatalogRepository.findTonnagesByVehicleType(normalizedVehicleType);
+        if (!exactMatched.isEmpty()) {
+            return exactMatched.get(0);
+        }
+
+        List<BigDecimal> compactMatched = truckSpecCatalogRepository.findTonnagesByCompactVehicleType(compactVehicleType);
+        if (!compactMatched.isEmpty()) {
+            return compactMatched.get(0);
+        }
         return null;
     }
 
@@ -769,6 +1228,7 @@ public class AlgorithmGatewayService {
 
         Map<String, Object> originMap = (Map<String, Object>) map.get("origin");
         Map<String, Object> destMap = (Map<String, Object>) map.get("destination");
+        List<Place> waypoints = parseWaypoints(map.get("waypoints"));
 
         Place origin = toPlace(originMap);
         Place destination = toPlace(destMap);
@@ -777,12 +1237,45 @@ public class AlgorithmGatewayService {
         Double weightKg = asDoubleOrNull(map.get("weightKg"));
         Boolean allowCombine = map.get("allowCombine") instanceof Boolean b ? b : null;
         Double finalPrice = asDoubleOrNull(map.get("finalPrice"));
+        LocalDateTime pickupScheduleStart = asLocalDateTimeOrNull(map.get("pickupScheduleStart"));
+        LocalDateTime deliveryDeadline = asLocalDateTimeOrNull(map.get("deliveryDeadline"));
+        LocalDateTime deliverySchedule = asLocalDateTimeOrNull(map.get("deliverySchedule"));
         String status = map.get("status") instanceof String s ? s : null;
 
+        LocalDateTime effectiveDeadline = deliveryDeadline != null ? deliveryDeadline : deliverySchedule;
+        LocalDateTime effectivePickupStart = pickupScheduleStart != null ? pickupScheduleStart : deliverySchedule;
+
         return new com.freight.backend.gpsload.routeassembly.model.Quote(
-                quoteId, origin, destination, volumeCbm, weightKg, allowCombine, finalPrice,
-                null, null, null, null, null, null, null, null, null, null, status, null
+                quoteId, origin, destination, waypoints, volumeCbm, weightKg, allowCombine, finalPrice,
+                effectivePickupStart, effectiveDeadline, effectiveDeadline,
+                null, null, null, null, null, null, null, null, null, status, null
         );
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Place> parseWaypoints(Object value) {
+        if (!(value instanceof List<?> rawList) || rawList.isEmpty()) {
+            return List.of();
+        }
+        List<Place> waypoints = new ArrayList<>();
+        for (Object item : rawList) {
+            if (item instanceof Place place) {
+                if (place.latitude() == null || place.longitude() == null) {
+                    continue;
+                }
+                waypoints.add(new Place(null, place.address(), place.latitude(), place.longitude()));
+                continue;
+            }
+            if (!(item instanceof Map<?, ?> rawMap)) {
+                continue;
+            }
+            Place waypoint = toPlace((Map<String, Object>) rawMap);
+            if (waypoint == null || waypoint.latitude() == null || waypoint.longitude() == null) {
+                continue;
+            }
+            waypoints.add(waypoint);
+        }
+        return waypoints;
     }
 
     private Place toPlace(Map<String, Object> map) {
@@ -798,6 +1291,78 @@ public class AlgorithmGatewayService {
     private Double asDoubleOrNull(Object value) {
         if (value instanceof Number n) return n.doubleValue();
         return null;
+    }
+
+    private LocalDateTime asLocalDateTimeOrNull(Object value) {
+        if (value instanceof LocalDateTime dt) {
+            return dt;
+        }
+        if (value instanceof String s && !s.isBlank()) {
+            try {
+                return LocalDateTime.parse(s);
+            } catch (RuntimeException ignored) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private LocalDateTime resolveDeliveryDeadline(Quote quote) {
+        if (quote == null) {
+            return null;
+        }
+        if (quote.getDeliveryDeadline() != null) {
+            return quote.getDeliveryDeadline();
+        }
+        return quote.getDeliverySchedule();
+    }
+
+    private LocalDateTime resolvePickupScheduleStart(Quote quote) {
+        if (quote == null) {
+            return null;
+        }
+        if (quote.getPickupScheduleStart() != null) {
+            return quote.getPickupScheduleStart();
+        }
+        return quote.getDeliverySchedule();
+    }
+
+    private String buildEmptyCandidateReason(
+            int totalOpenQuotes,
+            int invalidLocationCount,
+            int vehicleMismatchCount,
+            int missingLoadSpecCount,
+            int truckDimensionMismatchCount,
+            int overCapacityCount,
+            int outOfRadiusCount
+    ) {
+        List<String> reasons = new ArrayList<>();
+        if (invalidLocationCount > 0) {
+            reasons.add("좌표 누락 " + invalidLocationCount + "건");
+        }
+        if (vehicleMismatchCount > 0) {
+            reasons.add("차량 조건 불일치 " + vehicleMismatchCount + "건");
+        }
+        if (missingLoadSpecCount > 0) {
+            reasons.add("중량/부피 정보 누락 " + missingLoadSpecCount + "건");
+        }
+        if (truckDimensionMismatchCount > 0) {
+            reasons.add("화물 치수 초과 " + truckDimensionMismatchCount + "건");
+        }
+        if (overCapacityCount > 0) {
+            reasons.add("잔여 적재용량 초과 " + overCapacityCount + "건");
+        }
+        if (outOfRadiusCount > 0) {
+            reasons.add("픽업 반경 초과 " + outOfRadiusCount + "건");
+        }
+        if (reasons.isEmpty()) {
+            return "추천 가능한 견적이 없습니다. 필터 조건을 확인해 주세요.";
+        }
+        return String.format(
+                "추천 가능한 견적이 없습니다. (총 OPEN %d건, 탈락 사유: %s)",
+                totalOpenQuotes,
+                String.join(", ", reasons)
+        );
     }
 
     private CargoItem toCargoItemRecord(Map<String, Object> map) {
@@ -835,5 +1400,80 @@ public class AlgorithmGatewayService {
         }
         String normalized = raw.trim().toUpperCase(Locale.ROOT);
         return "SIMPLE".equals(normalized) ? RouteAssemblyRequest.RouteMode.SIMPLE : RouteAssemblyRequest.RouteMode.SMART;
+    }
+
+    private RouteAssemblyResponse applyMaxVisitCountLimit(RouteAssemblyResponse response, Integer maxVisitCount) {
+        if (response == null || maxVisitCount == null || maxVisitCount <= 0 || !response.hasRecommendations()) {
+            return response;
+        }
+
+        List<RecommendedRoute> filtered = response.recommendations().stream()
+                .filter(route -> countVisitPoints(route) <= maxVisitCount)
+                .toList();
+
+        if (filtered.size() == response.recommendations().size()) {
+            return response;
+        }
+
+        List<RecommendedRoute> reranked = reRankRoutes(filtered);
+        String baseMessage = response.message() == null ? "" : response.message();
+        String suffix = String.format(" 방문지 제한(%d)으로 %d개 추천이 제외되었습니다.",
+                maxVisitCount,
+                response.recommendations().size() - filtered.size());
+
+        return new RouteAssemblyResponse(
+                response.success(),
+                (baseMessage + suffix).trim(),
+                reranked,
+                response.totalCandidates(),
+                response.filteredCandidates(),
+                response.combinationsEvaluated(),
+                response.processingTimeMs()
+        );
+    }
+
+    private int countVisitPoints(RecommendedRoute route) {
+        if (route == null) {
+            return 0;
+        }
+        if (route.visitOrder() != null && !route.visitOrder().isEmpty()) {
+            return (int) route.visitOrder().stream()
+                    .filter(visit -> visit != null && visit.type() != CargoVisit.VisitType.PICKUP)
+                    .count();
+        }
+        return route.quoteIds() == null ? 0 : route.quoteIds().size();
+    }
+
+    private List<RecommendedRoute> reRankRoutes(List<RecommendedRoute> routes) {
+        if (routes == null || routes.isEmpty()) {
+            return List.of();
+        }
+        List<RecommendedRoute> ranked = new ArrayList<>(routes.size());
+        for (int i = 0; i < routes.size(); i++) {
+            RecommendedRoute route = routes.get(i);
+            ranked.add(new RecommendedRoute(
+                    i + 1,
+                    route.quoteIds(),
+                    route.visitOrder(),
+                    route.routeType(),
+                    route.estimatedTotalDistanceM(),
+                    route.estimatedTotalTimeS(),
+                    route.emptyRunDistanceM(),
+                    route.routeDeviationM(),
+                    route.totalRevenue(),
+                    route.estimatedCost(),
+                    route.estimatedProfit(),
+                    route.profitPerKm(),
+                    route.totalCbm(),
+                    route.totalWeight(),
+                    route.cbmUtilization(),
+                    route.weightUtilization(),
+                    route.finalScore(),
+                    route.scoreBreakdown(),
+                    route.scheduleViolations(),
+                    route.calibrationId()
+            ));
+        }
+        return ranked;
     }
 }

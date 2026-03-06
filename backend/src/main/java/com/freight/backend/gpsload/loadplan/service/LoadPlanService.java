@@ -99,8 +99,8 @@ public class LoadPlanService {
 
             int unloadOrder = totalCount - originalIdx;
 
-            // 회전 옵션 (4방향 - 높이 축 고정)
-            List<Rotation> rotations = generateRotations(cargo);
+            // 회전 옵션 (차량 바디 타입별 정책 반영)
+            List<Rotation> rotations = generateRotations(cargo, loadingCharacteristic);
 
             Position bestPosition = null;
             Rotation bestRotation = null;
@@ -262,10 +262,8 @@ public class LoadPlanService {
         long supportedArea = 0;
         double supportCentroidXSum = 0.0;
         double supportCentroidZSum = 0.0;
-        double supportCentroidYSum = 0.0; // Y축 지지 높이 중심
 
         int supportBoxCount = 0;
-        int maxSupportHeight = 0;
 
         for (PlacedBox box : placedBoxes) {
             if (Math.abs(box.y + box.h - y) > 1) continue;
@@ -277,7 +275,6 @@ public class LoadPlanService {
 
             supportedArea += area;
             supportBoxCount++;
-            maxSupportHeight = Math.max(maxSupportHeight, box.y + box.h);
 
             double overlapStartX = Math.max(x, box.x);
             double overlapStartZ = Math.max(z, box.z);
@@ -285,7 +282,6 @@ public class LoadPlanService {
             double overlapCenterZ = overlapStartZ + (overlapZ / 2.0);
             supportCentroidXSum += overlapCenterX * area;
             supportCentroidZSum += overlapCenterZ * area;
-            supportCentroidYSum += (box.y + box.h / 2.0) * area; // 지지 박스의 무게중심 높이
         }
 
         // Y축 높이 안정성: 높은 위치일수록 더 넓은 지지 필요
@@ -302,7 +298,6 @@ public class LoadPlanService {
         if (weightKg >= CENTER_STABILITY_CHECK_WEIGHT_KG && supportedArea > 0) {
             double supportCx = supportCentroidXSum / supportedArea;
             double supportCz = supportCentroidZSum / supportedArea;
-            double supportCy = supportCentroidYSum / supportedArea;
 
             double cargoCx = x + (w / 2.0);
             double cargoCz = z + (l / 2.0);
@@ -656,72 +651,80 @@ public class LoadPlanService {
     }
 
     /**
-     * 회전 옵션 생성 (최적화된 전략)
-     * - UPRIGHT 화물: 높이 축 고정, 회전 0번(원본)만 허용
-     * - 대형 화물: 실현 가능한 회전만 생성
-     * - 정육면체에 가까운 화물: 기본 2방향만 (90도 회전)
+     * 회전 옵션 생성 (차량 바디 타입별 정책 반영)
+     * - HEIGHT_LIMITED(탑차): 높이 증가 회전 금지
+     * - SIDE_LOADING(윙바디): 측면 적재를 고려해 제한적 높이축 회전 허용
+     * - TOP_LOADING(평판): 상단 적재로 6방향 회전 허용
+     * - STANDARD(카고): 기본 2방향 + 조건부 높이축 회전
      */
-    // 화물 회전 후보를 생성한다. 실현 가능한 회전만 포함하여 계산량 최적화.
-    private List<Rotation> generateRotations(CargoItem item) {
+    private List<Rotation> generateRotations(CargoItem item, String loadingCharacteristic) {
         List<Rotation> rotations = new ArrayList<>();
 
         int l = item.length();
         int w = item.width();
         int h = item.height();
 
-        // UPRIGHT(세워서 적재) — handling에서 파생: 높이 축 고정, 회전 불가
+        // UPRIGHT(세워서 적재) 또는 회전 불가 화물은 원본 고정
         if (!rotatable(item) || item.isUprightFromHandling()) {
             rotations.add(new Rotation(l, w, h, 0));
             return rotations;
         }
 
-        // 정육면체에 가까운 경우 (치수 차이가 10% 이내): 기본 방향 + 90도 회전만
-        double maxDim = Math.max(l, Math.max(w, h));
-        double minDim = Math.min(l, Math.min(w, h));
-        boolean nearCube = maxDim > 0 && (maxDim - minDim) / maxDim < 0.15;
+        String characteristic = loadingCharacteristic == null ? "STANDARD" : loadingCharacteristic.trim().toUpperCase();
+        boolean topLoading = "TOP_LOADING".equals(characteristic);
+        boolean sideLoading = "SIDE_LOADING".equals(characteristic);
+        boolean heightLimited = "HEIGHT_LIMITED".equals(characteristic);
 
-        if (nearCube) {
+        // 공통: 바닥면 회전(높이 고정)
+        addRotation(rotations, l, w, h, 0);
+        addRotation(rotations, w, l, h, 1);
+
+        // 차체 타입별 높이축 회전 정책
+        if (topLoading) {
+            // 평판: 상단 접근 가능하므로 전 방향 회전 허용
+            addRotation(rotations, l, h, w, 2);
+            addRotation(rotations, h, l, w, 3);
+            addRotation(rotations, w, h, l, 4);
+            addRotation(rotations, h, w, l, 5);
+        } else if (sideLoading) {
+            // 윙바디: 측면 도어 기반으로 제한적 높이축 회전만 허용
+            if (h < l || h < w) {
+                addRotation(rotations, h, w, l, 2);
+                addRotation(rotations, l, h, w, 3);
+            }
+        } else if (!heightLimited) {
+            // 카고/일반: 기존 전략 유지(조건부 높이축 회전)
+            if (h < l && h < w) {
+                addRotation(rotations, h, w, l, 2);
+                addRotation(rotations, w, h, l, 3);
+            } else if (h > l || h > w) {
+                if (h > l) {
+                    addRotation(rotations, h, w, l, 2);
+                }
+                if (h > w) {
+                    addRotation(rotations, l, h, w, 3);
+                }
+            }
+        }
+
+        // 탑차(HEIGHT_LIMITED): 원본 높이보다 높아지는 회전은 제외
+        if (heightLimited) {
+            rotations = rotations.stream()
+                    .filter(r -> r.h <= h)
+                    .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+        }
+
+        if (rotations.isEmpty()) {
             rotations.add(new Rotation(l, w, h, 0));
-            if (l != w) {
-                rotations.add(new Rotation(w, l, h, 1));
-            }
-            return rotations;
         }
+        return rotations;
+    }
 
-        // 일반 화물: 높이를 기준으로 회전 가능성 평가
-        // 기본 방향 (원본)
-        rotations.add(new Rotation(l, w, h, 0));
-
-        // 90도 회전 (바닥면에서 가로세로 교환)
-        if (l != w) {
-            rotations.add(new Rotation(w, l, h, 1));
+    private void addRotation(List<Rotation> rotations, int l, int w, int h, int type) {
+        boolean exists = rotations.stream().anyMatch(r -> r.l() == l && r.w() == w && r.h() == h);
+        if (!exists) {
+            rotations.add(new Rotation(l, w, h, type));
         }
-
-        // 높이 축 회전 (큰 면을 바닥에 놓기)
-        // 높이가 가로/세로보다 작으면 세워서 배치 가능
-        if (h < l && h < w) {
-            // 높이를 세로로: (h, w, l)
-            rotations.add(new Rotation(h, w, l, 2));
-            // 높이를 가로로: (w, h, l)
-            if (h != w) {
-                rotations.add(new Rotation(w, h, l, 3));
-            }
-        }
-        // 높이가 충분히 크면 눕혀서 배치 검토
-        else if (h > l || h > w) {
-            // 가장 큰 면을 바닥에 놓는 회전
-            if (h > l) {
-                rotations.add(new Rotation(h, w, l, 2));
-            }
-            if (h > w && h != w) {
-                rotations.add(new Rotation(l, h, w, 3));
-            }
-        }
-
-        // 중복 제거
-        return rotations.stream()
-                .distinct()
-                .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
     }
 
     // ========================================
@@ -803,11 +806,10 @@ public class LoadPlanService {
         if (truck.truckId() == null) {
             return truck;
         }
-        Optional<TruckDimension> dims = truckDimensionRepository.findById(truck.truckId());
-        if (dims.isEmpty()) {
+        TruckDimension d = truckDimensionRepository.findById(truck.truckId()).orElse(null);
+        if (d == null) {
             return truck;
         }
-        TruckDimension d = dims.get();
         // trucks 테이블의 cargo_length/width/height가 null이면 요청 값 유지
         int length = d.getLength() != null ? d.getLength() : truck.length();
         int width = d.getWidth() != null ? d.getWidth() : truck.width();
@@ -829,11 +831,9 @@ public class LoadPlanService {
         if (truckId == null) {
             return "STANDARD";
         }
-        Optional<TruckDimension> dims = truckDimensionRepository.findById(truckId);
-        if (dims.isEmpty()) {
-            return "STANDARD";
-        }
-        return dims.get().getLoadingCharacteristic();
+        return truckDimensionRepository.findById(truckId)
+                .map(TruckDimension::getLoadingCharacteristic)
+                .orElse("STANDARD");
     }
 
     /**
