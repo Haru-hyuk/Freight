@@ -61,6 +61,9 @@ public class QuoteItemEntity {
     @Column(name = "sort_order")
     private Integer sortOrder;
 
+    @Column(name = "drop_stop_seq")
+    private Integer dropStopSeq;
+
     protected QuoteItemEntity() {
     }
 
@@ -134,5 +137,9 @@ public class QuoteItemEntity {
 
     public Integer getSortOrder() {
         return sortOrder;
+    }
+
+    public Integer getDropStopSeq() {
+        return dropStopSeq;
     }
 }

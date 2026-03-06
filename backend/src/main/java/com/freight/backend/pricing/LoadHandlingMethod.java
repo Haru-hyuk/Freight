@@ -8,6 +8,17 @@ public enum LoadHandlingMethod {
         if (value == null) {
             return null;
         }
-        return LoadHandlingMethod.valueOf(value);
+        String normalized = value.trim().toUpperCase();
+        if (normalized.isEmpty()) {
+            return null;
+        }
+        if (normalized.contains(":")) {
+            normalized = normalized.substring(0, normalized.indexOf(':'));
+        }
+        return switch (normalized) {
+            case "SHIPPER" -> SHIPPER;
+            case "DRIVER" -> DRIVER;
+            default -> null;
+        };
     }
 }

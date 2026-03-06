@@ -2,6 +2,7 @@ package com.freight.backend.pricing;
 
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 /**
@@ -14,4 +15,6 @@ public interface PricingRateCatalogRepository extends JpaRepository<PricingRateC
     List<PricingRateCatalog> findByVehicleTypeOrderByMinDistanceKmAsc(String vehicleType);
 
     List<PricingRateCatalog> findAllByOrderByVehicleTypeAscMinDistanceKmAsc();
+
+    List<PricingRateCatalog> findAllByOrderByVehicleTypeAscMinDistanceKmAsc(Pageable pageable);
 }

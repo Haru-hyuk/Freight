@@ -306,8 +306,8 @@ public class CombinationGeneratorService {
                     q.origin().latitude(), q.origin().longitude()
             );
             double density = price / cbm;
-            double urgencyBoost = q.hasScheduledDate()
-                    ? Math.max(0.0, 18.0 - Math.max(0.0, q.minutesUntilScheduled(now)) / 45.0)
+            double urgencyBoost = q.hasDeliverySchedule()
+                    ? Math.max(0.0, 18.0 - Math.max(0.0, q.minutesUntilDeliverySchedule(now)) / 45.0)
                     : 0.0;
 
             return density * 0.7
@@ -378,7 +378,7 @@ public class CombinationGeneratorService {
     }
 
     private boolean canMeetSchedulesInAnyOrder(Place current, List<Quote> quotes) {
-        boolean hasSchedule = quotes.stream().anyMatch(Quote::hasScheduledDate);
+        boolean hasSchedule = quotes.stream().anyMatch(Quote::hasDeliverySchedule);
         if (!hasSchedule) {
             return true;
         }

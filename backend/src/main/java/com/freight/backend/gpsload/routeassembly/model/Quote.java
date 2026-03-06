@@ -14,11 +14,14 @@ public record Quote(
         Long quoteId,
         Place origin,
         Place destination,
+        List<Place> waypoints,
         Double volumeCbm,
         Double weightKg,
         Boolean allowCombine,
         Double finalPrice,
-        LocalDateTime scheduledDate,
+        LocalDateTime pickupScheduleStart,
+        LocalDateTime deliveryDeadline,
+        LocalDateTime deliverySchedule,
         Integer lengthCm,
         Integer widthCm,
         Integer heightCm,
@@ -51,12 +54,31 @@ public record Quote(
         return (long) lengthCm * widthCm * heightCm;
     }
 
-    public boolean hasScheduledDate() {
-        return scheduledDate != null;
+    public boolean hasDeliverySchedule() {
+        return effectiveDeliveryDeadline() != null;
     }
 
-    public long minutesUntilScheduled(LocalDateTime now) {
-        if (scheduledDate == null) return Long.MAX_VALUE;
-        return Duration.between(now, scheduledDate).toMinutes();
+    public boolean hasPickupScheduleStart() {
+        return effectivePickupScheduleStart() != null;
+    }
+
+    public long minutesUntilDeliverySchedule(LocalDateTime now) {
+        LocalDateTime deadline = effectiveDeliveryDeadline();
+        if (deadline == null) return Long.MAX_VALUE;
+        return Duration.between(now, deadline).toMinutes();
+    }
+
+    public LocalDateTime effectivePickupScheduleStart() {
+        if (pickupScheduleStart != null) {
+            return pickupScheduleStart;
+        }
+        return deliverySchedule;
+    }
+
+    public LocalDateTime effectiveDeliveryDeadline() {
+        if (deliveryDeadline != null) {
+            return deliveryDeadline;
+        }
+        return deliverySchedule;
     }
 }

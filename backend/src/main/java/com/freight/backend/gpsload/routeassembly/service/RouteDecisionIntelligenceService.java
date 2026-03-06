@@ -137,10 +137,10 @@ public class RouteDecisionIntelligenceService {
         LocalDateTime now = LocalDateTime.now();
         long minMinutes = Long.MAX_VALUE;
         for (Quote q : quotes) {
-            if (!q.hasScheduledDate()) {
+            if (!q.hasDeliverySchedule()) {
                 continue;
             }
-            long remain = q.minutesUntilScheduled(now);
+            long remain = q.minutesUntilDeliverySchedule(now);
             if (remain >= 0 && remain < minMinutes) {
                 minMinutes = remain;
             }
@@ -245,7 +245,7 @@ public class RouteDecisionIntelligenceService {
             RouteSimulationService.SimulationResult simulation
     ) {
         int quoteCount = quotes != null ? quotes.size() : 0;
-        long scheduledCount = quotes != null ? quotes.stream().filter(Quote::hasScheduledDate).count() : 0;
+        long scheduledCount = quotes != null ? quotes.stream().filter(Quote::hasDeliverySchedule).count() : 0;
         String combinePreference = driverState != null && driverState.combinePreference() != null
                 ? driverState.combinePreference().name()
                 : "UNKNOWN";
