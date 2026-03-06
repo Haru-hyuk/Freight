@@ -24,11 +24,18 @@ type RestrictionInfo = {
   notiDesc: string;
 };
 
-const QUICK_ACTIONS: Array<{ icon: React.ComponentProps<typeof Ionicons>["name"]; label: string }> = [
-  { icon: "document-text-outline", label: "정산서 발행" },
-  { icon: "receipt-outline", label: "인수증 관리" },
-  { icon: "notifications-outline", label: "공지사항" },
-  { icon: "headset-outline", label: "고객센터" },
+type QuickAction = {
+  icon: React.ComponentProps<typeof Ionicons>["name"];
+  label: string;
+  href?: `/(driver)/${string}`;
+  disabled?: boolean;
+};
+
+const QUICK_ACTIONS: QuickAction[] = [
+  { icon: "document-text-outline", label: "정산서 발행", href: "/(driver)/settlement" },
+  { icon: "receipt-outline", label: "인수증 관리", href: "/(driver)/settlement" },
+  { icon: "notifications-outline", label: "공지사항", disabled: true },
+  { icon: "headset-outline", label: "고객센터", href: "/(driver)/inquiries" },
 ];
 
 type HomeNoticeCard = {
@@ -38,6 +45,12 @@ type HomeNoticeCard = {
   timeText: string;
   icon: React.ComponentProps<typeof Ionicons>["name"];
   tone: "warn" | "info";
+  route?:
+    | `/(driver)/${string}`
+    | {
+        pathname: `/(driver)/${string}`;
+        params?: Record<string, string>;
+      };
 };
 
 function formatNoticeTimeText(value?: string): string {
@@ -270,6 +283,9 @@ const useStyles = createThemedStyles((theme) => {
       gap: spacing * 2,
       flex: 1,
     },
+    quickItemDisabled: {
+      opacity: 0.45,
+    },
     quickIconCircle: {
       width: 48,
       height: 48,
@@ -279,6 +295,10 @@ const useStyles = createThemedStyles((theme) => {
       borderWidth: 1,
       backgroundColor: tint(cBrand, 0.08, cSurface),
       borderColor: tint(cBrand, 0.22, cBorder),
+    },
+    quickIconCircleDisabled: {
+      backgroundColor: tint(cMuted, 0.08, cSurface),
+      borderColor: tint(cMuted, 0.22, cBorder),
     },
 
     noticeList: {
@@ -350,6 +370,7 @@ export function DriverHomePage() {
   const restrictionLevel: RestrictionLevel = restrictionInfo?.level ?? "danger";
   const hasMockHint =
     homeSummary.mockInfo.isSettlementMockPossible || homeSummary.mockInfo.isMatchMockPossible;
+  const hasAnnouncementListRoute = false;
   const noticeCards = useMemo<HomeNoticeCard[]>(() => {
     if (homeSummary.announcements.length > 0) {
       return homeSummary.announcements.map((announcement) => ({
@@ -371,6 +392,7 @@ export function DriverHomePage() {
           timeText: "지금",
           icon: "time-outline",
           tone: "warn",
+          route: { pathname: "/(driver)/run", params: { status: "NEGOTIATING" } },
         },
       ];
     }
@@ -516,16 +538,19 @@ export function DriverHomePage() {
       </View>
       <AppCard outlined style={styles.dashboardCard}>
         <View style={styles.dashboardContainer}>
-          <Pressable style={styles.dashboardItem}>
+          <Pressable style={styles.dashboardItem} onPress={() => router.push("/(driver)/quotes")}>
             <AppText variant="title" weight="900" color={cText}>
               {homeSummary.dashboard.openMatches}
             </AppText>
             <AppText variant="caption" weight="700" color={cMuted}>
-              오픈 매칭
+              수락 가능 오더
             </AppText>
           </Pressable>
           <View style={styles.dashboardDivider} />
-          <Pressable style={styles.dashboardItem}>
+          <Pressable
+            style={styles.dashboardItem}
+            onPress={() => router.push({ pathname: "/(driver)/run", params: { status: "NEGOTIATING" } })}
+          >
             <AppText variant="title" weight="900" color={cText}>
               {homeSummary.dashboard.pendingResponses}
             </AppText>
@@ -534,7 +559,10 @@ export function DriverHomePage() {
             </AppText>
           </Pressable>
           <View style={styles.dashboardDivider} />
-          <Pressable style={styles.dashboardItem}>
+          <Pressable
+            style={styles.dashboardItem}
+            onPress={() => router.push({ pathname: "/(driver)/run", params: { status: "TRANSIT" } })}
+          >
             <AppText variant="title" weight="900" color={cBrand}>
               {homeSummary.dashboard.inTransit}
             </AppText>
@@ -553,11 +581,19 @@ export function DriverHomePage() {
       <AppCard outlined style={styles.quickGridCard}>
         <View style={styles.quickGrid}>
           {QUICK_ACTIONS.map((item) => (
-            <Pressable key={item.label} style={styles.quickItem}>
-              <View style={styles.quickIconCircle}>
-                <Ionicons name={item.icon} size={20} color={cBrand} />
+            <Pressable
+              key={item.label}
+              style={[styles.quickItem, item.disabled && styles.quickItemDisabled]}
+              onPress={() => {
+                if (item.disabled || !item.href) return;
+                router.push(item.href);
+              }}
+              disabled={item.disabled || !item.href}
+            >
+              <View style={[styles.quickIconCircle, item.disabled && styles.quickIconCircleDisabled]}>
+                <Ionicons name={item.icon} size={20} color={item.disabled ? cMuted : cBrand} />
               </View>
-              <AppText variant="caption" weight="700" color={cSub}>
+              <AppText variant="caption" weight="700" color={item.disabled ? cMuted : cSub}>
                 {item.label}
               </AppText>
             </Pressable>
@@ -569,9 +605,11 @@ export function DriverHomePage() {
         <AppText variant="heading" weight="800" color={cText}>
           중요 알림
         </AppText>
-        <AppText variant="caption" weight="700" color={cSub}>
-          전체보기
-        </AppText>
+        {hasAnnouncementListRoute ? (
+          <AppText variant="caption" weight="700" color={cSub}>
+            전체보기
+          </AppText>
+        ) : null}
       </View>
       <View style={styles.noticeList}>
         {restrictionInfo ? (
@@ -604,31 +642,47 @@ export function DriverHomePage() {
           </View>
         ) : null}
 
-        {noticeCards.map((notice) => (
-          <View key={notice.id} style={styles.noticeCard}>
-            <View
-              style={[
-                styles.noticeIconWrap,
-                { backgroundColor: tint(notice.tone === "warn" ? cWarn : cInfo, 0.12, cSurface) },
-              ]}
-            >
-              <Ionicons name={notice.icon} size={20} color={notice.tone === "warn" ? cWarn : cInfo} />
-            </View>
-            <View style={styles.noticeContent}>
-              <View style={styles.noticeHeader}>
-                <AppText variant="detail" weight="800" color={cText}>
-                  {notice.title}
-                </AppText>
-                <AppText variant="caption" weight="700" color={cMuted}>
-                  {notice.timeText}
+        {noticeCards.map((notice) => {
+          const content = (
+            <>
+              <View
+                style={[
+                  styles.noticeIconWrap,
+                  { backgroundColor: tint(notice.tone === "warn" ? cWarn : cInfo, 0.12, cSurface) },
+                ]}
+              >
+                <Ionicons name={notice.icon} size={20} color={notice.tone === "warn" ? cWarn : cInfo} />
+              </View>
+              <View style={styles.noticeContent}>
+                <View style={styles.noticeHeader}>
+                  <AppText variant="detail" weight="800" color={cText}>
+                    {notice.title}
+                  </AppText>
+                  <AppText variant="caption" weight="700" color={cMuted}>
+                    {notice.timeText}
+                  </AppText>
+                </View>
+                <AppText variant="detail" color={cSub}>
+                  {notice.body}
                 </AppText>
               </View>
-              <AppText variant="detail" color={cSub}>
-                {notice.body}
-              </AppText>
-            </View>
-          </View>
-        ))}
+            </>
+          );
+
+          if (!notice.route) {
+            return (
+              <View key={notice.id} style={styles.noticeCard}>
+                {content}
+              </View>
+            );
+          }
+
+          return (
+            <Pressable key={notice.id} style={styles.noticeCard} onPress={() => router.push(notice.route as never)}>
+              {content}
+            </Pressable>
+          );
+        })}
       </View>
     </PageScaffold>
   );

@@ -28,3 +28,6 @@ Thumbs.db
 # Patch & Temp
 *.patch
 *.tmp
+
+# AI
+.codex
