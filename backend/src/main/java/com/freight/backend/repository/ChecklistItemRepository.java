@@ -9,4 +9,10 @@ public interface ChecklistItemRepository extends JpaRepository<ChecklistItem, Lo
     List<ChecklistItem> findByEnabledTrueOrderBySortOrderAsc();
 
     Optional<ChecklistItem> findTopByCategoryAndNameOrderByChecklistItemIdAsc(String category, String name);
+
+    List<ChecklistItem> findByCategoryAndEnabledTrueOrderBySortOrderAsc(String category);
+
+    boolean existsByCategoryAndNameIgnoreCaseAndEnabledTrue(String category, String name);
+
+    Optional<ChecklistItem> findFirstByCategoryAndNameIgnoreCase(String category, String name);
 }
