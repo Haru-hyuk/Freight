@@ -1025,6 +1025,14 @@ public class RouteAssemblyService {
         if (route == null) {
             return RouteAssemblyResponse.failure("선택한 견적의 경로를 계산할 수 없습니다.");
         }
+        if (route.scheduleViolations() > 0) {
+            return RouteAssemblyResponse.failure(
+                    String.format(
+                            "선택한 노선은 운송 일정 위반 %d건으로 수락할 수 없습니다. 견적 조합/순서를 조정해주세요.",
+                            route.scheduleViolations()
+                    )
+            );
+        }
 
         RecommendedRoute rankedRoute = new RecommendedRoute(
                 1,
