@@ -1,5 +1,8 @@
 package com.freight.backend.dto.quote;
 
+import java.time.LocalDateTime;
+import java.util.List;
+
 public class DriverQuoteSummaryResponse {
     private final Long quoteId;
     private final String originAddress;
@@ -21,6 +24,14 @@ public class DriverQuoteSummaryResponse {
     private final String vehicleBodyType;
     private final String loadMethod;
     private final String unloadMethod;
+    private final LocalDateTime pickupScheduleStart;
+    private final LocalDateTime deliveryDeadline;
+    private final LocalDateTime deliverySchedule;
+    private final String status;
+    private final LocalDateTime createdAt;
+    private final LocalDateTime updatedAt;
+    private final List<QuoteItemResponse> quoteItems;
+    private final List<QuoteStopResponse> stops;
 
     public DriverQuoteSummaryResponse(
             Long quoteId,
@@ -42,7 +53,15 @@ public class DriverQuoteSummaryResponse {
             String vehicleType,
             String vehicleBodyType,
             String loadMethod,
-            String unloadMethod
+            String unloadMethod,
+            LocalDateTime pickupScheduleStart,
+            LocalDateTime deliveryDeadline,
+            LocalDateTime deliverySchedule,
+            String status,
+            LocalDateTime createdAt,
+            LocalDateTime updatedAt,
+            List<QuoteItemResponse> quoteItems,
+            List<QuoteStopResponse> stops
     ) {
         this.quoteId = quoteId;
         this.originAddress = originAddress;
@@ -64,6 +83,14 @@ public class DriverQuoteSummaryResponse {
         this.vehicleBodyType = vehicleBodyType;
         this.loadMethod = loadMethod;
         this.unloadMethod = unloadMethod;
+        this.pickupScheduleStart = pickupScheduleStart;
+        this.deliveryDeadline = deliveryDeadline;
+        this.deliverySchedule = deliverySchedule;
+        this.status = status;
+        this.createdAt = createdAt;
+        this.updatedAt = updatedAt;
+        this.quoteItems = quoteItems;
+        this.stops = stops;
     }
 
     public Long getQuoteId() { return quoteId; }
@@ -86,4 +113,12 @@ public class DriverQuoteSummaryResponse {
     public String getVehicleBodyType() { return vehicleBodyType; }
     public String getLoadMethod() { return loadMethod; }
     public String getUnloadMethod() { return unloadMethod; }
+    public LocalDateTime getPickupScheduleStart() { return pickupScheduleStart; }
+    public LocalDateTime getDeliveryDeadline() { return deliveryDeadline; }
+    public LocalDateTime getDeliverySchedule() { return deliverySchedule; }
+    public String getStatus() { return status; }
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public LocalDateTime getUpdatedAt() { return updatedAt; }
+    public List<QuoteItemResponse> getQuoteItems() { return quoteItems; }
+    public List<QuoteStopResponse> getStops() { return stops; }
 }
