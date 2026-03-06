@@ -2,21 +2,30 @@ package com.freight.backend.service;
 
 import com.freight.backend.config.jwt.JwtTokenProvider;
 import com.freight.backend.dto.auth.LoginRequest;
-import com.freight.backend.dto.auth.MeResponse;
-import com.freight.backend.dto.auth.MeUpdateRequest;
 import com.freight.backend.dto.auth.TokenResponse;
 import com.freight.backend.entity.Admin;
 import com.freight.backend.entity.Driver;
+import com.freight.backend.entity.JwtRefreshToken;
 import com.freight.backend.entity.Shipper;
 import com.freight.backend.exception.CustomException;
 import com.freight.backend.exception.ErrorCode;
 import com.freight.backend.repository.AdminRepository;
 import com.freight.backend.repository.DriverRepository;
+import com.freight.backend.repository.JwtRefreshTokenRepository;
 import com.freight.backend.repository.ShipperRepository;
+import io.jsonwebtoken.JwtException;
 import jakarta.transaction.Transactional;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.Base64;
+import java.util.Date;
 import java.util.Locale;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -26,8 +35,9 @@ public class AuthService {
     private final DriverRepository driverRepository;
     private final ShipperRepository shipperRepository;
     private final AdminRepository adminRepository;
+    private final JwtRefreshTokenRepository jwtRefreshTokenRepository;
     private final JwtTokenProvider jwtTokenProvider;
-    private final BCryptPasswordEncoder passwordEncoder;
+    private final PasswordEncoder passwordEncoder;
 
     @Transactional
     public TokenResponse loginDriver(LoginRequest req) {
@@ -38,7 +48,7 @@ public class AuthService {
             throw new CustomException(ErrorCode.AUTH_UNAUTHORIZED);
         }
 
-        return issueAccessToken(driver.getDriverId(), driver.getEmail(), "DRIVER");
+        return issueTokenPair(driver.getDriverId(), driver.getEmail(), "DRIVER", JwtRefreshToken.UserType.DRIVER);
     }
 
     @Transactional
@@ -50,7 +60,7 @@ public class AuthService {
             throw new CustomException(ErrorCode.AUTH_UNAUTHORIZED);
         }
 
-        return issueAccessToken(shipper.getShipperId(), shipper.getEmail(), "SHIPPER");
+        return issueTokenPair(shipper.getShipperId(), shipper.getEmail(), "SHIPPER", JwtRefreshToken.UserType.SHIPPER);
     }
 
     @Transactional
@@ -65,163 +75,149 @@ public class AuthService {
         String role = admin.getRole() == null || admin.getRole().isBlank()
                 ? "ADMIN"
                 : admin.getRole();
-        return issueAccessToken(admin.getAdminId(), admin.getEmail(), role);
+        return issueTokenPair(admin.getAdminId(), admin.getEmail(), role, JwtRefreshToken.UserType.ADMIN);
     }
 
-    private TokenResponse issueAccessToken(Long userId, String email, String role) {
+    private TokenResponse issueTokenPair(
+            Long userId,
+            String email,
+            String role,
+            JwtRefreshToken.UserType userType
+    ) {
         String accessToken = jwtTokenProvider.generateAccessToken(userId, email, role);
-        String refreshToken = jwtTokenProvider.generateRefreshToken(userId, email, role);
+        String refreshJti = UUID.randomUUID().toString().replace("-", "");
+        String refreshToken = jwtTokenProvider.generateRefreshToken(userId, email, role, refreshJti);
+        saveRefreshToken(userType, userId, refreshJti, refreshToken);
 
         return TokenResponse.builder()
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
                 .tokenType("Bearer")
                 .expiresIn(jwtTokenProvider.getAccessTokenExpirationSeconds())
-                .role(role.toLowerCase())
+                .role(role.toLowerCase(Locale.ROOT))
                 .userId(String.valueOf(userId))
                 .build();
     }
 
     @Transactional
     public TokenResponse refreshToken(String refreshToken) {
+        LocalDateTime now = LocalDateTime.now();
         try {
-            jwtTokenProvider.validateTokenOrThrow(refreshToken);
-        } catch (Exception e) {
+            jwtTokenProvider.validateRefreshTokenOrThrow(refreshToken);
+        } catch (JwtException | IllegalArgumentException e) {
+            throw new CustomException(ErrorCode.AUTH_UNAUTHORIZED);
+        }
+
+        String jti = jwtTokenProvider.getJtiFromToken(refreshToken);
+        if (jti == null || jti.isBlank()) {
+            throw new CustomException(ErrorCode.AUTH_UNAUTHORIZED);
+        }
+
+        JwtRefreshToken persisted = jwtRefreshTokenRepository.findByJti(jti)
+                .orElseThrow(() -> new CustomException(ErrorCode.AUTH_UNAUTHORIZED));
+        String refreshTokenHash = hashToken(refreshToken);
+        if (persisted.isRevoked() || persisted.isExpired(now) || !persisted.matchesHash(refreshTokenHash)) {
             throw new CustomException(ErrorCode.AUTH_UNAUTHORIZED);
         }
 
         String userId = jwtTokenProvider.getUserIdFromToken(refreshToken);
+        Long parsedUserId;
+        try {
+            parsedUserId = Long.parseLong(userId);
+        } catch (NumberFormatException ex) {
+            throw new CustomException(ErrorCode.AUTH_UNAUTHORIZED);
+        }
+        if (!parsedUserId.equals(persisted.getUserId())) {
+            throw new CustomException(ErrorCode.AUTH_UNAUTHORIZED);
+        }
+
         String email = jwtTokenProvider.getEmailFromToken(refreshToken);
         String role = jwtTokenProvider.getRoleFromToken(refreshToken);
+        if (email == null || email.isBlank() || role == null || role.isBlank()) {
+            throw new CustomException(ErrorCode.AUTH_UNAUTHORIZED);
+        }
+        if (!isRoleMatchedWithUserType(role, persisted.getUserType())) {
+            throw new CustomException(ErrorCode.AUTH_UNAUTHORIZED);
+        }
 
-        return issueAccessToken(Long.parseLong(userId), email, role);
+        // 재사용 방지를 위해 사용된 refresh 토큰은 즉시 폐기한다.
+        persisted.revoke(now);
+        jwtRefreshTokenRepository.save(persisted);
+
+        return issueTokenPair(parsedUserId, email, role, persisted.getUserType());
     }
 
     @Transactional
-    public MeResponse updateMe(Long userId, String role, MeUpdateRequest req) {
-        String normalizedRole = normalizeRole(role);
-        return switch (normalizedRole) {
-            case "driver" -> updateDriver(userId, req);
-            case "shipper" -> updateShipper(userId, req);
-            case "admin" -> updateAdmin(userId, req);
-            default -> throw new CustomException(ErrorCode.AUTH_FORBIDDEN);
+    public void logout(Long userId, String role) {
+        JwtRefreshToken.UserType userType = resolveUserType(role);
+        jwtRefreshTokenRepository.revokeActiveTokensByUser(userType, userId, LocalDateTime.now());
+    }
+
+    private void saveRefreshToken(
+            JwtRefreshToken.UserType userType,
+            Long userId,
+            String refreshJti,
+            String refreshToken
+    ) {
+        String refreshTokenHash = hashToken(refreshToken);
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime issuedAt = toLocalDateTime(
+                jwtTokenProvider.getIssuedAtFromToken(refreshToken),
+                now
+        );
+        LocalDateTime expiresAt = toLocalDateTime(
+                jwtTokenProvider.getExpirationFromToken(refreshToken),
+                now.plusSeconds(jwtTokenProvider.getRefreshTokenExpirationSeconds())
+        );
+
+        jwtRefreshTokenRepository.revokeActiveTokensByUser(userType, userId, now);
+        JwtRefreshToken token = JwtRefreshToken.issue(
+                userType,
+                userId,
+                refreshTokenHash,
+                refreshJti,
+                issuedAt,
+                expiresAt,
+                null,
+                null
+        );
+        jwtRefreshTokenRepository.save(token);
+    }
+
+    private LocalDateTime toLocalDateTime(Date date, LocalDateTime fallback) {
+        if (date == null) {
+            return fallback;
+        }
+        return LocalDateTime.ofInstant(date.toInstant(), ZoneId.systemDefault());
+    }
+
+    private String hashToken(String token) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hashed = digest.digest(token.getBytes(StandardCharsets.UTF_8));
+            return Base64.getEncoder().encodeToString(hashed);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 algorithm is not available", e);
+        }
+    }
+
+    private JwtRefreshToken.UserType resolveUserType(String role) {
+        String normalized = role == null ? "" : role.trim().toUpperCase(Locale.ROOT);
+        if (normalized.startsWith("ROLE_")) {
+            normalized = normalized.substring(5);
+        }
+        return switch (normalized) {
+            case "DRIVER" -> JwtRefreshToken.UserType.DRIVER;
+            case "SHIPPER" -> JwtRefreshToken.UserType.SHIPPER;
+            case "ADMIN", "SUPER", "OPERATOR", "CS" -> JwtRefreshToken.UserType.ADMIN;
+            default -> throw new CustomException(ErrorCode.AUTH_UNAUTHORIZED);
         };
     }
 
-    private MeResponse updateDriver(Long userId, MeUpdateRequest req) {
-        Driver driver = driverRepository.findById(userId)
-                .orElseThrow(() -> new CustomException(ErrorCode.AUTH_FORBIDDEN));
-
-        String nextName = resolveString(req.getName(), driver.getName());
-        String nextEmail = resolveString(req.getEmail(), driver.getEmail());
-        String nextPhone = resolveString(req.getPhone(), driver.getPhone());
-
-        validatePhone(nextPhone);
-        validateEmailUniqueForDriver(nextEmail, driver.getDriverId());
-
-        driver.updateProfile(nextName, nextEmail, nextPhone);
-        Driver saved = driverRepository.save(driver);
-        return MeResponse.builder()
-                .id(String.valueOf(saved.getDriverId()))
-                .role("driver")
-                .email(saved.getEmail())
-                .name(saved.getName())
-                .phone(saved.getPhone())
-                .build();
-    }
-
-    private MeResponse updateShipper(Long userId, MeUpdateRequest req) {
-        Shipper shipper = shipperRepository.findById(userId)
-                .orElseThrow(() -> new CustomException(ErrorCode.AUTH_FORBIDDEN));
-
-        String nextName = resolveString(req.getName(), shipper.getName());
-        String nextEmail = resolveString(req.getEmail(), shipper.getEmail());
-        String nextPhone = resolveString(req.getPhone(), shipper.getPhone());
-
-        validatePhone(nextPhone);
-        validateEmailUniqueForShipper(nextEmail, shipper.getShipperId());
-
-        shipper.updateProfile(nextName, nextEmail, nextPhone);
-        Shipper saved = shipperRepository.save(shipper);
-        return MeResponse.builder()
-                .id(String.valueOf(saved.getShipperId()))
-                .role("shipper")
-                .email(saved.getEmail())
-                .name(saved.getName())
-                .phone(saved.getPhone())
-                .build();
-    }
-
-    private MeResponse updateAdmin(Long userId, MeUpdateRequest req) {
-        Admin admin = adminRepository.findById(userId)
-                .orElseThrow(() -> new CustomException(ErrorCode.AUTH_FORBIDDEN));
-
-        String nextName = resolveString(req.getName(), admin.getName());
-        String nextEmail = resolveString(req.getEmail(), admin.getEmail());
-        String nextPhone = resolveString(req.getPhone(), admin.getPhone());
-
-        validatePhone(nextPhone);
-        validateEmailUniqueForAdmin(nextEmail, admin.getAdminId());
-
-        admin.updateProfile(nextName, nextEmail, nextPhone);
-        Admin saved = adminRepository.save(admin);
-        return MeResponse.builder()
-                .id(String.valueOf(saved.getAdminId()))
-                .role("admin")
-                .email(saved.getEmail())
-                .name(saved.getName())
-                .phone(saved.getPhone())
-                .build();
-    }
-
-    private void validateEmailUniqueForDriver(String email, Long userId) {
-        driverRepository.findByEmail(email).ifPresent(found -> {
-            if (!found.getDriverId().equals(userId)) {
-                throw new CustomException(ErrorCode.DUPLICATE_EMAIL);
-            }
-        });
-    }
-
-    private void validateEmailUniqueForShipper(String email, Long userId) {
-        shipperRepository.findByEmail(email).ifPresent(found -> {
-            if (!found.getShipperId().equals(userId)) {
-                throw new CustomException(ErrorCode.DUPLICATE_EMAIL);
-            }
-        });
-    }
-
-    private void validateEmailUniqueForAdmin(String email, Long userId) {
-        adminRepository.findByEmail(email).ifPresent(found -> {
-            if (!found.getAdminId().equals(userId)) {
-                throw new CustomException(ErrorCode.DUPLICATE_EMAIL);
-            }
-        });
-    }
-
-    private String resolveString(String candidate, String fallback) {
-        if (candidate == null) {
-            return fallback;
+    private boolean isRoleMatchedWithUserType(String role, JwtRefreshToken.UserType userType) {
+        if (userType == null) {
+            return false;
         }
-        String trimmed = candidate.trim();
-        if (trimmed.isEmpty()) {
-            throw new CustomException(ErrorCode.INVALID_INPUT_VALUE);
-        }
-        return trimmed;
-    }
-
-    private void validatePhone(String phone) {
-        if (phone == null) {
-            return;
-        }
-        if (!phone.matches("^[0-9+()\\-\\s]{8,30}$")) {
-            throw new CustomException(ErrorCode.INVALID_INPUT_VALUE);
-        }
-    }
-
-    private String normalizeRole(String role) {
-        if (role == null) {
-            return "";
-        }
-        return role.trim().toLowerCase(Locale.ROOT);
+        return resolveUserType(role) == userType;
     }
 }
