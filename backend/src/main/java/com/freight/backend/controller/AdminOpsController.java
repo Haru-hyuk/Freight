@@ -4,11 +4,12 @@ import com.freight.backend.dto.admin.AdminUserStatusUpdateRequest;
 import com.freight.backend.exception.CustomException;
 import com.freight.backend.exception.ErrorCode;
 import com.freight.backend.service.AdminOpsService;
+import com.freight.backend.util.SecurityUtils;
 import java.util.Map;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -60,14 +61,14 @@ public class AdminOpsController {
     public ResponseEntity<Map<String, Object>> updateUserStatus(
             @AuthenticationPrincipal UserDetails userDetails,
             @PathVariable String userId,
-            @RequestBody AdminUserStatusUpdateRequest request
+            @Valid @RequestBody AdminUserStatusUpdateRequest request
     ) {
         requireAdmin(userDetails);
         return ResponseEntity.ok(adminOpsService.updateUserStatus(userId, request.getStatus()));
     }
 
     private static void requireAdmin(UserDetails userDetails) {
-        if (userDetails == null || !userDetails.getAuthorities().contains(new SimpleGrantedAuthority("ROLE_ADMIN"))) {
+        if (userDetails == null || !SecurityUtils.isAdmin(userDetails)) {
             throw new CustomException(ErrorCode.AUTH_FORBIDDEN);
         }
     }
