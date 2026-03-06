@@ -203,8 +203,8 @@ public class ScoringService {
         long minMinutes = Long.MAX_VALUE;
 
         for (Quote q : quotes) {
-            if (q.hasScheduledDate()) {
-                long remaining = q.minutesUntilScheduled(now);
+            if (q.hasDeliverySchedule()) {
+                long remaining = q.minutesUntilDeliverySchedule(now);
                 if (remaining >= 0 && remaining < minMinutes) {
                     minMinutes = remaining;
                 }
