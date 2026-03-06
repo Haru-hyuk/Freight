@@ -7,6 +7,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
@@ -18,7 +19,13 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 @Entity
-@Table(name = "delivery_photos")
+@Table(
+        name = "delivery_photos",
+        indexes = {
+                @Index(name = "idx_delivery_photos_match_id_created_at", columnList = "match_id, created_at"),
+                @Index(name = "idx_delivery_photos_match_id_type_created_at", columnList = "match_id, type, created_at")
+        }
+)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor

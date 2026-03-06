@@ -70,12 +70,6 @@ public class JwtRefreshToken {
     @Column(name = "revoked_at")
     private LocalDateTime revokedAt;
 
-    @Column(name = "device_info", length = 255)
-    private String deviceInfo;
-
-    @Column(name = "ip_address", length = 45)
-    private String ipAddress;
-
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -88,9 +82,7 @@ public class JwtRefreshToken {
             String refreshTokenHash,
             String jti,
             LocalDateTime issuedAt,
-            LocalDateTime expiresAt,
-            String deviceInfo,
-            String ipAddress
+            LocalDateTime expiresAt
     ) {
         return JwtRefreshToken.builder()
                 .userType(userType)
@@ -99,8 +91,6 @@ public class JwtRefreshToken {
                 .jti(jti)
                 .issuedAt(issuedAt)
                 .expiresAt(expiresAt)
-                .deviceInfo(deviceInfo)
-                .ipAddress(ipAddress)
                 .build();
     }
 
