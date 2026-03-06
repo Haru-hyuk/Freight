@@ -5,6 +5,7 @@ import com.freight.backend.gpsload.loadplan.model.LoadPlanResponse;
 import com.freight.backend.gpsload.loadplan.model.LoadPlanSavedResponse;
 import com.freight.backend.gpsload.loadplan.service.LoadPlanService;
 import org.springframework.http.MediaType;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -21,11 +22,13 @@ public class LoadPlanController {
     }
 
     @PostMapping(value = "/plan", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAnyRole('DRIVER','ADMIN')")
     public LoadPlanResponse plan(@RequestBody LoadPlanRequest request) {
         return loadPlanService.plan(request);
     }
 
     @PostMapping(value = "/plan/confirm", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAnyRole('DRIVER','ADMIN')")
     public LoadPlanSavedResponse confirm(@RequestBody LoadPlanRequest request) {
         return loadPlanService.planAndSave(request);
     }

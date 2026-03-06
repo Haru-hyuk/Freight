@@ -93,10 +93,16 @@ public class Shipper {
         this.updatedAt = LocalDateTime.now();
     }
 
-    public void updateProfile(String name, String email, String phone) {
-        this.name = name;
-        this.email = email;
-        this.phone = phone;
+    public void updateProfile(String nextName, String nextEmail, String nextPhone) {
+        if (nextName != null && !nextName.isBlank()) {
+            this.name = nextName.trim();
+        }
+        if (nextEmail != null && !nextEmail.isBlank()) {
+            this.email = nextEmail.trim();
+        }
+        if (nextPhone != null && !nextPhone.isBlank()) {
+            this.phone = nextPhone.trim();
+        }
         this.updatedAt = LocalDateTime.now();
     }
 }

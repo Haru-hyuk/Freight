@@ -7,6 +7,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
@@ -21,7 +22,19 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Entity
-@Table(name = "settlements")
+@Table(
+        name = "settlements",
+        indexes = {
+                @Index(name = "idx_settlements_match_id", columnList = "match_id"),
+                @Index(name = "idx_settlements_driver_id", columnList = "driver_id"),
+                @Index(name = "idx_settlements_shipper_id", columnList = "shipper_id"),
+                @Index(name = "idx_settlements_status", columnList = "settlement_status"),
+                @Index(name = "idx_settlements_driver_id_status", columnList = "driver_id, settlement_status")
+        },
+        uniqueConstraints = {
+                @jakarta.persistence.UniqueConstraint(name = "uk_settlements_match_id", columnNames = "match_id")
+        }
+)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
@@ -73,6 +86,15 @@ public class Settlement {
     @Column(name = "fast_fee", nullable = false, precision = 10, scale = 2)
     private BigDecimal fastFee;
 
+    @Column(name = "route_distance_km", precision = 10, scale = 2)
+    private BigDecimal routeDistanceKm;
+
+    @Column(name = "fuel_cost", nullable = false, precision = 10, scale = 2)
+    private BigDecimal fuelCost;
+
+    @Column(name = "toll_fee", nullable = false, precision = 10, scale = 2)
+    private BigDecimal tollFee;
+
     @Column(name = "driver_payout", nullable = false, precision = 10, scale = 2)
     private BigDecimal driverPayout;
 
@@ -108,6 +130,10 @@ public class Settlement {
     @Column(name = "deposit_account")
     private String depositAccount;
 
+    @Setter
+    @Column(name = "review_memo", length = 1000)
+    private String reviewMemo;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
@@ -126,6 +152,15 @@ public class Settlement {
         }
         if (settlementType == null) {
             settlementType = SettlementType.NORMAL;
+        }
+        if (fuelCost == null) {
+            fuelCost = BigDecimal.ZERO;
+        }
+        if (tollFee == null) {
+            tollFee = BigDecimal.ZERO;
+        }
+        if (routeDistanceKm == null) {
+            routeDistanceKm = BigDecimal.ZERO;
         }
     }
 
