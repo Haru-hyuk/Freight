@@ -2,6 +2,8 @@ package com.freight.backend.service;
 
 import com.freight.backend.dto.match.BatchAcceptMatchRequest;
 import com.freight.backend.dto.match.BatchAcceptMatchResponse;
+import com.freight.backend.dto.match.BatchStartTransitRequest;
+import com.freight.backend.dto.match.BatchStartTransitResponse;
 import com.freight.backend.dto.match.MatchResponse;
 import com.freight.backend.entity.FcmToken;
 import com.freight.backend.entity.Match;
@@ -82,10 +84,37 @@ public class MatchService {
     /** 기사에게 노출되는 오픈 매칭 목록 조회 */
     @Transactional(readOnly = true)
     public List<MatchResponse> getOpenMatches() {
-        return matchRepository.findByAcceptedFalseAndStatus(Match.Status.READY)
+        LocalDateTime now = LocalDateTime.now();
+        return matchRepository.findOpenMatchesForMarket(Match.Status.READY, now)
                 .stream()
                 .map(MatchResponse::from)
                 .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public boolean ensureOpenMatchForQuote(Long quoteId) {
+        if (quoteId == null || quoteId <= 0) {
+            return false;
+        }
+        Quote quote = quoteRepository.findById(quoteId)
+                .orElseThrow(() -> new CustomException(ErrorCode.INVALID_REQUEST));
+        if (!quote.isOpen()) {
+            return false;
+        }
+
+        Match existing = matchRepository.findByQuoteId(quoteId).orElse(null);
+        if (existing != null && existing.getStatus() != Match.Status.CANCELLED) {
+            return false;
+        }
+
+        Match match = Match.builder()
+                .quoteId(quoteId)
+                .driverId(null)
+                .accepted(false)
+                .status(Match.Status.READY)
+                .build();
+        matchRepository.save(match);
+        return true;
     }
 
     /**
@@ -268,6 +297,15 @@ public class MatchService {
             throw new CustomException(ErrorCode.AUTH_FORBIDDEN);
         }
 
+        // 결제 완료 후 취소는 환불 로직이 별도로 필요하므로 API 레벨에서 차단한다.
+        if (paymentRepository.existsByMatchIdAndStatus(matchId, Payment.PaymentStatus.COMPLETED)) {
+            throw new CustomException(ErrorCode.MATCH_CANCEL_NOT_ALLOWED_AFTER_PAYMENT);
+        }
+        // 운송이 시작되었거나 완료된 매칭은 취소할 수 없다.
+        if (match.getStatus() == Match.Status.IN_TRANSIT || match.getStatus() == Match.Status.COMPLETED) {
+            throw new CustomException(ErrorCode.INVALID_REQUEST);
+        }
+
         match.cancel();
         quote.reopen();
 
@@ -374,6 +412,72 @@ public class MatchService {
         );
 
         return MatchResponse.from(saved);
+    }
+
+    /**
+     * 그룹 오더 일괄 운송 시작
+     * - 동일 matchGroupKey를 가진 모든 매칭을 트랜잭션 내에서 일괄 처리
+     * - 일부만 성공하는 상태 불일치 방지
+     */
+    @Transactional
+    public BatchStartTransitResponse batchStartTransit(Long driverId, BatchStartTransitRequest request) {
+        List<Long> matchIds = request.getMatchIds();
+        if (matchIds == null || matchIds.isEmpty()) {
+            throw new CustomException(ErrorCode.INVALID_REQUEST);
+        }
+
+        List<Match> matches = matchRepository.findAllById(matchIds);
+        if (matches.size() != matchIds.size()) {
+            throw new CustomException(ErrorCode.MATCH_NOT_FOUND);
+        }
+
+        // 모든 매칭이 동일 기사의 것인지, 시작 가능한 상태인지 먼저 검증
+        String matchGroupKey = null;
+        for (Match match : matches) {
+            if (!Boolean.TRUE.equals(match.getAccepted())
+                    || match.getDriverId() == null
+                    || !match.getDriverId().equals(driverId)) {
+                throw new CustomException(ErrorCode.AUTH_FORBIDDEN);
+            }
+            if (match.getStatus() != Match.Status.READY) {
+                throw new CustomException(ErrorCode.INVALID_REQUEST);
+            }
+            if (!paymentRepository.existsByMatchIdAndStatus(match.getMatchId(), Payment.PaymentStatus.COMPLETED)) {
+                throw new CustomException(ErrorCode.MATCH_PAYMENT_REQUIRED);
+            }
+            if (matchGroupKey == null) {
+                matchGroupKey = match.getMatchGroupKey();
+            }
+        }
+
+        // 모든 검증 통과 후 일괄 상태 변경
+        List<MatchResponse> responses = new ArrayList<>();
+        for (Match match : matches) {
+            Quote quote = quoteRepository.findById(match.getQuoteId())
+                    .orElseThrow(() -> new CustomException(ErrorCode.INVALID_REQUEST));
+
+            match.startTransit();
+            quote.markInTransit();
+
+            Match saved = matchRepository.save(match);
+            quoteRepository.save(quote);
+
+            notificationService.createNotification(
+                    FcmToken.UserType.SHIPPER,
+                    quote.getShipperId(),
+                    saved.getMatchId(),
+                    Notification.Type.MATCH_UPDATED,
+                    "기사가 상차를 완료하여 운송이 시작되었습니다."
+            );
+
+            responses.add(MatchResponse.from(saved));
+        }
+
+        return BatchStartTransitResponse.builder()
+                .matchGroupKey(matchGroupKey)
+                .startedCount(responses.size())
+                .matches(responses)
+                .build();
     }
 
     @Transactional
