@@ -1,6 +1,7 @@
 package com.freight.backend.gpsload.routeassembly.service;
 
 import com.freight.backend.entity.QuoteItem;
+import com.freight.backend.entity.QuoteStop;
 import com.freight.backend.gpsload.loadplan.model.CargoHandling;
 import com.freight.backend.gpsload.loadplan.entity.TruckDimension;
 import com.freight.backend.gpsload.route.model.Place;
@@ -8,6 +9,7 @@ import com.freight.backend.gpsload.routeassembly.model.DriverState;
 import com.freight.backend.gpsload.routeassembly.model.Quote;
 import com.freight.backend.gpsload.loadplan.repository.TruckDimensionRepository;
 import com.freight.backend.repository.QuoteItemRepository;
+import com.freight.backend.repository.QuoteStopRepository;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -33,15 +35,18 @@ public class QuoteCandidateService {
     private final JdbcTemplate jdbcTemplate;
     private final TruckDimensionRepository truckDimensionRepository;
     private final QuoteItemRepository quoteItemRepository;
+    private final QuoteStopRepository quoteStopRepository;
 
     public QuoteCandidateService(
             JdbcTemplate jdbcTemplate,
             TruckDimensionRepository truckDimensionRepository,
-            QuoteItemRepository quoteItemRepository
+            QuoteItemRepository quoteItemRepository,
+            QuoteStopRepository quoteStopRepository
     ) {
         this.jdbcTemplate = jdbcTemplate;
         this.truckDimensionRepository = truckDimensionRepository;
         this.quoteItemRepository = quoteItemRepository;
+        this.quoteStopRepository = quoteStopRepository;
     }
 
     public List<Quote> findOpenCandidates(DriverState driverState, int limit) {
@@ -51,9 +56,17 @@ public class QuoteCandidateService {
                        origin_address, origin_lat, origin_lng,
                        destination_address, destination_lat, destination_lng,
                        volume_cbm, weight_kg, allow_combine, final_price,
-                       scheduled_date, length_cm, width_cm, height_cm, status,
-                       rotatable, stackable, fragile, no_stack, bottom_only, max_stack_weight,
-                       upright, easy_break
+                       pickup_schedule_start, delivery_deadline,
+                       delivery_schedule, status
+                FROM quotes
+                WHERE status = 'OPEN'
+                """;
+        String legacySelectSql = """
+                SELECT quote_id,
+                       origin_address, origin_lat, origin_lng,
+                       destination_address, destination_lat, destination_lng,
+                       volume_cbm, weight_kg, allow_combine, final_price,
+                       delivery_schedule, status
                 FROM quotes
                 WHERE status = 'OPEN'
                 """;
@@ -66,9 +79,13 @@ public class QuoteCandidateService {
         Optional<TruckDimension> truckOpt = resolveTruckSpec(driverState);
         List<Quote> raw = queryWithVehicleRules(selectSql, orderLimitSql, truckOpt, effectiveLimit);
         if (raw.isEmpty()) {
+            raw = queryWithVehicleRules(legacySelectSql, orderLimitSql, truckOpt, effectiveLimit);
+        }
+        if (raw.isEmpty()) {
             raw = queryMinimalOpenCandidates(effectiveLimit);
         }
-        List<Quote> withItems = applyQuoteItemsAggregation(raw);
+        List<Quote> withWaypoints = applyQuoteWaypoints(raw);
+        List<Quote> withItems = applyQuoteItemsAggregation(withWaypoints);
         return applyTruckCapacityFilter(driverState, withItems);
     }
 
@@ -77,7 +94,8 @@ public class QuoteCandidateService {
                 SELECT quote_id,
                        origin_address, origin_lat, origin_lng,
                        destination_address, destination_lat, destination_lng,
-                       volume_cbm, weight_kg, allow_combine, final_price, status
+                       volume_cbm, weight_kg, allow_combine, final_price,
+                       delivery_schedule, status
                 FROM quotes
                 WHERE status = 'OPEN'
                 ORDER BY quote_id DESC
@@ -105,14 +123,10 @@ public class QuoteCandidateService {
             int limit
     ) {
         if (truckOpt.isEmpty()) {
-            try {
-                return jdbcTemplate.query(selectSql + orderLimitSql, (rs, rowNum) -> mapQuote(rs), limit);
-            } catch (DataAccessException ignored) {
-                return queryMinimalOpenCandidates(limit);
-            }
+            return jdbcTemplate.query(selectSql + orderLimitSql, (rs, rowNum) -> mapQuote(rs), limit);
         }
 
-        TruckDimension truck = truckOpt.get();
+        TruckDimension truck = truckOpt.orElseThrow();
         String vehicleType = normalize(truck.getVehicleType());
         String bodyType = normalizeBodyType(truck.getVehicleBodyType());
         Double tonnage = truck.getTonnage() != null ? truck.getTonnage().doubleValue() : null;
@@ -164,9 +178,11 @@ public class QuoteCandidateService {
     }
 
     private void appendVehicleTypeFilter(StringBuilder where, List<Object> args, String vehicleType) {
-        if (vehicleType == null) return;
-        where.append(" AND (vehicle_type IS NULL OR TRIM(vehicle_type) = '' OR LOWER(TRIM(vehicle_type)) = LOWER(TRIM(?)))");
-        args.add(vehicleType);
+        String normalizedToken = normalizeVehicleTypeToken(vehicleType);
+        if (normalizedToken == null) return;
+        where.append(" AND (vehicle_type IS NULL OR TRIM(vehicle_type) = '' OR ");
+        where.append("LOWER(REPLACE(REPLACE(REPLACE(TRIM(vehicle_type), '-', ''), '_', ''), ' ', '')) = LOWER(?))");
+        args.add(normalizedToken);
     }
 
     private void appendBodyTypeFilter(StringBuilder where, List<Object> args, String bodyType) {
@@ -192,6 +208,14 @@ public class QuoteCandidateService {
         return s.isEmpty() ? null : s;
     }
 
+    private String normalizeVehicleTypeToken(String raw) {
+        String s = normalize(raw);
+        if (s == null) return null;
+        s = s.toLowerCase();
+        s = s.replace("-", "").replace("_", "").replace(" ", "");
+        return s.isEmpty() ? null : s;
+    }
+
     private String normalizeBodyType(String raw) {
         String s = normalize(raw);
         if (s == null) return null;
@@ -213,6 +237,60 @@ public class QuoteCandidateService {
     }
 
     private record QueryPlan(String sql, List<Object> args) {}
+
+    private List<Quote> applyQuoteWaypoints(List<Quote> quotes) {
+        if (quotes == null || quotes.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> quoteIds = quotes.stream()
+                .map(Quote::quoteId)
+                .filter(id -> id != null && id > 0)
+                .toList();
+        if (quoteIds.isEmpty()) {
+            return quotes;
+        }
+
+        Map<Long, List<Place>> waypointsByQuoteId = new HashMap<>();
+        List<QuoteStop> stops = quoteStopRepository.findByQuoteIdInOrderByQuoteIdAscSeqAsc(quoteIds);
+        for (QuoteStop stop : stops) {
+            if (stop == null || stop.getQuoteId() == null || stop.getLat() == null || stop.getLng() == null) {
+                continue;
+            }
+            waypointsByQuoteId.computeIfAbsent(stop.getQuoteId(), ignored -> new ArrayList<>())
+                    .add(new Place(null, stop.getAddress(), stop.getLat(), stop.getLng()));
+        }
+
+        List<Quote> enriched = new ArrayList<>(quotes.size());
+        for (Quote quote : quotes) {
+            List<Place> waypoints = waypointsByQuoteId.getOrDefault(quote.quoteId(), List.of());
+            enriched.add(new Quote(
+                    quote.quoteId(),
+                    quote.origin(),
+                    quote.destination(),
+                    waypoints,
+                    quote.volumeCbm(),
+                    quote.weightKg(),
+                    quote.allowCombine(),
+                    quote.finalPrice(),
+                    quote.pickupScheduleStart(),
+                    quote.deliveryDeadline(),
+                    quote.deliverySchedule(),
+                    quote.lengthCm(),
+                    quote.widthCm(),
+                    quote.heightCm(),
+                    quote.rotatable(),
+                    quote.stackable(),
+                    quote.fragile(),
+                    quote.noStack(),
+                    quote.bottomOnly(),
+                    quote.maxStackWeight(),
+                    quote.status(),
+                    quote.handling()
+            ));
+        }
+        return enriched;
+    }
 
     private List<Quote> applyQuoteItemsAggregation(List<Quote> quotes) {
         if (quotes == null || quotes.isEmpty()) {
@@ -240,6 +318,7 @@ public class QuoteCandidateService {
         for (Quote quote : quotes) {
             List<QuoteItem> quoteItems = itemsByQuoteId.getOrDefault(quote.quoteId(), List.of());
             if (quoteItems.isEmpty()) {
+                // Keep base quote candidates even when quote_items rows do not exist yet.
                 enriched.add(quote);
                 continue;
             }
@@ -252,21 +331,18 @@ public class QuoteCandidateService {
         double totalWeightKg = 0.0;
         double totalVolumeCbm = 0.0;
 
-        Integer maxLength = quote.lengthCm();
-        Integer maxWidth = quote.widthCm();
-        Integer maxHeight = quote.heightCm();
+        Integer maxLength = null;
+        Integer maxWidth = null;
+        Integer maxHeight = null;
 
-        boolean anyFragile = Boolean.TRUE.equals(quote.fragile());
-        boolean anyNoStack = Boolean.TRUE.equals(quote.noStack());
-        boolean anyBottomOnly = Boolean.TRUE.equals(quote.bottomOnly());
-        boolean allRotatable = quote.rotatable() == null || quote.rotatable();
-        boolean allStackable = quote.stackable() == null || quote.stackable();
-        Double minMaxStackWeight = quote.maxStackWeight();
+        boolean anyFragile = false;
+        boolean anyNoStack = false;
+        boolean anyBottomOnly = false;
+        boolean allRotatable = true;
+        boolean allStackable = true;
+        Double minMaxStackWeight = null;
 
         Set<CargoHandling> handlingSet = new LinkedHashSet<>();
-        if (quote.handling() != null) {
-            handlingSet.addAll(quote.handling());
-        }
 
         for (QuoteItem item : items) {
             int quantity = item.getQuantity() == null || item.getQuantity() <= 0 ? 1 : item.getQuantity();
@@ -325,11 +401,14 @@ public class QuoteCandidateService {
                 quote.quoteId(),
                 quote.origin(),
                 quote.destination(),
+                quote.waypoints(),
                 totalVolumeCbm > 0 ? totalVolumeCbm : quote.volumeCbm(),
                 totalWeightKg > 0 ? totalWeightKg : quote.weightKg(),
                 quote.allowCombine(),
                 quote.finalPrice(),
-                quote.scheduledDate(),
+                quote.pickupScheduleStart(),
+                quote.deliveryDeadline(),
+                quote.deliverySchedule(),
                 maxLength,
                 maxWidth,
                 maxHeight,
@@ -392,7 +471,7 @@ public class QuoteCandidateService {
             return candidates;
         }
 
-        TruckDimension truck = truckOpt.get();
+        TruckDimension truck = truckOpt.orElseThrow();
         Integer maxLength = truck.getLength();
         Integer maxWidth = truck.getWidth();
         Integer maxHeight = truck.getHeight();
@@ -415,17 +494,6 @@ public class QuoteCandidateService {
     }
 
     private Quote mapQuote(ResultSet rs) throws SQLException {
-        List<CargoHandling> handling = new ArrayList<>();
-        if (getBoolean(rs, "upright")) {
-            handling.add(CargoHandling.UPRIGHT);
-        }
-        if (getBoolean(rs, "fragile")) {
-            handling.add(CargoHandling.FRAGILE);
-        }
-        if (getBoolean(rs, "easy_break")) {
-            handling.add(CargoHandling.EASY_BREAK);
-        }
-
         return new Quote(
                 rs.getLong("quote_id"),
                 new Place(
@@ -440,22 +508,25 @@ public class QuoteCandidateService {
                         getDouble(rs, "destination_lat"),
                         getDouble(rs, "destination_lng")
                 ),
+                List.of(),
                 getDouble(rs, "volume_cbm"),
                 getDouble(rs, "weight_kg"),
                 getBooleanObject(rs, "allow_combine"),
                 getDouble(rs, "final_price"),
-                getLocalDateTime(rs, "scheduled_date"),
-                getInt(rs, "length_cm"),
-                getInt(rs, "width_cm"),
-                getInt(rs, "height_cm"),
-                getBooleanObject(rs, "rotatable"),
-                getBooleanObject(rs, "stackable"),
-                getBooleanObject(rs, "fragile"),
-                getBooleanObject(rs, "no_stack"),
-                getBooleanObject(rs, "bottom_only"),
-                getDouble(rs, "max_stack_weight"),
+                getLocalDateTime(rs, "pickup_schedule_start"),
+                getLocalDateTime(rs, "delivery_deadline"),
+                getLocalDateTime(rs, "delivery_schedule"),
+                null,
+                null,
+                null,
+                true,
+                true,
+                false,
+                false,
+                false,
+                null,
                 getString(rs, "status"),
-                handling
+                List.of()
         );
     }
 
@@ -474,19 +545,22 @@ public class QuoteCandidateService {
                         getDouble(rs, "destination_lat"),
                         getDouble(rs, "destination_lng")
                 ),
+                List.of(),
                 getDouble(rs, "volume_cbm"),
                 getDouble(rs, "weight_kg"),
                 getBooleanObject(rs, "allow_combine"),
                 getDouble(rs, "final_price"),
                 null,
                 null,
+                getLocalDateTime(rs, "delivery_schedule"),
                 null,
                 null,
                 null,
-                null,
-                null,
-                null,
-                null,
+                true,
+                true,
+                false,
+                false,
+                false,
                 null,
                 getString(rs, "status"),
                 List.of()
@@ -501,17 +575,6 @@ public class QuoteCandidateService {
         }
     }
 
-    private Integer getInt(ResultSet rs, String column) {
-        try {
-            Object value = rs.getObject(column);
-            if (value == null) return null;
-            if (value instanceof Number n) return n.intValue();
-            return Integer.parseInt(String.valueOf(value));
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
     private Double getDouble(ResultSet rs, String column) {
         try {
             Object value = rs.getObject(column);
@@ -521,11 +584,6 @@ public class QuoteCandidateService {
         } catch (Exception e) {
             return null;
         }
-    }
-
-    private boolean getBoolean(ResultSet rs, String column) {
-        Boolean b = getBooleanObject(rs, column);
-        return b != null && b;
     }
 
     private Boolean getBooleanObject(ResultSet rs, String column) {
