@@ -1,13 +1,19 @@
 {
-  "extends": "./tsconfig.base.json",
+  "extends": "expo/tsconfig.base",
   "compilerOptions": {
-    "strict": true
+    "strict": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ],
+      "@rodia/tokens": [
+        "../../packages/design-tokens/src"
+      ]
+    }
   },
   "include": [
     "**/*.ts",
     "**/*.tsx"
-  ],
-  "exclude": [
-    "node_modules"
   ]
 }
