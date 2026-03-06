@@ -5,6 +5,12 @@ import com.freight.backend.entity.Settlement;
 import com.freight.backend.exception.CustomException;
 import com.freight.backend.exception.ErrorCode;
 import com.freight.backend.service.SettlementService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -21,6 +27,7 @@ import lombok.RequiredArgsConstructor;
 @RestController
 @RequestMapping("/api/shipper/settlements")
 @RequiredArgsConstructor
+@Tag(name = "Shipper Settlement", description = "화주 정산 API")
 public class ShipperSettlementController {
 
     private final SettlementService settlementService;
@@ -32,6 +39,15 @@ public class ShipperSettlementController {
         return Long.parseLong(userDetails.getUsername());
     }
 
+    @Operation(summary = "내 정산 목록 조회")
+    @ApiResponse(
+            responseCode = "200",
+            description = "정산 목록 반환",
+            content = @Content(
+                    mediaType = "application/json",
+                    array = @ArraySchema(schema = @Schema(implementation = SettlementResponse.class))
+            )
+    )
     @GetMapping("/me")
     public ResponseEntity<List<SettlementResponse>> getMySettlements(
             @AuthenticationPrincipal UserDetails userDetails
@@ -43,6 +59,15 @@ public class ShipperSettlementController {
         return ResponseEntity.ok(rows);
     }
 
+    @Operation(summary = "매칭별 정산 조회")
+    @ApiResponse(
+            responseCode = "200",
+            description = "정산 정보 반환",
+            content = @Content(
+                    mediaType = "application/json",
+                    schema = @Schema(implementation = SettlementResponse.class)
+            )
+    )
     @GetMapping
     public ResponseEntity<SettlementResponse> getByMatch(
             @AuthenticationPrincipal UserDetails userDetails,
@@ -53,6 +78,15 @@ public class ShipperSettlementController {
         return ResponseEntity.ok(SettlementResponse.from(settlement));
     }
 
+    @Operation(summary = "정산 확정")
+    @ApiResponse(
+            responseCode = "200",
+            description = "확정된 정산 정보 반환",
+            content = @Content(
+                    mediaType = "application/json",
+                    schema = @Schema(implementation = SettlementResponse.class)
+            )
+    )
     @PostMapping("/{matchId}/confirm")
     public ResponseEntity<SettlementResponse> confirmSettlement(
             @AuthenticationPrincipal UserDetails userDetails,
