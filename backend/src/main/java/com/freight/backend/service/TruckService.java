@@ -4,12 +4,16 @@ import com.freight.backend.dto.truck.TruckCreateRequest;
 import com.freight.backend.dto.truck.TruckCreateResponse;
 import com.freight.backend.dto.truck.TruckResponse;
 import com.freight.backend.dto.truck.TruckUpdateRequest;
+import com.freight.backend.entity.Driver;
 import com.freight.backend.entity.Truck;
 import com.freight.backend.exception.CustomException;
 import com.freight.backend.exception.ErrorCode;
+import com.freight.backend.gpsload.loadplan.repository.TruckSpecCatalogRepository;
+import com.freight.backend.repository.DriverRepository;
 import com.freight.backend.repository.TruckRepository;
 import jakarta.transaction.Transactional;
 import java.util.List;
+import java.util.Locale;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
@@ -20,19 +24,18 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class TruckService {
-
     private final TruckRepository truckRepository;
+    private final DriverRepository driverRepository;
+    private final TruckSpecCatalogRepository truckSpecCatalogRepository;
 
     @Transactional
     public TruckCreateResponse createTruck(TruckCreateRequest req) {
         Long driverId = getCurrentDriverId();
-        Long nextTruckId = truckRepository.findMaxTruckId() + 1L;
 
         Truck truck = Truck.builder()
-                .truckId(nextTruckId)
                 .driverId(driverId)
-                .vehicleType(req.getVehicleType())
-                .vehicleBodyType(req.getVehicleBodyType())
+                .vehicleType(normalizeVehicleType(req.getVehicleType()))
+                .vehicleBodyType(normalizeVehicleBodyType(req.getVehicleBodyType()))
                 .tonnage(req.getTonnage())
                 .maxWeight(req.getMaxWeight())
                 .maxVolume(req.getMaxVolume())
@@ -41,7 +44,8 @@ public class TruckService {
                 .cargoHeight(req.getCargoHeight())
                 .name(req.getName())
                 .imageUrl(req.getImageUrl())
-                .approved(req.getApproved())
+                // 승인 상태는 기사 요청값을 신뢰하지 않고 서버에서 강제한다.
+                .approved(Boolean.FALSE)
                 .insurance(req.getInsurance())
                 .odometerKm(req.getOdometerKm())
                 .lastInspectionDate(req.getLastInspectionDate())
@@ -53,26 +57,29 @@ public class TruckService {
 
     @Transactional
     public List<TruckResponse> listTrucks() {
-        Long driverId = getCurrentDriverId();
+        Driver driver = getCurrentDriver();
+        Long driverId = driver.getDriverId();
+        Long selectedTruckId = driver.getSelectedTruckId();
         return truckRepository.findByDriverId(driverId).stream()
-                .map(this::toResponse)
+                .map(truck -> toResponse(truck, selectedTruckId))
                 .collect(Collectors.toList());
     }
 
     @Transactional
     public TruckResponse getTruck(Long truckId) {
-        Long driverId = getCurrentDriverId();
-        Truck truck = getOwnedTruck(truckId, driverId);
-        return toResponse(truck);
+        Driver driver = getCurrentDriver();
+        Truck truck = getOwnedTruck(truckId, driver.getDriverId());
+        return toResponse(truck, driver.getSelectedTruckId());
     }
 
     @Transactional
     public TruckResponse updateTruck(Long truckId, TruckUpdateRequest req) {
-        Long driverId = getCurrentDriverId();
+        Driver driver = getCurrentDriver();
+        Long driverId = driver.getDriverId();
         Truck truck = getOwnedTruck(truckId, driverId);
         truck.updateFrom(
-                req.getVehicleType(),
-                req.getVehicleBodyType(),
+                normalizeVehicleType(req.getVehicleType()),
+                normalizeVehicleBodyType(req.getVehicleBodyType()),
                 req.getTonnage(),
                 req.getMaxWeight(),
                 req.getMaxVolume(),
@@ -81,25 +88,55 @@ public class TruckService {
                 req.getCargoHeight(),
                 req.getName(),
                 req.getImageUrl(),
-                req.getApproved(),
                 req.getInsurance(),
                 req.getOdometerKm(),
                 req.getLastInspectionDate()
         );
-        return toResponse(truck);
+        // 수정된 차량은 재심사 상태가 되므로 선택 상태를 해제한다.
+        if (driver.getSelectedTruckId() != null && driver.getSelectedTruckId().equals(truckId)) {
+            driver.clearSelectedTruck();
+            driverRepository.save(driver);
+        }
+        return toResponse(truck, driver.getSelectedTruckId());
     }
 
     @Transactional
     public void deleteTruck(Long truckId) {
-        Long driverId = getCurrentDriverId();
+        Driver driver = getCurrentDriver();
+        Long driverId = driver.getDriverId();
         Truck truck = getOwnedTruck(truckId, driverId);
         truckRepository.delete(truck);
+        if (driver.getSelectedTruckId() != null && driver.getSelectedTruckId().equals(truckId)) {
+            driver.clearSelectedTruck();
+            driverRepository.save(driver);
+        }
+    }
+
+    @Transactional
+    public TruckResponse getActiveTruck() {
+        Driver driver = getCurrentDriver();
+        Truck selected = resolveSelectedOrFallbackApprovedTruck(driver);
+        return toResponse(selected, driver.getSelectedTruckId());
+    }
+
+    @Transactional
+    public TruckResponse selectActiveTruck(Long truckId) {
+        Driver driver = getCurrentDriver();
+        Long driverId = driver.getDriverId();
+        Truck truck = getOwnedTruck(truckId, driverId);
+        if (!isTruckApproved(truck)) {
+            throw new CustomException(ErrorCode.INVALID_REQUEST);
+        }
+        driver.selectTruck(truckId);
+        driverRepository.save(driver);
+        return toResponse(truck, truckId);
     }
 
     @Transactional
     public List<TruckResponse> listPendingTrucksForAdmin() {
         assertAdmin();
-        return truckRepository.findByApprovedFalseOrderByCreatedAtDesc().stream()
+        // 관리자 대기 목록은 조건 쿼리로 조회해 대량 데이터에서 메모리 필터를 피한다.
+        return truckRepository.findPendingApprovals().stream()
                 .map(this::toResponse)
                 .collect(Collectors.toList());
     }
@@ -116,7 +153,16 @@ public class TruckService {
 
         truck.setApprovedStatus(approved);
         Truck saved = truckRepository.save(truck);
-        return toResponse(saved);
+        // 반려된 차량이 선택되어 있었다면 선택을 해제한다.
+        if (!approved) {
+            driverRepository.findById(saved.getDriverId()).ifPresent(driver -> {
+                if (driver.getSelectedTruckId() != null && driver.getSelectedTruckId().equals(saved.getTruckId())) {
+                    driver.clearSelectedTruck();
+                    driverRepository.save(driver);
+                }
+            });
+        }
+        return toResponse(saved, null);
     }
 
     private Truck getOwnedTruck(Long truckId, Long driverId) {
@@ -128,7 +174,46 @@ public class TruckService {
         return truck;
     }
 
-    private TruckResponse toResponse(Truck truck) {
+    private Truck resolveSelectedOrFallbackApprovedTruck(Driver driver) {
+        Long driverId = driver.getDriverId();
+        Long selectedTruckId = driver.getSelectedTruckId();
+
+        if (selectedTruckId != null) {
+            Truck selected = truckRepository.findById(selectedTruckId)
+                    .orElseThrow(() -> new CustomException(ErrorCode.DRIVER_TRUCK_REQUIRED));
+            if (!driverId.equals(selected.getDriverId())) {
+                throw new CustomException(ErrorCode.AUTH_FORBIDDEN);
+            }
+            if (isTruckApproved(selected)) {
+                return selected;
+            }
+        }
+
+        Truck approvedFallback = truckRepository.findByDriverId(driverId).stream()
+                .filter(this::isTruckApproved)
+                .findFirst()
+                .orElseThrow(() -> new CustomException(ErrorCode.DRIVER_TRUCK_REQUIRED));
+
+        if (selectedTruckId == null || !selectedTruckId.equals(approvedFallback.getTruckId())) {
+            driver.selectTruck(approvedFallback.getTruckId());
+            driverRepository.save(driver);
+        }
+        return approvedFallback;
+    }
+
+    private boolean isTruckApproved(Truck truck) {
+        if (truck == null || !Boolean.TRUE.equals(truck.getApproved())) {
+            return false;
+        }
+        String approvalStatus = truck.getApprovalStatus();
+        if (approvalStatus == null || approvalStatus.isBlank()) {
+            return true;
+        }
+        return "APPROVED".equalsIgnoreCase(approvalStatus);
+    }
+
+    private TruckResponse toResponse(Truck truck, Long selectedTruckId) {
+        boolean selected = selectedTruckId != null && selectedTruckId.equals(truck.getTruckId());
         return new TruckResponse(
                 truck.getTruckId(),
                 truck.getDriverId(),
@@ -143,12 +228,25 @@ public class TruckService {
                 truck.getName(),
                 truck.getImageUrl(),
                 truck.getApproved(),
+                truck.getApprovalStatus(),
+                truck.getReviewMemo(),
+                selected,
                 truck.getInsurance(),
                 truck.getOdometerKm(),
                 truck.getLastInspectionDate(),
                 truck.getCreatedAt(),
                 truck.getUpdatedAt()
         );
+    }
+
+    private TruckResponse toResponse(Truck truck) {
+        return toResponse(truck, null);
+    }
+
+    private Driver getCurrentDriver() {
+        Long driverId = getCurrentDriverId();
+        return driverRepository.findById(driverId)
+                .orElseThrow(() -> new CustomException(ErrorCode.AUTH_FORBIDDEN));
     }
 
     private Long getCurrentDriverId() {
@@ -165,6 +263,67 @@ public class TruckService {
         return Long.valueOf(authentication.getName());
     }
 
+    private String normalizeVehicleType(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String upper = raw.trim().toUpperCase(Locale.ROOT);
+        if (upper.isBlank()) {
+            return null;
+        }
+        upper = upper.replace('-', '_').replace(' ', '_').replaceAll("_+", "_");
+
+        String canonicalFromExact = resolveCanonicalVehicleType(upper);
+        if (canonicalFromExact != null) {
+            return canonicalFromExact;
+        }
+
+        String compact = upper.replace("_", "");
+        String canonicalFromCompact = resolveCanonicalVehicleTypeByCompactCode(compact);
+        if (canonicalFromCompact != null) {
+            return canonicalFromCompact;
+        }
+
+        if (compact.startsWith("TON") && compact.length() > 3 && !upper.contains("_")) {
+            String candidate = "TON_" + compact.substring(3);
+            String canonicalFromCandidate = resolveCanonicalVehicleType(candidate);
+            return canonicalFromCandidate != null ? canonicalFromCandidate : candidate;
+        }
+
+        return upper;
+    }
+
+    private String resolveCanonicalVehicleType(String vehicleType) {
+        if (vehicleType == null || vehicleType.isBlank()) {
+            return null;
+        }
+        List<String> candidates = truckSpecCatalogRepository.findCanonicalVehicleTypes(vehicleType);
+        return candidates.isEmpty() ? null : candidates.get(0);
+    }
+
+    private String resolveCanonicalVehicleTypeByCompactCode(String compactVehicleType) {
+        if (compactVehicleType == null || compactVehicleType.isBlank()) {
+            return null;
+        }
+        List<String> candidates = truckSpecCatalogRepository.findCanonicalVehicleTypesByCompactCode(compactVehicleType);
+        return candidates.isEmpty() ? null : candidates.get(0);
+    }
+
+    private String normalizeVehicleBodyType(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String upper = raw.trim().toUpperCase(Locale.ROOT);
+        if (upper.isBlank()) {
+            return null;
+        }
+        upper = upper.replace('-', '_').replace(' ', '_').replaceAll("_+", "_");
+        if ("WINGBODY".equals(upper)) return "WING_BODY";
+        if ("CARGO_TRUCK".equals(upper) || "GENERAL".equals(upper)) return "CARGO";
+        if ("TOP_OPEN".equals(upper) || "TOPLOAD".equals(upper)) return "TOP";
+        return upper;
+    }
+
     private void assertAdmin() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()) {
@@ -172,7 +331,12 @@ public class TruckService {
         }
         boolean isAdmin = authentication.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
-                .anyMatch("ROLE_ADMIN"::equals);
+                .anyMatch(authority ->
+                        "ROLE_ADMIN".equals(authority)
+                                || "ROLE_SUPER".equals(authority)
+                                || "ROLE_OPERATOR".equals(authority)
+                                || "ROLE_CS".equals(authority)
+                );
         if (!isAdmin) {
             throw new CustomException(ErrorCode.AUTH_FORBIDDEN);
         }

@@ -4,6 +4,12 @@ import com.freight.backend.dto.match.MatchCreateRequest;
 import com.freight.backend.dto.match.MatchResponse;
 import com.freight.backend.service.MatchService;
 import com.freight.backend.util.SecurityUtils;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -28,14 +34,20 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/shipper/matches")
 @RequiredArgsConstructor
 @Slf4j
+@Tag(name = "Shipper Match", description = "화주용 매칭 API")
 public class ShipperMatchController {
 
     private final MatchService matchService;
 
-    /**
-     * 매칭 생성 (화주)
-     * POST /api/shipper/matches
-     */
+    @Operation(summary = "매칭 생성")
+    @ApiResponse(
+            responseCode = "200",
+            description = "생성된 매칭 정보 반환",
+            content = @Content(
+                    mediaType = "application/json",
+                    schema = @Schema(implementation = MatchResponse.class)
+            )
+    )
     @PostMapping
     public ResponseEntity<MatchResponse> createMatch(
             @AuthenticationPrincipal UserDetails userDetails,
@@ -46,10 +58,15 @@ public class ShipperMatchController {
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * 화주가 생성한 매칭 목록 (내 매칭, 취소 제외)
-     * GET /api/shipper/matches/me
-     */
+    @Operation(summary = "내 매칭 목록 조회")
+    @ApiResponse(
+            responseCode = "200",
+            description = "매칭 목록 반환",
+            content = @Content(
+                    mediaType = "application/json",
+                    array = @ArraySchema(schema = @Schema(implementation = MatchResponse.class))
+            )
+    )
     @GetMapping("/me")
     public ResponseEntity<List<MatchResponse>> getMyMatches(
             @AuthenticationPrincipal UserDetails userDetails
@@ -59,10 +76,8 @@ public class ShipperMatchController {
         return ResponseEntity.ok(matches);
     }
 
-    /**
-     * 매칭 취소 (화주: 본인 견적의 매칭만)
-     * DELETE /api/shipper/matches/{matchId}
-     */
+    @Operation(summary = "매칭 취소")
+    @ApiResponse(responseCode = "204", description = "취소 완료")
     @DeleteMapping("/{matchId}")
     public ResponseEntity<Void> cancelMatch(
             @AuthenticationPrincipal UserDetails userDetails,
@@ -73,10 +88,15 @@ public class ShipperMatchController {
         return ResponseEntity.noContent().build();
     }
 
-    /**
-     * 매칭 상세 조회 (화주: 본인 견적의 매칭만)
-     * GET /api/shipper/matches/{matchId}
-     */
+    @Operation(summary = "매칭 상세 조회")
+    @ApiResponse(
+            responseCode = "200",
+            description = "매칭 상세 정보 반환",
+            content = @Content(
+                    mediaType = "application/json",
+                    schema = @Schema(implementation = MatchResponse.class)
+            )
+    )
     @GetMapping("/{matchId}")
     public ResponseEntity<MatchResponse> getMatch(
             @AuthenticationPrincipal UserDetails userDetails,
