@@ -179,13 +179,13 @@ public class QuoteService {
                 .unloadMethod(req.getUnloadMethod())
                 .pickupScheduleStart(schedule.pickupScheduleStart())
                 .deliveryDeadline(schedule.deliveryDeadline())
-                .deliverySchedule(schedule.deliveryDeadline())
+                .deliverySchedule(schedule.deliverySchedule())
                 .status("OPEN")
                 .build();
 
         Quote saved = quoteRepository.save(quote);
 
-        saveChecklistItems(saved.getQuoteId(), req.getChecklistItems());
+        saveChecklistItems(saved.getQuoteId(), req.getChecklistItems(), resolvedStops.size() + 1);
         saveQuoteItems(saved.getQuoteId(), req.getQuoteItems());
         saveStops(saved.getQuoteId(), resolvedStops);
         matchService.ensureOpenMatchForQuote(saved.getQuoteId());
@@ -277,10 +277,13 @@ public class QuoteService {
         List<QuoteItemResponse> quoteItems = quoteItemRepository.findByQuoteId(quoteId).stream()
                 .map(this::toQuoteItemResponse)
                 .collect(Collectors.toList());
+        List<QuoteChecklistItemResponse> checklistItems = quoteChecklistItemRepository.findByQuoteId(quoteId).stream()
+                .map(this::toItemResponse)
+                .collect(Collectors.toList());
         List<QuoteStopResponse> stops = quoteStopRepository.findByQuoteIdOrderBySeqAsc(quoteId).stream()
                 .map(this::toStopResponse)
                 .collect(Collectors.toList());
-        return toDriverQuoteSummaryResponse(quote, itemCount, quoteItems, stops);
+        return toDriverQuoteSummaryResponse(quote, itemCount, quoteItems, checklistItems, stops);
     }
 
     @Transactional
@@ -308,6 +311,7 @@ public class QuoteService {
             itemCountByQuoteId.put(key, normalizeItemCount(row.getTotalQuantity()));
         });
         Map<Long, List<QuoteItemResponse>> quoteItemsByQuoteId = buildQuoteItemsByQuoteId(orderedQuoteIds);
+        Map<Long, List<QuoteChecklistItemResponse>> checklistItemsByQuoteId = buildChecklistItemsByQuoteId(orderedQuoteIds);
         Map<Long, List<QuoteStopResponse>> stopsByQuoteId = buildStopsByQuoteId(orderedQuoteIds);
 
         List<DriverQuoteSummaryResponse> responses = new ArrayList<>(orderedQuoteIds.size());
@@ -318,8 +322,9 @@ public class QuoteService {
             }
             int itemCount = itemCountByQuoteId.getOrDefault(quoteId, 1);
             List<QuoteItemResponse> quoteItems = quoteItemsByQuoteId.getOrDefault(quoteId, List.of());
+            List<QuoteChecklistItemResponse> checklistItems = checklistItemsByQuoteId.getOrDefault(quoteId, List.of());
             List<QuoteStopResponse> stops = stopsByQuoteId.getOrDefault(quoteId, List.of());
-            responses.add(toDriverQuoteSummaryResponse(quote, itemCount, quoteItems, stops));
+            responses.add(toDriverQuoteSummaryResponse(quote, itemCount, quoteItems, checklistItems, stops));
         }
         return responses;
     }
@@ -367,10 +372,30 @@ public class QuoteService {
         return byQuoteId;
     }
 
+    private Map<Long, List<QuoteChecklistItemResponse>> buildChecklistItemsByQuoteId(List<Long> quoteIds) {
+        Map<Long, List<QuoteChecklistItemResponse>> byQuoteId = new LinkedHashMap<>();
+        for (Long quoteId : quoteIds) {
+            if (quoteId == null || quoteId <= 0) continue;
+            byQuoteId.put(quoteId, new ArrayList<>());
+        }
+        quoteChecklistItemRepository.findByQuoteIdIn(quoteIds).forEach(item -> {
+            Long quoteId = item.getQuoteId();
+            if (quoteId == null || !byQuoteId.containsKey(quoteId)) return;
+            byQuoteId.get(quoteId).add(toItemResponse(item));
+        });
+        byQuoteId.values().forEach(list ->
+                list.sort((a, b) -> Long.compare(
+                        a.getChecklistItemId() == null ? Long.MAX_VALUE : a.getChecklistItemId(),
+                        b.getChecklistItemId() == null ? Long.MAX_VALUE : b.getChecklistItemId()
+                )));
+        return byQuoteId;
+    }
+
     private DriverQuoteSummaryResponse toDriverQuoteSummaryResponse(
             Quote quote,
             int itemCount,
             List<QuoteItemResponse> quoteItems,
+            List<QuoteChecklistItemResponse> checklistItems,
             List<QuoteStopResponse> stops
     ) {
         String originAddress = sanitizeDisplayText(quote.getOriginAddress());
@@ -401,11 +426,12 @@ public class QuoteService {
                 quote.getUnloadMethod(),
                 resolvePickupScheduleStart(quote),
                 resolveDeliveryDeadline(quote),
-                resolveDeliveryDeadline(quote),
+                resolveDeliverySchedule(quote),
                 quote.getStatus(),
                 quote.getCreatedAt(),
                 quote.getUpdatedAt(),
                 quoteItems == null ? List.of() : quoteItems,
+                checklistItems == null ? List.of() : checklistItems,
                 stops == null ? List.of() : stops
         );
     }
@@ -512,11 +538,11 @@ public class QuoteService {
                 req.getUnloadMethod(),
                 schedule.pickupScheduleStart(),
                 schedule.deliveryDeadline(),
-                schedule.deliveryDeadline()
+                schedule.deliverySchedule()
         );
 
         quoteChecklistItemRepository.deleteByQuoteId(quoteId);
-        saveChecklistItems(quoteId, req.getChecklistItems());
+        saveChecklistItems(quoteId, req.getChecklistItems(), resolvedStops.size() + 1);
 
         quoteItemRepository.deleteByQuoteId(quoteId);
         saveQuoteItems(quoteId, req.getQuoteItems());
@@ -533,7 +559,8 @@ public class QuoteService {
                         .map(item -> new QuoteChecklistItemResponse(
                                 item.getChecklistItemId(),
                                 item.getExtraInput(),
-                                item.getExtraFee() == null ? BigDecimal.ZERO : item.getExtraFee()
+                                item.getExtraFee() == null ? BigDecimal.ZERO : item.getExtraFee(),
+                                StopOrderUtils.normalizeDropStopSeq(item.getStopSeq())
                         ))
                         .collect(Collectors.toList());
         List<QuoteStopResponse> stops = quoteStopRepository.findByQuoteIdOrderBySeqAsc(quoteId).stream()
@@ -804,7 +831,8 @@ public class QuoteService {
         return new QuoteChecklistItemResponse(
                 item.getChecklistItemId(),
                 item.getExtraInput(),
-                item.getExtraFee()
+                item.getExtraFee(),
+                item.getStopSeq()
         );
     }
 
@@ -899,7 +927,7 @@ public class QuoteService {
                 quote.getUnloadMethod(),
                 resolvePickupScheduleStart(quote),
                 resolveDeliveryDeadline(quote),
-                resolveDeliveryDeadline(quote),
+                resolveDeliverySchedule(quote),
                 quote.getStatus(),
                 quote.getCreatedAt(),
                 quote.getUpdatedAt(),
@@ -971,7 +999,10 @@ public class QuoteService {
             if (normalizedDeadline.isBefore(normalizedPickup) || normalizedDeadline.isBefore(now)) {
                 throw new CustomException(ErrorCode.INVALID_REQUEST);
             }
-            return new NormalizedSchedule(normalizedPickup, normalizedDeadline);
+            LocalDateTime normalizedLegacy = legacyDeliverySchedule != null
+                    ? legacyDeliverySchedule.toLocalDate().atTime(23, 59, 59).withNano(0)
+                    : normalizedDeadline;
+            return new NormalizedSchedule(normalizedPickup, normalizedDeadline, normalizedLegacy);
         }
 
         // 단건은 시간까지 정밀하게 사용한다.
@@ -980,12 +1011,16 @@ public class QuoteService {
         if (normalizedDeadline.isBefore(normalizedPickup) || normalizedDeadline.isBefore(now)) {
             throw new CustomException(ErrorCode.INVALID_REQUEST);
         }
-        return new NormalizedSchedule(normalizedPickup, normalizedDeadline);
+        LocalDateTime normalizedLegacy = legacyDeliverySchedule != null
+                ? legacyDeliverySchedule.withSecond(0).withNano(0)
+                : normalizedDeadline;
+        return new NormalizedSchedule(normalizedPickup, normalizedDeadline, normalizedLegacy);
     }
 
     private record NormalizedSchedule(
             LocalDateTime pickupScheduleStart,
-            LocalDateTime deliveryDeadline
+            LocalDateTime deliveryDeadline,
+            LocalDateTime deliverySchedule
     ) {
     }
 
@@ -1007,6 +1042,16 @@ public class QuoteService {
             return quote.getDeliveryDeadline();
         }
         return quote.getDeliverySchedule();
+    }
+
+    private LocalDateTime resolveDeliverySchedule(Quote quote) {
+        if (quote == null) {
+            return null;
+        }
+        if (quote.getDeliverySchedule() != null) {
+            return quote.getDeliverySchedule();
+        }
+        return quote.getDeliveryDeadline();
     }
 
     private Quote findQuoteByIdentifier(String quoteIdentifier) {
@@ -1138,16 +1183,21 @@ public class QuoteService {
         return sb.toString();
     }
 
-    private void saveChecklistItems(Long quoteId, List<QuoteChecklistItemRequest> items) {
+    private void saveChecklistItems(Long quoteId, List<QuoteChecklistItemRequest> items, int maxDropStopSeq) {
         if (items == null) {
             return;
         }
-        Set<Long> seenChecklistIds = new java.util.HashSet<>();
+        Set<String> seenChecklistKeys = new java.util.HashSet<>();
         for (QuoteChecklistItemRequest item : items) {
             if (item == null || item.getChecklistItemId() == null || item.getChecklistItemId() <= 0) {
                 throw new CustomException(ErrorCode.INVALID_REQUEST);
             }
-            if (!seenChecklistIds.add(item.getChecklistItemId())) {
+            Integer normalizedStopSeq = StopOrderUtils.normalizeDropStopSeq(item.getStopSeq());
+            if (normalizedStopSeq != null && (maxDropStopSeq <= 0 || normalizedStopSeq > maxDropStopSeq)) {
+                throw new CustomException(ErrorCode.INVALID_REQUEST);
+            }
+            String dedupeKey = item.getChecklistItemId() + ":" + (normalizedStopSeq == null ? "ALL" : normalizedStopSeq);
+            if (!seenChecklistKeys.add(dedupeKey)) {
                 throw new CustomException(ErrorCode.INVALID_REQUEST);
             }
 
@@ -1173,6 +1223,7 @@ public class QuoteService {
                     .quoteId(quoteId)
                     .checklistItemId(item.getChecklistItemId())
                     .extraInput(normalizedExtraInput)
+                    .stopSeq(normalizedStopSeq)
                     .extraFee(fee)
                     .build();
             quoteChecklistItemRepository.save(entity);

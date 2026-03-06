@@ -10,4 +10,5 @@ public class QuoteChecklistItemResponse {
     private Long checklistItemId;
     private String extraInput;
     private BigDecimal extraFee;
+    private Integer stopSeq;
 }
