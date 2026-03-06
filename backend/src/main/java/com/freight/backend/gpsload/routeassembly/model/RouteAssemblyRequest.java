@@ -1,6 +1,10 @@
 package com.freight.backend.gpsload.routeassembly.model;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonValue;
+
 import java.util.List;
+import java.util.Locale;
 
 /**
  * 노선 조립 요청
@@ -20,7 +24,25 @@ public record RouteAssemblyRequest(
      */
     public enum RouteMode {
         SIMPLE,
-        SMART
+        SMART;
+
+        @JsonCreator
+        public static RouteMode fromValue(String raw) {
+            if (raw == null || raw.isBlank()) {
+                return SMART;
+            }
+            String normalized = raw.trim().toUpperCase(Locale.ROOT);
+            return switch (normalized) {
+                case "SIMPLE", "SINGLE" -> SIMPLE;
+                case "SMART", "BUNDLED" -> SMART;
+                default -> SMART;
+            };
+        }
+
+        @JsonValue
+        public String toValue() {
+            return name();
+        }
     }
 
     /**

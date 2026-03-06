@@ -13,7 +13,11 @@ import com.freight.backend.gpsload.routeassembly.service.QuoteAcceptanceService;
 import com.freight.backend.gpsload.routeassembly.service.QuoteCandidateService;
 import com.freight.backend.gpsload.routeassembly.service.RouteAssemblyService;
 import com.freight.backend.gpsload.routeassembly.service.RouteScoringCalibrationService;
+import com.freight.backend.util.SecurityUtils;
 import org.springframework.http.MediaType;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -48,11 +52,16 @@ public class RouteAssemblyController {
         this.routeScoringCalibrationService = routeScoringCalibrationService;
     }
 
+    /**
+     * 내부/관리자용 경로 추천 API
+     * 기사 앱에서는 /api/driver/optimization/route-recommendations 사용 권장
+     */
     @PostMapping(
             value = "/recommend",
             consumes = MediaType.APPLICATION_JSON_VALUE,
             produces = MediaType.APPLICATION_JSON_VALUE
     )
+    @PreAuthorize("hasAnyRole('DRIVER','ADMIN','OPERATOR')")
     public RouteAssemblyResponse recommend(@RequestBody RouteAssemblyRequest request) {
         List<Quote> openCandidates = quoteCandidateService.findOpenCandidates(request.driverState(), 200);
         if (request.hasSelectedQuotes()) {
@@ -78,6 +87,7 @@ public class RouteAssemblyController {
             consumes = MediaType.APPLICATION_JSON_VALUE,
             produces = MediaType.APPLICATION_JSON_VALUE
     )
+    @PreAuthorize("hasAnyRole('DRIVER','ADMIN','OPERATOR')")
     public RouteAssemblyResponse evaluate(@RequestBody RouteAssemblyRequest request) {
         if (!request.hasCandidateQuotes()) {
             return RouteAssemblyResponse.failure("평가할 견적이 없습니다.");
@@ -113,8 +123,13 @@ public class RouteAssemblyController {
             consumes = MediaType.APPLICATION_JSON_VALUE,
             produces = MediaType.APPLICATION_JSON_VALUE
     )
-    public RouteAcceptResponse accept(@RequestBody RouteAcceptRequest request) {
-        return quoteAcceptanceService.accept(request);
+    @PreAuthorize("hasAnyRole('DRIVER','ADMIN')")
+    public RouteAcceptResponse accept(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestBody RouteAcceptRequest request
+    ) {
+        Long driverId = SecurityUtils.requireDriverId(userDetails);
+        return quoteAcceptanceService.accept(driverId, request);
     }
 
     @PostMapping(
@@ -122,6 +137,7 @@ public class RouteAssemblyController {
             consumes = MediaType.APPLICATION_JSON_VALUE,
             produces = MediaType.APPLICATION_JSON_VALUE
     )
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER','OPERATOR','CS')")
     public RouteCalibrationFeedbackResponse feedback(@RequestBody RouteCalibrationFeedbackRequest request) {
         if (request == null || !request.isValid()) {
             return RouteCalibrationFeedbackResponse.fail(
@@ -140,11 +156,13 @@ public class RouteAssemblyController {
             value = "/calibration/recompute",
             produces = MediaType.APPLICATION_JSON_VALUE
     )
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER','OPERATOR','CS')")
     public RouteCalibrationStatusResponse recomputeCalibration() {
         return routeScoringCalibrationService.recomputeNow(AssemblyParameters.defaults());
     }
 
     @GetMapping(value = "/calibration/status", produces = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER','OPERATOR','CS')")
     public RouteCalibrationStatusResponse calibrationStatus() {
         return routeScoringCalibrationService.status(AssemblyParameters.defaults());
     }
