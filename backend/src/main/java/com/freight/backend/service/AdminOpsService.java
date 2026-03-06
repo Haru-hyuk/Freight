@@ -10,70 +10,136 @@ import com.freight.backend.repository.DriverRepository;
 import com.freight.backend.repository.MatchRepository;
 import com.freight.backend.repository.QuoteRepository;
 import com.freight.backend.repository.ShipperRepository;
+import com.freight.backend.repository.TruckRepository;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
 public class AdminOpsService {
+    private static final int USER_SCAN_LIMIT = 2000;
 
     private final QuoteRepository quoteRepository;
     private final MatchRepository matchRepository;
     private final DriverRepository driverRepository;
     private final ShipperRepository shipperRepository;
+    private final TruckRepository truckRepository;
 
     @Transactional(readOnly = true)
     public Map<String, Object> getDashboard(String range) {
-        List<Quote> quotes = quoteRepository.findAll();
-        List<Match> matches = matchRepository.findAll();
         LocalDate today = LocalDate.now();
-        LocalDate weekStart = today.minusDays(6);
+        LocalDateTime todayStart = today.atStartOfDay();
+        LocalDateTime weekStart = today.minusDays(6).atStartOfDay();
 
-        long todayOrders = quotes.stream()
-                .filter(q -> q.getCreatedAt() != null && q.getCreatedAt().toLocalDate().isEqual(today))
-                .count();
-        long weeklyOrders = quotes.stream()
-                .filter(q -> q.getCreatedAt() != null && !q.getCreatedAt().toLocalDate().isBefore(weekStart))
-                .count();
-        long inTransit = matches.stream().filter(m -> m.getStatus() == Match.Status.IN_TRANSIT).count();
-        long completed = matches.stream().filter(m -> m.getStatus() == Match.Status.COMPLETED).count();
-        long cancelledQuotes = quotes.stream().filter(q -> "CANCELLED".equalsIgnoreCase(q.getStatus())).count();
+        // 성능 최적화: DB 카운트 쿼리 사용
+        long todayOrders = quoteRepository.countByCreatedAtAfter(todayStart);
+        long weeklyOrders = quoteRepository.countByCreatedAtAfter(weekStart);
+        long inTransit = matchRepository.countByStatus(Match.Status.IN_TRANSIT);
+        long completed = matchRepository.countByStatus(Match.Status.COMPLETED);
+        long cancelledQuotes = quoteRepository.countByStatus("CANCELLED");
 
-        int totalFinalPrice = quotes.stream()
-                .map(Quote::getFinalPrice)
-                .filter(v -> v != null && v > 0)
-                .mapToInt(Integer::intValue)
-                .sum();
+        // 성능 최적화: 총 매출은 DB 집계 쿼리 사용
+        long totalFinalPrice = quoteRepository.sumFinalPrice();
         int platformFee = (int) Math.round(totalFinalPrice * 0.1);
-        int unsettled = quotes.stream()
-                .filter(q -> q.getFinalPrice() != null)
-                .filter(q -> matches.stream().noneMatch(m -> m.getQuoteId().equals(q.getQuoteId()) && m.getStatus() == Match.Status.COMPLETED))
-                .mapToInt(Quote::getFinalPrice)
-                .sum();
+
+        // 미정산 금액은 DB 집계 쿼리로 계산한다.
+        long unsettled = quoteRepository.sumUnsettledFinalPrice(Match.Status.COMPLETED);
+
+        // 성능 최적화: DB 카운트 쿼리 사용
+        long totalQuotesOpen = quoteRepository.countByStatus("OPEN");
+        long totalMatches = matchRepository.count();
+        long nonCancelledMatches = matchRepository.countNonCancelled();
+        long driverCompleted = matchRepository.countDriverCompleted();
+        long totalDrivers = driverRepository.count();
+        long totalShippers = shipperRepository.count();
+        long pendingDriverApprovals = driverRepository.countPendingApprovals();
+        long pendingTruckApprovals = truckRepository.countPendingApprovals();
+        long newDriversToday = driverRepository.countByCreatedAtAfter(todayStart);
+        long newShippersToday = shipperRepository.countByCreatedAtAfter(todayStart);
+
+        // 성능 최적화: 최근 5건 매칭만 조회
+        List<Match> recentMatchList = matchRepository.findRecentMatches(PageRequest.of(0, 5));
+
+        // 최근 매칭에 필요한 Quote/Shipper/Driver만 조회
+        List<Long> recentQuoteIds = recentMatchList.stream()
+                .map(Match::getQuoteId)
+                .filter(id -> id != null && id > 0)
+                .distinct()
+                .toList();
+        Map<Long, Quote> quoteMap = quoteRepository.findAllById(recentQuoteIds).stream()
+                .collect(Collectors.toMap(Quote::getQuoteId, q -> q, (left, right) -> left));
+
+        List<Long> recentShipperIds = quoteMap.values().stream()
+                .map(Quote::getShipperId)
+                .filter(id -> id != null && id > 0)
+                .distinct()
+                .toList();
+        List<Long> recentDriverIds = recentMatchList.stream()
+                .map(Match::getDriverId)
+                .filter(id -> id != null && id > 0)
+                .distinct()
+                .toList();
+
+        Map<Long, String> shipperNameMap = shipperRepository.findAllById(recentShipperIds).stream()
+                .collect(Collectors.toMap(Shipper::getShipperId, s -> defaultText(s.getName(), "화주"), (left, right) -> left));
+        Map<Long, String> driverNameMap = driverRepository.findAllById(recentDriverIds).stream()
+                .collect(Collectors.toMap(Driver::getDriverId, d -> defaultText(d.getName(), "기사"), (left, right) -> left));
+
+        List<Map<String, Object>> recentMatches = recentMatchList.stream()
+                .map(m -> toRecentMatchRow(m, quoteMap, shipperNameMap, driverNameMap))
+                .toList();
 
         Map<String, Object> kpi = new LinkedHashMap<>();
         kpi.put("today_orders", (int) todayOrders);
         kpi.put("weekly_orders", (int) weeklyOrders);
-        kpi.put("dispatch_completion_rate", matches.isEmpty() ? 0 : (int) Math.round((completed * 100.0) / matches.size()));
+        kpi.put("dispatch_completion_rate", totalMatches == 0 ? 0 : (int) Math.round((completed * 100.0) / totalMatches));
         kpi.put("avg_dispatch_minutes", 45);
         kpi.put("in_transit_count", (int) inTransit);
         kpi.put("canceled_quotes", (int) cancelledQuotes);
         kpi.put("gmv", totalFinalPrice);
         kpi.put("platform_fee", platformFee);
         kpi.put("unsettled_amount", unsettled);
+        // 관리자 웹 KPI와 1:1로 맞추기 위한 확장 필드
+        kpi.put("total_shippers", totalShippers);
+        kpi.put("total_drivers", totalDrivers);
+        kpi.put("new_shippers_today", newShippersToday);
+        kpi.put("new_drivers_today", newDriversToday);
+        kpi.put("total_quotes_open", totalQuotesOpen);
+        kpi.put("total_matches", totalMatches);
+        kpi.put("match_completion_rate", nonCancelledMatches == 0
+                ? 0
+                : Math.round((completed * 1000.0) / nonCancelledMatches) / 10.0);
+        kpi.put("average_matching_time", 45);
+        kpi.put("total_revenue", totalFinalPrice);
+        kpi.put("total_platform_fee", platformFee);
+        kpi.put("total_settlement_amount", unsettled);
+        kpi.put("deviation_cases_open", 0);
+        kpi.put("driver_completion_rate", nonCancelledMatches == 0
+                ? 0
+                : Math.round((driverCompleted * 1000.0) / nonCancelledMatches) / 10.0);
+        kpi.put("driver_on_time_rate", 0.0);
 
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("kpi", kpi);
         out.put("deviations", List.of());
+        out.put("recent_matches", recentMatches);
+        out.put("pending_approvals", Map.of(
+                "drivers", (int) pendingDriverApprovals,
+                "trucks", (int) pendingTruckApprovals
+        ));
         out.put("range", range);
         return out;
     }
@@ -84,10 +150,18 @@ public class AdminOpsService {
         String qNorm = q == null ? "" : q.trim().toLowerCase(Locale.ROOT);
         int p = page == null || page < 1 ? 1 : page;
         int s = size == null || size < 1 ? 20 : size;
+        PageRequest userScan = PageRequest.of(0, USER_SCAN_LIMIT, Sort.by(Sort.Direction.DESC, "createdAt"));
 
         List<Map<String, Object>> items = new ArrayList<>();
         if (!"DRIVER".equals(roleNorm)) {
-            for (Shipper shipper : shipperRepository.findAll()) {
+            List<Shipper> shippers = shipperRepository.findAll(userScan).getContent();
+            List<Long> shipperIds = shippers.stream()
+                    .map(Shipper::getShipperId)
+                    .filter(id -> id != null && id > 0)
+                    .toList();
+            Map<Long, Long> quoteCountByShipper = toCountMap(quoteRepository.countByShipperIds(shipperIds));
+            Map<Long, Long> matchCountByShipper = toCountMap(matchRepository.countByShipperIdsNotCancelled(shipperIds));
+            for (Shipper shipper : shippers) {
                 if (!matchesQuery(qNorm, shipper.getName(), shipper.getEmail(), shipper.getPhone())) continue;
                 Map<String, Object> row = new LinkedHashMap<>();
                 row.put("id", "S-" + shipper.getShipperId());
@@ -97,13 +171,19 @@ public class AdminOpsService {
                 row.put("phone", shipper.getPhone());
                 row.put("status", normalizeUserStatus(shipper.getStatus()));
                 row.put("created_at", shipper.getCreatedAt() == null ? null : shipper.getCreatedAt().toString());
-                row.put("quotes_count", quoteRepository.findByShipperId(shipper.getShipperId()).size());
-                row.put("matches_count", matchRepository.findByShipperIdAndStatusNotCancelled(shipper.getShipperId()).size());
+                row.put("quotes_count", quoteCountByShipper.getOrDefault(shipper.getShipperId(), 0L).intValue());
+                row.put("matches_count", matchCountByShipper.getOrDefault(shipper.getShipperId(), 0L).intValue());
                 items.add(row);
             }
         }
         if (!"SHIPPER".equals(roleNorm)) {
-            for (Driver driver : driverRepository.findAll()) {
+            List<Driver> drivers = driverRepository.findAll(userScan).getContent();
+            List<Long> driverIds = drivers.stream()
+                    .map(Driver::getDriverId)
+                    .filter(id -> id != null && id > 0)
+                    .toList();
+            Map<Long, Long> matchCountByDriver = toCountMap(matchRepository.countByDriverIds(driverIds));
+            for (Driver driver : drivers) {
                 if (!matchesQuery(qNorm, driver.getName(), driver.getEmail(), driver.getPhone())) continue;
                 Map<String, Object> row = new LinkedHashMap<>();
                 row.put("id", "D-" + driver.getDriverId());
@@ -114,7 +194,7 @@ public class AdminOpsService {
                 row.put("status", normalizeUserStatus(driver.getStatus()));
                 row.put("created_at", driver.getCreatedAt() == null ? null : driver.getCreatedAt().toString());
                 row.put("quotes_count", 0);
-                row.put("matches_count", matchRepository.findByDriverId(driver.getDriverId()).size());
+                row.put("matches_count", matchCountByDriver.getOrDefault(driver.getDriverId(), 0L).intValue());
                 items.add(row);
             }
         }
@@ -257,12 +337,75 @@ public class AdminOpsService {
             throw new CustomException(ErrorCode.INVALID_REQUEST);
         }
         String[] parts = userId.split("-", 2);
+        if (parts.length < 2 || parts[1].isBlank()) {
+            throw new CustomException(ErrorCode.INVALID_REQUEST);
+        }
         String prefix = parts[0].toUpperCase(Locale.ROOT);
-        Long id = Long.parseLong(parts[1]);
+        Long id;
+        try {
+            id = Long.parseLong(parts[1]);
+        } catch (NumberFormatException e) {
+            throw new CustomException(ErrorCode.INVALID_REQUEST);
+        }
         if (!"S".equals(prefix) && !"D".equals(prefix)) {
             throw new CustomException(ErrorCode.INVALID_REQUEST);
         }
         return new UserRef(prefix, id);
+    }
+
+    private Map<String, Object> toRecentMatchRow(
+            Match match,
+            Map<Long, Quote> quoteMap,
+            Map<Long, String> shipperNameMap,
+            Map<Long, String> driverNameMap
+    ) {
+        Quote quote = quoteMap.get(match.getQuoteId());
+        String shipperName = quote == null ? "화주" : shipperNameMap.getOrDefault(quote.getShipperId(), "화주");
+        String driverName = match.getDriverId() == null ? "미배정" : driverNameMap.getOrDefault(match.getDriverId(), "기사");
+
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("match_id", String.valueOf(match.getMatchId()));
+        row.put("quote_id", quote == null ? null : String.valueOf(quote.getQuoteId()));
+        row.put("shipper_name", shipperName);
+        row.put("driver_name", driverName);
+        row.put("truck_type", quote == null ? "-" : defaultText(quote.getVehicleType(), "-"));
+        row.put("origin_address", quote == null ? "-" : defaultText(quote.getOriginAddress(), "-"));
+        row.put("destination_address", quote == null ? "-" : defaultText(quote.getDestinationAddress(), "-"));
+        row.put("departure_time", toText(match.getAcceptedAt()));
+        row.put("expected_arrival", null);
+        row.put("agreed_price", quote == null || quote.getFinalPrice() == null ? 0 : quote.getFinalPrice());
+        row.put("status", match.getStatus() == null ? "READY" : match.getStatus().name());
+        row.put("payment_status", "PENDING");
+        row.put("settlement_status", "PENDING");
+        row.put("distance_km", quote == null || quote.getDistanceKm() == null ? 0 : quote.getDistanceKm());
+        row.put("estimated_minutes", 0);
+        row.put("actual_minutes", null);
+        return row;
+    }
+
+    private static String toText(LocalDateTime value) {
+        return value == null ? null : value.toString();
+    }
+
+    private static String defaultText(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value;
+    }
+
+    private static Map<Long, Long> toCountMap(List<Object[]> rows) {
+        if (rows == null || rows.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, Long> out = new LinkedHashMap<>();
+        for (Object[] row : rows) {
+            if (row == null || row.length < 2) {
+                continue;
+            }
+            if (!(row[0] instanceof Number idValue) || !(row[1] instanceof Number countValue)) {
+                continue;
+            }
+            out.put(idValue.longValue(), countValue.longValue());
+        }
+        return out;
     }
 
     private record UserRef(String prefix, Long id) {}

@@ -4,12 +4,13 @@ import com.freight.backend.dto.admin.AdminSanctionCreateRequest;
 import com.freight.backend.exception.CustomException;
 import com.freight.backend.exception.ErrorCode;
 import com.freight.backend.service.AdminSanctionService;
+import com.freight.backend.util.SecurityUtils;
 import java.util.List;
 import java.util.Map;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -37,7 +38,7 @@ public class AdminSanctionController {
     @PostMapping
     public ResponseEntity<Map<String, Object>> create(
             @AuthenticationPrincipal UserDetails userDetails,
-            @RequestBody AdminSanctionCreateRequest request
+            @Valid @RequestBody AdminSanctionCreateRequest request
     ) {
         requireAdmin(userDetails);
         Long adminId = Long.parseLong(userDetails.getUsername());
@@ -54,7 +55,7 @@ public class AdminSanctionController {
     }
 
     private static void requireAdmin(UserDetails userDetails) {
-        if (userDetails == null || !userDetails.getAuthorities().contains(new SimpleGrantedAuthority("ROLE_ADMIN"))) {
+        if (userDetails == null || !SecurityUtils.isAdmin(userDetails)) {
             throw new CustomException(ErrorCode.AUTH_FORBIDDEN);
         }
     }
