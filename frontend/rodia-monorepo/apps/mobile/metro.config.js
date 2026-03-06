@@ -1,91 +1,82 @@
-// apps/mobile/metro.config.js
 const path = require("path");
 const { getDefaultConfig } = require("expo/metro-config");
 
-// ✅ blockList 생성용(Expo/Metro 버전에 따라 경로가 다를 수 있어 방어적으로 처리)
-function getBlockList() {
-  try {
-    // Metro(구버전/일부 환경)
-    // eslint-disable-next-line global-require
-    const exclusionList = require("metro-config/src/defaults/exclusionList");
-    return exclusionList;
-  } catch {
-    try {
-      // Metro(신버전)
-      // eslint-disable-next-line global-require
-      const { exclusionList } = require("metro-config");
-      return exclusionList;
-    } catch {
-      return null;
-    }
-  }
-}
-
-const projectRoot = __dirname;
-// apps/mobile -> (../..) = monorepo root
-const workspaceRoot = path.resolve(projectRoot, "../..");
+// ─── 경로 정의 ─────────────────────────────────────────────────────────────
+const projectRoot = __dirname; // apps/mobile
+const workspaceRoot = path.resolve(projectRoot, "../.."); // 모노레포 루트
 
 const config = getDefaultConfig(projectRoot);
 
-// Monorepo packages 변경 감지(일단 유지: 안전한 1차 개선)
+// ─── 1. 감시 범위 ─────────────────────────────────────────────────────────────
+// 모노레포 루트 전체를 Hot-Reload 감시 대상에 포함.
 config.watchFolders = [workspaceRoot];
 
-// ✅ 1차 개선 핵심: 쓸데없는 폴더를 Metro 감시/해석에서 제외
-const exclusionList = getBlockList();
-if (exclusionList) {
-  const sep = `\\${path.sep}`; // windows/mac 대응
-  config.resolver.blockList = exclusionList([
-    // git/캐시/산출물
-    new RegExp(`${sep}\\.git${sep}.*`),
-    new RegExp(`${sep}\\.expo${sep}.*`),
-    new RegExp(`${sep}dist${sep}.*`),
-    new RegExp(`${sep}build${sep}.*`),
-    new RegExp(`${sep}coverage${sep}.*`),
+// ─── 2. blockList ─────────────────────────────────────────────────────────────
+// [주의] "dist", "build", "coverage" 같은 일반 디렉토리명을 패턴에 추가하면
+// node_modules 안의 동명 디렉토리도 함께 차단된다.
+// 예: /[/\\]build[/\\]/ → expo-router/build/qualified-entry.js 차단 → 번들링 실패.
+//
+// 도트파일 디렉토리(.git, .expo)만 안전하게 차단한다.
+// 이 패턴들은 npm 패키지 내부에 절대 존재하지 않는 이름이므로 오탐(false positive) 위험이 없다.
+const additionalBlockPatterns = [
+  /[/\\]\.git[/\\]/,
+  /[/\\]\.expo[/\\]/,
+];
 
-    // node_modules 내부를 watchFolders로 잡았을 때 불필요한 스캔 방지(안전)
-    new RegExp(`${sep}node_modules${sep}.*`),
-  ]);
-}
+const existingBlockList = config.resolver.blockList;
+config.resolver.blockList = existingBlockList
+  ? [
+      ...(Array.isArray(existingBlockList) ? existingBlockList : [existingBlockList]),
+      ...additionalBlockPatterns,
+    ]
+  : additionalBlockPatterns;
 
-// 모듈 해석 경로(앱 node_modules + 루트 node_modules)
+// ─── 3. 모듈 해석 경로 ───────────────────────────────────────────────────────────
+// 모노레포 환경에서 패키지 중복 방지를 위한 탐색 순서 강제.
 config.resolver.nodeModulesPaths = [
   path.resolve(projectRoot, "node_modules"),
   path.resolve(workspaceRoot, "node_modules"),
 ];
 
-// 상위 디렉토리로 node_modules 탐색 방지(모노레포에서 중복/충돌 예방)
-config.resolver.disableHierarchicalLookup = true;
-
-// pnpm/yarn workspaces 심링크 대응(환경에 따라 필요)
+// ─── 4. 심링크 지원 ──────────────────────────────────────────────────────────
+// pnpm/yarn workspace 심링크를 올바르게 추적한다.
 config.resolver.unstable_enableSymlinks = true;
 
-// three.js는 .mjs / .cjs 확장자를 사용 — Metro가 인식할 수 있도록 추가
+// unstable_enablePackageExports: 명시적으로 설정하지 않는다 (Expo 기본값 위임).
+//
+// [오류 근거] false로 설정하면 Metro가 package.json "exports" 맵을 무시하고
+// 파일을 직접 탐색한다. expo-router 6.x는 "expo-router/build/qualified-entry"
+// 같은 서브경로를 exports 맵을 통해 실제 파일로 매핑하므로, false 시
+// "Unable to resolve expo-router/build/qualified-entry" 번들링 오류가 발생한다.
+//
+// @expo/metro-config의 getDefaultConfig가 Expo SDK 버전에 맞는 기본값을
+// 주입하므로 이 옵션은 덮어쓰지 않아야 한다.
+
+// ─── 5. 소스 확장자 ─────────────────────────────────────────────────────────────
+// mjs/cjs를 앞에 배치해 ESM-first 패키지(three 등)의 진입점이 올바르게 해석되도록 한다.
 const defaultSourceExts = config.resolver.sourceExts ?? ["js", "jsx", "ts", "tsx", "json"];
 config.resolver.sourceExts = ["mjs", "cjs", ...defaultSourceExts];
 
-// package.json "exports" 필드 지원 (three.js ESM 엔트리 해석에 필요)
-config.resolver.unstable_enablePackageExports = true;
+// ─── 6. Three.js 단일 인스턴스 보장 ──────────────────────────────────────────
+// ESM/CJS 혼용으로 인한 Three.js 런타임 오류 방지를 위해 CJS 빌드로 강제 리다이렉트.
+let THREE_CJS_PATH = null;
+try {
+  THREE_CJS_PATH = require.resolve("three/build/three.cjs", {
+    paths: [projectRoot, workspaceRoot],
+  });
+} catch {
+  // three 미설치 환경 — 폴백
+}
 
-// three.js 단일 인스턴스 보장
-// unstable_enablePackageExports 활성 시 일부 임포트가 three.module.js(ESM),
-// 다른 임포트가 three.cjs(CJS)로 분리 해석돼 R3F "multiple Three.js instances" 경고가 발생.
-// resolveRequest로 모든 'three' 임포트를 CJS 빌드 하나로 고정한다.
-const THREE_CJS = path.resolve(workspaceRoot, "node_modules/three/build/three.cjs");
-const _defaultResolveRequest = config.resolver.resolveRequest;
+const defaultResolveRequest = config.resolver.resolveRequest ?? null;
 config.resolver.resolveRequest = (context, moduleName, platform) => {
-  if (moduleName === "three") {
-    return { filePath: THREE_CJS, type: "sourceFile" };
+  if (moduleName === "three" && THREE_CJS_PATH) {
+    return { filePath: THREE_CJS_PATH, type: "sourceFile" };
   }
-  if (_defaultResolveRequest) {
-    return _defaultResolveRequest(context, moduleName, platform);
+  if (defaultResolveRequest) {
+    return defaultResolveRequest(context, moduleName, platform);
   }
   return context.resolveRequest(context, moduleName, platform);
 };
 
 module.exports = config;
-
-/**
- * 1차 개선 요약(안전):
- * - watchFolders는 유지하고, .git/.expo/dist/build/coverage/node_modules를 blockList로 제외해 감시 비용을 줄임
- * - 동작이 깨질 가능성을 최소화하면서 체감 속도를 먼저 개선하는 목적
- */
