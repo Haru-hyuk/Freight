@@ -79,6 +79,7 @@ import { PageScaffold } from "@/widgets/layout/PageScaffold";
 
 type DriverOrdersBoardProps = {
   assignedOnly?: boolean;
+  initialRunStatusFilter?: string | null;
 };
 
 type ToastState = {
@@ -120,6 +121,20 @@ const RUN_STATUS_FILTER_LABELS: Record<RunStatusFilterKey, string> = {
   TRANSIT: "운송중",
   COMPLETED: "완료",
 };
+
+function normalizeRunStatusFilterKey(value: unknown): RunStatusFilterKey {
+  const token = String(value ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "_")
+    .replace(/-/g, "_");
+
+  if (token === "IN_TRANSIT") return "TRANSIT";
+  if ((RUN_STATUS_FILTER_ORDER as readonly string[]).includes(token)) {
+    return token as RunStatusFilterKey;
+  }
+  return "ALL";
+}
 
 function toPositiveInt(value: unknown): number {
   const parsed = Number(value);
@@ -1048,6 +1063,7 @@ function DriverOrderCardView({
 
 export function DriverOrdersBoard({
   assignedOnly,
+  initialRunStatusFilter,
 }: DriverOrdersBoardProps) {
   const router = useRouter();
   const theme = useAppTheme();
@@ -1072,7 +1088,11 @@ export function DriverOrdersBoard({
   const [isRecommending, setIsRecommending] = useState(false);
   const [recommendAnalysis, setRecommendAnalysis] = useState<DriverRouteRecommendationAnalysis | null>(null);
   const [selectedRecommendKey, setSelectedRecommendKey] = useState<string | null>(null);
-  const [runStatusFilter, setRunStatusFilter] = useState<RunStatusFilterKey>("ALL");
+  const normalizedInitialRunStatusFilter = useMemo(
+    () => normalizeRunStatusFilterKey(initialRunStatusFilter),
+    [initialRunStatusFilter]
+  );
+  const [runStatusFilter, setRunStatusFilter] = useState<RunStatusFilterKey>(normalizedInitialRunStatusFilter);
   const [availableTrucks, setAvailableTrucks] = useState<DriverTruck[]>([]);
   const [selectedTruckId, setSelectedTruckId] = useState<number | null>(null);
   const [isTruckMenuOpen, setIsTruckMenuOpen] = useState(false);
@@ -1171,8 +1191,8 @@ export function DriverOrdersBoard({
   useEffect(() => {
     if (!assignedOnly) return;
     setActiveFilter("ALL");
-    setRunStatusFilter("ALL");
-  }, [assignedOnly]);
+    setRunStatusFilter(normalizedInitialRunStatusFilter);
+  }, [assignedOnly, normalizedInitialRunStatusFilter]);
 
   useEffect(() => {
     if (resolvedActiveTab !== "market") {
