@@ -5,6 +5,11 @@ import { Alert, Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import type { QuoteDetailResponse } from "@/entities/quote/model/quote.types";
+import { addDriverAcceptedRunGroup } from "@/features/driver-orders/model/acceptedRunGroups";
+import {
+  clearDriverMarketRecommendationSelection,
+  getDriverMarketRecommendationSelection,
+} from "@/features/driver-orders/model/marketRecommendationSelection";
 import {
   buildEmptyRouteSummary,
   fetchRouteSummary,
@@ -20,17 +25,12 @@ import {
   postCounterOffer,
   type DriverOrderCard,
 } from "@/features/matching/api";
-import CounterOfferModal, { type CounterOfferSubmitPayload } from "@/features/matching/ui/CounterOfferModal";
-import {
-  getDriverMarketRecommendationSelection,
-  clearDriverMarketRecommendationSelection,
-} from "@/features/driver-orders/model/marketRecommendationSelection";
-import { DRIVER_ROUTE_PATH } from "@/features/matching/model/driverRunUiApiGrounding";
 import {
   DRIVER_RUN_SYNC_EVENT,
   publishDriverRunSyncEvent,
 } from "@/features/matching/model/driverRunSyncEvents";
-import { addDriverAcceptedRunGroup } from "@/features/driver-orders/model/acceptedRunGroups";
+import { DRIVER_ROUTE_PATH } from "@/features/matching/model/driverRunUiApiGrounding";
+import CounterOfferModal, { type CounterOfferSubmitPayload } from "@/features/matching/ui/CounterOfferModal";
 import { previewLoadPlan as previewLoadPlanGenerated } from "@/shared/api/generated/driver-optimization-controller/driver-optimization-controller";
 import type { LoadPlanResponse, Placement, TruckSpecReferenceResponse } from "@/shared/api/generated/schemas";
 import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
