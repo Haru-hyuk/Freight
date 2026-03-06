@@ -9,7 +9,7 @@ import com.freight.backend.gpsload.route.model.Place;
 public record CargoVisit(
         int sequence,              // 방문 순서 (1부터 시작)
         Long quoteId,              // 관련 견적 ID
-        VisitType type,            // 방문 유형 (PICKUP/DELIVERY)
+        VisitType type,            // 방문 유형 (PICKUP/WAYPOINT/DELIVERY)
         Place location,            // 방문 위치
         String address,            // 주소
         Long estimatedArrivalTime, // 예상 도착 시간 (밀리초, 출발 기준)
@@ -21,6 +21,7 @@ public record CargoVisit(
      */
     public enum VisitType {
         PICKUP,   // 픽업 (상차)
+        WAYPOINT, // 경유
         DELIVERY  // 배송 (하차)
     }
 
