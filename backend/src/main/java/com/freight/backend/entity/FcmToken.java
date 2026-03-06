@@ -7,6 +7,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
@@ -17,7 +18,13 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 @Entity
-@Table(name = "push_devices")
+@Table(
+        name = "push_devices",
+        indexes = {
+                @Index(name = "idx_push_devices_user_type_user_id_active", columnList = "user_type, user_id, is_active"),
+                @Index(name = "idx_push_devices_last_seen_at", columnList = "last_seen_at")
+        }
+)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class FcmToken {
