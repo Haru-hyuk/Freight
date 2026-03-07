@@ -658,6 +658,7 @@ export default function DriverOrderDetailPage({ params }: DriverOrderDetailPageP
     routeSource === DRIVER_ORDER_SCOPE_LEGACY.OPEN ||
     uiState === DRIVER_UI_STATE.READY_TO_ACCEPT ||
     uiState === DRIVER_UI_STATE.NEGOTIATING;
+  const settlementMatchId = toPositiveInt(parsedMatch?.matchId ?? matchId);
   const pageTitle = "오더 상세";
   const isRunNegotiationProbeLoading =
     routeSource === "run" && matchId > 0 && runNegotiationProbeMatchId !== matchId;
@@ -935,16 +936,16 @@ export default function DriverOrderDetailPage({ params }: DriverOrderDetailPageP
   }, [matchId, runAndRefetch, unloadingPhotos]);
 
   const handleOpenSettlement = useCallback(() => {
-    if (matchId <= 0 || isNavigatingSettlement) return;
+    if (settlementMatchId <= 0 || isNavigatingSettlement) return;
     setIsNavigatingSettlement(true);
     router.push({
       pathname: "/(driver)/settlement/[matchId]",
-      params: { matchId: String(matchId) },
+      params: { matchId: String(settlementMatchId) },
     });
     setTimeout(() => {
       setIsNavigatingSettlement(false);
     }, 600);
-  }, [isNavigatingSettlement, matchId, router]);
+  }, [isNavigatingSettlement, router, settlementMatchId]);
 
   return (
     <DriverOrderDetailView

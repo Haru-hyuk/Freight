@@ -350,15 +350,6 @@ export function DriverSettlementReceiptPage() {
                     {toSettlementTypeLabel(settlement.settlementType)}
                   </AppText>
                 </View>
-
-                <View style={styles.row}>
-                  <AppText variant="caption" style={styles.rowLabel}>
-                    화주 결제 수단
-                  </AppText>
-                  <AppText variant="detail" weight="700" style={styles.rowValue}>
-                    {toPaymentMethodLabel(settlement.shipperPaymentMethod)}
-                  </AppText>
-                </View>
               </AppCard>
 
               <View style={styles.section}>
@@ -376,7 +367,7 @@ export function DriverSettlementReceiptPage() {
                   </View>
                   <View style={styles.row}>
                     <AppText variant="caption" style={styles.rowLabel}>
-                      정산 완료 시각
+                      결제 완료 시각
                     </AppText>
                     <AppText variant="detail" weight="700" style={styles.rowValue}>
                       {toDateText(settlement.completedAt)}
@@ -384,7 +375,7 @@ export function DriverSettlementReceiptPage() {
                   </View>
                   <View style={styles.row}>
                     <AppText variant="caption" style={styles.rowLabel}>
-                      결제 기한
+                      정산 예정일
                     </AppText>
                     <AppText variant="detail" weight="700" style={styles.rowValue}>
                       {toDateText(settlement.dueDate)}

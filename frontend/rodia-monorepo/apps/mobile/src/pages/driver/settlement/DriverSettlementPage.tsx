@@ -5,7 +5,9 @@ import { Alert, StyleSheet, View } from "react-native";
 import { useRouter } from "expo-router";
 
 import {
+  getDriverSettlementSummaryMe,
   listDriverSettlementsMe,
+  type DriverSettlementSummary,
   type DriverSettlementItem,
 } from "@/features/driver-profile/api/driver-settlement-api";
 import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
@@ -160,6 +162,7 @@ export function DriverSettlementPage() {
   const styles = useStyles();
 
   const [settlements, setSettlements] = React.useState<DriverSettlementItem[]>([]);
+  const [summary, setSummary] = React.useState<DriverSettlementSummary | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
@@ -177,9 +180,14 @@ export function DriverSettlementPage() {
     setErrorMessage(null);
 
     try {
-      const nextSettlements = await listDriverSettlementsMe();
+      const [nextSettlements, nextSummary] = await Promise.all([
+        listDriverSettlementsMe(),
+        getDriverSettlementSummaryMe(),
+      ]);
       setSettlements(nextSettlements);
+      setSummary(nextSummary);
     } catch (error) {
+      setSummary(null);
       setErrorMessage(readApiErrorMessage(error, "정산 내역을 불러오지 못했습니다."));
     } finally {
       if (refresh) {
@@ -214,19 +222,27 @@ export function DriverSettlementPage() {
   );
 
   const totalPayout = React.useMemo(
-    () => settlements.reduce((sum, settlement) => sum + (typeof settlement.driverPayout === "number" ? settlement.driverPayout : 0), 0),
-    [settlements]
+    () =>
+      summary
+        ? summary.totalPayoutAmount
+        : settlements.reduce(
+            (sum, settlement) => sum + (typeof settlement.driverPayout === "number" ? settlement.driverPayout : 0),
+            0
+          ),
+    [settlements, summary]
   );
 
   const pendingCount = React.useMemo(
     () =>
-      settlements.filter(
-        (settlement) =>
-          String(settlement.settlementStatus ?? "")
-            .trim()
-            .toUpperCase() === "PENDING"
-      ).length,
-    [settlements]
+      summary
+        ? summary.pendingSettlementCount
+        : settlements.filter(
+            (settlement) =>
+              String(settlement.settlementStatus ?? "")
+                .trim()
+                .toUpperCase() === "PENDING"
+          ).length,
+    [settlements, summary]
   );
 
   const isBusy = isLoading || isRefreshing || navigatingMatchId !== null;

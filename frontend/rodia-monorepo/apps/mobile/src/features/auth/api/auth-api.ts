@@ -623,20 +623,42 @@ export type MeProfile = {
   bankAccount?: string;
 };
 
+function asObj(value: unknown): AnyObj {
+  return value && typeof value === "object" ? (value as AnyObj) : {};
+}
+
+function resolveMeSource(raw: unknown): AnyObj {
+  const root = asObj(raw);
+  const nestedData = asObj(root?.data);
+  const nestedResult = asObj(root?.result);
+
+  if (pickString(root.id, root.role, root.email, root.name, root.phone, root.bankName, root.bankAccount)) {
+    return root;
+  }
+  if (pickString(nestedData.id, nestedData.role, nestedData.email, nestedData.name, nestedData.phone, nestedData.bankName, nestedData.bankAccount)) {
+    return nestedData;
+  }
+  if (pickString(nestedResult.id, nestedResult.role, nestedResult.email, nestedResult.name, nestedResult.phone, nestedResult.bankName, nestedResult.bankAccount)) {
+    return nestedResult;
+  }
+  return root;
+}
+
 /**
  * MeResponse(서버 raw) → MeProfile(도메인)
- * - bankName / bankAccount: 서버 MeResponse 스펙에 없는 필드 → undefined 고정
- * - 나머지 필드: null-safety ?? undefined 처리
+ * - 스펙 외 확장 필드(bankName/bankAccount)가 내려오면 보존하고, 없으면 undefined 처리
+ * - data/result envelope 응답도 허용
  */
-function toMeProfile(raw: MeResponse): MeProfile {
+function toMeProfile(raw: MeResponse | unknown): MeProfile {
+  const source = resolveMeSource(raw);
   return {
-    id:          raw.id    ?? undefined,
-    role:        raw.role  ?? undefined,
-    email:       raw.email ?? undefined,
-    name:        raw.name  ?? undefined,
-    phone:       raw.phone ?? undefined,
-    bankName:    undefined,   // MeResponse 스펙 미포함 필드
-    bankAccount: undefined,   // MeResponse 스펙 미포함 필드
+    id: pickString(source.id, source.userId),
+    role: pickString(source.role, source.userRole),
+    email: pickString(source.email),
+    name: pickString(source.name),
+    phone: pickString(source.phone),
+    bankName: pickString(source.bankName, source.bank_name, source.settlementBankName),
+    bankAccount: pickString(source.bankAccount, source.bank_account, source.settlementBankAccount),
   };
 }
 
