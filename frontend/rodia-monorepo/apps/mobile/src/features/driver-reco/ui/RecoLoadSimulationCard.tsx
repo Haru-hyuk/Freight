@@ -4,7 +4,7 @@ import { ActivityIndicator, InteractionManager, Pressable, StyleSheet, useWindow
 import RecoLoadScene3D from "@/features/driver-reco/ui/RecoLoadScene3D";
 import type { Placement } from "@/shared/api/generated/schemas";
 import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
-import { createThemedStyles } from "@/shared/theme/useAppTheme";
+import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppCard } from "@/shared/ui/kit/AppCard";
 import { AppText } from "@/shared/ui/kit/AppText";
 
@@ -25,6 +25,15 @@ export type RecoSelectedOrderDetail = {
   items: SelectedOrderItem[];
 };
 
+export type RecoRecommendedOrderSummary = {
+  stopOrder: number;
+  quoteId: number;
+  accentColor: string;
+  priceText: string;
+  originAddress: string;
+  destinationAddress: string;
+};
+
 type RecoLoadSimulationCardProps = {
   dims: {
     widthCm: number;
@@ -39,6 +48,7 @@ type RecoLoadSimulationCardProps = {
   stopColorMap: Map<number, string>;
   selectedStopOrder: number | null;
   onSelectStopOrder: (nextStopOrder: number | null) => void;
+  recommendedOrders: RecoRecommendedOrderSummary[];
   selectedOrderDetail: RecoSelectedOrderDetail | null;
 };
 
@@ -84,30 +94,11 @@ const useStyles = createThemedStyles((theme) => {
       gap: spacing,
       paddingHorizontal: spacing * 2,
     },
-    selectedPanel: {
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: tint(cBorder, 0.8, cBorder),
-      backgroundColor: theme.colors.bgSurface,
-      paddingHorizontal: spacing * 3,
-      paddingVertical: spacing * 2.5,
+    selectedInlineWrap: {
       gap: spacing * 1.5,
-    },
-    selectedPanelHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing * 1.5,
-    },
-    selectedPanelBadge: {
-      minWidth: 24,
-      height: 24,
-      borderRadius: 12,
-      alignItems: "center",
-      justifyContent: "center",
-      paddingHorizontal: spacing,
-    },
-    selectedRouteWrap: {
-      gap: spacing,
+      paddingTop: spacing * 1.5,
+      borderTopWidth: 1,
+      borderTopColor: tint(cBorder, 0.7, cBorder),
     },
     selectedMetaRow: {
       flexDirection: "row",
@@ -136,6 +127,41 @@ const useStyles = createThemedStyles((theme) => {
       paddingVertical: spacing,
       gap: spacing * 0.5,
     },
+    recommendedWrap: {
+      gap: spacing,
+    },
+    recommendedRow: {
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: tint(cBorder, 0.8, cBorder),
+      backgroundColor: theme.colors.bgSurface,
+      paddingHorizontal: spacing * 2,
+      paddingVertical: spacing * 1.5,
+      gap: spacing,
+    },
+    recommendedRowTop: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: spacing * 1.5,
+    },
+    recommendedSeqWrap: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing * 1.5,
+      flex: 1,
+    },
+    recommendedSeqBadge: {
+      minWidth: 22,
+      height: 22,
+      borderRadius: 11,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: spacing,
+    },
+    recommendedRouteText: {
+      color: theme.colors.textSub,
+    },
   });
 });
 
@@ -149,8 +175,10 @@ export function RecoLoadSimulationCard({
   stopColorMap,
   selectedStopOrder,
   onSelectStopOrder,
+  recommendedOrders,
   selectedOrderDetail,
 }: RecoLoadSimulationCardProps) {
+  const theme = useAppTheme();
   const styles = useStyles();
   const { height: screenHeight } = useWindowDimensions();
   const maxSceneHeight = Math.floor(screenHeight * 0.34);
@@ -206,72 +234,103 @@ export function RecoLoadSimulationCard({
         )}
       </View>
 
-      {selectedOrderDetail ? (
-        <View style={styles.selectedPanel}>
-          <View style={styles.selectedPanelHeader}>
-            <View style={[styles.selectedPanelBadge, { backgroundColor: selectedOrderDetail.accentColor }]}>
-              <AppText variant="caption" weight="900" color="textOnBrand">
-                {selectedOrderDetail.stopOrder}
-              </AppText>
-            </View>
-            <AppText variant="detail" weight="900" color="textMain">
-              선택된 추천 오더
-            </AppText>
-          </View>
-
-          <View style={styles.selectedRouteWrap}>
-            <AppText variant="caption" color="textSub">
-              출발: {selectedOrderDetail.originAddress}
-            </AppText>
-            <AppText variant="caption" color="textSub">
-              도착: {selectedOrderDetail.destinationAddress}
-            </AppText>
-          </View>
-
-          <View style={styles.selectedMetaRow}>
-            <View style={styles.selectedMetaCell}>
-              <AppText variant="caption" color="textMuted">
-                거리
-              </AppText>
-              <AppText variant="detail" weight="900" color="brandPrimary">
-                {selectedOrderDetail.distanceText}
-              </AppText>
-            </View>
-            <View style={styles.selectedMetaCell}>
-              <AppText variant="caption" color="textMuted">
-                중량
-              </AppText>
-              <AppText variant="detail" weight="900" color="textMain">
-                {selectedOrderDetail.weightText}
-              </AppText>
-            </View>
-            <View style={styles.selectedMetaCell}>
-              <AppText variant="caption" color="textMuted">
-                CBM
-              </AppText>
-              <AppText variant="detail" weight="900" color="textMain">
-                {selectedOrderDetail.cbmText}
-              </AppText>
-            </View>
-          </View>
-
-          <View style={styles.selectedItemsWrap}>
-            <AppText variant="caption" weight="800" color="textMuted">
-              화물 품목
-            </AppText>
-            {selectedOrderDetail.items.map((item) => (
-              <View key={item.key} style={styles.selectedItemRow}>
-                <AppText variant="caption" weight="800" color="textMain">
-                  {item.title}
-                </AppText>
-                {item.subtitle ? (
-                  <AppText variant="caption" color="textSub">
-                    {item.subtitle}
+      {recommendedOrders.length > 0 ? (
+        <View style={styles.recommendedWrap}>
+          <AppText variant="caption" weight="800" color="textMuted">
+            추천 오더
+          </AppText>
+          {recommendedOrders.map((order) => {
+            const isSelected = selectedStopOrder === order.stopOrder;
+            const selectedDetail =
+              selectedOrderDetail && selectedOrderDetail.stopOrder === order.stopOrder
+                ? selectedOrderDetail
+                : null;
+            return (
+              <Pressable
+                key={`reco-order-${order.quoteId}-${order.stopOrder}`}
+                onPress={() => onSelectStopOrder(isSelected ? null : order.stopOrder)}
+                hitSlop={{ top: 6, right: 6, bottom: 6, left: 6 }}
+                style={[
+                  styles.recommendedRow,
+                  isSelected
+                    ? {
+                        borderColor: order.accentColor,
+                        borderWidth: 2,
+                        backgroundColor: tint(order.accentColor, 0.08, theme.colors.bgSurface),
+                      }
+                    : null,
+                ]}
+              >
+                <View style={styles.recommendedRowTop}>
+                  <View style={styles.recommendedSeqWrap}>
+                    <View style={[styles.recommendedSeqBadge, { backgroundColor: order.accentColor }]}>
+                      <AppText variant="caption" weight="900" color="textOnBrand">
+                        {order.stopOrder}
+                      </AppText>
+                    </View>
+                    <AppText variant="detail" weight="900" color="textMain">
+                      추천 오더
+                    </AppText>
+                  </View>
+                  <AppText variant="detail" weight="900" color="brandPrimary">
+                    {order.priceText}
                   </AppText>
+                </View>
+                <AppText variant="caption" style={styles.recommendedRouteText}>
+                  {order.originAddress} → {order.destinationAddress}
+                </AppText>
+
+                {isSelected && selectedDetail ? (
+                  <View style={styles.selectedInlineWrap}>
+                    <View style={styles.selectedMetaRow}>
+                      <View style={styles.selectedMetaCell}>
+                        <AppText variant="caption" color="textMuted">
+                          거리
+                        </AppText>
+                        <AppText variant="detail" weight="900" color="brandPrimary">
+                          {selectedDetail.distanceText}
+                        </AppText>
+                      </View>
+                      <View style={styles.selectedMetaCell}>
+                        <AppText variant="caption" color="textMuted">
+                          중량
+                        </AppText>
+                        <AppText variant="detail" weight="900" color="textMain">
+                          {selectedDetail.weightText}
+                        </AppText>
+                      </View>
+                      <View style={styles.selectedMetaCell}>
+                        <AppText variant="caption" color="textMuted">
+                          CBM
+                        </AppText>
+                        <AppText variant="detail" weight="900" color="textMain">
+                          {selectedDetail.cbmText}
+                        </AppText>
+                      </View>
+                    </View>
+
+                    <View style={styles.selectedItemsWrap}>
+                      <AppText variant="caption" weight="800" color="textMuted">
+                        화물 품목
+                      </AppText>
+                      {selectedDetail.items.map((item) => (
+                        <View key={item.key} style={styles.selectedItemRow}>
+                          <AppText variant="caption" weight="800" color="textMain">
+                            {item.title}
+                          </AppText>
+                          {item.subtitle ? (
+                            <AppText variant="caption" color="textSub">
+                              {item.subtitle}
+                            </AppText>
+                          ) : null}
+                        </View>
+                      ))}
+                    </View>
+                  </View>
                 ) : null}
-              </View>
-            ))}
-          </View>
+              </Pressable>
+            );
+          })}
         </View>
       ) : null}
     </AppCard>

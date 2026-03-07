@@ -14,6 +14,7 @@ type RecoRouteWebViewProps = {
   loading: boolean;
   externalUrl?: string | null;
   markerIconUriByType?: Partial<Record<string, string>>;
+  fill?: boolean;
 };
 
 type RouteStopPoint = {
@@ -29,6 +30,12 @@ type RoutePathPoint = {
 };
 
 const MAP_HEIGHT = 240;
+const ROUTE_PATH_CACHE_MAX = 40;
+
+let cachedKakaoJsAppKey: string | null = null;
+let kakaoJsAppKeyRequest: Promise<string> | null = null;
+const routePathCache = new Map<string, RoutePathPoint[]>();
+const routePathRequestCache = new Map<string, Promise<RoutePathPoint[]>>();
 
 const useStyles = createThemedStyles((theme) => {
   const cBorder = safeString(theme?.colors?.borderDefault, "#E2E8F0");
@@ -41,6 +48,12 @@ const useStyles = createThemedStyles((theme) => {
       borderWidth: 1,
       borderColor: cBorder,
       backgroundColor: theme.colors.bgSurface,
+    },
+    frameFill: {
+      height: undefined,
+      flex: 1,
+      borderRadius: 0,
+      borderWidth: 0,
     },
     webView: {
       flex: 1,
@@ -111,6 +124,77 @@ function parseDirectionsVertices(raw: unknown): RoutePathPoint[] {
   } catch {
     return [];
   }
+}
+
+function buildRoutePathCacheKey(stops: RouteStopPoint[]): string {
+  if (stops.length < 2) return "";
+  return stops
+    .map((stop) => `${stop.type ?? ""}:${stop.lat.toFixed(6)},${stop.lng.toFixed(6)}`)
+    .join("|");
+}
+
+function setRoutePathCache(cacheKey: string, path: RoutePathPoint[]): void {
+  if (!cacheKey) return;
+  if (routePathCache.has(cacheKey)) {
+    routePathCache.delete(cacheKey);
+  }
+  routePathCache.set(cacheKey, path);
+  if (routePathCache.size <= ROUTE_PATH_CACHE_MAX) return;
+  const oldestKey = routePathCache.keys().next().value;
+  if (!oldestKey) return;
+  routePathCache.delete(oldestKey);
+}
+
+async function resolveKakaoJsAppKey(): Promise<string> {
+  if (cachedKakaoJsAppKey) return cachedKakaoJsAppKey;
+  if (!kakaoJsAppKeyRequest) {
+    kakaoJsAppKeyRequest = getPublicConfig()
+      .then((config) => String(config?.kakaoJsAppKey ?? "").trim())
+      .catch(() => "")
+      .finally(() => {
+        kakaoJsAppKeyRequest = null;
+      });
+  }
+  const key = await kakaoJsAppKeyRequest;
+  if (key) {
+    cachedKakaoJsAppKey = key;
+  }
+  return key;
+}
+
+async function loadRoutePathByStops(stops: RouteStopPoint[]): Promise<RoutePathPoint[]> {
+  if (stops.length < 2) return [];
+
+  const segments: RoutePathPoint[] = [];
+  for (let i = 0; i < stops.length - 1; i += 1) {
+    const from = stops[i];
+    const to = stops[i + 1];
+
+    try {
+      const raw = await getDirections({
+        origin: `${from.lng},${from.lat}`,
+        destination: `${to.lng},${to.lat}`,
+      });
+      const path = parseDirectionsVertices(raw);
+      if (path.length <= 0) continue;
+
+      if (segments.length > 0) {
+        const first = path[0];
+        const last = segments[segments.length - 1];
+        if (last && Math.abs(last.lat - first.lat) < 1e-7 && Math.abs(last.lng - first.lng) < 1e-7) {
+          segments.push(...path.slice(1));
+        } else {
+          segments.push(...path);
+        }
+      } else {
+        segments.push(...path);
+      }
+    } catch {
+      // Segment failure is ignored; straight-line fallback will be used.
+    }
+  }
+
+  return segments;
 }
 
 function buildKakaoMapHtml(
@@ -213,6 +297,7 @@ export function RecoRouteWebView({
   loading,
   externalUrl,
   markerIconUriByType = {},
+  fill = false,
 }: RecoRouteWebViewProps) {
   const theme = useAppTheme();
   const styles = useStyles();
@@ -228,15 +313,9 @@ export function RecoRouteWebView({
   useEffect(() => {
     let cancelled = false;
     const loadConfig = async () => {
-      try {
-        const config = await getPublicConfig();
-        if (cancelled) return;
-        const key = String(config?.kakaoJsAppKey ?? "").trim();
-        setKakaoJsAppKey(key);
-      } catch {
-        if (cancelled) return;
-        setKakaoJsAppKey("");
-      }
+      const key = await resolveKakaoJsAppKey();
+      if (cancelled) return;
+      setKakaoJsAppKey(key);
     };
     void loadConfig();
     return () => {
@@ -252,37 +331,34 @@ export function RecoRouteWebView({
         return;
       }
 
-      const segments: RoutePathPoint[] = [];
-      for (let i = 0; i < safeStops.length - 1; i += 1) {
-        const from = safeStops[i];
-        const to = safeStops[i + 1];
-
-        try {
-          const raw = await getDirections({
-            origin: `${from.lng},${from.lat}`,
-            destination: `${to.lng},${to.lat}`,
-          });
-          const path = parseDirectionsVertices(raw);
-          if (path.length <= 0) continue;
-
-          if (segments.length > 0) {
-            const first = path[0];
-            const last = segments[segments.length - 1];
-            if (last && Math.abs(last.lat - first.lat) < 1e-7 && Math.abs(last.lng - first.lng) < 1e-7) {
-              segments.push(...path.slice(1));
-            } else {
-              segments.push(...path);
-            }
-          } else {
-            segments.push(...path);
-          }
-        } catch {
-          // Segment failure is ignored; straight-line fallback will be used.
-        }
+      const cacheKey = buildRoutePathCacheKey(safeStops);
+      if (!cacheKey) {
+        setRoutePath([]);
+        return;
       }
 
+      const cachedPath = routePathCache.get(cacheKey);
+      if (cachedPath) {
+        setRoutePath(cachedPath);
+        return;
+      }
+
+      let pendingRequest = routePathRequestCache.get(cacheKey);
+      if (!pendingRequest) {
+        pendingRequest = loadRoutePathByStops(safeStops)
+          .then((path) => {
+            setRoutePathCache(cacheKey, path);
+            return path;
+          })
+          .finally(() => {
+            routePathRequestCache.delete(cacheKey);
+          });
+        routePathRequestCache.set(cacheKey, pendingRequest);
+      }
+
+      const path = await pendingRequest;
       if (cancelled) return;
-      setRoutePath(segments);
+      setRoutePath(path);
     };
 
     void loadRoutePath();
@@ -309,7 +385,7 @@ export function RecoRouteWebView({
   const showFallback = webViewFailed || !html;
 
   return (
-    <View style={styles.frame}>
+    <View style={[styles.frame, fill ? styles.frameFill : null]}>
       {showFallback ? (
         <View style={styles.overlay}>
           <AppText variant="caption" color="textMuted">

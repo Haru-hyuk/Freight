@@ -1,16 +1,21 @@
-import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, Pressable, StyleSheet, View } from "react-native";
+import { Alert, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import type { QuoteDetailResponse } from "@/entities/quote/model/quote.types";
+import { addDriverAcceptedRunGroup } from "@/features/driver-orders/model/acceptedRunGroups";
+import {
+  clearDriverMarketRecommendationSelection,
+  getDriverMarketRecommendationSelection,
+} from "@/features/driver-orders/model/marketRecommendationSelection";
 import {
   buildEmptyRouteSummary,
   fetchRouteSummary,
   type NormalizedRouteSummary,
 } from "@/features/driver-reco/model/routeSummary";
 import RecoLoadSimulationCard, {
+  type RecoRecommendedOrderSummary,
   type RecoSelectedOrderDetail,
 } from "@/features/driver-reco/ui/RecoLoadSimulationCard";
 import RecoRouteMapCard from "@/features/driver-reco/ui/RecoRouteMapCard";
@@ -20,24 +25,19 @@ import {
   postCounterOffer,
   type DriverOrderCard,
 } from "@/features/matching/api";
-import CounterOfferModal, { type CounterOfferSubmitPayload } from "@/features/matching/ui/CounterOfferModal";
-import {
-  getDriverMarketRecommendationSelection,
-  clearDriverMarketRecommendationSelection,
-} from "@/features/driver-orders/model/marketRecommendationSelection";
-import { DRIVER_ROUTE_PATH } from "@/features/matching/model/driverRunUiApiGrounding";
 import {
   DRIVER_RUN_SYNC_EVENT,
   publishDriverRunSyncEvent,
 } from "@/features/matching/model/driverRunSyncEvents";
-import { addDriverAcceptedRunGroup } from "@/features/driver-orders/model/acceptedRunGroups";
+import { DRIVER_ROUTE_PATH } from "@/features/matching/model/driverRunUiApiGrounding";
+import CounterOfferModal, { type CounterOfferSubmitPayload } from "@/features/matching/ui/CounterOfferModal";
 import { previewLoadPlan as previewLoadPlanGenerated } from "@/shared/api/generated/driver-optimization-controller/driver-optimization-controller";
 import type { LoadPlanResponse, Placement, TruckSpecReferenceResponse } from "@/shared/api/generated/schemas";
 import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
 import { formatKrw } from "@/shared/lib/format/display";
 import { API_ERROR_CODE, getApiErrorCode } from "@/shared/lib/policy";
 import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
-import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
+import { createThemedStyles } from "@/shared/theme/useAppTheme";
 import { AppButton } from "@/shared/ui/kit/AppButton";
 import { AppCard } from "@/shared/ui/kit/AppCard";
 import { AppErrorState } from "@/shared/ui/kit/AppErrorState";
@@ -326,7 +326,8 @@ const useStyles = createThemedStyles((theme) => {
   return StyleSheet.create({
     content: {
       gap: spacing * 3,
-      paddingBottom: spacing * 24,
+      paddingTop: spacing * 4,
+      paddingBottom: spacing * 30,
     },
     summaryCard: {
       padding: spacing * 4,
@@ -355,74 +356,6 @@ const useStyles = createThemedStyles((theme) => {
       backgroundColor: tint(cBorder, 0.4, theme.colors.bgSurfaceAlt),
       gap: spacing * 0.5,
     },
-    quotesCard: {
-      padding: spacing * 4,
-      gap: spacing * 2,
-    },
-    quoteRow: {
-      minHeight: 44,
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: cBorder,
-      backgroundColor: theme.colors.bgSurface,
-      paddingHorizontal: spacing * 3,
-      paddingVertical: spacing * 2.5,
-      gap: spacing,
-    },
-    quoteTop: {
-      flexDirection: "row",
-      alignItems: "flex-start",
-      justifyContent: "space-between",
-      gap: spacing * 2,
-    },
-    quoteSeqWrap: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing * 1.5,
-      flex: 1,
-    },
-    quoteSeqBadge: {
-      width: 24,
-      height: 24,
-      borderRadius: 12,
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: tint(theme.colors.brandPrimary, 0.9, theme.colors.brandPrimary),
-    },
-    quoteRouteWrap: {
-      gap: spacing,
-    },
-    quoteRouteRow: {
-      flexDirection: "row",
-      alignItems: "flex-start",
-      gap: spacing * 1.5,
-    },
-    quoteRouteIconWrap: {
-      width: 20,
-      height: 20,
-      borderRadius: 10,
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: tint(cBorder, 0.3, theme.colors.bgSurfaceAlt),
-      marginTop: 1,
-    },
-    quoteRouteText: {
-      flex: 1,
-      color: theme.colors.textSub,
-    },
-    quoteMetaRow: {
-      flexDirection: "row",
-      gap: spacing * 1.5,
-    },
-    quoteMetaCell: {
-      flex: 1,
-      borderRadius: 10,
-      backgroundColor: tint(cBorder, 0.38, theme.colors.bgSurfaceAlt),
-      paddingHorizontal: spacing * 1.5,
-      paddingVertical: spacing * 1.2,
-      alignItems: "center",
-      gap: spacing * 0.5,
-    },
     stateWrap: {
       paddingTop: spacing * 12,
     },
@@ -448,7 +381,6 @@ export default function DriverMarketRecommendationPage({
   const params = useLocalSearchParams<RouteParams>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const theme = useAppTheme();
   const styles = useStyles();
 
   const rawKey =
@@ -757,6 +689,23 @@ export default function DriverMarketRecommendationPage({
       items,
     };
   }, [selectedEntry, selectedStopOrder, stopColorMap]);
+  const recommendedOrders = useMemo<RecoRecommendedOrderSummary[]>(
+    () =>
+      quoteCards.map((entry, index) => {
+        const stopOrder = index + 1;
+        const accentColor = stopColorMap.get(stopOrder) ?? PALETTE[(stopOrder - 1) % PALETTE.length];
+        const priceValue = entry.order?.priceValue ?? entry.quote?.finalPrice ?? 0;
+        return {
+          stopOrder,
+          quoteId: entry.quoteId,
+          accentColor,
+          priceText: formatKrw(priceValue),
+          originAddress: entry.order?.originAddress ?? entry.quote?.originAddress ?? "-",
+          destinationAddress: entry.order?.destinationAddress ?? entry.quote?.destinationAddress ?? "-",
+        };
+      }),
+    [quoteCards, stopColorMap]
+  );
 
   const handleAccept = useCallback(() => {
     if (routeLoading || isBusy || isSubmittingOffer) return;
@@ -1048,108 +997,9 @@ export default function DriverMarketRecommendationPage({
             stopColorMap={stopColorMap}
             selectedStopOrder={selectedStopOrder}
             onSelectStopOrder={setSelectedStopOrder}
+            recommendedOrders={recommendedOrders}
             selectedOrderDetail={selectedOrderDetail}
           />
-
-          <AppCard style={styles.quotesCard}>
-            <AppText variant="heading" weight="900" color="textMain">
-              추천 오더
-            </AppText>
-            {quoteCards.map((entry, index) => {
-              const stopOrder = index + 1;
-              const accentColor = stopColorMap.get(stopOrder) ?? PALETTE[(stopOrder - 1) % PALETTE.length];
-              const isCardSelected = selectedStopOrder === stopOrder;
-              const priceValue = entry.order?.priceValue ?? entry.quote?.finalPrice ?? 0;
-              const originAddress = entry.order?.originAddress ?? entry.quote?.originAddress ?? "-";
-              const destinationAddress = entry.order?.destinationAddress ?? entry.quote?.destinationAddress ?? "-";
-              const quoteDistanceKm = entry.quote?.distanceKm;
-              const weightValue = entry.order?.weightKg ?? entry.quote?.weightKg;
-              const cbmValue = entry.order?.volumeCbm ?? entry.quote?.volumeCbm;
-              const distanceText =
-                entry.order?.routeDistanceText ??
-                (typeof quoteDistanceKm === "number" && quoteDistanceKm > 0 ? `${quoteDistanceKm.toFixed(1)}km` : "-");
-              const weightText =
-                typeof weightValue === "number" && weightValue > 0 ? `${weightValue.toFixed(1)}kg` : "-";
-              const cbmText = typeof cbmValue === "number" && cbmValue > 0 ? cbmValue.toFixed(1) : "-";
-              const cargoText = entry.order?.cargoText ?? entry.quote?.cargoName ?? "-";
-              const vehicleText = entry.order?.vehicleText ?? entry.quote?.vehicleType ?? "-";
-              const methodText =
-                entry.order?.methodText ??
-                `${entry.quote?.loadMethod ?? "-"} · ${entry.quote?.unloadMethod ?? "-"}`;
-
-              return (
-                <Pressable
-                  key={`quote-${entry.quoteId}`}
-                  onPress={() => setSelectedStopOrder((prev) => (prev === stopOrder ? null : stopOrder))}
-                  hitSlop={{ top: 6, right: 6, bottom: 6, left: 6 }}
-                  style={[
-                    styles.quoteRow,
-                    isCardSelected
-                      ? {
-                          borderColor: accentColor,
-                          borderWidth: 2,
-                          backgroundColor: tint(accentColor, 0.08, theme.colors.bgSurface),
-                        }
-                      : null,
-                  ]}
-                >
-                  <View style={styles.quoteTop}>
-                    <View style={styles.quoteSeqWrap}>
-                      <View style={[styles.quoteSeqBadge, isCardSelected ? { backgroundColor: accentColor } : null]}>
-                        <AppText variant="caption" weight="900" color="textOnBrand">
-                          {stopOrder}
-                        </AppText>
-                      </View>
-                      <AppText variant="detail" weight="900" color="textMain">
-                        추천 오더
-                      </AppText>
-                    </View>
-                    <AppText variant="detail" weight="900" color="brandPrimary">
-                      {formatKrw(priceValue)}
-                    </AppText>
-                  </View>
-                  <View style={styles.quoteRouteWrap}>
-                    <View style={styles.quoteRouteRow}>
-                      <View style={styles.quoteRouteIconWrap}>
-                        <Ionicons name="navigate" size={12} color={theme.colors.brandPrimary} />
-                      </View>
-                      <AppText variant="caption" style={styles.quoteRouteText}>
-                        {originAddress}
-                      </AppText>
-                    </View>
-                    <View style={styles.quoteRouteRow}>
-                      <View style={styles.quoteRouteIconWrap}>
-                        <Ionicons name="flag" size={12} color={theme.colors.semanticSuccess} />
-                      </View>
-                      <AppText variant="caption" style={styles.quoteRouteText}>
-                        {destinationAddress}
-                      </AppText>
-                    </View>
-                  </View>
-                  <View style={styles.quoteMetaRow}>
-                    <View style={styles.quoteMetaCell}>
-                      <AppText variant="caption" color="textMuted">거리</AppText>
-                      <AppText variant="detail" weight="900" color="brandPrimary">{distanceText}</AppText>
-                    </View>
-                    <View style={styles.quoteMetaCell}>
-                      <AppText variant="caption" color="textMuted">중량</AppText>
-                      <AppText variant="detail" weight="900" color="textMain">{weightText}</AppText>
-                    </View>
-                    <View style={styles.quoteMetaCell}>
-                      <AppText variant="caption" color="textMuted">CBM</AppText>
-                      <AppText variant="detail" weight="900" color="textMain">{cbmText}</AppText>
-                    </View>
-                  </View>
-                  <AppText variant="caption" color="textSub">
-                    화물: {cargoText}
-                  </AppText>
-                  <AppText variant="caption" color="textSub">
-                    차량/작업: {vehicleText} · {methodText}
-                  </AppText>
-                </Pressable>
-              );
-            })}
-          </AppCard>
         </View>
       </PageScaffold>
 

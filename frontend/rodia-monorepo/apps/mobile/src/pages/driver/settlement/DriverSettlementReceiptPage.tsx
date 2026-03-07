@@ -1,6 +1,6 @@
 import React from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { Alert, ScrollView, Share, StyleSheet, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, ScrollView, Share, StyleSheet, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
 import { getDriverSettlementByMatch } from "@/features/driver-profile/api/driver-settlement-api";
@@ -85,16 +85,33 @@ function toSettlementTypeLabel(value: string | undefined): string {
   return "기타 정산";
 }
 
-function resolvePayoutDate(settlement: SettlementResponse): string | undefined {
-  return settlement.shipperPaidAt ?? settlement.completedAt ?? settlement.createdAt;
+function isCompletedSettlement(value: string | undefined): boolean {
+  return String(value ?? "")
+    .trim()
+    .toUpperCase() === "COMPLETED";
+}
+
+function resolveReferenceDate(settlement: SettlementResponse): string | undefined {
+  if (isCompletedSettlement(settlement.settlementStatus)) {
+    return settlement.completedAt ?? settlement.createdAt;
+  }
+  return settlement.dueDate ?? settlement.createdAt;
+}
+
+function resolveReferenceDateLabel(settlement: SettlementResponse): string {
+  if (isCompletedSettlement(settlement.settlementStatus)) {
+    return "입금 완료 시각";
+  }
+  return "정산 예정일";
 }
 
 function buildShareText(settlement: SettlementResponse): string {
   return [
     "[Rodia 기사 정산서]",
-    `지급액: ${toMoneyText(settlement.driverPayout)}`,
+    `기사 정산 금액: ${toMoneyText(settlement.driverPayout)}`,
+    `총 운임: ${toMoneyText(settlement.totalFare)}`,
     `정산 상태: ${toSettlementStatusLabel(settlement.settlementStatus)}`,
-    `지급일: ${toDateText(resolvePayoutDate(settlement))}`,
+    `${resolveReferenceDateLabel(settlement)}: ${toDateText(resolveReferenceDate(settlement))}`,
     `정산 유형: ${toSettlementTypeLabel(settlement.settlementType)}`,
   ].join("\n");
 }
@@ -163,10 +180,15 @@ const useStyles = createThemedStyles((theme) => {
       alignItems: "center",
       gap: spacing * 2,
     },
-    shareButton: {
-      minHeight: 48,
-      marginHorizontal: spacing * 4,
-      marginBottom: spacing,
+    headerIconButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: theme.colors.borderDefault,
+      backgroundColor: theme.colors.bgSurface,
     },
   });
 });
@@ -236,7 +258,28 @@ export function DriverSettlementReceiptPage() {
     }
   }, [isLoading, isRefreshing, isSharing, settlement]);
 
-  const payoutDateText = settlement ? toDateText(resolvePayoutDate(settlement)) : "-";
+  const referenceDateText = settlement ? toDateText(resolveReferenceDate(settlement)) : "-";
+  const referenceDateLabel = settlement ? resolveReferenceDateLabel(settlement) : "정산 예정일";
+  const isShareDisabled = !settlement || isLoading || isRefreshing || isSharing;
+  const headerRight = (
+    <Pressable
+      onPress={() => void handleShare()}
+      disabled={isShareDisabled}
+      style={({ pressed }) => [
+        styles.headerIconButton,
+        pressed ? { opacity: 0.75 } : null,
+        isShareDisabled ? { opacity: 0.5 } : null,
+      ]}
+      accessibilityRole="button"
+      accessibilityLabel="정산서 공유"
+    >
+      {isSharing ? (
+        <ActivityIndicator size="small" color={theme.colors.textMuted} />
+      ) : (
+        <Ionicons name="share-outline" size={18} color={theme.colors.textMain} />
+      )}
+    </Pressable>
+  );
 
   return (
     <PageScaffold
@@ -246,17 +289,7 @@ export function DriverSettlementReceiptPage() {
       contentStyle={styles.content}
       onPressBack={() => router.back()}
       backLabel="이전"
-      bottomBar={
-        <AppButton
-          title="정산서 공유하기"
-          variant="secondary"
-          left={<Ionicons name="share-outline" size={16} color={theme.colors.textMain} />}
-          onPress={() => void handleShare()}
-          loading={isSharing}
-          disabled={!settlement || isLoading || isRefreshing || isSharing}
-          style={styles.shareButton}
-        />
-      }
+      headerRight={headerRight}
     >
       <AppRequestState
         isLoading={isLoading}
@@ -276,7 +309,7 @@ export function DriverSettlementReceiptPage() {
               <AppCard elevated={false} style={styles.summaryCard}>
                 <View style={styles.summaryAmountWrap}>
                   <AppText variant="caption" color="textMuted">
-                    이번 정산 지급액
+                    기사 정산 금액 (실수령액)
                   </AppText>
                   <AppText variant="display" weight="900" style={styles.summaryAmount}>
                     {toMoneyText(settlement.driverPayout)}
@@ -294,7 +327,7 @@ export function DriverSettlementReceiptPage() {
 
                 <View style={styles.row}>
                   <AppText variant="caption" style={styles.rowLabel}>
-                    결제 상태
+                    화주 결제 상태
                   </AppText>
                   <AppText variant="detail" weight="700" style={styles.rowValue}>
                     {toPaymentStatusLabel(settlement.shipperPaymentStatus)}
@@ -303,10 +336,10 @@ export function DriverSettlementReceiptPage() {
 
                 <View style={styles.row}>
                   <AppText variant="caption" style={styles.rowLabel}>
-                    지급 일자
+                    {referenceDateLabel}
                   </AppText>
                   <AppText variant="detail" weight="700" style={styles.rowValue}>
-                    {payoutDateText}
+                    {referenceDateText}
                   </AppText>
                 </View>
 
@@ -321,7 +354,7 @@ export function DriverSettlementReceiptPage() {
 
                 <View style={styles.row}>
                   <AppText variant="caption" style={styles.rowLabel}>
-                    결제 수단
+                    화주 결제 수단
                   </AppText>
                   <AppText variant="detail" weight="700" style={styles.rowValue}>
                     {toPaymentMethodLabel(settlement.shipperPaymentMethod)}

@@ -1,6 +1,6 @@
+import { uploadDriverPhoto as uploadDriverPhotoGenerated } from "@/shared/api/generated/delivery-photo-controller/delivery-photo-controller";
 import type { UploadDriverPhotoType } from "@/shared/api/generated/schemas";
 import { getApiBaseUrl, isMockMode } from "@/shared/lib/config/env";
-import { tokenStorage } from "@/shared/lib/storage/tokenStorage";
 
 import { parseMatchPositiveInt } from "./shipper-match-parser";
 
@@ -61,31 +61,6 @@ function collectCandidateObjects(input: unknown): AnyObject[] {
   return out;
 }
 
-async function toUploadPayload(value: unknown): Promise<unknown> {
-  if (typeof Blob !== "undefined" && value instanceof Blob) {
-    const text = (await value.text()).trim();
-    if (!text) return null;
-
-    try {
-      return JSON.parse(text);
-    } catch {
-      return text;
-    }
-  }
-
-  if (typeof value === "string") {
-    const text = value.trim();
-    if (!text) return null;
-    try {
-      return JSON.parse(text);
-    } catch {
-      return text;
-    }
-  }
-
-  return value;
-}
-
 function resolveUploadedUrlFromPayload(payload: unknown): string | null {
   const directText = toText(payload);
   if (directText) {
@@ -118,7 +93,8 @@ function resolveUriExtension(uri: string): string {
   const path = toText(uri).split("?")[0] ?? "";
   const parts = path.split(".");
   const ext = (parts[parts.length - 1] ?? "").toLowerCase();
-  if (ext === "png" || ext === "webp" || ext === "heic" || ext === "jpg" || ext === "jpeg") return ext;
+  if (ext === "png" || ext === "webp" || ext === "jpg" || ext === "jpeg") return ext;
+  if (ext === "heic") return "jpg";
   return "jpg";
 }
 
@@ -149,33 +125,14 @@ export async function uploadImage(
   try {
     const ext = resolveUriExtension(safeUri);
     const mimeType = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
-
-    const formData = new FormData();
-    // React Native requires the { uri, name, type } shape — do NOT convert to Blob.
-    // Also do NOT set Content-Type manually; the runtime will add the correct
-    // multipart/form-data; boundary=... header automatically.
-    formData.append("file", { uri: safeUri, name: `photo.${ext}`, type: mimeType } as any);
-
-    const accessToken = await tokenStorage.getAccessToken();
     const takenAt = new Date().toISOString();
-    const url = `${getApiBaseUrl().replace(/\/+$/, "")}/api/driver/matches/${safeMatchId}/photos?type=${encodeURIComponent(type)}&takenAt=${encodeURIComponent(takenAt)}`;
-
-    const headers: Record<string, string> = {};
-    if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
-    // Content-Type is intentionally omitted so the fetch layer can set the multipart boundary.
-
-    const fetchResponse = await fetch(url, { method: "POST", headers, body: formData });
-
-    if (!fetchResponse.ok) {
-      const status = fetchResponse.status;
-      if (UPLOAD_FALLBACK_HTTP_STATUSES.has(status)) {
-        return buildFallbackUploadedUrl(safeMatchId, type, safeUri);
-      }
-      throw Object.assign(new Error(`Upload failed: ${status}`), { response: { status } });
-    }
-
-    const raw: unknown = await fetchResponse.json().catch(() => null);
-    const payload = await toUploadPayload(raw);
+    const payload = await uploadDriverPhotoGenerated(
+      safeMatchId,
+      {
+        file: { uri: safeUri, name: `photo.${ext}`, type: mimeType } as unknown as Blob,
+      },
+      { type, takenAt }
+    );
     const uploadedUrl = resolveUploadedUrlFromPayload(payload);
     if (uploadedUrl) return uploadedUrl;
     return buildFallbackUploadedUrl(safeMatchId, type, safeUri);

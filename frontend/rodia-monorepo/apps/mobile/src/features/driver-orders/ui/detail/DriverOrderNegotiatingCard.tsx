@@ -10,7 +10,9 @@ import { AppCard } from "@/shared/ui/kit/AppCard";
 import { AppText } from "@/shared/ui/kit/AppText";
 
 type Props = {
-  quote: QuoteDetailResponse | null;
+  quote?: QuoteDetailResponse | null;
+  proposedPrice?: number;
+  proposedMessage?: string | null;
 };
 
 const useStyles = createThemedStyles((theme) => {
@@ -109,14 +111,14 @@ const useStyles = createThemedStyles((theme) => {
   });
 });
 
-export function DriverOrderNegotiatingCard({ quote }: Props) {
+export function DriverOrderNegotiatingCard({ proposedPrice, proposedMessage }: Props) {
   const styles = useStyles();
   const theme = useAppTheme();
   const cPrimary = safeString(theme?.colors?.brandPrimary, "#FF6A00");
 
-  // Only show shipper's desired price if the field has a valid positive value (confirmed field in QuoteDetailResponse)
-  const desiredPrice = Number(quote?.desiredPrice);
-  const hasDesiredPrice = Number.isFinite(desiredPrice) && desiredPrice > 0;
+  const proposed = Number(proposedPrice);
+  const hasProposedPrice = Number.isFinite(proposed) && proposed > 0;
+  const messageText = typeof proposedMessage === "string" ? proposedMessage.trim() : "";
 
   return (
     <AppCard outlined tone="actionRequired" style={styles.card}>
@@ -129,16 +131,14 @@ export function DriverOrderNegotiatingCard({ quote }: Props) {
 
       <View style={styles.divider} />
 
-      {hasDesiredPrice ? (
-        <View style={styles.infoRow}>
-          <AppText style={styles.infoLabel}>화주 제안 운임</AppText>
-          <AppText style={styles.infoValueHighlight}>{formatKrw(desiredPrice)}</AppText>
-        </View>
-      ) : null}
+      <View style={styles.infoRow}>
+        <AppText style={styles.infoLabel}>운임 제안 금액</AppText>
+        <AppText style={styles.infoValueHighlight}>{hasProposedPrice ? formatKrw(proposed) : "확인 중"}</AppText>
+      </View>
 
       <View style={styles.infoRow}>
-        <AppText style={styles.infoLabel}>내 제안</AppText>
-        <AppText style={styles.infoValue}>응답 대기 중</AppText>
+        <AppText style={styles.infoLabel}>제안 메시지</AppText>
+        <AppText style={styles.infoValue}>{messageText || "메시지를 입력하지 않았습니다."}</AppText>
       </View>
 
       <View style={styles.divider} />
