@@ -1,5 +1,10 @@
 // apps/mobile/src/features/auth/api/auth-api.ts
 
+import {
+  me as meGenerated,
+  updateMe as updateMeGenerated,
+} from "@/shared/api/generated/auth/auth";
+import type { MeResponse } from "@/shared/api/generated/schemas/meResponse";
 import { apiClient } from "@/shared/lib/api/apiClient";
 import { tokenStorage, type AuthTokens } from "@/shared/lib/storage/tokenStorage";
 import type { User, UserRole } from "@/entities/user/types";
@@ -618,6 +623,23 @@ export type MeProfile = {
   bankAccount?: string;
 };
 
+/**
+ * MeResponse(서버 raw) → MeProfile(도메인)
+ * - bankName / bankAccount: 서버 MeResponse 스펙에 없는 필드 → undefined 고정
+ * - 나머지 필드: null-safety ?? undefined 처리
+ */
+function toMeProfile(raw: MeResponse): MeProfile {
+  return {
+    id:          raw.id    ?? undefined,
+    role:        raw.role  ?? undefined,
+    email:       raw.email ?? undefined,
+    name:        raw.name  ?? undefined,
+    phone:       raw.phone ?? undefined,
+    bankName:    undefined,   // MeResponse 스펙 미포함 필드
+    bankAccount: undefined,   // MeResponse 스펙 미포함 필드
+  };
+}
+
 export async function getMeProfile(): Promise<MeProfile | null> {
   if (isMockMode()) {
     const access = await tokenStorage.getAccessToken();
@@ -633,20 +655,10 @@ export async function getMeProfile(): Promise<MeProfile | null> {
     };
   }
 
+  // [교체] apiClient.get("/api/auth/me") → meGenerated()
   try {
-    const res = await apiClient.get("/api/auth/me");
-    const data = (res as any)?.data ?? null;
-    const d = (data ?? {}) as AnyObj;
-    const source = (d?.data ?? d?.result ?? d) as AnyObj;
-    return {
-      id: pickString(source?.id),
-      role: pickString(source?.role),
-      email: pickString(source?.email),
-      name: pickString(source?.name),
-      phone: pickString(source?.phone),
-      bankName: pickString(source?.bankName),
-      bankAccount: pickString(source?.bankAccount),
-    };
+    const data = await meGenerated();
+    return toMeProfile(data);
   } catch {
     return null;
   }
@@ -672,21 +684,10 @@ export async function updateMeProfile(input: MeUpdateInput): Promise<{ ok: boole
     };
   }
 
+  // [교체] apiClient.patch("/api/auth/me", input) → updateMeGenerated(input)
   try {
-    const res = await apiClient.patch("/api/auth/me", input);
-    const data = (res as any)?.data ?? null;
-    const d = (data ?? {}) as AnyObj;
-    const source = (d?.data ?? d?.result ?? d) as AnyObj;
-    return {
-      ok: true,
-      profile: {
-        id: pickString(source?.id),
-        role: pickString(source?.role),
-        email: pickString(source?.email),
-        name: pickString(source?.name),
-        phone: pickString(source?.phone),
-      },
-    };
+    const data = await updateMeGenerated(input);
+    return { ok: true, profile: toMeProfile(data) };
   } catch (err) {
     const meta = extractApiErrorMeta(err);
     return { ok: false, message: meta?.message ?? "저장에 실패했습니다." };

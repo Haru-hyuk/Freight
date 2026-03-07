@@ -1,4 +1,4 @@
-// src/features/shipper-settings/api/shipper-address-book-api.ts
+﻿// src/features/shipper-settings/api/shipper-address-book-api.ts
 //
 // [리팩토링] apiClient 직접 호출 → Orval 자동생성 함수로 교체
 //
@@ -16,7 +16,7 @@ import {
   create1 as createGenerated,
   update as updateGenerated,
   _delete as deleteGenerated,
-} from "@/shared/api/generated/shipper-address-controller/shipper-address-controller";
+} from "@/shared/api/generated/shipper-address/shipper-address";
 import type { ShipperAddressItemResponse } from "@/shared/api/generated/schemas/shipperAddressItemResponse";
 import type { ShipperAddressUpsertRequest } from "@/shared/api/generated/schemas/shipperAddressUpsertRequest";
 import { isMockMode } from "@/shared/lib/config/env";
@@ -214,3 +214,4 @@ export async function deleteShipperAddressBookItem(id: string): Promise<void> {
 export function __resetMockAddressBookForTest() {
   mockAddressStore = shipperSettingsMock.addresses.primary.map((item) => ({ ...item }));
 }
+

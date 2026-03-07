@@ -31,8 +31,7 @@ import {
 } from "@/features/matching/model/driverRunSyncEvents";
 import { DRIVER_ROUTE_PATH } from "@/features/matching/model/driverRunUiApiGrounding";
 import CounterOfferModal, { type CounterOfferSubmitPayload } from "@/features/matching/ui/CounterOfferModal";
-import { previewLoadPlan as previewLoadPlanGenerated } from "@/shared/api/generated/driver-optimization-controller/driver-optimization-controller";
-import type { LoadPlanResponse, Placement, TruckSpecReferenceResponse } from "@/shared/api/generated/schemas";
+import { previewDriverLoadPlan, type LoadPlanResponse, type Placement, type TruckSpecReferenceResponse } from "@/features/matching/api";
 import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
 import { formatKrw } from "@/shared/lib/format/display";
 import { API_ERROR_CODE, getApiErrorCode } from "@/shared/lib/policy";
@@ -513,7 +512,7 @@ export default function DriverMarketRecommendationPage({
         let resolvedPlacements: Placement[] = [];
 
         try {
-          const previewPayload = await previewLoadPlanGenerated({
+          const previewPayload = await previewDriverLoadPlan({
             quoteIds: safeQuoteIds,
             ...(previewTruckId > 0 ? { truckId: previewTruckId } : {}),
           });

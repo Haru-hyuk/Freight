@@ -293,6 +293,7 @@ export function buildQuoteCreateRequest(draft: QuoteCreateDraft): QuoteCreateReq
     cargoName: summarizeCargoName(draft),
     cargoType: mapCargoType(draft.isFrozen),
     ...(cargoDesc ? { cargoDesc } : {}),
+    basePrice,
     ...(desiredPrice > 0 ? { desiredPrice } : {}),
     allowCombine: !!draft.isPool,
     loadMethod: toActorOnlyWorkMethod(draft.loadMethod, DEFAULT_LOAD_METHOD),
@@ -306,7 +307,6 @@ export function buildQuoteCreateRequest(draft: QuoteCreateDraft): QuoteCreateReq
     payload.truckId = truckId;
   }
   if (distanceKm > 0) payload.distanceKm = distanceKm;
-  if (basePrice > 0) payload.basePrice = basePrice;
   if (distancePrice > 0) payload.distancePrice = distancePrice;
 
   return payload;

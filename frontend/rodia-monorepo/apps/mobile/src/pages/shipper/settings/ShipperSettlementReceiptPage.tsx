@@ -7,8 +7,7 @@ import type { QuoteDetailResponse } from "@/entities/quote/model/quote.types";
 import { getShipperQuoteDetailByIdentifier } from "@/features/quote/api";
 import { CargoDetailList } from "@/features/quote/ui/CargoDetailList";
 import { SettlementPriceBreakdown } from "@/features/settlement/ui/SettlementPriceBreakdown";
-import { getByMatch } from "@/shared/api/generated/shipper-settlement-controller/shipper-settlement-controller";
-import type { SettlementResponse } from "@/shared/api/generated/schemas/settlementResponse";
+import { getShipperSettlementByMatch, type SettlementResponse } from "@/features/settlement/api/shipper-settlement-api";
 import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
 import { formatDateTime, formatKrw } from "@/shared/lib/format/display";
 import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
@@ -252,7 +251,7 @@ export default function ShipperSettlementReceiptPage() {
       setErrorMessage(null);
 
       try {
-        const settlementData = await getByMatch({ matchId });
+        const settlementData = await getShipperSettlementByMatch({ matchId });
         setSettlement(settlementData);
 
         if (quoteId > 0) {

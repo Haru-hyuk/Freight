@@ -20,8 +20,12 @@ import {
   useQuoteCreateDraft,
 } from "@/features/quote/model/quoteCreateDraft";
 import { createShipperMatch } from "@/features/matching/api";
-import { createShipperQuote, previewShipperQuote, type QuotePricePreview } from "@/features/quote/api/quote-api";
-import { buildQuoteCreateRequest } from "@/features/quote/model/quoteCreateRequestMapper";
+import {
+  createShipperQuote,
+  mapToQuoteCreateRequest,
+  previewShipperQuote,
+  type QuotePricePreview,
+} from "@/features/quote/api/quote-api";
 import { isActorOnlyWorkMethod } from "@/features/quote/model/workMethod";
 import { getQuoteFlatCardStyle, QUOTE_PROGRESS_TOKENS } from "@/features/quote/ui/QuoteCreateUiPrimitives";
 import QuoteCreateStep1 from "@/features/quote/ui/QuoteCreateStep1";
@@ -232,7 +236,7 @@ function QuoteCreatePageInner() {
       ...draft,
       basePrice: submitBasePrice,
     };
-    const payload = buildQuoteCreateRequest(draftForPreview);
+    const payload = mapToQuoteCreateRequest(draftForPreview);
     const { truckId: _ignoredTruckId, ...previewPayload } = payload;
 
     if (!String(previewPayload?.originAddress ?? "").trim() || !String(previewPayload?.destinationAddress ?? "").trim()) {
@@ -324,7 +328,7 @@ function QuoteCreatePageInner() {
       basePrice: submitBasePrice,
     };
     
-    const payload = buildQuoteCreateRequest(draftForSubmit);
+    const payload = mapToQuoteCreateRequest(draftForSubmit);
     const { truckId: _ignoredTruckId, ...createPayload } = payload;
 
     const stops = Array.isArray(payload?.stops) ? payload.stops : [];

@@ -1,7 +1,7 @@
 import {
   getByMatch,
   getMySettlements,
-} from "@/shared/api/generated/shipper-settlement-controller/shipper-settlement-controller";
+} from "@/shared/api/generated/shipper-settlement/shipper-settlement";
 import type { SettlementResponse } from "@/shared/api/generated/schemas/settlementResponse";
 import { isMockMode } from "@/shared/lib/config/env";
 

@@ -25,8 +25,10 @@ import {
   getMatchPaymentSnapshot,
   hasCompletedPaymentForMatch,
   prepareShipperPayment,
+  type PaymentResponseMethod,
+  type PaymentResponseStatus,
   type PrepareShipperPaymentResult,
-} from "@/features/payment/api/payment-api";
+} from "@/features/payment/api";
 import { TossPaymentModal } from "@/features/payment/ui/TossPaymentModal";
 import { deleteShipperQuote } from "@/features/quote/api";
 import {
@@ -39,8 +41,7 @@ import { formatWorkMethodLabel } from "@/features/quote/model/workMethod";
 import { BottomActionRouter } from "@/features/quote/ui/actions/BottomActionRouter";
 import { RecoRouteWebView } from "@/features/driver-reco/ui/RecoRouteWebView";
 import type { NormalizedRouteStop } from "@/features/driver-reco/model/routeSummary";
-import { getShipperMatchPhotos as getShipperMatchPhotosGenerated } from "@/shared/api/generated/delivery-photo-controller/delivery-photo-controller";
-import type { DeliveryPhotoResponse } from "@/shared/api/generated/schemas/deliveryPhotoResponse";
+import { getShipperQuotePhotos, type DeliveryPhotoResponse } from "@/features/quote/api";
 import { getApiBaseUrl } from "@/shared/lib/config/env";
 import { DriverVehicleInfo } from "@/features/quote/ui/DriverVehicleInfo";
 import { QuoteRouteInfo } from "@/features/quote/ui/QuoteRouteInfo";
@@ -53,8 +54,6 @@ import {
   resolveEffectiveQuoteStatus,
   type CustomerUiState,
 } from "@/shared/lib/policy";
-import type { PaymentResponseMethod } from "@/shared/api/generated/schemas/paymentResponseMethod";
-import type { PaymentResponseStatus } from "@/shared/api/generated/schemas/paymentResponseStatus";
 import { initLayoutAnimationForAndroid } from "@/shared/lib/ui/layoutAnimationInit";
 import { safeNumber, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
@@ -1199,7 +1198,7 @@ export default function QuoteDetailPage() {
       return;
     }
     try {
-      const photos = await getShipperMatchPhotosGenerated(safeMatchId);
+      const photos = await getShipperQuotePhotos(safeMatchId);
       setShipperPhotos(Array.isArray(photos) ? photos : []);
     } catch {
       setShipperPhotos([]);

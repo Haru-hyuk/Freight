@@ -1,11 +1,14 @@
-import React, { useMemo } from "react";
-import { Alert, StyleSheet, View } from "react-native";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, Alert, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
-import type { PaymentMethodMock, PaymentMethodType } from "@/features/shipper-settings/api/shipper-settings-mock";
-import { shipperSettingsMock } from "@/features/shipper-settings/api/shipper-settings-mock";
-import { isMockMode } from "@/shared/lib/config/env";
+import {
+  listShipperPaymentMethods,
+  type PaymentMethodType,
+  type ShipperPaymentMethod,
+} from "@/features/shipper-settings/api/shipper-payment-methods-api";
+import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
 import type { AppTheme } from "@/shared/theme/types";
 import { useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppButton } from "@/shared/ui/kit/AppButton";
@@ -89,10 +92,15 @@ function createStyles(theme: AppTheme) {
     actionButton: {
       flex: 1,
     },
+    loadingWrap: {
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 32,
+    },
   });
 }
 
-function PaymentMethodCard({ item }: { item: PaymentMethodMock }) {
+function PaymentMethodCard({ item }: { item: ShipperPaymentMethod }) {
   const theme = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
 
@@ -148,7 +156,24 @@ export default function ShipperPaymentMethodsPage() {
   const router = useRouter();
   const theme = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const methods: PaymentMethodMock[] = isMockMode() ? shipperSettingsMock.paymentMethods : [];
+
+  const [methods, setMethods] = useState<ShipperPaymentMethod[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const loadMethods = useCallback(async () => {
+    try {
+      const data = await listShipperPaymentMethods();
+      setMethods(Array.isArray(data) ? data : []);
+    } catch (error) {
+      Alert.alert("조회 실패", readApiErrorMessage(error));
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadMethods();
+  }, [loadMethods]);
 
   return (
     <PageScaffold
@@ -167,11 +192,17 @@ export default function ShipperPaymentMethodsPage() {
         description="카드/계좌/후불 수단"
         right={<AppButton title="수단 추가" size="sm" onPress={() => Alert.alert("결제수단 추가", "추가 화면은 목업입니다.")} />}
       >
-        <View style={styles.cardWrap}>
-          {methods.map((item) => (
-            <PaymentMethodCard key={item.id} item={item} />
-          ))}
-        </View>
+        {isLoading ? (
+          <View style={styles.loadingWrap}>
+            <ActivityIndicator size="small" color={theme.colors.brandPrimary} />
+          </View>
+        ) : (
+          <View style={styles.cardWrap}>
+            {methods.map((item) => (
+              <PaymentMethodCard key={item.id} item={item} />
+            ))}
+          </View>
+        )}
       </SettingSection>
     </PageScaffold>
   );

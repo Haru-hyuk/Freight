@@ -1,4 +1,4 @@
-import {
+﻿import {
   acceptMatch as acceptDriverMatchGenerated,
   acceptMatches as acceptDriverMatchesGenerated,
   cancelMatch1 as cancelDriverMatchGenerated,
@@ -6,7 +6,7 @@ import {
   getMyMatches1 as getMyDriverMatchesGenerated,
   getOpenMatches as getOpenDriverMatchesGenerated,
   startTransit as startDriverTransitGenerated,
-} from "@/shared/api/generated/driver-match-controller/driver-match-controller";
+} from "@/shared/api/generated/driver-match/driver-match";
 import {
   createDriverCounterOffer,
   type CounterOfferItem,
@@ -16,8 +16,8 @@ import {
   cancelMatch as cancelShipperMatchGenerated,
   createMatch as createShipperMatchGenerated,
   getMyMatches as getMyShipperMatchesGenerated,
-} from "@/shared/api/generated/shipper-match-controller/shipper-match-controller";
-import { getShipperTracking as getShipperTrackingGenerated } from "@/shared/api/generated/tracking-controller/tracking-controller";
+} from "@/shared/api/generated/shipper-match/shipper-match";
+import { getShipperTracking as getShipperTrackingGenerated } from "@/shared/api/generated/tracking/tracking";
 import { isMockMode } from "@/shared/lib/config/env";
 import {
   acceptMockFlowDriverMatch,
@@ -440,3 +440,4 @@ export async function getShipperMatchTracking(matchId: number): Promise<ShipperT
   const data = await getShipperTrackingGenerated(safeMatchId);
   return toShipperTrackingSnapshot(safeMatchId, data);
 }
+

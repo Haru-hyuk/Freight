@@ -1,12 +1,12 @@
-import {
+﻿import {
   createCounterOffer as createDriverCounterOfferGenerated,
   getMyCounterOffers as getMyDriverCounterOffersGenerated,
-} from "@/shared/api/generated/driver-counter-offer-controller/driver-counter-offer-controller";
+} from "@/shared/api/generated/driver-counter-offer/driver-counter-offer";
 import {
   acceptCounterOffer as acceptShipperCounterOfferGenerated,
   getCounterOffers as getShipperCounterOffersGenerated,
   rejectCounterOffer as rejectShipperCounterOfferGenerated,
-} from "@/shared/api/generated/shipper-counter-offer-controller/shipper-counter-offer-controller";
+} from "@/shared/api/generated/shipper-counter-offer/shipper-counter-offer";
 import type { CounterOfferAcceptResponse } from "@/shared/api/generated/schemas/counterOfferAcceptResponse";
 import { isMockMode } from "@/shared/lib/config/env";
 import {
@@ -331,3 +331,4 @@ export function isCounterOfferPending(status: string): boolean {
 export function normalizeCounterOfferStatus(status: string): string {
   return normalizeCounterOfferStatusValue(status);
 }
+
