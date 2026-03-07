@@ -5,7 +5,7 @@ import {
   type CounterOfferItem,
 } from "@/features/counter-offer/api";
 import { getQuoteSummary } from "@/shared/api/generated";
-import { recommendRoutes as recommendRoutesGenerated } from "@/shared/api/generated/driver-optimization-controller/driver-optimization-controller";
+import { recommendRoutes as recommendRoutesGenerated } from "@/shared/api/generated/driver-optimization/driver-optimization";
 import type { DriverQuoteSummaryResponse } from "@/shared/api/generated/schemas/driverQuoteSummaryResponse";
 import { getDriverMatchMode } from "@/shared/lib/config/env";
 import {

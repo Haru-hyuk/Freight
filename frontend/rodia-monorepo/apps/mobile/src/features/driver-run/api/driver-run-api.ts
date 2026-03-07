@@ -1,6 +1,6 @@
-import { completeTransit as completeTransitGenerated, startTransit as startTransitGenerated } from "@/shared/api/generated/driver-match-controller/driver-match-controller";
-import { getDriverMatchPhotos as getDriverMatchPhotosGenerated, uploadDriverPhoto as uploadDriverPhotoGenerated } from "@/shared/api/generated/delivery-photo-controller/delivery-photo-controller";
-import { submitDriverGps as submitDriverGpsGenerated, updateTrackingSharing as updateTrackingSharingGenerated } from "@/shared/api/generated/tracking-controller/tracking-controller";
+﻿import { completeTransit as completeTransitGenerated, startTransit as startTransitGenerated } from "@/shared/api/generated/driver-match/driver-match";
+import { getDriverMatchPhotos as getDriverMatchPhotosGenerated, uploadDriverPhoto as uploadDriverPhotoGenerated } from "@/shared/api/generated/delivery-photo/delivery-photo";
+import { submitDriverGps as submitDriverGpsGenerated, updateTrackingSharing as updateTrackingSharingGenerated } from "@/shared/api/generated/tracking/tracking";
 import type {
   DeliveryPhotoResponse,
   GpsLogUpsertRequest,
@@ -277,3 +277,4 @@ export async function uploadDriverRunPhoto(
 
   return toDeliveryPhotoResponse(data);
 }
+

@@ -1,4 +1,4 @@
-import { uploadDriverPhoto as uploadDriverPhotoGenerated } from "@/shared/api/generated/delivery-photo-controller/delivery-photo-controller";
+﻿import { uploadDriverPhoto as uploadDriverPhotoGenerated } from "@/shared/api/generated/delivery-photo/delivery-photo";
 import type { UploadDriverPhotoType } from "@/shared/api/generated/schemas";
 import { getApiBaseUrl, isMockMode } from "@/shared/lib/config/env";
 
@@ -145,3 +145,5 @@ export async function uploadImage(
 }
 
 export type { UploadDriverPhotoType as DriverPhotoUploadType };
+
+

@@ -20,8 +20,8 @@ export interface CargoItem {
   bottomOnly?: boolean;
   maxStackWeight?: number;
   handling?: CargoItemHandlingItem[];
+  fragileFromHandling?: boolean;
   uprightFromHandling?: boolean;
   easyBreakFromHandling?: boolean;
-  fragileFromHandling?: boolean;
   vulnerableFromHandling?: boolean;
 }

@@ -6,6 +6,7 @@
  */
 
 export interface DriverSignupRequest {
+  /** @minLength 1 */
   email: string;
   /**
    * @minLength 8
@@ -18,11 +19,19 @@ export interface DriverSignupRequest {
    * @maxLength 50
    */
   name: string;
-  /** @pattern ^01[0-9]-?\d{3,4}-?\d{4}$ */
+  /**
+   * @minLength 1
+   * @pattern ^01[0-9]-?\d{3,4}-?\d{4}$
+   */
   phone: string;
+  /** @minLength 1 */
   address: string;
   addressDetail?: string;
+  /** @minLength 1 */
   bankName: string;
-  /** @pattern ^\d{10,14}$ */
+  /**
+   * @minLength 1
+   * @pattern ^\d{10,14}$
+   */
   bankAccount: string;
 }

@@ -3,8 +3,8 @@ import { ActivityIndicator, Linking, StyleSheet, View } from "react-native";
 import WebView from "react-native-webview";
 
 import type { NormalizedRouteStop } from "@/features/driver-reco/model/routeSummary";
-import { getDirections } from "@/shared/api/generated/kakao-directions-controller/kakao-directions-controller";
-import { getPublicConfig } from "@/shared/api/generated/public-config-controller/public-config-controller";
+import { getDirections } from "@/shared/api/generated/kakao-directions/kakao-directions";
+import { getPublicConfig } from "@/shared/api/generated/public-config/public-config";
 import { safeNumber, safeString } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppText } from "@/shared/ui/kit/AppText";
@@ -411,3 +411,4 @@ export function RecoRouteWebView({
 }
 
 export default RecoRouteWebView;
+

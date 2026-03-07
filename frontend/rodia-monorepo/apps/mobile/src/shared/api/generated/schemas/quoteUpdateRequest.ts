@@ -11,7 +11,13 @@ import type { QuoteStopRequest } from './quoteStopRequest';
 export interface QuoteUpdateRequest {
   truckId?: number;
   originAddress?: string;
+  originAddressDetail?: string;
   destinationAddress?: string;
+  destinationAddressDetail?: string;
+  senderName?: string;
+  senderPhone?: string;
+  receiverName?: string;
+  receiverPhone?: string;
   originLat?: number;
   originLng?: number;
   destinationLat?: number;
@@ -30,6 +36,9 @@ export interface QuoteUpdateRequest {
   allowCombine?: boolean;
   loadMethod?: string;
   unloadMethod?: string;
+  pickupScheduleStart?: string;
+  deliveryDeadline?: string;
+  deliverySchedule?: string;
   checklistItems?: QuoteChecklistItemRequest[];
   quoteItems?: QuoteItemRequest[];
   stops?: QuoteStopRequest[];

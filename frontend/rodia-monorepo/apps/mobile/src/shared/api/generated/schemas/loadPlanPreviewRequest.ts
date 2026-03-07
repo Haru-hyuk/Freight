@@ -7,5 +7,6 @@
 
 export interface LoadPlanPreviewRequest {
   truckId?: number;
+  /** @minItems 1 */
   quoteIds: number[];
 }

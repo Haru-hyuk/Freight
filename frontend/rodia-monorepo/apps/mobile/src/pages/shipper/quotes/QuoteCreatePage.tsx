@@ -20,8 +20,12 @@ import {
   useQuoteCreateDraft,
 } from "@/features/quote/model/quoteCreateDraft";
 import { createShipperMatch } from "@/features/matching/api";
-import { createShipperQuote, previewShipperQuote, type QuotePricePreview } from "@/features/quote/api/quote-api";
-import { buildQuoteCreateRequest } from "@/features/quote/model/quoteCreateRequestMapper";
+import {
+  createShipperQuote,
+  mapToQuoteCreateRequest,
+  previewShipperQuote,
+  type QuotePricePreview,
+} from "@/features/quote/api/quote-api";
 import { isActorOnlyWorkMethod } from "@/features/quote/model/workMethod";
 import { getQuoteFlatCardStyle, QUOTE_PROGRESS_TOKENS } from "@/features/quote/ui/QuoteCreateUiPrimitives";
 import QuoteCreateStep1 from "@/features/quote/ui/QuoteCreateStep1";
@@ -190,8 +194,8 @@ function QuoteCreatePageInner() {
   const parseQty = (v?: string) => parseInt((v ?? "").replace(/[^\d]/g, ""), 10) || 0;
 
   const isStep1Ready = useMemo(() => {
-    return hasText(draft?.startAddr) && hasText(draft?.endAddr) && hasText(draft?.senderPhone);
-  }, [draft?.startAddr, draft?.endAddr, draft?.senderPhone]);
+    return hasText(draft?.startAddr) && hasText(draft?.endAddr);
+  }, [draft?.startAddr, draft?.endAddr]);
 
   const cargoList = draft?.cargoList ?? [];
   const validCargoCount = useMemo(() => {
@@ -226,13 +230,27 @@ function QuoteCreatePageInner() {
     });
   }, [draft?.endAddr, draft?.startAddr, params?.prefillEndAddr, params?.prefillStartAddr, patchDraft]);
 
+  const budgetUserTouchedRef = useRef(false);
+
   useEffect(() => {
+    if (previewPrice === null) return;
+    if (budgetUserTouchedRef.current) return;
+    if ((draft?.budget ?? "").trim().length > 0) return;
+    patchDraft({ budget: String(previewPrice) } as any);
+  }, [previewPrice]);
+
+  useEffect(() => {
+    if (step !== 3) {
+      setIsPreviewLoading(false);
+      return;
+    }
+
     const submitBasePrice = Math.max(0, Math.trunc(Number(pricing?.basePrice ?? 0)));
     const draftForPreview: typeof draft & { basePrice?: number } = {
       ...draft,
       basePrice: submitBasePrice,
     };
-    const payload = buildQuoteCreateRequest(draftForPreview);
+    const payload = mapToQuoteCreateRequest(draftForPreview);
     const { truckId: _ignoredTruckId, ...previewPayload } = payload;
 
     if (!String(previewPayload?.originAddress ?? "").trim() || !String(previewPayload?.destinationAddress ?? "").trim()) {
@@ -273,7 +291,7 @@ function QuoteCreatePageInner() {
       canceled = true;
       clearTimeout(timer);
     };
-  }, [draft, pricing?.basePrice]);
+  }, [draft, pricing?.basePrice, step]);
 
   const goBack = () => {
     if (step > 1) {
@@ -324,7 +342,7 @@ function QuoteCreatePageInner() {
       basePrice: submitBasePrice,
     };
     
-    const payload = buildQuoteCreateRequest(draftForSubmit);
+    const payload = mapToQuoteCreateRequest(draftForSubmit);
     const { truckId: _ignoredTruckId, ...createPayload } = payload;
 
     const stops = Array.isArray(payload?.stops) ? payload.stops : [];
@@ -504,7 +522,7 @@ function QuoteCreatePageInner() {
 
       {step === 1 && <QuoteCreateStep1 />}
       {step === 2 && <QuoteCreateStep2 />}
-      {step === 3 && <QuoteCreateStep3 validationPreview={validationPreview} isValidationLoading={isPreviewLoading} />}
+      {step === 3 && <QuoteCreateStep3 validationPreview={validationPreview} isValidationLoading={isPreviewLoading} onUserBudgetChange={() => { budgetUserTouchedRef.current = true; }} />}
 
       <Modal visible={isSubmitDoneOpen} transparent animationType="fade" onRequestClose={goToQuoteList}>
         <View style={styles.requestModalOverlay}>

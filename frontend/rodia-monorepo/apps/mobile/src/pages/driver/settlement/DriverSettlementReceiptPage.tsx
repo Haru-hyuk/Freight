@@ -3,9 +3,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { ActivityIndicator, Alert, Pressable, ScrollView, Share, StyleSheet, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
-import { getDriverSettlementByMatch } from "@/features/driver-profile/api/driver-settlement-api";
+import { getDriverSettlementByMatch, type SettlementResponse } from "@/features/driver-profile/api/driver-settlement-api";
 import { SettlementPriceBreakdown } from "@/features/settlement/ui/SettlementPriceBreakdown";
-import type { SettlementResponse } from "@/shared/api/generated/schemas/settlementResponse";
 import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
 import { formatDateTime, formatKrw } from "@/shared/lib/format/display";
 import { safeNumber, tint } from "@/shared/theme/colorUtils";

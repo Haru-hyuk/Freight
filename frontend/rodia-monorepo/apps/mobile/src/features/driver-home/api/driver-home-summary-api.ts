@@ -1,4 +1,4 @@
-import {
+﻿import {
   isCounterOfferPending,
   listMyDriverCounterOffers,
   type CounterOfferItem,
@@ -13,7 +13,7 @@ import {
   listOpenDriverMatches,
   type DriverMatchItem,
 } from "@/features/matching/api/shipper-match-api";
-import { listPublished } from "@/shared/api/generated/announcement-controller/announcement-controller";
+import { listPublished } from "@/shared/api/generated/announcement/announcement";
 import type { AnnouncementResponse } from "@/shared/api/generated/schemas/announcementResponse";
 import { isMockMode } from "@/shared/lib/config/env";
 
@@ -291,3 +291,4 @@ export async function loadDriverHomeSummary(
     announcements,
   };
 }
+

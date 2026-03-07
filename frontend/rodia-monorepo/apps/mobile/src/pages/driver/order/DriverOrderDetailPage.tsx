@@ -28,8 +28,7 @@ import {
 import { DRIVER_ROUTE_PATH } from "@/features/matching/model/driverRunUiApiGrounding";
 import type { CounterOfferSubmitPayload } from "@/features/matching/ui/CounterOfferModal";
 import type { QuoteDetailResponse } from "@/entities/quote/model/quote.types";
-import { previewLoadPlan as previewLoadPlanGenerated } from "@/shared/api/generated/driver-optimization-controller/driver-optimization-controller";
-import type { LoadPlanResponse, Placement, TruckSpecReferenceResponse } from "@/shared/api/generated/schemas";
+import { previewDriverLoadPlan, type LoadPlanResponse, type Placement, type TruckSpecReferenceResponse } from "@/features/matching/api";
 import { confirmLoading, confirmUnloading, startDriving } from "@/shared/lib/mock-flow";
 import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
 import {
@@ -729,7 +728,7 @@ export default function DriverOrderDetailPage({ params }: DriverOrderDetailPageP
     const safeTruckId = toPositiveInt(viewModel.quote?.truckId);
     (async () => {
       try {
-        const payload = await previewLoadPlanGenerated({
+        const payload = await previewDriverLoadPlan({
           quoteIds: [safeQuoteId],
           ...(safeTruckId > 0 ? { truckId: safeTruckId } : {}),
         });

@@ -24,7 +24,7 @@
  * ─────────────────────────────────────────────────────────────
  * 2. 적재물 그룹 키: Placement.stopOrder
  * ─────────────────────────────────────────────────────────────
- *  - previewLoadPlan API (driver-optimization-controller)가 반환하는 LoadPlanResponse.placements[]의
+ *  - previewLoadPlan API (driver-optimization)가 반환하는 LoadPlanResponse.placements[]의
  *    각 Placement는 stopOrder 필드를 가진다.
  *  - stopOrder는 1-based 정수로, 추천 recommendation.quoteIds 배열 내 quote의 순서(인덱스+1)에 대응한다.
  *    예) quoteIds = [101, 202] → stopOrder=1 아이템들은 quoteId=101, stopOrder=2는 quoteId=202

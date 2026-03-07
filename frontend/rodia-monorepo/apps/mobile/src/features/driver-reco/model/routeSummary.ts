@@ -1,4 +1,4 @@
-// OpenAPI grounding (route-assembly-controller.recommend):
+﻿// OpenAPI grounding (route-assembly-controller.recommend):
 // - POST /api/route-assembly/recommend → RouteAssemblyResponse
 // - RouteAssemblyRequest: { selectedQuoteIds?, candidateQuotes?: Quote[], mode?: "SIMPLE"|"SMART" }
 //   candidateQuotes with origin/destination Place coordinates is required at runtime (server 500 without it).
@@ -13,7 +13,7 @@ import { buildRouteAssemblyRequest } from "@/features/driver-reco/model/routeAss
 import {
   evaluate as evaluateRouteAssemblyGenerated,
   recommend as recommendRouteAssemblyGenerated,
-} from "@/shared/api/generated/route-assembly-controller/route-assembly-controller";
+} from "@/shared/api/generated/route-assembly/route-assembly";
 
 type AnyObject = Record<string, unknown>;
 
@@ -207,3 +207,4 @@ export async function fetchRouteSummary({ selectedQuoteIds, quotes = [] }: Fetch
     return { ...buildEmptyRouteSummary("경로 계산 실패(서버 오류)"), isError: true };
   }
 }
+

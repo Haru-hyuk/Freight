@@ -1,10 +1,13 @@
 import {
   getByMatch1,
   getMySettlements1,
-} from "@/shared/api/generated/driver-settlement-controller/driver-settlement-controller";
+} from "@/shared/api/generated/driver-settlement/driver-settlement";
 import type { SettlementResponse } from "@/shared/api/generated/schemas/settlementResponse";
 import { isMockMode } from "@/shared/lib/config/env";
 
+// ─── 타입 재공개 ──────────────────────────────────────────────────────────────
+
+export type { SettlementResponse };
 export type DriverSettlementItem = SettlementResponse;
 
 const DRIVER_SETTLEMENT_MOCK_ITEMS: ReadonlyArray<SettlementResponse> = [

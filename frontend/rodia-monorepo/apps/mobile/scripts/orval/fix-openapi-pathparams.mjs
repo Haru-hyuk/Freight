@@ -84,6 +84,126 @@ function addMissingPathParamsToOperation(operation, paramNames, fallbackSchema) 
   return added;
 }
 
+/**
+ * Admin과 관련된 모든 흔적을 spec에서 제거한다.
+ *
+ * (1) paths: '/api/admin' 으로 시작하는 경로 전체 삭제
+ * (2) components.schemas:
+ *     - 이름이 'Admin' 으로 시작하는 schema
+ *     - 이름에 'Deviation', 'Sanction', 'ActivityLog' 를 포함하는 schema
+ *
+ * openapi.fixed.json 저장 전에 적용되어 Orval 코드 생성 단계 이전에
+ * 관리자 전용 API와 DTO를 완전히 차단한다.
+ *
+ * @param {object} openapiJson
+ * @returns {{ fixed: object, removedPaths: number, removedSchemas: number }}
+ */
+function purgeAdminTraces(openapiJson) {
+  // (1) /api/admin/* 경로 제거
+  const rawPaths = openapiJson?.paths ?? {};
+  const filteredPaths = {};
+  let removedPaths = 0;
+
+  for (const [routePath, pathItem] of Object.entries(rawPaths)) {
+    if (routePath.startsWith("/api/admin")) {
+      removedPaths += 1;
+    } else {
+      filteredPaths[routePath] = pathItem;
+    }
+  }
+
+  // (2) Admin 관련 schema 제거
+  const rawSchemas = openapiJson?.components?.schemas ?? {};
+  const filteredSchemas = {};
+  let removedSchemas = 0;
+
+  for (const [schemaName, schemaDef] of Object.entries(rawSchemas)) {
+    const isAdminSchema =
+      schemaName.startsWith("Admin") ||
+      schemaName.includes("Deviation") ||
+      schemaName.includes("Sanction") ||
+      schemaName.includes("ActivityLog");
+
+    if (isAdminSchema) {
+      removedSchemas += 1;
+    } else {
+      filteredSchemas[schemaName] = schemaDef;
+    }
+  }
+
+  const fixed = {
+    ...openapiJson,
+    paths: filteredPaths,
+    components: {
+      ...openapiJson?.components,
+      schemas: filteredSchemas,
+    },
+  };
+
+  return { fixed, removedPaths, removedSchemas };
+}
+
+function normalizeControllerTag(tag) {
+  const original = String(tag ?? "").trim();
+  if (!original) return original;
+  if (!/controller$/i.test(original)) return original;
+
+  const withoutSuffix = original.replace(/-?controller$/i, "");
+  const kebab = withoutSuffix
+    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+    .replace(/[_\s]+/g, "-")
+    .replace(/-+/g, "-")
+    .toLowerCase()
+    .trim();
+
+  return kebab || original;
+}
+
+function normalizeControllerTags(openapiJson) {
+  const paths = openapiJson?.paths ?? {};
+  if (!paths || typeof paths !== "object") return { fixed: openapiJson, renamedTags: 0 };
+
+  const HTTP_METHODS = [
+    "get",
+    "post",
+    "put",
+    "patch",
+    "delete",
+    "options",
+    "head",
+    "trace",
+  ];
+
+  let renamedTags = 0;
+
+  for (const [, pathItem] of Object.entries(paths)) {
+    if (!pathItem || typeof pathItem !== "object") continue;
+
+    for (const method of HTTP_METHODS) {
+      const operation = pathItem?.[method];
+      if (!operation || typeof operation !== "object") continue;
+
+      const tags = Array.isArray(operation.tags) ? operation.tags : [];
+      if (tags.length <= 0) continue;
+
+      const nextTags = [];
+      for (const tag of tags) {
+        const original = String(tag ?? "").trim();
+        if (!original) continue;
+        const normalized = normalizeControllerTag(original);
+        if (normalized !== original) renamedTags += 1;
+        if (!nextTags.includes(normalized)) nextTags.push(normalized);
+      }
+
+      if (nextTags.length > 0) {
+        operation.tags = nextTags;
+      }
+    }
+  }
+
+  return { fixed: openapiJson, renamedTags };
+}
+
 function fixOpenApiPathParams(openapiJson) {
   const paths = openapiJson?.paths ?? {};
   if (!paths || typeof paths !== "object") return { fixed: openapiJson, added: 0 };
@@ -178,16 +298,23 @@ async function main() {
 
   // 1. Path Params Fix
   const { fixed, added } = fixOpenApiPathParams(rawJson ?? {});
-  
-  // 2. [수정 포인트] Blob 버그 원인인 */* Content-Type을 application/json으로 강제 일괄 치환
+
+  // 2. Blob 버그 원인인 */* Content-Type을 application/json으로 강제 일괄 치환
   let fixedString = JSON.stringify(fixed);
   fixedString = fixedString.replace(/"\*\/\*"/g, '"application/json"');
-  const finalFixedJson = JSON.parse(fixedString);
+  const afterContentTypeFix = JSON.parse(fixedString);
 
-  safeWriteJson(FIXED_PATH, finalFixedJson);
+  // 3. Admin 경로 + Schema 완전 제거 — 모바일 앱 번들 최적화
+  const { fixed: finalFixedJson, removedPaths, removedSchemas } = purgeAdminTraces(afterContentTypeFix);
+  // 4. tags-split 결과 경로에서 controller 접미사 제거
+  const { fixed: normalizedTagJson, renamedTags } = normalizeControllerTags(finalFixedJson);
+
+  safeWriteJson(FIXED_PATH, normalizedTagJson);
 
   console.log(`[orval:fetch] added Path Params=${added}`);
   console.log(`[orval:fetch] patched */* to application/json`);
+  console.log(`[orval:fetch] removed Admin paths=${removedPaths}, schemas=${removedSchemas}`);
+  console.log(`[orval:fetch] normalized controller tags=${renamedTags}`);
 }
 
 main().catch((e) => {
