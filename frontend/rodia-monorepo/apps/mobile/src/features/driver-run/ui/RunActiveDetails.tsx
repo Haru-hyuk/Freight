@@ -1205,7 +1205,7 @@ export function RunActiveDetails({
 
   return (
     <PageScaffold
-      title="운행정보"
+      title="운행 정보"
       scroll={false}
       padding={0}
       onPressBack={handleViewRunList}
@@ -1225,7 +1225,7 @@ export function RunActiveDetails({
                 {driverBadgeLabel}
               </AppText>
             </View>
-            <AppText style={styles.idText}>{`매칭 #${safeMatchId || "-"}${quoteId > 0 ? ` · 견적 #${quoteId}` : ""}`}</AppText>
+            <AppText style={styles.idText}>{`매칭 #${safeMatchId || "-"}${quoteId > 0 ? ` · 오더 #${quoteId}` : ""}`}</AppText>
           </View>
           <View style={styles.syncRow}>
             <AppText style={styles.syncTimeLabel}>{`마지막 동기화 시각: ${syncTimeText}`}</AppText>

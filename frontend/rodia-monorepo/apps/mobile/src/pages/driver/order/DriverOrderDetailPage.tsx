@@ -635,7 +635,7 @@ export default function DriverOrderDetailPage({ params }: DriverOrderDetailPageP
     routeSource === "market" ||
     uiState === DRIVER_UI_STATE.READY_TO_ACCEPT ||
     uiState === DRIVER_UI_STATE.NEGOTIATING;
-  const pageTitle = isQuoteMode ? "견적 상세" : "오더 상세";
+  const pageTitle = "오더 상세";
   const isRunNegotiationProbeLoading =
     routeSource === "run" && matchId > 0 && runNegotiationProbeMatchId !== matchId;
   const negotiatingQuoteId = toPositiveInt(viewModel.quote?.quoteId ?? parsedMatch?.quoteId ?? viewModel.quoteId);

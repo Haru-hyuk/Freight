@@ -108,10 +108,10 @@ type DriverOrdersListItem =
 
 const RUN_STATUS_FILTER_LABELS: Record<RunStatusFilterKey, string> = {
   ALL: "전체",
-  NEGOTIATING: "협의중",
-  ASSIGNED: "배차완료",
-  PICKUP: "상차중",
-  TRANSIT: "운송중",
+  NEGOTIATING: "협의 중",
+  ASSIGNED: "배차 확정",
+  PICKUP: "상차 중",
+  TRANSIT: "운송 중",
   COMPLETED: "완료",
 };
 
@@ -1335,7 +1335,7 @@ export function DriverOrdersBoard({
         )
       );
       if (safeQuoteIds.length <= 0) {
-        showToast("추천 노선에 유효한 견적 ID가 없습니다.");
+        showToast("추천 노선에 유효한 오더 정보가 없습니다.");
         return;
       }
 
