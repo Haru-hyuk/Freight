@@ -47,8 +47,9 @@ formData.append(`file`, uploadDriverPhotoBody.file);
   export const downloadPhoto = (
     photoId: number,
  ) => {
-      return customInstance<string>(
-      {url: `/api/delivery-photos/${photoId}/file`, method: 'GET'
+      return customInstance<Blob>(
+      {url: `/api/delivery-photos/${photoId}/file`, method: 'GET',
+        responseType: 'blob'
     },
       );
     }

@@ -6,6 +6,7 @@
  */
 
 export interface BatchAcceptMatchRequest {
+  /** @minItems 1 */
   matchIds: number[];
   routeType?: string;
   orderedQuoteIds?: number[];

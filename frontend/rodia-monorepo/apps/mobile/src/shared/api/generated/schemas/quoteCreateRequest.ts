@@ -19,7 +19,37 @@ export interface QuoteCreateRequest {
    * @minLength 0
    * @maxLength 255
    */
+  originAddressDetail?: string;
+  /**
+   * @minLength 0
+   * @maxLength 255
+   */
   destinationAddress: string;
+  /**
+   * @minLength 0
+   * @maxLength 255
+   */
+  destinationAddressDetail?: string;
+  /**
+   * @minLength 0
+   * @maxLength 100
+   */
+  senderName?: string;
+  /**
+   * @minLength 0
+   * @maxLength 50
+   */
+  senderPhone?: string;
+  /**
+   * @minLength 0
+   * @maxLength 100
+   */
+  receiverName?: string;
+  /**
+   * @minLength 0
+   * @maxLength 50
+   */
+  receiverPhone?: string;
   /**
    * @minimum -90
    * @maximum 90
@@ -40,30 +70,37 @@ export interface QuoteCreateRequest {
    * @maximum 180
    */
   destinationLng?: number;
-  /** @minimum 1 */
   distanceKm?: number;
   /** @minimum 1 */
   weightKg: number;
   volumeCbm?: number;
+  /** @minLength 1 */
   vehicleType: string;
+  /** @minLength 1 */
   vehicleBodyType: string;
   /**
    * @minLength 0
    * @maxLength 100
    */
   cargoName: string;
+  /** @minLength 1 */
   cargoType: string;
   /**
    * @minLength 0
    * @maxLength 500
    */
   cargoDesc?: string;
-  basePrice?: number;
+  basePrice: number;
   distancePrice?: number;
   desiredPrice?: number;
   allowCombine?: boolean;
+  /** @minLength 1 */
   loadMethod: string;
+  /** @minLength 1 */
   unloadMethod: string;
+  pickupScheduleStart?: string;
+  deliveryDeadline?: string;
+  deliverySchedule?: string;
   checklistItems?: QuoteChecklistItemRequest[];
   quoteItems?: QuoteItemRequest[];
   stops?: QuoteStopRequest[];

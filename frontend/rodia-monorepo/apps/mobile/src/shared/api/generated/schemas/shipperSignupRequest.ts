@@ -6,6 +6,7 @@
  */
 
 export interface ShipperSignupRequest {
+  /** @minLength 1 */
   email: string;
   /**
    * @minLength 8
@@ -23,15 +24,23 @@ export interface ShipperSignupRequest {
    * @maxLength 100
    */
   companyName: string;
-  /** @pattern ^01[0-9]-?\d{3,4}-?\d{4}$ */
+  /**
+   * @minLength 1
+   * @pattern ^01[0-9]-?\d{3,4}-?\d{4}$
+   */
   phone: string;
+  /** @minLength 1 */
   address: string;
   addressDetail?: string;
-  /** @pattern ^\d{3}-?\d{2}-?\d{5}$ */
+  /**
+   * @minLength 1
+   * @pattern ^\d{3}-?\d{2}-?\d{5}$
+   */
   bizRegNo: string;
   /** @pattern ^0\d{1,2}-?\d{3,4}-?\d{4}$ */
   bizPhone?: string;
   /** @pattern ^\d{8}$ */
   openDate?: string;
+  /** @minLength 1 */
   ownerName: string;
 }

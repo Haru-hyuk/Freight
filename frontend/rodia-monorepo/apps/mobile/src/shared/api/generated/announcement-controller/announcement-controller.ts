@@ -20,7 +20,7 @@ import { customInstance } from '../../orval/custom-instance';
     },
       );
     }
-  export const get = (
+  export const get1 = (
     announcementId: number,
  ) => {
       return customInstance<AnnouncementResponse>(
@@ -29,4 +29,4 @@ import { customInstance } from '../../orval/custom-instance';
       );
     }
   export type ListPublishedResult = NonNullable<Awaited<ReturnType<typeof listPublished>>>
-export type GetResult = NonNullable<Awaited<ReturnType<typeof get>>>
+export type Get1Result = NonNullable<Awaited<ReturnType<typeof get1>>>

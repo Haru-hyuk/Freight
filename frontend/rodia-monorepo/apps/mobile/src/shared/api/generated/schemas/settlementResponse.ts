@@ -13,6 +13,9 @@ export interface SettlementResponse {
   totalFare?: number;
   platformFee?: number;
   fastFee?: number;
+  routeDistanceKm?: number;
+  fuelCost?: number;
+  tollFee?: number;
   driverPayout?: number;
   shipperPaymentStatus?: string;
   shipperPaymentMethod?: string;

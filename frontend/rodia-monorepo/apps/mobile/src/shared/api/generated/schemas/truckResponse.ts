@@ -19,6 +19,9 @@ export interface TruckResponse {
   name?: string;
   imageUrl?: string;
   approved?: boolean;
+  approvalStatus?: string;
+  reviewMemo?: string;
+  selected?: boolean;
   insurance?: string;
   odometerKm?: number;
   lastInspectionDate?: string;
