@@ -149,7 +149,7 @@ const DriverOrderLoadSimulation = ({
       ? "매칭 응답의 적재 계획 데이터"
       : source === "preview"
       ? "서버 프리뷰 기반 적재 계획"
-      : "견적 화물 스키마 기반 자동 배치 (Fallback)";
+      : "오더 화물 정보 기반 자동 배치 (Fallback)";
 
   return (
     <AppCard style={simStyles.card}>
@@ -986,7 +986,7 @@ export function DriverOrderDetailView({
     return (
       <PageScaffold
         title={pageTitle}
-        subtitle="오더 정보 확인"
+        subtitle="오더 상세 정보"
         scroll={false}
         padding={20}
         onPressBack={onBack}
@@ -1008,7 +1008,7 @@ export function DriverOrderDetailView({
     return (
       <PageScaffold
         title={pageTitle}
-        subtitle="오더 정보 확인"
+        subtitle="오더 상세 정보"
         scroll={false}
         padding={20}
         onPressBack={onBack}
@@ -1025,7 +1025,7 @@ export function DriverOrderDetailView({
     return (
       <PageScaffold
         title={pageTitle}
-        subtitle="오더 정보 확인"
+        subtitle="오더 상세 정보"
         scroll={false}
         padding={20}
         onPressBack={onBack}
@@ -1048,7 +1048,7 @@ export function DriverOrderDetailView({
     return (
       <PageScaffold
         title={pageTitle}
-        subtitle="오더 정보 확인"
+        subtitle="오더 상세 정보"
         scroll={false}
         padding={20}
         onPressBack={onBack}
@@ -1215,7 +1215,7 @@ export function DriverOrderDetailView({
             <AppCard style={{ padding: 16 }}>
               <View style={themedStyles.listHeader}>
                 <AppText variant="heading" weight="bold">
-                  Loading Order List
+                  적재 오더 목록
                 </AppText>
                 <AppText variant="caption" color={theme.colors.textMuted}>
                   상차 후 하차 순서 기준으로 적재물을 확인하세요.

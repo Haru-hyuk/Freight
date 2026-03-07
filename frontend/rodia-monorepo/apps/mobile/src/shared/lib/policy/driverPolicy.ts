@@ -39,10 +39,10 @@ const DRIVER_UI_STATE_BY_BACKEND_STATUS: Readonly<Record<BackendStatus, DriverUi
 
 const DRIVER_STATUS_TITLE_MAP: Readonly<Record<DriverUiState, string>> = {
   [DRIVER_UI_STATE.READY_TO_ACCEPT]: "배차 요청이 도착했습니다",
-  [DRIVER_UI_STATE.NEGOTIATING]: "운임 협의가 진행 중입니다",
+  [DRIVER_UI_STATE.NEGOTIATING]: "운임 협의 중입니다",
   [DRIVER_UI_STATE.ASSIGNED]: "배차가 확정되었습니다",
   [DRIVER_UI_STATE.PICKUP_IN_PROGRESS]: "상차가 진행 중입니다",
-  [DRIVER_UI_STATE.TRANSIT_IN_PROGRESS]: "운송이 진행 중입니다",
+  [DRIVER_UI_STATE.TRANSIT_IN_PROGRESS]: "운송 중입니다",
   [DRIVER_UI_STATE.COMPLETED]: "운송이 완료되었습니다",
   [DRIVER_UI_STATE.CANCELED]: "배차가 취소되었습니다",
   [DRIVER_UI_STATE.UNKNOWN]: "상태 확인이 필요합니다",
