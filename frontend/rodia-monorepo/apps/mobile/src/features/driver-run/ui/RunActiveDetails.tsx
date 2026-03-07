@@ -77,6 +77,7 @@ type RoutePhotoStop = {
 const KAKAO_MAP_WEB_URL = "https://map.kakao.com/";
 const IMAGE_PICKER_MISSING_MESSAGE = "이미지 선택 모듈(expo-image-picker)이 없어 사진 업로드를 사용할 수 없습니다.";
 const AUTO_GPS_SUBMIT_INTERVAL_MS = 60_000;
+const PHOTO_UPLOAD_PICKER_QUALITY = 0.2;
 
 const useStyles = createThemedStyles((theme) => {
   const spacing = safeNumber(theme?.layout?.spacing?.base, 4);
@@ -1094,11 +1095,16 @@ export function RunActiveDetails({
         return;
       }
 
-      const result = await picker.launchImageLibraryAsync({
+      const pickerOptions: Record<string, unknown> = {
         mediaTypes: picker.MediaTypeOptions?.Images,
         allowsEditing: false,
-        quality: 0.9,
-      });
+        quality: PHOTO_UPLOAD_PICKER_QUALITY,
+      };
+      if (Platform.OS === "ios") {
+        // HEIC 원본 대신 호환 포맷으로 선택해 업로드 실패를 줄인다.
+        pickerOptions.preferredAssetRepresentationMode = "compatible";
+      }
+      const result = await picker.launchImageLibraryAsync(pickerOptions);
       if (result?.canceled) return;
 
       const selectedUri = toText(result?.assets?.[0]?.uri);

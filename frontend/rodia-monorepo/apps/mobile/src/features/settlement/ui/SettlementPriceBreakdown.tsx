@@ -14,7 +14,7 @@ type SettlementPriceBreakdownProps = {
 };
 
 type BreakdownRow = {
-  key: "driverPayout" | "platformFee" | "fastFee" | "dueDate";
+  key: "driverPayout" | "totalFare" | "platformFee" | "fastFee" | "dueDate";
   label: string;
   value: string;
   valueVariant?: "title" | "detail";
@@ -33,22 +33,28 @@ function buildRows(settlement: SettlementResponse): BreakdownRow[] {
   const rows: BreakdownRow[] = [
     {
       key: "driverPayout",
-      label: "기사 지급액",
+      label: "실수령액",
       value: toMoneyText(settlement.driverPayout),
       valueVariant: "title",
     },
     {
+      key: "totalFare",
+      label: "총 운임 (화주 결제 금액)",
+      value: toMoneyText(settlement.totalFare),
+      valueVariant: "detail",
+    },
+    {
       key: "platformFee",
-      label: "플랫폼 수수료",
+      label: "플랫폼 수수료 (공제)",
       value: toMoneyText(settlement.platformFee),
       valueVariant: "title",
     },
   ];
 
   if (typeof settlement.fastFee === "number" && settlement.fastFee > 0) {
-    rows.splice(1, 0, {
+    rows.splice(3, 0, {
       key: "fastFee",
-      label: "급행 수수료",
+      label: "빠른 정산 수수료 (공제)",
       value: toMoneyText(settlement.fastFee),
       valueVariant: "title",
     });
@@ -57,7 +63,7 @@ function buildRows(settlement: SettlementResponse): BreakdownRow[] {
   if (settlement.dueDate) {
     rows.push({
       key: "dueDate",
-      label: "결제 기한",
+      label: "정산 예정일",
       value: toDateTimeText(settlement.dueDate),
       valueVariant: "detail",
     });
@@ -105,23 +111,6 @@ const useStyles = createThemedStyles((theme) => {
       textAlign: "right",
       flexShrink: 0,
     },
-    totalWrap: {
-      borderTopWidth: 1,
-      borderTopColor: theme.colors.borderDefault,
-      marginTop: s,
-      paddingTop: s * 2,
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      gap: s * 2,
-    },
-    totalLabel: {
-      color: theme.colors.textMuted,
-    },
-    totalValue: {
-      color: theme.colors.brandPrimary,
-      textAlign: "right",
-    },
   });
 });
 
@@ -152,14 +141,6 @@ export function SettlementPriceBreakdown({ title = "정산 금액 내역", settl
             </View>
           );
         })}
-        <View style={styles.totalWrap}>
-          <AppText variant="caption" weight="700" style={styles.totalLabel}>
-            합계
-          </AppText>
-          <AppText variant="title" weight="900" style={styles.totalValue}>
-            {toMoneyText(settlement.totalFare)}
-          </AppText>
-        </View>
       </AppCard>
     </View>
   );

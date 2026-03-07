@@ -190,14 +190,14 @@ function resolveUriExtension(uri: string): string {
   const path = toText(uri).split("?")[0] ?? "";
   const parts = path.split(".");
   const ext = (parts[parts.length - 1] ?? "").toLowerCase();
-  if (ext === "png" || ext === "webp" || ext === "heic" || ext === "jpg" || ext === "jpeg") return ext;
+  if (ext === "png" || ext === "webp" || ext === "jpg" || ext === "jpeg") return ext;
+  if (ext === "heic") return "jpg";
   return "jpg";
 }
 
 function resolveMimeType(extension: string): string {
   if (extension === "png") return "image/png";
   if (extension === "webp") return "image/webp";
-  if (extension === "heic") return "image/heic";
   return "image/jpeg";
 }
 

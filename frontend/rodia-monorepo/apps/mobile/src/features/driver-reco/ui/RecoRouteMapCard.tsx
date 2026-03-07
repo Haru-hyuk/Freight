@@ -1,5 +1,16 @@
-import React, { useMemo, useState } from "react";
-import { ActivityIndicator, Modal, Pressable, StyleSheet, TouchableOpacity, View } from "react-native";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  Animated,
+  Modal,
+  PanResponder,
+  Pressable,
+  StyleSheet,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
   KAKAO_LINK_MAX_POINTS,
@@ -25,6 +36,18 @@ type RecoRouteMapCardProps = {
   selectedStopOrder?: number | null;
   onRetry?(): void;
 };
+
+const MAP_MODAL_BASE_HEIGHT_RATIO = 0.8;
+const MAP_MODAL_MAX_RAISE_RATIO = 0.12;
+const MAP_MODAL_CLOSE_THRESHOLD_RATIO = 0.22;
+const MAP_MODAL_MIN_HEIGHT = 360;
+const MAP_MODAL_MIN_RAISE = 40;
+const MAP_MODAL_MIN_CLOSE_THRESHOLD = 72;
+const MAP_MODAL_OVERSCROLL_ALLOWANCE = 32;
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
 
 const useStyles = createThemedStyles((theme) => {
   const spacing = safeNumber(theme?.layout?.spacing?.base, 4);
@@ -105,11 +128,32 @@ const useStyles = createThemedStyles((theme) => {
     },
     modalRoot: {
       flex: 1,
+      justifyContent: "flex-end",
+    },
+    modalBackdrop: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: tint(cTextMain, 0.42, cTextMain),
+    },
+    modalSheet: {
       backgroundColor: theme.colors.bgSurfaceAlt,
+      borderTopLeftRadius: 16,
+      borderTopRightRadius: 16,
+      overflow: "hidden",
+    },
+    modalDragArea: {
+      height: spacing * 4,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    modalDragHandle: {
+      width: 42,
+      height: 4,
+      borderRadius: 999,
+      backgroundColor: tint(cTextMain, 0.25, cBorder),
     },
     modalHeader: {
       paddingHorizontal: spacing * 4,
-      paddingTop: spacing * 4,
+      paddingTop: spacing * 2,
       paddingBottom: spacing * 2,
       borderBottomWidth: 1,
       borderBottomColor: tint(cBorder, 0.72, cBorder),
@@ -136,8 +180,6 @@ const useStyles = createThemedStyles((theme) => {
     },
     modalMapWrap: {
       flex: 1,
-      paddingHorizontal: spacing * 2,
-      paddingVertical: spacing * 2,
     },
   });
 });
@@ -152,7 +194,127 @@ export function RecoRouteMapCard({
   onRetry,
 }: RecoRouteMapCardProps) {
   const styles = useStyles();
+  const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
   const [isExpanded, setIsExpanded] = useState(false);
+  const sheetTranslateY = useRef(new Animated.Value(0)).current;
+  const sheetTranslateSnapshotRef = useRef(0);
+  const sheetDragStartRef = useRef(0);
+
+  const modalBaseHeight = useMemo(
+    () => Math.max(MAP_MODAL_MIN_HEIGHT, Math.round(windowHeight * MAP_MODAL_BASE_HEIGHT_RATIO)),
+    [windowHeight]
+  );
+  const modalMaxRaise = useMemo(
+    () => Math.max(MAP_MODAL_MIN_RAISE, Math.round(windowHeight * MAP_MODAL_MAX_RAISE_RATIO)),
+    [windowHeight]
+  );
+  const modalCloseThreshold = useMemo(
+    () => Math.max(MAP_MODAL_MIN_CLOSE_THRESHOLD, Math.round(modalBaseHeight * MAP_MODAL_CLOSE_THRESHOLD_RATIO)),
+    [modalBaseHeight]
+  );
+
+  const animateSheetTo = useCallback(
+    (toValue: number) => {
+      Animated.spring(sheetTranslateY, {
+        toValue,
+        useNativeDriver: true,
+        speed: 18,
+        bounciness: 0,
+      }).start();
+    },
+    [sheetTranslateY]
+  );
+
+  const openExpandedModal = useCallback(() => {
+    if (isExpanded) return;
+    setIsExpanded(true);
+  }, [isExpanded]);
+
+  const closeExpandedModal = useCallback(() => {
+    Animated.timing(sheetTranslateY, {
+      toValue: modalBaseHeight,
+      duration: 180,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (!finished) return;
+      setIsExpanded(false);
+      sheetTranslateY.setValue(0);
+      sheetTranslateSnapshotRef.current = 0;
+    });
+  }, [modalBaseHeight, sheetTranslateY]);
+
+  useEffect(() => {
+    const id = sheetTranslateY.addListener(({ value }) => {
+      sheetTranslateSnapshotRef.current = value;
+    });
+    return () => {
+      sheetTranslateY.removeListener(id);
+    };
+  }, [sheetTranslateY]);
+
+  useEffect(() => {
+    if (!isExpanded) return;
+    sheetTranslateY.stopAnimation();
+    sheetTranslateY.setValue(modalBaseHeight);
+    sheetTranslateSnapshotRef.current = modalBaseHeight;
+    const frameId = requestAnimationFrame(() => {
+      animateSheetTo(0);
+    });
+    return () => {
+      cancelAnimationFrame(frameId);
+    };
+  }, [animateSheetTo, isExpanded, modalBaseHeight, sheetTranslateY]);
+
+  useEffect(() => {
+    return () => {
+      sheetTranslateY.stopAnimation();
+    };
+  }, [sheetTranslateY]);
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gestureState) => {
+          const vertical = Math.abs(gestureState.dy);
+          const horizontal = Math.abs(gestureState.dx);
+          return vertical > 4 && vertical > horizontal;
+        },
+        onPanResponderGrant: () => {
+          sheetDragStartRef.current = sheetTranslateSnapshotRef.current;
+        },
+        onPanResponderMove: (_, gestureState) => {
+          const next = sheetDragStartRef.current + gestureState.dy;
+          const clamped = clamp(
+            next,
+            -modalMaxRaise,
+            modalCloseThreshold + MAP_MODAL_OVERSCROLL_ALLOWANCE
+          );
+          sheetTranslateY.setValue(clamped);
+        },
+        onPanResponderRelease: (_, gestureState) => {
+          const current = sheetTranslateSnapshotRef.current;
+          if (gestureState.vy > 1.1 || current > modalCloseThreshold) {
+            closeExpandedModal();
+            return;
+          }
+          if (gestureState.dy < -28 || current < -modalMaxRaise / 2) {
+            animateSheetTo(-modalMaxRaise);
+            return;
+          }
+          animateSheetTo(0);
+        },
+        onPanResponderTerminate: () => {
+          const current = sheetTranslateSnapshotRef.current;
+          if (current > modalCloseThreshold) {
+            closeExpandedModal();
+            return;
+          }
+          animateSheetTo(0);
+        },
+      }),
+    [animateSheetTo, closeExpandedModal, modalCloseThreshold, modalMaxRaise, sheetTranslateY]
+  );
 
   // OpenAPI: route-assembly 스키마에 polyline/mapLink 없음 → client에서 Kakao link/by URL 생성.
   // stops(visitOrder 기반) 우선; 없으면 fallbackStops(quote origin/dest 기반) 사용.
@@ -217,7 +379,7 @@ export function RecoRouteMapCard({
           </View>
           <Pressable
             style={styles.mapExpandOverlay}
-            onPress={() => setIsExpanded(true)}
+            onPress={openExpandedModal}
             hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
           >
             <View style={styles.mapExpandChip}>
@@ -255,28 +417,45 @@ export function RecoRouteMapCard({
 
         <Modal
           visible={isExpanded}
-          animationType="slide"
-          presentationStyle="fullScreen"
-          onRequestClose={() => setIsExpanded(false)}
+          animationType="fade"
+          transparent
+          statusBarTranslucent
+          onRequestClose={closeExpandedModal}
         >
           <View style={styles.modalRoot}>
-            <View style={styles.modalHeader}>
-              <AppText variant="detail" weight="800" color="textMain" style={styles.modalTitle}>
-                {displaySummary}
-              </AppText>
-              <Pressable style={styles.modalCloseBtn} onPress={() => setIsExpanded(false)}>
-                <AppText variant="caption" weight="800" style={styles.modalCloseText}>
-                  닫기
+            <Pressable style={styles.modalBackdrop} onPress={closeExpandedModal} />
+            <Animated.View
+              style={[
+                styles.modalSheet,
+                {
+                  height: modalBaseHeight,
+                  paddingBottom: Math.max(insets.bottom, 8),
+                  transform: [{ translateY: sheetTranslateY }],
+                },
+              ]}
+            >
+              <View style={styles.modalDragArea} {...panResponder.panHandlers}>
+                <View style={styles.modalDragHandle} />
+              </View>
+              <View style={styles.modalHeader}>
+                <AppText variant="detail" weight="800" color="textMain" style={styles.modalTitle}>
+                  {displaySummary}
                 </AppText>
-              </Pressable>
-            </View>
-            <View style={styles.modalMapWrap}>
-              <RecoRouteWebView
-                stops={effectiveStops}
-                loading={false}
-                externalUrl={kakaoRouteLink.url}
-              />
-            </View>
+                <Pressable style={styles.modalCloseBtn} onPress={closeExpandedModal}>
+                  <AppText variant="caption" weight="800" style={styles.modalCloseText}>
+                    닫기
+                  </AppText>
+                </Pressable>
+              </View>
+              <View style={styles.modalMapWrap}>
+                <RecoRouteWebView
+                  stops={effectiveStops}
+                  loading={false}
+                  externalUrl={kakaoRouteLink.url}
+                  fill
+                />
+              </View>
+            </Animated.View>
           </View>
         </Modal>
       </View>

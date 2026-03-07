@@ -334,7 +334,7 @@ export function DriverSettlementPage() {
 
                   <View style={styles.cardMetaRow}>
                     <AppText variant="caption" style={styles.cardLabel}>
-                      결제 상태
+                      화주 결제 상태
                     </AppText>
                     <AppText variant="detail" weight="700" style={styles.cardValue}>
                       {toPaymentStatusLabel(item.shipperPaymentStatus)}
@@ -352,7 +352,7 @@ export function DriverSettlementPage() {
 
                   <View style={styles.cardMetaRow}>
                     <AppText variant="caption" style={styles.cardLabel}>
-                      총 운임
+                      총 운임 (화주 결제 금액)
                     </AppText>
                     <AppText variant="detail" weight="700" style={styles.cardValue}>
                       {toMoneyText(item.totalFare)}
