@@ -242,6 +242,19 @@ function resolveDistancePrice(draft: QuoteCreateDraft) {
   return Math.max(0, toInt(safeRaw, 0));
 }
 
+function combineDateAndTime(date: Date | undefined, time: Date | undefined): string | undefined {
+  const d = date instanceof Date && !isNaN(date.getTime()) ? date : null;
+  if (!d) return undefined;
+  const combined = new Date(d);
+  const t = time instanceof Date && !isNaN(time.getTime()) ? time : null;
+  if (t) {
+    combined.setHours(t.getHours(), t.getMinutes(), 0, 0);
+  } else {
+    combined.setHours(9, 0, 0, 0);
+  }
+  return combined.toISOString();
+}
+
 function buildChecklistItems(draft: QuoteCreateDraft): QuoteChecklistItemDto[] {
   const selected = Array.isArray(draft?.selectedOpts) ? draft.selectedOpts : [];
   if (!selected.length) return [];
@@ -260,8 +273,8 @@ function buildChecklistItems(draft: QuoteCreateDraft): QuoteChecklistItemDto[] {
 }
 
 export function buildQuoteCreateRequest(draft: QuoteCreateDraft): QuoteCreateRequestPayload {
-  const originAddress = joinAddress(draft.startAddr, draft.startAddrDetail);
-  const destinationAddress = joinAddress(draft.endAddr, draft.endAddrDetail);
+  const originAddress = String(draft.startAddr ?? "").trim();
+  const destinationAddress = String(draft.endAddr ?? "").trim();
   const extendedDraft = draft as QuoteCreateDraft & Record<string, unknown>;
   const originLat = readFirstFiniteNumber(extendedDraft, ["originLat", "startLat", "srcLat"], 0);
   const originLng = readFirstFiniteNumber(extendedDraft, ["originLng", "startLng", "srcLng"], 0);
@@ -278,10 +291,20 @@ export function buildQuoteCreateRequest(draft: QuoteCreateDraft): QuoteCreateReq
   const checklistItems = buildChecklistItems(draft);
   const quoteItems = buildQuoteItems(draft);
   const stops = buildStops(draft);
+  const pickupScheduleStart = combineDateAndTime(
+    (draft as QuoteCreateDraft & { date?: Date }).date,
+    (draft as QuoteCreateDraft & { time?: Date }).time,
+  );
 
   const payload: QuoteCreateRequestPayload = {
     originAddress,
     destinationAddress,
+    ...(draft.startAddrDetail?.trim() ? { originAddressDetail: draft.startAddrDetail.trim() } : {}),
+    ...(draft.endAddrDetail?.trim() ? { destinationAddressDetail: draft.endAddrDetail.trim() } : {}),
+    ...(draft.senderName?.trim() ? { senderName: draft.senderName.trim() } : {}),
+    ...(draft.senderPhone?.trim() ? { senderPhone: draft.senderPhone.trim() } : {}),
+    ...(draft.receiverName?.trim() ? { receiverName: draft.receiverName.trim() } : {}),
+    ...(draft.receiverPhone?.trim() ? { receiverPhone: draft.receiverPhone.trim() } : {}),
     originLat,
     originLng,
     destinationLat,
@@ -301,6 +324,7 @@ export function buildQuoteCreateRequest(draft: QuoteCreateDraft): QuoteCreateReq
     ...(checklistItems.length > 0 ? { checklistItems } : {}),
     ...(quoteItems.length > 0 ? { quoteItems } : {}),
     ...(stops.length > 0 ? { stops } : {}),
+    ...(pickupScheduleStart ? { pickupScheduleStart, deliveryDeadline: pickupScheduleStart } : {}),
   };
 
   if (truckId > 0) {

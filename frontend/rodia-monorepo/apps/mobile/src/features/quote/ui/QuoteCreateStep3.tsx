@@ -45,6 +45,7 @@ type AutoBudgetMode = "min" | "avg";
 type QuoteCreateStep3Props = {
   validationPreview?: QuotePricePreview | null;
   isValidationLoading?: boolean;
+  onUserBudgetChange?: () => void;
 };
 
 function clamp(n: number, min: number, max: number) {
@@ -235,7 +236,7 @@ const useStyles = createThemedStyles((theme: AppTheme) => {
   });
 });
 
-export function QuoteCreateStep3({ validationPreview = null, isValidationLoading = false }: QuoteCreateStep3Props) {
+export function QuoteCreateStep3({ validationPreview = null, isValidationLoading = false, onUserBudgetChange }: QuoteCreateStep3Props) {
   const theme = useAppTheme();
   const styles = useStyles();
   const { draft, patchDraft, toggleOption } = useQuoteCreateDraft();
@@ -317,6 +318,7 @@ export function QuoteCreateStep3({ validationPreview = null, isValidationLoading
     patchDraft(payload as any);
   };
   const handleBudgetChange = (v: string) => {
+    onUserBudgetChange?.();
     setAutoBudgetMode(null);
     patchDraft({ budget: digitsOnly(v) } as any);
   };
