@@ -5,7 +5,15 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, Platform } from "react-native";
 import { DriverOrderDetailView } from "@/features/driver-orders/ui/detail/DriverOrderDetailView";
 import { getDriverRunPhotos } from "@/features/driver-run/api/driver-run-api";
-import { acceptDriverMatch, postCounterOffer, uploadImage, type DriverPhotoUploadType } from "@/features/matching/api";
+import {
+  acceptDriverMatch,
+  DRIVER_ORDER_SCOPE_ALIAS,
+  DRIVER_ORDER_SCOPE_LEGACY,
+  postCounterOffer,
+  toLegacyDriverOrderScope,
+  uploadImage,
+  type DriverPhotoUploadType,
+} from "@/features/matching/api";
 import type { ParsedMatchResponseItem } from "@/features/matching/api/shipper-match-parser";
 import { useMatchDetail } from "@/features/matching/model/useMatchDetail";
 import {
@@ -55,7 +63,17 @@ function parsePositiveRouteId(rawId: string | string[] | undefined): number {
 
 function parseRouteSource(rawSource: string | string[] | undefined): string {
   const candidate = Array.isArray(rawSource) ? rawSource[0] : rawSource;
-  return String(candidate ?? "").trim().toLowerCase();
+  const token = String(candidate ?? "").trim().toLowerCase();
+  if (token === "run") return "run";
+  if (
+    token === DRIVER_ORDER_SCOPE_LEGACY.OPEN ||
+    token === DRIVER_ORDER_SCOPE_LEGACY.ASSIGNED ||
+    token === DRIVER_ORDER_SCOPE_ALIAS.OPEN ||
+    token === DRIVER_ORDER_SCOPE_ALIAS.ASSIGNED
+  ) {
+    return toLegacyDriverOrderScope(token);
+  }
+  return token;
 }
 
 function toStatusToken(value: unknown): string {
@@ -614,7 +632,13 @@ export default function DriverOrderDetailPage({ params }: DriverOrderDetailPageP
     truckSpec?: TruckSpecReferenceResponse;
   }) | null) ?? null;
   const scope =
-    routeSource === "market" ? "market" : routeSource === "run" ? "run" : routeSource === "my" ? "my" : "unknown";
+    routeSource === DRIVER_ORDER_SCOPE_LEGACY.OPEN
+      ? DRIVER_ORDER_SCOPE_LEGACY.OPEN
+      : routeSource === "run"
+        ? "run"
+        : routeSource === DRIVER_ORDER_SCOPE_LEGACY.ASSIGNED
+          ? DRIVER_ORDER_SCOPE_LEGACY.ASSIGNED
+          : "unknown";
   const uiState = getDriverUiStateFromStatusPayload({
     scope,
     accepted: parsedMatch?.accepted,
@@ -632,7 +656,7 @@ export default function DriverOrderDetailPage({ params }: DriverOrderDetailPageP
       hasRunPendingCounterOffer
     );
   const isQuoteMode =
-    routeSource === "market" ||
+    routeSource === DRIVER_ORDER_SCOPE_LEGACY.OPEN ||
     uiState === DRIVER_UI_STATE.READY_TO_ACCEPT ||
     uiState === DRIVER_UI_STATE.NEGOTIATING;
   const pageTitle = "오더 상세";
@@ -797,7 +821,7 @@ export default function DriverOrderDetailPage({ params }: DriverOrderDetailPageP
             });
 
             await viewModel.refetch();
-            if (routeSource === "market" || isQuoteMode) {
+            if (routeSource === DRIVER_ORDER_SCOPE_LEGACY.OPEN || isQuoteMode) {
               router.replace(DRIVER_ROUTE_PATH.RUN_TAB);
               return;
             }

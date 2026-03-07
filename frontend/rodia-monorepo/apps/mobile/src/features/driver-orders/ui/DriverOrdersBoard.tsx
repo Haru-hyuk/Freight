@@ -19,6 +19,8 @@ import { listDriverTrucks, type DriverTruck } from "@/features/driver-profile/ap
 import {
   acceptDriverMatch,
   buildDriverOrderDetailParams,
+  DRIVER_ORDER_SCOPE_LEGACY,
+  DRIVER_ORDERS_TAB_ALIAS,
   getDriverOrderFilterLabel,
   getDriverMatch,
   getDriverQuoteSummaryByQuoteId,
@@ -34,6 +36,8 @@ import {
   type DriverRouteRecommendationMode,
   type DriverOrdersOverview,
   type DriverOrdersTabKey,
+  toDriverOrdersTabAlias,
+  toLegacyDriverOrdersTabKey,
 } from "@/features/matching/api";
 import {
   getDriverAcceptedRunGroups,
@@ -672,7 +676,10 @@ export function DriverOrdersBoard({
   const [selectedTruckId, setSelectedTruckId] = useState<number | null>(null);
   const [isTruckMenuOpen, setIsTruckMenuOpen] = useState(false);
 
-  const resolvedActiveTab: DriverOrdersTabKey = assignedOnly ? "my" : "market";
+  const resolvedActiveTab: DriverOrdersTabKey = toLegacyDriverOrdersTabKey(
+    assignedOnly ? DRIVER_ORDERS_TAB_ALIAS.ASSIGNED : DRIVER_ORDERS_TAB_ALIAS.OPEN
+  );
+  const resolvedActiveTabAlias = toDriverOrdersTabAlias(resolvedActiveTab);
   const refreshIconColor = safeString(
     theme.colors?.textSub,
     safeString(theme.colors?.textMain, safeString(theme.colors?.brandPrimary, ""))
@@ -770,10 +777,10 @@ export function DriverOrdersBoard({
   }, [assignedOnly, normalizedInitialRunStatusFilter]);
 
   useEffect(() => {
-    if (resolvedActiveTab !== "market") {
+    if (resolvedActiveTabAlias !== DRIVER_ORDERS_TAB_ALIAS.OPEN) {
       setIsTruckMenuOpen(false);
     }
-  }, [resolvedActiveTab]);
+  }, [resolvedActiveTabAlias]);
 
   useEffect(() => {
     if (assignedOnly) return undefined;
@@ -1059,10 +1066,10 @@ export function DriverOrdersBoard({
         return;
       }
 
-      if (resolvedActiveTab === "market") {
+      if (resolvedActiveTabAlias === DRIVER_ORDERS_TAB_ALIAS.OPEN) {
         router.push({
           pathname: DRIVER_ROUTE_PATH.ORDER_DETAIL,
-          params: { id: String(card.matchId), source: "market" },
+          params: { id: String(card.matchId), source: DRIVER_ORDER_SCOPE_LEGACY.OPEN },
         });
       } else if (
         assignedOnly &&
@@ -1103,7 +1110,7 @@ export function DriverOrdersBoard({
         }
       } else {
         const detailParams = buildDriverOrderDetailParams(card);
-        const source = assignedOnly ? "run" : "my";
+        const source = assignedOnly ? "run" : DRIVER_ORDER_SCOPE_LEGACY.ASSIGNED;
         const pathname = source === "run" ? DRIVER_ROUTE_PATH.RUN_DETAIL : DRIVER_ROUTE_PATH.ORDER_DETAIL;
         router.push({
           pathname,
@@ -1118,7 +1125,7 @@ export function DriverOrdersBoard({
         cardNavLockRef.current = false;
       }, 450);
     },
-    [assignedOnly, resolvedActiveTab, router, setActiveRun, showToast]
+    [assignedOnly, resolvedActiveTabAlias, router, setActiveRun, showToast]
   );
 
   const handlePrepareForDrive = useCallback(
@@ -1321,9 +1328,9 @@ export function DriverOrdersBoard({
 
   useEffect(() => {
     if (assignedOnly) return;
-    if (resolvedActiveTab !== "market") return;
+    if (resolvedActiveTabAlias !== DRIVER_ORDERS_TAB_ALIAS.OPEN) return;
     void handleAnalyzeRecommendations();
-  }, [assignedOnly, handleAnalyzeRecommendations, resolvedActiveTab]);
+  }, [assignedOnly, handleAnalyzeRecommendations, resolvedActiveTabAlias]);
 
   const handleOpenRecommendationDetail = useCallback(
     (route: DriverRouteRecommendation) => {
@@ -1373,14 +1380,14 @@ export function DriverOrdersBoard({
       });
       router.push({
         pathname: DRIVER_ROUTE_PATH.ORDER_DETAIL,
-        params: { id: String(primaryMatchId), source: "market", recommendKey: route.key },
+        params: { id: String(primaryMatchId), source: DRIVER_ORDER_SCOPE_LEGACY.OPEN, recommendKey: route.key },
       });
     },
     [baseMarketOrders, maxQuotesPerRoute, recommendMode, router, selectedTruckId, showToast]
   );
 
   const renderListHeader = useCallback(() => {
-    const showRecommendPanel = resolvedActiveTab === "market" && !assignedOnly;
+    const showRecommendPanel = resolvedActiveTabAlias === DRIVER_ORDERS_TAB_ALIAS.OPEN && !assignedOnly;
     const recommendationRows = recommendAnalysis?.routes ?? [];
     const showRunStatusFilter = assignedOnly && runStatusOptions.length > 1;
 
@@ -1646,7 +1653,7 @@ export function DriverOrdersBoard({
     overview.availableFilters,
     recommendAnalysis,
     recommendMode,
-    resolvedActiveTab,
+    resolvedActiveTabAlias,
     runStatusFilter,
     runStatusOptions,
     selectedTruck,

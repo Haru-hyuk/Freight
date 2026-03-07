@@ -12,6 +12,33 @@ import type { DriverMatchItem } from "./shipper-match-api";
  * - parser는 UI 파생값을 만들지 않는다.
  */
 export type DriverOrderScope = "market" | "my";
+export type DriverOrderScopeAlias = "open" | "assigned";
+
+export const DRIVER_ORDER_SCOPE_LEGACY = {
+  OPEN: "market",
+  ASSIGNED: "my",
+} as const;
+
+export const DRIVER_ORDER_SCOPE_ALIAS = {
+  OPEN: "open",
+  ASSIGNED: "assigned",
+} as const;
+
+export function toLegacyDriverOrderScope(
+  scope: DriverOrderScope | DriverOrderScopeAlias
+): DriverOrderScope {
+  if (scope === DRIVER_ORDER_SCOPE_ALIAS.OPEN) return DRIVER_ORDER_SCOPE_LEGACY.OPEN;
+  if (scope === DRIVER_ORDER_SCOPE_ALIAS.ASSIGNED) return DRIVER_ORDER_SCOPE_LEGACY.ASSIGNED;
+  return scope;
+}
+
+export function toDriverOrderScopeAlias(
+  scope: DriverOrderScope | DriverOrderScopeAlias
+): DriverOrderScopeAlias {
+  if (scope === DRIVER_ORDER_SCOPE_LEGACY.OPEN) return DRIVER_ORDER_SCOPE_ALIAS.OPEN;
+  if (scope === DRIVER_ORDER_SCOPE_LEGACY.ASSIGNED) return DRIVER_ORDER_SCOPE_ALIAS.ASSIGNED;
+  return scope;
+}
 
 export type ParsedDriverOrderQuote = {
   status?: string;
@@ -114,10 +141,11 @@ function parseDriverOrderQuote(quote: QuoteDetailResponse | null): ParsedDriverO
 export function parseDriverOrderSource(input: {
   match: DriverMatchItem;
   quote: QuoteDetailResponse | null;
-  scope: DriverOrderScope;
+  scope: DriverOrderScope | DriverOrderScopeAlias;
   index: number;
 }): ParsedDriverOrderSource {
   const { match, quote, scope, index } = input;
+  const legacyScope = toLegacyDriverOrderScope(scope);
   const matchId = parseDriverOrderPositiveInt(match.matchId);
   const quoteIdFromMatch = parseDriverOrderPositiveInt(match.quoteId);
   const quoteIdFromQuote = parseDriverOrderPositiveInt(quote?.quoteId);
@@ -127,7 +155,7 @@ export function parseDriverOrderSource(input: {
   const matchGroupOrder = parseDriverOrderPositiveInt(match.matchGroupOrder);
 
   return {
-    scope,
+    scope: legacyScope,
     index,
     seed,
     matchId,
