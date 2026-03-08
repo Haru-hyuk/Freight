@@ -16,6 +16,8 @@ import com.freight.backend.geocoding.GeocodingResult;
 import com.freight.backend.geocoding.GeocodingService;
 import com.freight.backend.gpsload.loadplan.model.CargoItem;
 import com.freight.backend.gpsload.loadplan.model.LoadPlanRequest;
+import com.freight.backend.gpsload.loadplan.model.Placement;
+import com.freight.backend.gpsload.loadplan.entity.TruckSpecCatalog;
 import com.freight.backend.gpsload.loadplan.repository.TruckSpecCatalogRepository;
 import com.freight.backend.gpsload.loadplan.service.LoadPlanService;
 import com.freight.backend.gpsload.route.model.Place;
@@ -129,8 +131,8 @@ public class AlgorithmGatewayService {
         List<Map<String, Object>> candidates = new ArrayList<>();
         double loadedWeight = request.getLoadedWeightKg() == null ? 0.0 : Math.max(0.0, request.getLoadedWeightKg());
         double loadedVolume = request.getLoadedVolumeCbm() == null ? 0.0 : Math.max(0.0, request.getLoadedVolumeCbm());
-        double truckMaxWeight = safeBigDecimal(truck.getMaxWeight(), 5000.0);
-        double truckMaxVolume = safeBigDecimal(truck.getMaxVolume(), 10.0);
+        double truckMaxWeight = resolveTruckMaxWeightKg(truck);
+        double truckMaxVolume = resolveTruckMaxVolumeCbm(truck);
         double remainingWeight = Math.max(0.0, truckMaxWeight - loadedWeight);
         double remainingCbm = Math.max(0.0, truckMaxVolume - loadedVolume);
         int invalidLocationCount = 0;
@@ -278,9 +280,13 @@ public class AlgorithmGatewayService {
                 driverStateRecord, quoteList, effectiveParams, selectedQuoteIds, requestedMode
         );
 
-        RouteAssemblyResponse primaryResponse = applyMaxVisitCountLimit(
+        RouteAssemblyResponse primaryResponse = filterPhysicallyFeasibleRoutes(
+                driverId,
+                truck.getTruckId(),
+                applyMaxVisitCountLimit(
                 routeAssemblyService.recommend(assemblyRequest),
                 request.getMaxVisitCount()
+                )
         );
         if (primaryResponse.hasRecommendations()) {
             return primaryResponse;
@@ -293,9 +299,13 @@ public class AlgorithmGatewayService {
                     .filter(q -> q != null && q.quoteId() != null && selectedIdSet.contains(q.quoteId()))
                     .toList();
             if (!selectedQuotes.isEmpty()) {
-                RouteAssemblyResponse selectedEvaluation = applyMaxVisitCountLimit(
+                RouteAssemblyResponse selectedEvaluation = filterPhysicallyFeasibleRoutes(
+                        driverId,
+                        truck.getTruckId(),
+                        applyMaxVisitCountLimit(
                         routeAssemblyService.evaluateSelectedQuotes(driverStateRecord, selectedQuotes, effectiveParams),
                         request.getMaxVisitCount()
+                        )
                 );
                 if (selectedEvaluation.hasRecommendations()) {
                     return selectedEvaluation;
@@ -308,9 +318,13 @@ public class AlgorithmGatewayService {
             RouteAssemblyRequest simpleRequest = new RouteAssemblyRequest(
                     driverStateRecord, quoteList, effectiveParams, selectedQuoteIds, RouteAssemblyRequest.RouteMode.SIMPLE
             );
-            RouteAssemblyResponse simpleResponse = applyMaxVisitCountLimit(
+            RouteAssemblyResponse simpleResponse = filterPhysicallyFeasibleRoutes(
+                    driverId,
+                    truck.getTruckId(),
+                    applyMaxVisitCountLimit(
                     routeAssemblyService.recommend(simpleRequest),
                     request.getMaxVisitCount()
+                    )
             );
             if (simpleResponse.hasRecommendations()) {
                 return simpleResponse;
@@ -321,9 +335,13 @@ public class AlgorithmGatewayService {
             RouteAssemblyRequest smartRequest = new RouteAssemblyRequest(
                     driverStateRecord, quoteList, effectiveParams, selectedQuoteIds, RouteAssemblyRequest.RouteMode.SMART
             );
-            RouteAssemblyResponse smartResponse = applyMaxVisitCountLimit(
+            RouteAssemblyResponse smartResponse = filterPhysicallyFeasibleRoutes(
+                    driverId,
+                    truck.getTruckId(),
+                    applyMaxVisitCountLimit(
                     routeAssemblyService.recommend(smartRequest),
                     request.getMaxVisitCount()
+                    )
             );
             if (smartResponse.hasRecommendations()) {
                 return smartResponse;
@@ -417,9 +435,13 @@ public class AlgorithmGatewayService {
             selectedQuoteIds = normalizeSelectedQuoteIds(selectedRoute.quoteIds());
         }
 
+        List<Long> loadPlanQuoteIds = selectedRoute != null
+                ? resolveLoadPlanQuoteIds(selectedRoute, selectedQuoteIds)
+                : selectedQuoteIds;
+
         LoadPlanPreviewRequest loadPlanRequest = new LoadPlanPreviewRequest();
         loadPlanRequest.setTruckId(request.getTruckId());
-        loadPlanRequest.setQuoteIds(selectedQuoteIds);
+        loadPlanRequest.setQuoteIds(loadPlanQuoteIds);
         Object loadPlan = previewLoadPlan(driverId, loadPlanRequest);
 
         Map<String, Object> response = new LinkedHashMap<>();
@@ -429,6 +451,7 @@ public class AlgorithmGatewayService {
         response.put("mode", toClientMode(parseRouteMode(request.getMode())));
         response.put("requestedQuoteIds", requestedQuoteIds);
         response.put("selectedQuoteIds", selectedQuoteIds);
+        response.put("loadPlanQuoteIds", loadPlanQuoteIds);
         response.put("selectedRouteRank", selectedRoute != null ? selectedRoute.rank() : null);
         response.put("selectedRoute", selectedRoute);
         response.put("routeSummary", routeSummary);
@@ -485,7 +508,7 @@ public class AlgorithmGatewayService {
         // Truck record 생성
         com.freight.backend.gpsload.loadplan.model.Truck truckModel = new com.freight.backend.gpsload.loadplan.model.Truck(
                 truck.getTruckId(), dims[0], dims[1], dims[2],
-                safeBigDecimal(truck.getMaxWeight(), 5000.0),
+                resolveTruckMaxWeightKg(truck),
                 inferDoorPosition(truck.getVehicleBodyType())
         );
 
@@ -505,7 +528,8 @@ public class AlgorithmGatewayService {
         truckMeta.put("length", dims[0]);
         truckMeta.put("width", dims[1]);
         truckMeta.put("height", dims[2]);
-        truckMeta.put("maxWeightKg", safeBigDecimal(truck.getMaxWeight(), 0.0));
+        truckMeta.put("maxWeightKg", resolveTruckMaxWeightKg(truck));
+        truckMeta.put("maxVolumeCbm", resolveTruckMaxVolumeCbm(truck));
         response.put("truck", truckMeta);
 
         return response;
@@ -1040,11 +1064,77 @@ public class AlgorithmGatewayService {
         if (l > 0 && w > 0 && h > 0) {
             return new int[]{l, w, h};
         }
+        TruckSpecCatalog spec = resolveTruckSpec(truck);
+        if (spec != null
+                && spec.getCargoLengthCm() != null && spec.getCargoLengthCm() > 0
+                && spec.getCargoWidthCm() != null && spec.getCargoWidthCm() > 0
+                && spec.getCargoHeightCm() != null && spec.getCargoHeightCm() > 0) {
+            return new int[]{spec.getCargoLengthCm(), spec.getCargoWidthCm(), spec.getCargoHeightCm()};
+        }
         double tonnage = truck.getTonnage() == null ? 1.0 : truck.getTonnage().doubleValue();
         if (tonnage <= 1.0) return new int[]{310, 160, 170};
         if (tonnage <= 2.5) return new int[]{430, 200, 200};
         if (tonnage <= 5.0) return new int[]{620, 230, 230};
         return new int[]{960, 240, 250};
+    }
+
+    private double resolveTruckMaxWeightKg(Truck truck) {
+        double configured = safeBigDecimal(truck.getMaxWeight(), 0.0);
+        if (configured > 0) {
+            return configured;
+        }
+        TruckSpecCatalog spec = resolveTruckSpec(truck);
+        if (spec != null && spec.getMaxWeight() != null && spec.getMaxWeight().doubleValue() > 0) {
+            return spec.getMaxWeight().doubleValue();
+        }
+        return 5000.0;
+    }
+
+    private double resolveTruckMaxVolumeCbm(Truck truck) {
+        double configured = safeBigDecimal(truck.getMaxVolume(), 0.0);
+        if (configured > 0) {
+            return configured;
+        }
+        TruckSpecCatalog spec = resolveTruckSpec(truck);
+        if (spec != null && spec.getMaxVolume() != null && spec.getMaxVolume().doubleValue() > 0) {
+            return spec.getMaxVolume().doubleValue();
+        }
+        int[] dims = inferTruckDimensionsCm(truck);
+        return Math.max(1.0, (dims[0] * dims[1] * dims[2]) / 1_000_000.0);
+    }
+
+    private TruckSpecCatalog resolveTruckSpec(Truck truck) {
+        if (truck == null) {
+            return null;
+        }
+
+        if (truck.getVehicleType() != null && !truck.getVehicleType().isBlank()
+                && truck.getVehicleBodyType() != null && !truck.getVehicleBodyType().isBlank()) {
+            TruckSpecCatalog byVehicle = truckSpecCatalogRepository
+                    .findByVehicleTypeAndVehicleBodyType(truck.getVehicleType(), truck.getVehicleBodyType())
+                    .orElse(null);
+            if (byVehicle != null) {
+                return byVehicle;
+            }
+        }
+
+        if (truck.getTonnage() != null
+                && truck.getVehicleBodyType() != null && !truck.getVehicleBodyType().isBlank()) {
+            TruckSpecCatalog byTonnage = truckSpecCatalogRepository
+                    .findByTonnageAndVehicleBodyType(truck.getTonnage(), truck.getVehicleBodyType())
+                    .orElse(null);
+            if (byTonnage != null) {
+                return byTonnage;
+            }
+        }
+
+        if (truck.getVehicleType() != null && !truck.getVehicleType().isBlank()) {
+            List<TruckSpecCatalog> specs = truckSpecCatalogRepository.findByVehicleTypeOrderByVehicleBodyTypeAsc(truck.getVehicleType());
+            if (!specs.isEmpty()) {
+                return specs.get(0);
+            }
+        }
+        return null;
     }
 
     private String inferDoorPosition(String bodyType) {
@@ -1061,7 +1151,7 @@ public class AlgorithmGatewayService {
 
     private boolean isQuoteLoadCompatibleWithTruck(Truck truck, Quote quote, List<QuoteItem> quoteItems) {
         int[] truckDims = inferTruckDimensionsCm(truck);
-        double truckMaxWeight = safeBigDecimal(truck.getMaxWeight(), 5000.0);
+        double truckMaxWeight = resolveTruckMaxWeightKg(truck);
 
         if (quoteItems == null || quoteItems.isEmpty()) {
             return true;
@@ -1233,6 +1323,31 @@ public class AlgorithmGatewayService {
                 .filter(id -> id != null && id > 0)
                 .distinct()
                 .toList();
+    }
+
+    private List<Long> resolveLoadPlanQuoteIds(RecommendedRoute selectedRoute, List<Long> fallbackQuoteIds) {
+        if (selectedRoute == null) {
+            return fallbackQuoteIds;
+        }
+
+        List<Long> deliveryQuoteIds = new ArrayList<>();
+        if (selectedRoute.visitOrder() != null) {
+            for (CargoVisit visit : selectedRoute.visitOrder()) {
+                if (visit == null || visit.type() != CargoVisit.VisitType.DELIVERY) {
+                    continue;
+                }
+                Long quoteId = visit.quoteId();
+                if (quoteId == null || quoteId <= 0 || deliveryQuoteIds.contains(quoteId)) {
+                    continue;
+                }
+                deliveryQuoteIds.add(quoteId);
+            }
+        }
+
+        if (!deliveryQuoteIds.isEmpty()) {
+            return deliveryQuoteIds;
+        }
+        return fallbackQuoteIds;
     }
 
     private Double parseTonnageFromType(String vehicleType) {
@@ -1676,6 +1791,231 @@ public class AlgorithmGatewayService {
                 response.combinationsEvaluated(),
                 response.processingTimeMs()
         );
+    }
+
+    private RouteAssemblyResponse filterPhysicallyFeasibleRoutes(
+            Long driverId,
+            Long truckId,
+            RouteAssemblyResponse response
+    ) {
+        if (response == null || !response.hasRecommendations()) {
+            return response;
+        }
+
+        List<RecommendedRoute> feasibleRoutes = response.recommendations().stream()
+                .filter(route -> isPhysicallyFeasibleRoute(driverId, truckId, route))
+                .toList();
+
+        if (feasibleRoutes.size() == response.recommendations().size()) {
+            return response;
+        }
+
+        List<RecommendedRoute> reranked = reRankRoutes(feasibleRoutes);
+        String baseMessage = response.message() == null ? "" : response.message();
+        String suffix = String.format(" 실제 적재 불가 추천 %d건을 제외했습니다.", response.recommendations().size() - feasibleRoutes.size());
+
+        return new RouteAssemblyResponse(
+                response.success(),
+                (baseMessage + suffix).trim(),
+                reranked,
+                response.totalCandidates(),
+                response.filteredCandidates(),
+                response.combinationsEvaluated(),
+                response.processingTimeMs()
+        );
+    }
+
+    @SuppressWarnings("unchecked")
+    private boolean isPhysicallyFeasibleRoute(Long driverId, Long truckId, RecommendedRoute route) {
+        if (route == null || route.quoteIds() == null || route.quoteIds().isEmpty()) {
+            return false;
+        }
+
+        List<Long> normalizedQuoteIds = normalizeSelectedQuoteIds(route.quoteIds());
+        if (normalizedQuoteIds.isEmpty()) {
+            return false;
+        }
+
+        try {
+            Truck truck = resolveTruck(driverId, truckId);
+            Map<Long, Quote> quoteById = quoteRepository.findAllById(normalizedQuoteIds).stream()
+                    .collect(Collectors.toMap(Quote::getQuoteId, Function.identity()));
+            Map<Long, List<QuoteItem>> itemsByQuoteId = fetchQuoteItems(normalizedQuoteIds);
+
+            if (route.visitOrder() == null || route.visitOrder().isEmpty()) {
+                return loadActiveQuotesPreview(driverId, truckId, truck, normalizedQuoteIds, quoteById, itemsByQuoteId) != null;
+            }
+
+            Set<Long> activeQuoteIds = new LinkedHashSet<>();
+            Set<Long> deliveredQuoteIds = new LinkedHashSet<>();
+            Map<String, Placement> previousPlacementsById = Map.of();
+            for (CargoVisit visit : route.visitOrder()) {
+                if (visit == null || visit.quoteId() == null || visit.quoteId() <= 0) {
+                    continue;
+                }
+                if (visit.type() == CargoVisit.VisitType.PICKUP) {
+                    activeQuoteIds.add(visit.quoteId());
+                    List<Long> currentLoadQuoteIds = buildActiveLoadPlanQuoteIds(route, activeQuoteIds, deliveredQuoteIds);
+                    Map<String, Placement> currentPlacementsById = loadActiveQuotesPreview(
+                            driverId,
+                            truckId,
+                            truck,
+                            currentLoadQuoteIds,
+                            quoteById,
+                            itemsByQuoteId
+                    );
+                    if (currentPlacementsById == null) {
+                        return false;
+                    }
+                    if (!placementsRemainStable(previousPlacementsById, currentPlacementsById)) {
+                        return false;
+                    }
+                    previousPlacementsById = currentPlacementsById;
+                    continue;
+                }
+                if (visit.type() == CargoVisit.VisitType.DELIVERY) {
+                    activeQuoteIds.remove(visit.quoteId());
+                    deliveredQuoteIds.add(visit.quoteId());
+                    List<Long> currentLoadQuoteIds = buildActiveLoadPlanQuoteIds(route, activeQuoteIds, deliveredQuoteIds);
+                    Map<String, Placement> currentPlacementsById = loadActiveQuotesPreview(
+                            driverId,
+                            truckId,
+                            truck,
+                            currentLoadQuoteIds,
+                            quoteById,
+                            itemsByQuoteId
+                    );
+                    if (currentPlacementsById == null && !currentLoadQuoteIds.isEmpty()) {
+                        return false;
+                    }
+                    if (currentPlacementsById != null && !placementsRemainStable(previousPlacementsById, currentPlacementsById)) {
+                        return false;
+                    }
+                    previousPlacementsById = currentPlacementsById == null ? Map.of() : currentPlacementsById;
+                }
+            }
+            return true;
+        } catch (CustomException ex) {
+            return false;
+        }
+    }
+
+    private List<Long> buildActiveLoadPlanQuoteIds(
+            RecommendedRoute route,
+            Set<Long> activeQuoteIds,
+            Set<Long> deliveredQuoteIds
+    ) {
+        if (activeQuoteIds == null || activeQuoteIds.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> remainingDeliveryOrder = new ArrayList<>();
+        if (route != null && route.visitOrder() != null) {
+            for (CargoVisit visit : route.visitOrder()) {
+                if (visit == null || visit.type() != CargoVisit.VisitType.DELIVERY) {
+                    continue;
+                }
+                Long quoteId = visit.quoteId();
+                if (quoteId == null
+                        || !activeQuoteIds.contains(quoteId)
+                        || deliveredQuoteIds.contains(quoteId)
+                        || remainingDeliveryOrder.contains(quoteId)) {
+                    continue;
+                }
+                remainingDeliveryOrder.add(quoteId);
+            }
+        }
+
+        if (!remainingDeliveryOrder.isEmpty()) {
+            return remainingDeliveryOrder;
+        }
+        return new ArrayList<>(activeQuoteIds);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Placement> loadActiveQuotesPreview(
+            Long driverId,
+            Long truckId,
+            Truck truck,
+            List<Long> activeQuoteIds,
+            Map<Long, Quote> quoteById,
+            Map<Long, List<QuoteItem>> itemsByQuoteId
+    ) {
+        if (activeQuoteIds == null || activeQuoteIds.isEmpty()) {
+            return Map.of();
+        }
+
+        double currentWeightKg = 0.0;
+        double currentVolumeCbm = 0.0;
+        for (Long quoteId : activeQuoteIds) {
+            Quote quote = quoteById.get(quoteId);
+            if (quote == null) {
+                return null;
+            }
+            List<QuoteItem> quoteItems = itemsByQuoteId.getOrDefault(quoteId, List.of());
+            currentWeightKg += deriveQuoteWeightKg(quote, quoteItems);
+            currentVolumeCbm += deriveQuoteVolumeCbm(quote, quoteItems);
+        }
+
+        if (currentWeightKg > resolveTruckMaxWeightKg(truck) || currentVolumeCbm > resolveTruckMaxVolumeCbm(truck)) {
+            return null;
+        }
+
+        LoadPlanPreviewRequest loadPlanRequest = new LoadPlanPreviewRequest();
+        loadPlanRequest.setTruckId(truckId);
+        loadPlanRequest.setQuoteIds(activeQuoteIds);
+        Object preview = previewLoadPlan(driverId, loadPlanRequest);
+        if (!(preview instanceof Map<?, ?> previewMap)) {
+            return null;
+        }
+
+        Object unplaced = previewMap.get("unplaced");
+        if (unplaced instanceof Collection<?> unplacedItems && !unplacedItems.isEmpty()) {
+            return null;
+        }
+
+        Object placementsRaw = previewMap.get("placements");
+        if (!(placementsRaw instanceof Collection<?> placementsCollection)) {
+            return Map.of();
+        }
+
+        Map<String, Placement> placementsById = new LinkedHashMap<>();
+        for (Object entry : placementsCollection) {
+            if (!(entry instanceof Placement placement) || placement.id() == null || placement.id().isBlank()) {
+                continue;
+            }
+            placementsById.put(placement.id(), placement);
+        }
+        return placementsById;
+    }
+
+    private boolean placementsRemainStable(
+            Map<String, Placement> previousPlacementsById,
+            Map<String, Placement> currentPlacementsById
+    ) {
+        if (previousPlacementsById == null || previousPlacementsById.isEmpty()) {
+            return true;
+        }
+        if (currentPlacementsById == null) {
+            return false;
+        }
+
+        for (Map.Entry<String, Placement> entry : previousPlacementsById.entrySet()) {
+            Placement previous = entry.getValue();
+            Placement current = currentPlacementsById.get(entry.getKey());
+            if (previous == null || current == null) {
+                continue;
+            }
+            if (previous.x() != current.x()
+                    || previous.y() != current.y()
+                    || previous.z() != current.z()
+                    || previous.width() != current.width()
+                    || previous.length() != current.length()
+                    || previous.height() != current.height()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private int countVisitPoints(RecommendedRoute route) {
