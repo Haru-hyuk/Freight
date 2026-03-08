@@ -8,6 +8,7 @@ import { getQuoteSummary } from "@/shared/api/generated";
 import { recommendRoutes as recommendRoutesGenerated } from "@/shared/api/generated/driver-optimization/driver-optimization";
 import type { DriverQuoteSummaryResponse } from "@/shared/api/generated/schemas/driverQuoteSummaryResponse";
 import { getDriverMatchMode } from "@/shared/lib/config/env";
+import type { CargoVisit } from "@/shared/api/generated/schemas/cargoVisit";
 import {
   BACKEND_STATUS,
   DRIVER_UI_STATE,
@@ -144,6 +145,7 @@ export type DriverRouteRecommendation = {
   key: string;
   rank: number;
   quoteIds: number[];
+  visitOrder?: CargoVisit[];
   routeType: DriverRouteRecommendationMode | "HOME_ROUTE" | "UNKNOWN";
   totalRevenue: number;
   estimatedTotalDistanceKm: number;
@@ -510,6 +512,7 @@ function parseRecommendedRoute(
     key: toOptionalText(source.calibrationId) ?? `server-${index + 1}-${quoteIds.join("-")}`,
     rank: Math.max(1, Math.trunc(toPositiveNumber(source.rank, index + 1))),
     quoteIds,
+    visitOrder: Array.isArray(source.visitOrder) ? (source.visitOrder as CargoVisit[]) : undefined,
     routeType,
     totalRevenue: toPositiveNumber(source.totalRevenue, 0),
     estimatedTotalDistanceKm: toPositiveNumber(source.estimatedTotalDistanceM, 0) / 1000,

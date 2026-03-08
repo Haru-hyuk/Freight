@@ -6,6 +6,7 @@ import type { Placement } from "@/shared/api/generated/schemas";
 import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppCard } from "@/shared/ui/kit/AppCard";
+import { AppButton } from "@/shared/ui/kit/AppButton";
 import { AppText } from "@/shared/ui/kit/AppText";
 
 type SelectedOrderItem = {
@@ -23,6 +24,16 @@ export type RecoSelectedOrderDetail = {
   weightText: string;
   cbmText: string;
   items: SelectedOrderItem[];
+};
+
+export type RecoVisitStep = {
+  key: string;
+  sequence: number;
+  stopOrder: number | null;
+  quoteId?: number;
+  typeLabel: string;
+  title: string;
+  subtitle?: string;
 };
 
 export type RecoRecommendedOrderSummary = {
@@ -45,11 +56,16 @@ type RecoLoadSimulationCardProps = {
   onToggleXray: () => void;
   routeLoading?: boolean;
   orderedPlacements: Placement[];
+  visibleStopOrders: ReadonlySet<number>;
   stopColorMap: Map<number, string>;
   selectedStopOrder: number | null;
   onSelectStopOrder: (nextStopOrder: number | null) => void;
   recommendedOrders: RecoRecommendedOrderSummary[];
   selectedOrderDetail: RecoSelectedOrderDetail | null;
+  visitSteps: RecoVisitStep[];
+  selectedStepIndex: number;
+  onPrevStep: () => void;
+  onNextStep: () => void;
 };
 
 const useStyles = createThemedStyles((theme) => {
@@ -162,6 +178,27 @@ const useStyles = createThemedStyles((theme) => {
     recommendedRouteText: {
       color: theme.colors.textSub,
     },
+    stepNavigator: {
+      gap: spacing,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: tint(cBorder, 0.8, cBorder),
+      backgroundColor: theme.colors.bgSurface,
+      padding: spacing * 2,
+    },
+    stepNavigatorTop: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: spacing,
+    },
+    stepNavigatorButtons: {
+      flexDirection: "row",
+      gap: spacing,
+    },
+    stepNavigatorButton: {
+      minWidth: 78,
+    },
   });
 });
 
@@ -172,11 +209,16 @@ export function RecoLoadSimulationCard({
   onToggleXray,
   routeLoading = false,
   orderedPlacements,
+  visibleStopOrders,
   stopColorMap,
   selectedStopOrder,
   onSelectStopOrder,
   recommendedOrders,
   selectedOrderDetail,
+  visitSteps,
+  selectedStepIndex,
+  onPrevStep,
+  onNextStep,
 }: RecoLoadSimulationCardProps) {
   const theme = useAppTheme();
   const styles = useStyles();
@@ -197,6 +239,10 @@ export function RecoLoadSimulationCard({
 
     return () => task.cancel();
   }, [routeLoading]);
+
+  const selectedStep = visitSteps[selectedStepIndex] ?? null;
+  const canPrevStep = selectedStepIndex > 0;
+  const canNextStep = selectedStepIndex >= 0 && selectedStepIndex < visitSteps.length - 1;
 
   return (
     <AppCard style={styles.loadCard}>
@@ -219,6 +265,7 @@ export function RecoLoadSimulationCard({
           <RecoLoadScene3D
             dims={dims}
             orderedPlacements={orderedPlacements}
+            visibleStopOrders={visibleStopOrders}
             stopColorMap={stopColorMap}
             selectedStopOrder={selectedStopOrder}
             isXray={isXray}
@@ -233,6 +280,44 @@ export function RecoLoadSimulationCard({
           </View>
         )}
       </View>
+
+      {selectedStep ? (
+        <View style={styles.stepNavigator}>
+          <View style={styles.stepNavigatorTop}>
+            <View style={{ flex: 1, gap: 2 }}>
+              <AppText variant="caption" color="textMuted">
+                {`상하차 단계 ${selectedStepIndex + 1}/${visitSteps.length}`}
+              </AppText>
+              <AppText variant="detail" weight="900" color="textMain">
+                {`${selectedStep.typeLabel} · ${selectedStep.title}`}
+              </AppText>
+              {selectedStep.subtitle ? (
+                <AppText variant="caption" color="textSub">
+                  {selectedStep.subtitle}
+                </AppText>
+              ) : null}
+            </View>
+            <View style={styles.stepNavigatorButtons}>
+              <AppButton
+                title="이전"
+                size="sm"
+                variant="secondary"
+                style={styles.stepNavigatorButton}
+                disabled={!canPrevStep}
+                onPress={onPrevStep}
+              />
+              <AppButton
+                title="다음"
+                size="sm"
+                variant="primary"
+                style={styles.stepNavigatorButton}
+                disabled={!canNextStep}
+                onPress={onNextStep}
+              />
+            </View>
+          </View>
+        </View>
+      ) : null}
 
       {recommendedOrders.length > 0 ? (
         <View style={styles.recommendedWrap}>
