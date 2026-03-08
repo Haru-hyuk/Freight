@@ -460,6 +460,19 @@ function resolveOrderQuoteId(order: DriverOrderCard | null | undefined): number 
   return toPositiveInt(order?.quoteId);
 }
 
+async function loadQuoteEntriesSequentially(quoteIds: number[]): Promise<Array<readonly [number, QuoteDetailResponse | null]>> {
+  const entries: Array<readonly [number, QuoteDetailResponse | null]> = [];
+  for (const quoteId of quoteIds) {
+    try {
+      const quote = await getDriverQuoteSummaryDetail(quoteId);
+      entries.push([quoteId, quote] as const);
+    } catch {
+      entries.push([quoteId, null] as const);
+    }
+  }
+  return entries;
+}
+
 function mergePlacementsByStopOrder(placements: Placement[]): Placement[] {
   if (placements.length <= 1) return placements;
 
@@ -856,12 +869,7 @@ export default function DriverMarketRecommendationPage({
       setStepPlacements(null);
       setStepTruckSpec(null);
       try {
-        const quoteEntries = await Promise.all(
-          safeQuoteIds.map(async (quoteId) => {
-            const quote = await getDriverQuoteSummaryDetail(quoteId);
-            return [quoteId, quote] as const;
-          })
-        );
+        const quoteEntries = await loadQuoteEntriesSequentially(safeQuoteIds);
         if (cancelled) return;
         const quoteMap: Record<number, QuoteDetailResponse> = {};
         quoteEntries.forEach(([quoteId, quote]) => {
