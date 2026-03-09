@@ -1,5 +1,6 @@
 import { TRUCK_APPROVAL_MOCK_ROWS } from "@/features/trucks/model/mockData";
 import type { TruckApprovalReviewPayload, TruckApprovalRow } from "@/features/trucks/model/types";
+import axios from "axios";
 import { apiPaths } from "@/shared/lib/api/endpoints";
 import { apiClient } from "@/shared/lib/api/client";
 import { appendActivityLog } from "@/shared/lib/activity-log";
@@ -29,6 +30,8 @@ const reviewOverrides = new Map<
 >();
 
 let truckRowsStore: TruckApprovalRow[] = [...TRUCK_APPROVAL_MOCK_ROWS];
+const USE_DRIVER_TRUCKS_FALLBACK =
+  String(import.meta.env.VITE_USE_DRIVER_TRUCKS_FALLBACK ?? "").toLowerCase() === "true";
 
 function toRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
@@ -136,18 +139,21 @@ function toTruckRow(truck: BackendTruck): TruckApprovalRow | null {
 async function fetchBackendTrucks(): Promise<BackendTruck[]> {
   try {
     const response = await apiClient.get<unknown>(apiPaths.adminTrucksPending);
-    const pending = pickListPayload(response.data).map(mapBackendTruck);
-    if (pending.length > 0) return pending;
-
-    // Fallback: some environments do not expose pending endpoint yet.
-    const allResponse = await apiClient.get<unknown>(apiPaths.driverTrucks);
-    return pickListPayload(allResponse.data)
+    return pickListPayload(response.data)
       .map(mapBackendTruck)
       .filter((truck) => truck.approved !== true);
-  } catch {
+  } catch (error) {
+    if (!axios.isAxiosError(error) || error.response?.status !== 404) {
+      return [];
+    }
+    if (!USE_DRIVER_TRUCKS_FALLBACK) {
+      return [];
+    }
+
+    // Legacy fallback for environments without /api/admin/trucks/pending.
     try {
-      const allResponse = await apiClient.get<unknown>(apiPaths.driverTrucks);
-      return pickListPayload(allResponse.data)
+      const legacyResponse = await apiClient.get<unknown>(apiPaths.driverTrucks);
+      return pickListPayload(legacyResponse.data)
         .map(mapBackendTruck)
         .filter((truck) => truck.approved !== true);
     } catch {

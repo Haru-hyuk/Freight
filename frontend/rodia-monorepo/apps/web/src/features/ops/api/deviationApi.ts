@@ -1,6 +1,8 @@
 import { apiPaths } from "@/shared/lib/api/endpoints";
 import { apiClient } from "@/shared/lib/api/client";
 import { isMockModeEnabled } from "@/shared/lib/mock-mode";
+import { appendActivityLog } from "@/shared/lib/activity-log";
+import axios from "axios";
 
 export enum DeviationType {
   LATE_DELIVERY = "LATE_DELIVERY",
@@ -134,6 +136,31 @@ const SOURCE_PRIORITY: Record<DeviationSource, number> = {
   [DeviationSource.NOTIFICATION]: 2,
   [DeviationSource.ANNOUNCEMENT]: 1,
 };
+
+const LEGACY_ADMIN_DEVIATIONS_PATH = "/api/admin/ops/deviations";
+const USE_ADMIN_DASHBOARD_DEVIATIONS =
+  String(import.meta.env.VITE_USE_ADMIN_DASHBOARD_DEVIATIONS ?? "").toLowerCase() === "true";
+const USE_ROLE_DEVIATION_MATCHES_FALLBACK =
+  String(import.meta.env.VITE_USE_ROLE_DEVIATION_MATCHES_FALLBACK ?? "").toLowerCase() === "true";
+const USE_NOTIFICATION_MARK_READ_ENDPOINT =
+  String(import.meta.env.VITE_USE_NOTIFICATION_MARK_READ_ENDPOINT ?? "").toLowerCase() === "true";
+let isAdminDashboardDeviationsAvailable = USE_ADMIN_DASHBOARD_DEVIATIONS;
+let isNotificationMarkReadEndpointAvailable = USE_NOTIFICATION_MARK_READ_ENDPOINT;
+
+function normalizeApiPath(path: string): string {
+  return path.replace(/\/+$/, "");
+}
+
+function shouldCallLegacyAdminDeviations(): boolean {
+  return normalizeApiPath(apiPaths.adminDeviations) !== normalizeApiPath(LEGACY_ADMIN_DEVIATIONS_PATH);
+}
+
+function shouldCallAdminDashboardDeviations(): boolean {
+  // `/api/admin/dashboard` can return 400 in environments where backend
+  // request parameter metadata is not compiled with `-parameters`.
+  // Keep this source opt-in and disabled by default.
+  return isAdminDashboardDeviationsAvailable;
+}
 
 const liveActionOverrides = new Map<
   string,
@@ -656,12 +683,34 @@ function mergeMatchSnapshots(rows: BackendMatch[]): BackendMatch[] {
 }
 
 async function fetchAdminDeviationRows(): Promise<Deviation[]> {
-  try {
-    const response = await apiClient.get<unknown>(apiPaths.adminDeviations);
-    return pickListPayload(response.data).map(mapAdminDeviation);
-  } catch {
-    return [];
+  const rows: Deviation[] = [];
+
+  if (shouldCallLegacyAdminDeviations()) {
+    try {
+      const response = await apiClient.get<unknown>(apiPaths.adminDeviations);
+      rows.push(...pickListPayload(response.data).map(mapAdminDeviation));
+    } catch {
+      // continue with dashboard source
+    }
   }
+
+  if (shouldCallAdminDashboardDeviations()) {
+    try {
+      const dashboardResponse = await apiClient.get<unknown>(apiPaths.adminDashboard);
+      const dashboard = toRecord(dashboardResponse.data);
+      rows.push(...pickListPayload(dashboard.deviations).map(mapAdminDeviation));
+    } catch (error) {
+      if (
+        axios.isAxiosError(error) &&
+        [400, 403, 404, 405].includes(error.response?.status ?? 0)
+      ) {
+        isAdminDashboardDeviationsAvailable = false;
+      }
+      // ignore dashboard parse/fetch error
+    }
+  }
+
+  return rows;
 }
 
 async function fetchNotifications(): Promise<BackendNotification[]> {
@@ -704,6 +753,19 @@ async function fetchMatchesByPath(path: string): Promise<BackendMatch[]> {
 }
 
 async function fetchMatchSignals(): Promise<BackendMatch[]> {
+  try {
+    const response = await apiClient.get<unknown>(apiPaths.adminTransportMatches);
+    return mergeMatchSnapshots(pickListPayload(response.data).map(mapBackendMatch));
+  } catch (error) {
+    if (
+      !USE_ROLE_DEVIATION_MATCHES_FALLBACK ||
+      !axios.isAxiosError(error) ||
+      error.response?.status !== 404
+    ) {
+      return [];
+    }
+  }
+
   const [shipperRows, driverOpenRows, driverRows] = await Promise.all([
     fetchMatchesByPath(apiPaths.shipperMatchesMe),
     fetchMatchesByPath(apiPaths.driverMatches),
@@ -807,7 +869,17 @@ function mapActionToStatus(action: DeviationAction["action"]): DeviationStatus {
   return DeviationStatus.DISMISSED;
 }
 
+function toActionLabel(action: DeviationAction["action"]): string {
+  if (action === "START_INVESTIGATION") return "start investigation";
+  if (action === "RESOLVE") return "resolve";
+  return "dismiss";
+}
+
 async function tryExecuteAdminAction(action: DeviationAction): Promise<boolean> {
+  if (!shouldCallLegacyAdminDeviations()) {
+    return false;
+  }
+
   try {
     await apiClient.post(`${apiPaths.adminDeviations}/${action.caseId}/actions`, action);
     return true;
@@ -823,13 +895,21 @@ function extractNotificationId(caseId: string): number | null {
 }
 
 async function tryMarkNotificationRead(caseId: string): Promise<boolean> {
+  if (!isNotificationMarkReadEndpointAvailable) return false;
+
   const notificationId = extractNotificationId(caseId);
   if (!notificationId) return false;
 
   try {
     await apiClient.patch(`/api/notifications/${notificationId}/read`);
     return true;
-  } catch {
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      const status = error.response?.status;
+      if (status === 400 || status === 403 || status === 404 || status === 405) {
+        isNotificationMarkReadEndpointAvailable = false;
+      }
+    }
     return false;
   }
 }
@@ -859,6 +939,7 @@ export async function executeDeviationAction(action: DeviationAction): Promise<D
     return { success: false, mode: "LOCAL_SESSION", message: "사건 ID가 필요합니다." };
   }
 
+  const actionLabel = toActionLabel(action.action);
   const nextStatus = mapActionToStatus(action.action);
   const updatedAt = nowIso();
   const resolvedAt =
@@ -879,6 +960,12 @@ export async function executeDeviationAction(action: DeviationAction): Promise<D
         target.overdueHours,
       );
     }
+    appendActivityLog({
+      action: "DEVIATION_ACTIONED",
+      targetId: action.caseId,
+      mode: "MOCK",
+      message: `deviation ${action.caseId} ${actionLabel} (MOCK)`,
+    });
     return { success: true, mode: "REMOTE" };
   }
 
@@ -896,8 +983,21 @@ export async function executeDeviationAction(action: DeviationAction): Promise<D
   });
 
   if (remoteApplied) {
+    appendActivityLog({
+      action: "DEVIATION_ACTIONED",
+      targetId: action.caseId,
+      mode: "REAL",
+      message: `deviation ${action.caseId} ${actionLabel} applied`,
+    });
     return { success: true, mode: "REMOTE" };
   }
+
+  appendActivityLog({
+    action: "DEVIATION_ACTIONED",
+    targetId: action.caseId,
+    mode: "REAL",
+    message: `deviation ${action.caseId} ${actionLabel} failed remotely, saved in session`,
+  });
 
   return {
     success: true,

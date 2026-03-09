@@ -32,3 +32,7 @@ docs/
 # Patch & Temp
 *.patch
 *.tmp
+
+# Gradle User Home (local cache)
+.gradle-user-home/
+**/.gradle-user-home/

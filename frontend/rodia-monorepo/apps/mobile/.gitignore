@@ -42,3 +42,7 @@ pnpm-debug.log*
 # generated native folders
 /ios
 /android
+
+# Gradle User Home (local cache)
+.gradle-user-home/
+**/.gradle-user-home/

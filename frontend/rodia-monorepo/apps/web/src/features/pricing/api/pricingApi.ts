@@ -14,6 +14,7 @@ type BackendQuote = {
   quoteId: number | null;
   vehicleType: string | null;
   vehicleBodyType: string | null;
+  tonnage: number | null;
   desiredPrice: number | null;
   finalPrice: number | null;
   createdAt: string | null;
@@ -109,13 +110,46 @@ function pickListPayload(payload: unknown): unknown[] {
 
 function mapBackendQuote(raw: unknown): BackendQuote {
   const row = toRecord(raw);
+  const vehicle = toRecord(row.vehicle);
+  const truck = toRecord(row.truck);
   return {
-    quoteId: toNumberValue(row.quoteId ?? row.id),
-    vehicleType: toStringValue(row.vehicleType, "") || null,
-    vehicleBodyType: toStringValue(row.vehicleBodyType, "") || null,
-    desiredPrice: toNumberValue(row.desiredPrice),
-    finalPrice: toNumberValue(row.finalPrice),
-    createdAt: toStringValue(row.createdAt, "") || null,
+    quoteId: toNumberValue(row.quoteId ?? row.quote_id ?? row.id),
+    vehicleType:
+      toStringValue(
+        row.vehicleType ??
+          row.vehicle_type ??
+          row.truckType ??
+          row.truck_type ??
+          vehicle.vehicleType ??
+          vehicle.vehicle_type ??
+          truck.vehicleType ??
+          truck.vehicle_type,
+        "",
+      ) || null,
+    vehicleBodyType:
+      toStringValue(
+        row.vehicleBodyType ??
+          row.vehicle_body_type ??
+          row.bodyType ??
+          row.body_type ??
+          vehicle.vehicleBodyType ??
+          vehicle.vehicle_body_type ??
+          truck.vehicleBodyType ??
+          truck.vehicle_body_type,
+        "",
+      ) || null,
+    tonnage: toNumberValue(
+      row.tonnage ??
+        row.tonnageTon ??
+        row.tonnage_ton ??
+        row.vehicleTonnage ??
+        row.vehicle_tonnage ??
+        vehicle.tonnage ??
+        truck.tonnage,
+    ),
+    desiredPrice: toNumberValue(row.desiredPrice ?? row.desired_price ?? row.basePrice ?? row.base_price),
+    finalPrice: toNumberValue(row.finalPrice ?? row.final_price ?? row.totalPrice ?? row.total_price),
+    createdAt: toStringValue(row.createdAt ?? row.created_at ?? row.updatedAt ?? row.updated_at, "") || null,
   };
 }
 
@@ -136,6 +170,46 @@ function normalizeVehicleKey(vehicleType: string | null, bodyType: string | null
   return `${type}__${body}`;
 }
 
+function normalizeVehicleTypeLabel(value: string | null): string {
+  const text = (value ?? "").trim().toUpperCase();
+  return text.length > 0 ? text : "TRUCK";
+}
+
+function normalizeBodyTypeLabel(value: string | null): string {
+  const text = (value ?? "").trim().toUpperCase();
+  return text.length > 0 ? text : "GENERAL";
+}
+
+function inferTonnageLabelFromPrice(price: number | null): string {
+  if (typeof price !== "number" || !Number.isFinite(price) || price <= 0) return "5t";
+  if (price < 250000) return "1t";
+  if (price < 450000) return "5t";
+  if (price < 700000) return "11t";
+  return "25t";
+}
+
+function deriveTonnageLabel(tonnage: number | null, vehicleType: string | null, price: number | null): string {
+  if (typeof tonnage === "number" && Number.isFinite(tonnage) && tonnage > 0) {
+    const rounded = Number.isInteger(tonnage) ? tonnage : Number(tonnage.toFixed(1));
+    return `${rounded}t`;
+  }
+
+  const type = (vehicleType ?? "").trim();
+  if (type.length === 0) return "UNKNOWN";
+
+  const matched = type.match(/(\d+(?:\.\d+)?)/);
+  if (matched?.[1]) {
+    const parsed = Number(matched[1]);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      const rounded = Number.isInteger(parsed) ? parsed : Number(parsed.toFixed(1));
+      return `${rounded}t`;
+    }
+  }
+
+  if (type.length > 0) return type;
+  return inferTonnageLabelFromPrice(price);
+}
+
 function inferScope(category: string | null): AdditionalPricingScope {
   const text = (category ?? "").toLowerCase();
   if (text.includes("vehicle")) return "VEHICLE_OPTION";
@@ -144,7 +218,25 @@ function inferScope(category: string | null): AdditionalPricingScope {
   return "TRANSPORT_OPTION";
 }
 
+function toHttpStatus(error: unknown): number | undefined {
+  const maybeResponse = (error as { response?: { status?: number } } | null | undefined)?.response;
+  return typeof maybeResponse?.status === "number" ? maybeResponse.status : undefined;
+}
+
 async function fetchBackendQuotes(): Promise<BackendQuote[]> {
+  try {
+    const response = await apiClient.get<unknown>(apiPaths.adminTransportQuotes);
+    return pickListPayload(response.data).map(mapBackendQuote);
+  } catch (error) {
+    if (toHttpStatus(error) !== 404) {
+      return [];
+    }
+  }
+
+  if (apiPaths.adminTransportQuotes === apiPaths.shipperQuotes) {
+    return [];
+  }
+
   try {
     const response = await apiClient.get<unknown>(apiPaths.shipperQuotes);
     return pickListPayload(response.data).map(mapBackendQuote);
@@ -204,6 +296,7 @@ export async function fetchVehiclePricingRows(): Promise<VehiclePricingRow[]> {
     {
       vehicleType: string;
       vehicleBodyType: string;
+      tonnageLabel: string;
       prices: number[];
       additional: number[];
       latest: number;
@@ -211,16 +304,22 @@ export async function fetchVehiclePricingRows(): Promise<VehiclePricingRow[]> {
   >();
 
   for (const quote of quotes) {
-    const vehicleType = quote.vehicleType ?? "UNKNOWN";
-    const bodyType = quote.vehicleBodyType ?? "GENERAL";
+    const vehicleType = normalizeVehicleTypeLabel(quote.vehicleType);
+    const bodyType = normalizeBodyTypeLabel(quote.vehicleBodyType);
+    const tonnageLabel = deriveTonnageLabel(quote.tonnage, quote.vehicleType, quote.finalPrice ?? quote.desiredPrice ?? null);
     const key = normalizeVehicleKey(vehicleType, bodyType);
     const current = grouped.get(key) ?? {
       vehicleType,
       vehicleBodyType: bodyType,
+      tonnageLabel,
       prices: [],
       additional: [],
       latest: 0,
     };
+
+    if (current.tonnageLabel === "UNKNOWN" && tonnageLabel !== "UNKNOWN") {
+      current.tonnageLabel = tonnageLabel;
+    }
 
     const base = quote.desiredPrice ?? quote.finalPrice ?? 0;
     const final = quote.finalPrice ?? quote.desiredPrice ?? base;
@@ -239,7 +338,7 @@ export async function fetchVehiclePricingRows(): Promise<VehiclePricingRow[]> {
 
     return {
       vehiclePricingId: `VP-${key.replace(/[^A-Z0-9_]/g, "_")}`,
-      tonnageLabel: group.vehicleType,
+      tonnageLabel: group.tonnageLabel,
       bodyType: group.vehicleBodyType as VehiclePricingRow["bodyType"],
       baseFare: avgBase,
       additionalFare: avgAdditional,

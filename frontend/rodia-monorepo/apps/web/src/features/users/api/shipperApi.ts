@@ -1,6 +1,7 @@
 import { apiPaths } from "@/shared/lib/api/endpoints";
 import { apiClient } from "@/shared/lib/api/client";
 import { isMockModeEnabled } from "@/shared/lib/mock-mode";
+import axios from "axios";
 
 export enum ShipperStatus {
   ACTIVE = "ACTIVE",
@@ -115,6 +116,8 @@ type BackendNotification = {
 const MOCK_GRADES = [ShipperGrade.PLATINUM, ShipperGrade.GOLD, ShipperGrade.SILVER, ShipperGrade.BRONZE] as const;
 const MOCK_SHIPMENT_STATUS: ReadonlyArray<ShipmentLog["status"]> = ["완료", "완료", "진행중", "대기", "취소"];
 const liveStatusOverrides = new Map<string, ShipperStatus>();
+const USE_ROLE_ENDPOINT_FALLBACK =
+  String(import.meta.env.VITE_USE_ROLE_ENDPOINT_FALLBACK ?? "").toLowerCase() === "true";
 
 const ALL_SHIPPERS: Shipper[] = Array.from({ length: 100 }, (_, index) => {
   const id = `shipper_${index + 1}`;
@@ -222,37 +225,37 @@ function resolveSettlementMePath(basePath: string): string {
 function mapBackendMatch(raw: unknown): BackendMatch {
   const row = toRecord(raw);
   return {
-    matchId: toOptionalNumberValue(row.matchId ?? row.id) ?? null,
-    quoteId: toOptionalNumberValue(row.quoteId) ?? null,
-    driverId: toOptionalNumberValue(row.driverId) ?? null,
+    matchId: toOptionalNumberValue(row.matchId ?? row.match_id ?? row.id) ?? null,
+    quoteId: toOptionalNumberValue(row.quoteId ?? row.quote_id) ?? null,
+    driverId: toOptionalNumberValue(row.driverId ?? row.driver_id) ?? null,
     status: toStringValue(row.status, "READY"),
-    createdAt: toStringValue(row.createdAt, "") || null,
-    updatedAt: toStringValue(row.updatedAt, "") || null,
+    createdAt: toStringValue(row.createdAt ?? row.created_at, "") || null,
+    updatedAt: toStringValue(row.updatedAt ?? row.updated_at, "") || null,
   };
 }
 
 function mapBackendQuote(raw: unknown): BackendQuote {
   const row = toRecord(raw);
   return {
-    quoteId: toOptionalNumberValue(row.quoteId ?? row.id) ?? null,
-    originAddress: toStringValue(row.originAddress, "-"),
-    destinationAddress: toStringValue(row.destinationAddress, "-"),
-    distanceKm: toOptionalNumberValue(row.distanceKm) ?? null,
-    desiredPrice: toOptionalNumberValue(row.desiredPrice) ?? null,
-    finalPrice: toOptionalNumberValue(row.finalPrice) ?? null,
+    quoteId: toOptionalNumberValue(row.quoteId ?? row.quote_id ?? row.id) ?? null,
+    originAddress: toStringValue(row.originAddress ?? row.origin_address, "-"),
+    destinationAddress: toStringValue(row.destinationAddress ?? row.destination_address, "-"),
+    distanceKm: toOptionalNumberValue(row.distanceKm ?? row.distance_km) ?? null,
+    desiredPrice: toOptionalNumberValue(row.desiredPrice ?? row.desired_price) ?? null,
+    finalPrice: toOptionalNumberValue(row.finalPrice ?? row.final_price) ?? null,
   };
 }
 
 function mapBackendSettlement(raw: unknown): BackendSettlement {
   const row = toRecord(raw);
   return {
-    settlementId: toOptionalNumberValue(row.settlementId ?? row.id) ?? null,
-    matchId: toOptionalNumberValue(row.matchId) ?? null,
-    shipperId: toOptionalNumberValue(row.shipperId) ?? null,
-    totalFare: toOptionalNumberValue(row.totalFare) ?? null,
-    settlementStatus: toStringValue(row.settlementStatus, "") || null,
-    completedAt: toStringValue(row.completedAt, "") || null,
-    createdAt: toStringValue(row.createdAt, "") || null,
+    settlementId: toOptionalNumberValue(row.settlementId ?? row.settlement_id ?? row.id) ?? null,
+    matchId: toOptionalNumberValue(row.matchId ?? row.match_id) ?? null,
+    shipperId: toOptionalNumberValue(row.shipperId ?? row.shipper_id) ?? null,
+    totalFare: toOptionalNumberValue(row.totalFare ?? row.total_fare) ?? null,
+    settlementStatus: toStringValue(row.settlementStatus ?? row.settlement_status, "") || null,
+    completedAt: toStringValue(row.completedAt ?? row.completed_at, "") || null,
+    createdAt: toStringValue(row.createdAt ?? row.created_at, "") || null,
   };
 }
 
@@ -262,11 +265,11 @@ function mapBackendNotification(raw: unknown): BackendNotification | null {
   if (notificationId === undefined) return null;
   return {
     notificationId,
-    matchId: toOptionalNumberValue(row.matchId) ?? null,
+    matchId: toOptionalNumberValue(row.matchId ?? row.match_id) ?? null,
     type: toStringValue(row.type, "") || null,
     message: toStringValue(row.message, ""),
-    isRead: Boolean(row.isRead),
-    createdAt: toStringValue(row.createdAt, "") || null,
+    isRead: Boolean(row.isRead ?? row.is_read),
+    createdAt: toStringValue(row.createdAt ?? row.created_at, "") || null,
   };
 }
 
@@ -301,23 +304,59 @@ function matchesShipperId(rowId: string, targetId: string): boolean {
 
 async function fetchMatches(): Promise<BackendMatch[]> {
   try {
-    const response = await apiClient.get<unknown>(apiPaths.shipperMatchesMe);
+    const response = await apiClient.get<unknown>(apiPaths.adminTransportMatches);
     return pickListPayload(response.data).map(mapBackendMatch);
-  } catch {
-    return [];
+  } catch (error) {
+    if (!axios.isAxiosError(error) || error.response?.status !== 404) {
+      return [];
+    }
+    if (!USE_ROLE_ENDPOINT_FALLBACK) {
+      return [];
+    }
+
+    try {
+      const response = await apiClient.get<unknown>(apiPaths.shipperMatchesMe);
+      return pickListPayload(response.data).map(mapBackendMatch);
+    } catch {
+      return [];
+    }
   }
 }
 
 async function fetchQuotes(): Promise<BackendQuote[]> {
   try {
-    const response = await apiClient.get<unknown>(apiPaths.shipperQuotes);
+    const response = await apiClient.get<unknown>(apiPaths.adminTransportQuotes);
     return pickListPayload(response.data).map(mapBackendQuote);
-  } catch {
-    return [];
+  } catch (error) {
+    if (!axios.isAxiosError(error) || error.response?.status !== 404) {
+      return [];
+    }
+    if (!USE_ROLE_ENDPOINT_FALLBACK) {
+      return [];
+    }
+
+    try {
+      const response = await apiClient.get<unknown>(apiPaths.shipperQuotes);
+      return pickListPayload(response.data).map(mapBackendQuote);
+    } catch {
+      return [];
+    }
   }
 }
 
 async function fetchSettlements(): Promise<BackendSettlement[]> {
+  try {
+    const response = await apiClient.get<unknown>(apiPaths.adminTransportSettlements);
+    return pickListPayload(response.data).map(mapBackendSettlement);
+  } catch (error) {
+    if (!axios.isAxiosError(error) || error.response?.status !== 404) {
+      return [];
+    }
+  }
+  if (!USE_ROLE_ENDPOINT_FALLBACK) {
+    return [];
+  }
+
   try {
     const response = await apiClient.get<unknown>(resolveSettlementMePath(apiPaths.shipperSettlements));
     return pickListPayload(response.data).map(mapBackendSettlement);

@@ -1,4 +1,5 @@
 import type { QuoteQuery, QuoteResponse, QuoteRow, QuoteStatus, QuoteUpdatePayload } from "@/features/quotes/model/types";
+import axios from "axios";
 import { apiPaths } from "@/shared/lib/api/endpoints";
 import { apiClient } from "@/shared/lib/api/client";
 import { appendActivityLog } from "@/shared/lib/activity-log";
@@ -91,6 +92,11 @@ const MOCK_QUOTES: QuoteRow[] = [
 ];
 
 const liveQuoteOverrides = new Map<string, QuoteUpdatePayload>();
+const USE_ADMIN_QUOTE_DETAIL =
+  String(import.meta.env.VITE_USE_ADMIN_QUOTE_DETAIL ?? "").toLowerCase() === "true";
+const USE_SHIPPER_QUOTE_DETAIL_FALLBACK =
+  String(import.meta.env.VITE_USE_SHIPPER_QUOTE_DETAIL_FALLBACK ?? "").toLowerCase() === "true";
+let isAdminQuoteDetailPathAvailable = USE_ADMIN_QUOTE_DETAIL;
 
 function toRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
@@ -149,49 +155,49 @@ function extractQuoteIdentifier(value: string): string {
 function mapBackendQuoteList(raw: unknown): BackendQuoteList {
   const row = toRecord(raw);
   return {
-    quoteId: toNumberValue(row.quoteId ?? row.id),
-    quotePublicId: toStringValue(row.quotePublicId, "") || null,
-    originAddress: toStringValue(row.originAddress, "-"),
-    destinationAddress: toStringValue(row.destinationAddress, "-"),
-    distanceKm: toNumberValue(row.distanceKm),
-    vehicleType: toStringValue(row.vehicleType, "") || null,
-    vehicleBodyType: toStringValue(row.vehicleBodyType, "") || null,
-    cargoName: toStringValue(row.cargoName, "") || null,
-    desiredPrice: toNumberValue(row.desiredPrice),
-    finalPrice: toNumberValue(row.finalPrice),
+    quoteId: toNumberValue(row.quoteId ?? row.quote_id ?? row.id),
+    quotePublicId: toStringValue(row.quotePublicId ?? row.quote_public_id, "") || null,
+    originAddress: toStringValue(row.originAddress ?? row.origin_address, "-"),
+    destinationAddress: toStringValue(row.destinationAddress ?? row.destination_address, "-"),
+    distanceKm: toNumberValue(row.distanceKm ?? row.distance_km),
+    vehicleType: toStringValue(row.vehicleType ?? row.vehicle_type, "") || null,
+    vehicleBodyType: toStringValue(row.vehicleBodyType ?? row.vehicle_body_type, "") || null,
+    cargoName: toStringValue(row.cargoName ?? row.cargo_name, "") || null,
+    desiredPrice: toNumberValue(row.desiredPrice ?? row.desired_price),
+    finalPrice: toNumberValue(row.finalPrice ?? row.final_price),
     status: toStringValue(row.status, "") || null,
-    createdAt: toStringValue(row.createdAt, "") || null,
+    createdAt: toStringValue(row.createdAt ?? row.created_at, "") || null,
   };
 }
 
 function mapBackendQuoteDetail(raw: unknown): BackendQuoteDetail {
   const row = toRecord(raw);
   return {
-    quoteId: toNumberValue(row.quoteId ?? row.id),
-    quotePublicId: toStringValue(row.quotePublicId, "") || null,
-    truckId: toNumberValue(row.truckId),
-    originAddress: toStringValue(row.originAddress, "-"),
-    destinationAddress: toStringValue(row.destinationAddress, "-"),
-    originLat: toNumberValue(row.originLat),
-    originLng: toNumberValue(row.originLng),
-    destinationLat: toNumberValue(row.destinationLat),
-    destinationLng: toNumberValue(row.destinationLng),
-    distanceKm: toNumberValue(row.distanceKm),
-    weightKg: toNumberValue(row.weightKg),
-    volumeCbm: toNumberValue(row.volumeCbm),
-    vehicleType: toStringValue(row.vehicleType, "") || null,
-    vehicleBodyType: toStringValue(row.vehicleBodyType, "") || null,
-    cargoName: toStringValue(row.cargoName, "") || null,
-    cargoType: toStringValue(row.cargoType, "") || null,
-    cargoDesc: toStringValue(row.cargoDesc, "") || null,
-    desiredPrice: toNumberValue(row.desiredPrice),
-    finalPrice: toNumberValue(row.finalPrice),
+    quoteId: toNumberValue(row.quoteId ?? row.quote_id ?? row.id),
+    quotePublicId: toStringValue(row.quotePublicId ?? row.quote_public_id, "") || null,
+    truckId: toNumberValue(row.truckId ?? row.truck_id),
+    originAddress: toStringValue(row.originAddress ?? row.origin_address, "-"),
+    destinationAddress: toStringValue(row.destinationAddress ?? row.destination_address, "-"),
+    originLat: toNumberValue(row.originLat ?? row.origin_lat),
+    originLng: toNumberValue(row.originLng ?? row.origin_lng),
+    destinationLat: toNumberValue(row.destinationLat ?? row.destination_lat),
+    destinationLng: toNumberValue(row.destinationLng ?? row.destination_lng),
+    distanceKm: toNumberValue(row.distanceKm ?? row.distance_km),
+    weightKg: toNumberValue(row.weightKg ?? row.weight_kg),
+    volumeCbm: toNumberValue(row.volumeCbm ?? row.volume_cbm),
+    vehicleType: toStringValue(row.vehicleType ?? row.vehicle_type, "") || null,
+    vehicleBodyType: toStringValue(row.vehicleBodyType ?? row.vehicle_body_type, "") || null,
+    cargoName: toStringValue(row.cargoName ?? row.cargo_name, "") || null,
+    cargoType: toStringValue(row.cargoType ?? row.cargo_type, "") || null,
+    cargoDesc: toStringValue(row.cargoDesc ?? row.cargo_desc, "") || null,
+    desiredPrice: toNumberValue(row.desiredPrice ?? row.desired_price),
+    finalPrice: toNumberValue(row.finalPrice ?? row.final_price),
     allowCombine: typeof row.allowCombine === "boolean" ? row.allowCombine : null,
-    loadMethod: toStringValue(row.loadMethod, "") || null,
-    unloadMethod: toStringValue(row.unloadMethod, "") || null,
+    loadMethod: toStringValue(row.loadMethod ?? row.load_method, "") || null,
+    unloadMethod: toStringValue(row.unloadMethod ?? row.unload_method, "") || null,
     status: toStringValue(row.status, "") || null,
-    createdAt: toStringValue(row.createdAt, "") || null,
-    updatedAt: toStringValue(row.updatedAt, "") || null,
+    createdAt: toStringValue(row.createdAt ?? row.created_at, "") || null,
+    updatedAt: toStringValue(row.updatedAt ?? row.updated_at, "") || null,
     checklistItems: Array.isArray(row.checklistItems) ? row.checklistItems : [],
     stops: Array.isArray(row.stops) ? row.stops : [],
   };
@@ -306,20 +312,60 @@ function paginateRows(rows: QuoteRow[], page: number, size: number): QuoteRespon
 
 async function fetchQuoteList(): Promise<BackendQuoteList[]> {
   try {
-    const response = await apiClient.get<unknown>(apiPaths.shipperQuotes);
+    const response = await apiClient.get<unknown>(apiPaths.adminTransportQuotes);
     return pickListPayload(response.data).map(mapBackendQuoteList);
-  } catch {
-    return [];
+  } catch (error) {
+    if (!axios.isAxiosError(error) || error.response?.status !== 404) {
+      return [];
+    }
+
+    try {
+      const response = await apiClient.get<unknown>(apiPaths.shipperQuotes);
+      return pickListPayload(response.data).map(mapBackendQuoteList);
+    } catch {
+      return [];
+    }
   }
 }
 
 async function fetchQuoteDetail(identifier: string): Promise<BackendQuoteDetail | null> {
-  try {
-    const response = await apiClient.get<unknown>(`${apiPaths.shipperQuotes.replace(/\/$/, "")}/${identifier}`);
-    return mapBackendQuoteDetail(response.data);
-  } catch {
+  const adminPath = `${apiPaths.adminTransportQuotes.replace(/\/$/, "")}/${identifier}`;
+  if (!isAdminQuoteDetailPathAvailable) {
     return null;
   }
+
+  try {
+    const response = await apiClient.get<unknown>(adminPath);
+    return mapBackendQuoteDetail(response.data);
+  } catch (error) {
+    if (!axios.isAxiosError(error)) {
+      return null;
+    }
+
+    const status = error.response?.status;
+    if (status === 400 || status === 403 || status === 405) {
+      isAdminQuoteDetailPathAvailable = false;
+      return null;
+    }
+    if (status !== 404) return null;
+    if (!USE_SHIPPER_QUOTE_DETAIL_FALLBACK) return null;
+
+    try {
+      const response = await apiClient.get<unknown>(`${apiPaths.shipperQuotes.replace(/\/$/, "")}/${identifier}`);
+      return mapBackendQuoteDetail(response.data);
+    } catch {
+      return null;
+    }
+  }
+}
+
+async function enrichRowsWithDetail(rows: QuoteRow[]): Promise<QuoteRow[]> {
+  const enriched: QuoteRow[] = [];
+  for (const row of rows) {
+    const detail = await fetchQuoteDetail(extractQuoteIdentifier(row.quoteId));
+    enriched.push(mergeRowWithDetail(row, detail));
+  }
+  return enriched;
 }
 
 function filterMockQuotes(query: QuoteQuery): QuoteResponse {
@@ -344,24 +390,14 @@ export async function fetchQuoteRows(query: QuoteQuery): Promise<QuoteResponse> 
 
   const shouldFilterCombine = typeof query.allowCombine === "boolean";
   if (shouldFilterCombine) {
-    const enriched = await Promise.all(
-      byStatusAndKeyword.map(async (row) => {
-        const detail = await fetchQuoteDetail(extractQuoteIdentifier(row.quoteId));
-        return mergeRowWithDetail(row, detail);
-      }),
-    );
+    const enriched = await enrichRowsWithDetail(byStatusAndKeyword);
     const filtered = filterRows(enriched, query);
     return paginateRows(filtered, query.page, query.size);
   }
 
   const pageStart = (query.page - 1) * query.size;
   const pageRows = byStatusAndKeyword.slice(pageStart, pageStart + query.size);
-  const enrichedPage = await Promise.all(
-    pageRows.map(async (row) => {
-      const detail = await fetchQuoteDetail(extractQuoteIdentifier(row.quoteId));
-      return mergeRowWithDetail(row, detail);
-    }),
-  );
+  const enrichedPage = await enrichRowsWithDetail(pageRows);
 
   return {
     items: enrichedPage,

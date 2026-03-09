@@ -1,6 +1,7 @@
 import { apiClient } from "@/shared/lib/api/client";
 import { apiPaths } from "@/shared/lib/api/endpoints";
 import { isMockModeEnabled } from "@/shared/lib/mock-mode";
+import axios from "axios";
 
 export enum DriverStatus {
   ACTIVE = "ACTIVE",
@@ -159,6 +160,8 @@ const MOCK_DELIVERY_STATUSES: ReadonlyArray<DeliveryLog["status"]> = [
 ];
 
 const liveStatusOverrides = new Map<string, DriverStatus>();
+const USE_ROLE_ENDPOINT_FALLBACK =
+  String(import.meta.env.VITE_USE_ROLE_ENDPOINT_FALLBACK ?? "").toLowerCase() === "true";
 
 const ALL_DRIVERS: Driver[] = Array.from({ length: 80 }, (_, index) => {
   const totalMatches = 20 + (index % 30) * 3;
@@ -290,60 +293,60 @@ function parseDriverNumber(id: string): number | null {
 function mapBackendMatch(raw: unknown): BackendMatch {
   const row = toRecord(raw);
   return {
-    matchId: toOptionalNumberValue(row.matchId ?? row.id),
-    quoteId: toOptionalNumberValue(row.quoteId),
-    driverId: toOptionalNumberValue(row.driverId),
+    matchId: toOptionalNumberValue(row.matchId ?? row.match_id ?? row.id),
+    quoteId: toOptionalNumberValue(row.quoteId ?? row.quote_id),
+    driverId: toOptionalNumberValue(row.driverId ?? row.driver_id),
     accepted: Boolean(row.accepted),
     status: toStringValue(row.status, "READY"),
-    createdAt: toStringValue(row.createdAt, "") || null,
-    updatedAt: toStringValue(row.updatedAt, "") || null,
+    createdAt: toStringValue(row.createdAt ?? row.created_at, "") || null,
+    updatedAt: toStringValue(row.updatedAt ?? row.updated_at, "") || null,
   };
 }
 
 function mapBackendQuote(raw: unknown): BackendQuote {
   const row = toRecord(raw);
   return {
-    quoteId: toOptionalNumberValue(row.quoteId ?? row.id),
-    shipperId: toOptionalNumberValue(row.shipperId),
-    originAddress: toStringValue(row.originAddress, "-"),
-    destinationAddress: toStringValue(row.destinationAddress, "-"),
-    distanceKm: toOptionalNumberValue(row.distanceKm),
-    weightKg: toOptionalNumberValue(row.weightKg),
-    desiredPrice: toOptionalNumberValue(row.desiredPrice),
-    finalPrice: toOptionalNumberValue(row.finalPrice),
-    createdAt: toStringValue(row.createdAt, "") || null,
+    quoteId: toOptionalNumberValue(row.quoteId ?? row.quote_id ?? row.id),
+    shipperId: toOptionalNumberValue(row.shipperId ?? row.shipper_id),
+    originAddress: toStringValue(row.originAddress ?? row.origin_address, "-"),
+    destinationAddress: toStringValue(row.destinationAddress ?? row.destination_address, "-"),
+    distanceKm: toOptionalNumberValue(row.distanceKm ?? row.distance_km),
+    weightKg: toOptionalNumberValue(row.weightKg ?? row.weight_kg),
+    desiredPrice: toOptionalNumberValue(row.desiredPrice ?? row.desired_price),
+    finalPrice: toOptionalNumberValue(row.finalPrice ?? row.final_price),
+    createdAt: toStringValue(row.createdAt ?? row.created_at, "") || null,
   };
 }
 
 function mapBackendSettlement(raw: unknown): BackendSettlement {
   const row = toRecord(raw);
   return {
-    settlementId: toOptionalNumberValue(row.settlementId ?? row.id),
-    matchId: toOptionalNumberValue(row.matchId),
-    driverId: toOptionalNumberValue(row.driverId),
-    totalFare: toOptionalNumberValue(row.totalFare),
-    driverPayout: toOptionalNumberValue(row.driverPayout),
-    settlementStatus: toStringValue(row.settlementStatus, "") || null,
-    completedAt: toStringValue(row.completedAt, "") || null,
-    createdAt: toStringValue(row.createdAt, "") || null,
+    settlementId: toOptionalNumberValue(row.settlementId ?? row.settlement_id ?? row.id),
+    matchId: toOptionalNumberValue(row.matchId ?? row.match_id),
+    driverId: toOptionalNumberValue(row.driverId ?? row.driver_id),
+    totalFare: toOptionalNumberValue(row.totalFare ?? row.total_fare),
+    driverPayout: toOptionalNumberValue(row.driverPayout ?? row.driver_payout),
+    settlementStatus: toStringValue(row.settlementStatus ?? row.settlement_status, "") || null,
+    completedAt: toStringValue(row.completedAt ?? row.completed_at, "") || null,
+    createdAt: toStringValue(row.createdAt ?? row.created_at, "") || null,
   };
 }
 
 function mapBackendTruck(raw: unknown): BackendTruck {
   const row = toRecord(raw);
   return {
-    truckId: toOptionalNumberValue(row.truckId ?? row.id),
-    driverId: toOptionalNumberValue(row.driverId),
-    vehicleType: toStringValue(row.vehicleType, "") || null,
-    vehicleBodyType: toStringValue(row.vehicleBodyType, "") || null,
-    maxWeight: toOptionalNumberValue(row.maxWeight),
-    maxVolume: toOptionalNumberValue(row.maxVolume),
+    truckId: toOptionalNumberValue(row.truckId ?? row.truck_id ?? row.id),
+    driverId: toOptionalNumberValue(row.driverId ?? row.driver_id),
+    vehicleType: toStringValue(row.vehicleType ?? row.vehicle_type, "") || null,
+    vehicleBodyType: toStringValue(row.vehicleBodyType ?? row.vehicle_body_type, "") || null,
+    maxWeight: toOptionalNumberValue(row.maxWeight ?? row.max_weight),
+    maxVolume: toOptionalNumberValue(row.maxVolume ?? row.max_volume),
     name: toStringValue(row.name, "") || null,
     approved: typeof row.approved === "boolean" ? row.approved : null,
     insurance: toStringValue(row.insurance, "") || null,
     tonnage: toOptionalNumberValue(row.tonnage),
-    createdAt: toStringValue(row.createdAt, "") || null,
-    updatedAt: toStringValue(row.updatedAt, "") || null,
+    createdAt: toStringValue(row.createdAt ?? row.created_at, "") || null,
+    updatedAt: toStringValue(row.updatedAt ?? row.updated_at, "") || null,
   };
 }
 
@@ -353,15 +356,27 @@ function mapBackendNotification(raw: unknown): BackendNotification | null {
   if (notificationId === null) return null;
   return {
     notificationId,
-    matchId: toOptionalNumberValue(row.matchId),
+    matchId: toOptionalNumberValue(row.matchId ?? row.match_id),
     type: toStringValue(row.type, "") || null,
     message: toStringValue(row.message, ""),
-    isRead: Boolean(row.isRead),
-    createdAt: toStringValue(row.createdAt, "") || null,
+    isRead: Boolean(row.isRead ?? row.is_read),
+    createdAt: toStringValue(row.createdAt ?? row.created_at, "") || null,
   };
 }
 
 async function fetchMatches(): Promise<BackendMatch[]> {
+  try {
+    const response = await apiClient.get<unknown>(apiPaths.adminTransportMatches);
+    return pickListPayload(response.data).map(mapBackendMatch);
+  } catch (error) {
+    if (!axios.isAxiosError(error) || error.response?.status !== 404) {
+      return [];
+    }
+  }
+  if (!USE_ROLE_ENDPOINT_FALLBACK) {
+    return [];
+  }
+
   const driverMyPath = `${apiPaths.driverMatches.replace(/\/$/, "")}/me`;
 
   const [shipperRows, driverOpenRows, driverRows] = await Promise.all([
@@ -388,14 +403,38 @@ async function fetchMatches(): Promise<BackendMatch[]> {
 
 async function fetchQuotes(): Promise<BackendQuote[]> {
   try {
-    const response = await apiClient.get<unknown>(apiPaths.shipperQuotes);
+    const response = await apiClient.get<unknown>(apiPaths.adminTransportQuotes);
     return pickListPayload(response.data).map(mapBackendQuote);
-  } catch {
-    return [];
+  } catch (error) {
+    if (!axios.isAxiosError(error) || error.response?.status !== 404) {
+      return [];
+    }
+    if (!USE_ROLE_ENDPOINT_FALLBACK) {
+      return [];
+    }
+
+    try {
+      const response = await apiClient.get<unknown>(apiPaths.shipperQuotes);
+      return pickListPayload(response.data).map(mapBackendQuote);
+    } catch {
+      return [];
+    }
   }
 }
 
 async function fetchSettlements(): Promise<BackendSettlement[]> {
+  try {
+    const response = await apiClient.get<unknown>(apiPaths.adminTransportSettlements);
+    return pickListPayload(response.data).map(mapBackendSettlement);
+  } catch (error) {
+    if (!axios.isAxiosError(error) || error.response?.status !== 404) {
+      return [];
+    }
+  }
+  if (!USE_ROLE_ENDPOINT_FALLBACK) {
+    return [];
+  }
+
   const [shipperRows, driverRows] = await Promise.all([
     apiClient
       .get<unknown>(resolveSettlementMePath(apiPaths.shipperSettlements))
@@ -416,10 +455,22 @@ async function fetchSettlements(): Promise<BackendSettlement[]> {
 
 async function fetchTrucks(): Promise<BackendTruck[]> {
   try {
-    const response = await apiClient.get<unknown>(apiPaths.driverTrucks);
+    const response = await apiClient.get<unknown>(apiPaths.adminTrucksPending);
     return pickListPayload(response.data).map(mapBackendTruck);
-  } catch {
-    return [];
+  } catch (error) {
+    if (!axios.isAxiosError(error) || error.response?.status !== 404) {
+      return [];
+    }
+    if (!USE_ROLE_ENDPOINT_FALLBACK) {
+      return [];
+    }
+
+    try {
+      const response = await apiClient.get<unknown>(apiPaths.driverTrucks);
+      return pickListPayload(response.data).map(mapBackendTruck);
+    } catch {
+      return [];
+    }
   }
 }
 

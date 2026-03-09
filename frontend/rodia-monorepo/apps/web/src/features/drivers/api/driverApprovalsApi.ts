@@ -1,5 +1,6 @@
 ﻿import { DRIVER_APPROVAL_MOCK_ROWS } from "@/features/drivers/model/mockData";
 import type { DriverApprovalReviewPayload, DriverApprovalRow } from "@/features/drivers/model/types";
+import axios from "axios";
 import { appendActivityLog } from "@/shared/lib/activity-log";
 import { apiClient } from "@/shared/lib/api/client";
 import { apiPaths } from "@/shared/lib/api/endpoints";
@@ -29,6 +30,8 @@ const reviewOverrides = new Map<
 >();
 
 let driverRowsStore: DriverApprovalRow[] = [...DRIVER_APPROVAL_MOCK_ROWS];
+const USE_DRIVER_TRUCKS_FALLBACK =
+  String(import.meta.env.VITE_USE_DRIVER_TRUCKS_FALLBACK ?? "").toLowerCase() === "true";
 
 function toRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
@@ -77,18 +80,18 @@ function parseDriverId(input: string): number | null {
 function mapBackendTruck(raw: unknown): BackendTruck {
   const row = toRecord(raw);
   return {
-    truckId: toNumberValue(row.truckId ?? row.id),
-    driverId: toNumberValue(row.driverId),
-    vehicleType: toStringValue(row.vehicleType, "") || null,
-    vehicleBodyType: toStringValue(row.vehicleBodyType, "") || null,
+    truckId: toNumberValue(row.truckId ?? row.truck_id ?? row.id),
+    driverId: toNumberValue(row.driverId ?? row.driver_id),
+    vehicleType: toStringValue(row.vehicleType ?? row.vehicle_type, "") || null,
+    vehicleBodyType: toStringValue(row.vehicleBodyType ?? row.vehicle_body_type, "") || null,
     name: toStringValue(row.name, "") || null,
     approved: typeof row.approved === "boolean" ? row.approved : null,
     insurance: toStringValue(row.insurance, "") || null,
     tonnage: toNumberValue(row.tonnage),
-    maxWeight: toNumberValue(row.maxWeight),
-    maxVolume: toNumberValue(row.maxVolume),
-    createdAt: toStringValue(row.createdAt, "") || null,
-    updatedAt: toStringValue(row.updatedAt, "") || null,
+    maxWeight: toNumberValue(row.maxWeight ?? row.max_weight),
+    maxVolume: toNumberValue(row.maxVolume ?? row.max_volume),
+    createdAt: toStringValue(row.createdAt ?? row.created_at, "") || null,
+    updatedAt: toStringValue(row.updatedAt ?? row.updated_at, "") || null,
   };
 }
 
@@ -164,28 +167,28 @@ function deriveRowsFromTrucks(trucks: BackendTruck[]): DriverApprovalRow[] {
 
 async function fetchBackendTrucks(): Promise<BackendTruck[]> {
   try {
-    const response = await apiClient.get<unknown>(apiPaths.driverTrucks);
+    const response = await apiClient.get<unknown>(apiPaths.adminTrucksPending);
     return pickListPayload(response.data).map(mapBackendTruck);
-  } catch {
-    return [];
+  } catch (error) {
+    if (!axios.isAxiosError(error) || error.response?.status !== 404) {
+      return [];
+    }
+    if (!USE_DRIVER_TRUCKS_FALLBACK) {
+      return [];
+    }
+
+    try {
+      const response = await apiClient.get<unknown>(apiPaths.driverTrucks);
+      return pickListPayload(response.data).map(mapBackendTruck);
+    } catch {
+      return [];
+    }
   }
 }
 
 async function tryUpdateTruckApproval(truckId: number, approved: boolean): Promise<boolean> {
-  const basePath = apiPaths.driverTrucks.replace(/\/$/, "");
   try {
-    const currentResponse = await apiClient.get<unknown>(`${basePath}/${truckId}`);
-    const current = mapBackendTruck(currentResponse.data);
-    await apiClient.put(`${basePath}/${truckId}`, {
-      vehicleType: current.vehicleType,
-      vehicleBodyType: current.vehicleBodyType,
-      tonnage: current.tonnage,
-      maxWeight: current.maxWeight,
-      maxVolume: current.maxVolume,
-      name: current.name,
-      approved,
-      insurance: current.insurance,
-    });
+    await apiClient.patch(apiPaths.adminTruckApproval(String(truckId)), { approved });
     return true;
   } catch {
     return false;
@@ -252,4 +255,3 @@ export async function reviewDriverApproval(payload: DriverApprovalReviewPayload)
       : `차주 ${payload.driverId} 승인 검토 결과를 세션에만 반영했습니다(백엔드 API 미지원).`,
   });
 }
-

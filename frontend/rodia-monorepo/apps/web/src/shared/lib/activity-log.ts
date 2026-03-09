@@ -3,12 +3,16 @@
   | "QUOTE_NOTIFICATION_SENT"
   | "PRICING_UPDATED"
   | "PRICING_NOTIFICATION_SENT"
+  | "SANCTION_CREATED"
+  | "DEVIATION_ACTIONED"
   | "DISPATCH_ASSIGNED"
   | "DRIVER_APPROVAL_REVIEWED"
   | "TRUCK_APPROVAL_REVIEWED"
   | "SETTLEMENT_REVIEWED"
   | "ORDER_CANCELLATION_REVIEWED"
-  | "LIVE_ALERT_SENT";
+  | "LIVE_ALERT_SENT"
+  | "MATCHING_CANCELLED"
+  | "ADMIN_LOGOUT";
 
 export type AdminActivityLog = {
   id: string;
@@ -20,11 +24,11 @@ export type AdminActivityLog = {
 };
 
 const ACTIVITY_LOG_KEY = "rodia_admin_activity_logs";
-const ACTIVITY_LOG_EVENT = "rodia:activity-log-changed";
 const MAX_LOG_ITEMS = 200;
 const EMPTY_LOGS: AdminActivityLog[] = [];
 let cachedRawLogs: string | null = null;
 let cachedParsedLogs: AdminActivityLog[] = EMPTY_LOGS;
+const listeners = new Set<() => void>();
 
 function readLogs(): AdminActivityLog[] {
   if (typeof window === "undefined") return [];
@@ -56,9 +60,16 @@ function readLogs(): AdminActivityLog[] {
 }
 
 function writeLogs(logs: AdminActivityLog[]) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(ACTIVITY_LOG_KEY, JSON.stringify(logs.slice(0, MAX_LOG_ITEMS)));
-  window.dispatchEvent(new Event(ACTIVITY_LOG_EVENT));
+  const limited = logs.slice(0, MAX_LOG_ITEMS);
+  const raw = JSON.stringify(limited);
+  cachedRawLogs = raw;
+  cachedParsedLogs = limited;
+
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem(ACTIVITY_LOG_KEY, raw);
+  }
+
+  listeners.forEach((listener) => listener());
 }
 
 export function getActivityLogs(): AdminActivityLog[] {
@@ -77,17 +88,25 @@ export function appendActivityLog(item: Omit<AdminActivityLog, "id" | "createdAt
 }
 
 export function subscribeActivityLogs(listener: () => void): () => void {
-  if (typeof window === "undefined") return () => undefined;
+  listeners.add(listener);
+
+  if (typeof window === "undefined") {
+    return () => {
+      listeners.delete(listener);
+    };
+  }
 
   const handleStorage = (event: StorageEvent) => {
-    if (event.key === ACTIVITY_LOG_KEY) listener();
+    if (event.key !== ACTIVITY_LOG_KEY) return;
+    cachedRawLogs = null;
+    cachedParsedLogs = EMPTY_LOGS;
+    listener();
   };
 
   window.addEventListener("storage", handleStorage);
-  window.addEventListener(ACTIVITY_LOG_EVENT, listener);
 
   return () => {
+    listeners.delete(listener);
     window.removeEventListener("storage", handleStorage);
-    window.removeEventListener(ACTIVITY_LOG_EVENT, listener);
   };
 }

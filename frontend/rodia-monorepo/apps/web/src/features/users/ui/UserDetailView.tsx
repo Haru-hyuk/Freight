@@ -1,4 +1,4 @@
-import * as React from "react";
+﻿import * as React from "react";
 import { NavLink } from "react-router-dom";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/ui/shadcn/tabs";
@@ -16,15 +16,21 @@ import { UserSettlementSection } from "@/features/users/ui/UserSettlementSection
 import { UserDeviationsSection } from "@/features/users/ui/UserDeviationsSection";
 
 import { SanctionDialog } from "@/features/sanctions/ui/SanctionDialog";
+import { createSanction } from "@/features/sanctions/model/sanctionsApi";
 
 type Props = {
   userId: string;
 };
 
+function roleLabel(role: "SHIPPER" | "DRIVER") {
+  return role === "SHIPPER" ? "화주" : "차주";
+}
+
 export function UserDetailView({ userId }: Props) {
   const [loading, setLoading] = React.useState(true);
   const [data, setData] = React.useState<UserDetailResponse | null>(null);
   const [sanctionOpen, setSanctionOpen] = React.useState(false);
+  const [sanctionMessage, setSanctionMessage] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (!userId) {
@@ -58,24 +64,26 @@ export function UserDetailView({ userId }: Props) {
   const user = data?.user;
 
   return (
-    <div className="space-y-6">
+    <div className="min-h-screen space-y-6 bg-background text-foreground">
       <div className="space-y-1">
-        <div className="text-base text-slate-600">
+        <div className="text-sm text-foreground/70">
           <NavLink to="/users" className="underline underline-offset-4">
             사용자
           </NavLink>{" "}
-          <span className="text-slate-500">/</span> 상세
+          / 상세
         </div>
-        <h2 className="text-3xl font-semibold text-slate-900">사용자 상세</h2>
-        <p className="text-base text-slate-600">사용자 기본 정보와 운영 지표를 확인합니다.</p>
+        <h2 className="text-2xl font-semibold">사용자 상세</h2>
+        <p className="text-sm text-foreground/70">기본 정보와 운영 지표를 확인합니다.</p>
       </div>
 
-      <Card className="rounded-lg border border-slate-300 bg-white">
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-lg text-slate-900">기본 정보</CardTitle>
-          <p className="text-base text-slate-600">계정 상태 및 연락 정보를 확인합니다.</p>
-        </CardHeader>
+      {sanctionMessage ? (
+        <div className="rounded-lg border border-border bg-muted p-3 text-sm">{sanctionMessage}</div>
+      ) : null}
 
+      <Card className="rounded-lg border border-border bg-background">
+        <CardHeader className="space-y-1">
+          <CardTitle className="text-base">기본 정보</CardTitle>
+        </CardHeader>
         <CardContent className="space-y-3">
           {loading ? (
             <div className="space-y-3">
@@ -86,10 +94,10 @@ export function UserDetailView({ userId }: Props) {
             <>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="outline">{user.role === "SHIPPER" ? "화주" : "차주"}</Badge>
+                  <Badge variant="outline">{roleLabel(user.role)}</Badge>
                   <UserStatusBadge status={user.status} />
-                  <div className="text-base font-semibold text-slate-900">{user.name}</div>
-                  <div className="text-base text-slate-600">({user.id})</div>
+                  <div className="text-base font-semibold">{user.name}</div>
+                  <div className="text-sm text-foreground/70">({user.id})</div>
                 </div>
 
                 <Button type="button" variant="secondary" onClick={() => setSanctionOpen(true)}>
@@ -100,19 +108,19 @@ export function UserDetailView({ userId }: Props) {
               <Separator />
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="rounded-lg border border-slate-300 bg-slate-100 p-4">
-                  <div className="text-base font-semibold text-slate-900">이메일</div>
-                  <div className="mt-2 text-base text-slate-600">{user.email ?? "-"}</div>
+                <div className="rounded-lg border border-border bg-muted p-4">
+                  <div className="text-sm font-semibold">이메일</div>
+                  <div className="mt-2 text-sm text-foreground/70">{user.email ?? "-"}</div>
                 </div>
 
-                <div className="rounded-lg border border-slate-300 bg-slate-100 p-4">
-                  <div className="text-base font-semibold text-slate-900">연락처</div>
-                  <div className="mt-2 text-base text-slate-600">{user.phone ?? "-"}</div>
+                <div className="rounded-lg border border-border bg-muted p-4">
+                  <div className="text-sm font-semibold">연락처</div>
+                  <div className="mt-2 text-sm text-foreground/70">{user.phone ?? "-"}</div>
                 </div>
               </div>
             </>
           ) : (
-            <div className="rounded-lg border border-slate-300 bg-slate-100 p-4 text-base text-slate-600">
+            <div className="rounded-lg border border-border bg-muted p-4 text-sm text-foreground/70">
               사용자 정보를 불러오지 못했습니다.
             </div>
           )}
@@ -120,7 +128,7 @@ export function UserDetailView({ userId }: Props) {
       </Card>
 
       <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="w-full border border-slate-300 bg-slate-100 sm:w-auto">
+        <TabsList className="w-full border border-border bg-muted sm:w-auto">
           <TabsTrigger value="overview" className="w-1/2 sm:w-auto">
             개요
           </TabsTrigger>
@@ -136,18 +144,17 @@ export function UserDetailView({ userId }: Props) {
         </TabsList>
 
         <TabsContent value="overview" className="mt-4">
-          <Card className="rounded-lg border border-slate-300 bg-white">
+          <Card className="rounded-lg border border-border bg-background">
             <CardHeader className="space-y-1">
-              <CardTitle className="text-lg font-bold text-slate-900">개요</CardTitle>
-              <p className="text-base text-slate-600">핵심 운영 지표 요약</p>
+              <CardTitle className="text-base">개요</CardTitle>
             </CardHeader>
 
             <CardContent className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <div className="rounded-lg border border-slate-300 bg-slate-100 p-4">
-                <div className="text-base font-semibold text-slate-900">오더 수</div>
-                <div className="mt-2 text-base text-slate-600">{data?.quotes.length ?? 0}건</div>
+              <div className="rounded-lg border border-border bg-muted p-4">
+                <div className="text-sm font-semibold">오더 수</div>
+                <div className="mt-2 text-sm text-foreground/70">{data?.quotes.length ?? 0}건</div>
               </div>
-              <div className="rounded-lg border border-slate-300 bg-slate-100 p-4">
+              <div className="rounded-lg border border-border bg-muted p-4">
                 <div className="text-sm font-semibold">매칭 수</div>
                 <div className="mt-2 text-sm text-foreground/70">{data?.matches.length ?? 0}건</div>
               </div>
@@ -177,7 +184,7 @@ export function UserDetailView({ userId }: Props) {
 
             <Card className="rounded-lg border border-border bg-background">
               <CardHeader className="space-y-1">
-                <CardTitle className="text-base font-bold">제재</CardTitle>
+                <CardTitle className="text-base">제재</CardTitle>
                 <p className="text-sm text-foreground/70">제재 등록 및 이력 이동</p>
               </CardHeader>
 
@@ -197,10 +204,21 @@ export function UserDetailView({ userId }: Props) {
           open={sanctionOpen}
           onOpenChange={setSanctionOpen}
           target={{ id: user.id, role: user.role, name: user.name }}
-          onSubmit={(payload) => {
-            // MODIFIED: API 연동 전 임시 처리
-            // eslint-disable-next-line no-console
-            console.log("submit sanction:", payload);
+          onSubmit={async (payload) => {
+            const result = await createSanction({
+              targetId: user.id,
+              targetRole: user.role,
+              targetName: user.name,
+              type: payload.type,
+              reason: payload.reason,
+              amount: payload.amount,
+            });
+
+            setSanctionMessage(
+              result.mode === "REAL"
+                ? `제재가 등록되었습니다. (${result.row.id})`
+                : result.message ?? "제재 등록 API 오류로 세션 반영 상태입니다.",
+            );
           }}
         />
       ) : null}

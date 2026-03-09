@@ -5,6 +5,7 @@ import type {
   DeliveryMatchStatus,
   DeliverySettlementStatus,
 } from "@/features/delivery/model/types";
+import axios from "axios";
 import { apiPaths } from "@/shared/lib/api/endpoints";
 import { apiClient } from "@/shared/lib/api/client";
 import { isMockModeEnabled } from "@/shared/lib/mock-mode";
@@ -68,6 +69,8 @@ const MOCK_DELIVERY_HISTORY: DeliveryHistoryRow[] = [
     driverPayout: 640000,
   },
 ];
+const USE_ROLE_DELIVERY_ENDPOINT_FALLBACK =
+  String(import.meta.env.VITE_USE_ROLE_DELIVERY_ENDPOINT_FALLBACK ?? "").toLowerCase() === "true";
 
 function toRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
@@ -153,39 +156,39 @@ function resolveSettlementMePath(basePath: string): string {
 function mapBackendMatch(raw: unknown): BackendMatch {
   const row = toRecord(raw);
   return {
-    matchId: toNumberValue(row.matchId ?? row.id),
-    quoteId: toNumberValue(row.quoteId),
-    driverId: toNumberValue(row.driverId),
+    matchId: toNumberValue(row.matchId ?? row.match_id ?? row.id),
+    quoteId: toNumberValue(row.quoteId ?? row.quote_id),
+    driverId: toNumberValue(row.driverId ?? row.driver_id),
     accepted: toBooleanValue(row.accepted),
     status: toStringValue(row.status, "READY"),
-    acceptedAt: toStringValue(row.acceptedAt, "") || null,
-    createdAt: toStringValue(row.createdAt, "") || null,
-    updatedAt: toStringValue(row.updatedAt, "") || null,
+    acceptedAt: toStringValue(row.acceptedAt ?? row.accepted_at, "") || null,
+    createdAt: toStringValue(row.createdAt ?? row.created_at, "") || null,
+    updatedAt: toStringValue(row.updatedAt ?? row.updated_at, "") || null,
   };
 }
 
 function mapBackendSettlement(raw: unknown): BackendSettlement {
   const row = toRecord(raw);
   return {
-    settlementId: toNumberValue(row.settlementId ?? row.id),
-    matchId: toNumberValue(row.matchId),
-    totalFare: toNumberValue(row.totalFare),
-    driverPayout: toNumberValue(row.driverPayout),
-    settlementStatus: toStringValue(row.settlementStatus ?? row.status, "") || null,
-    completedAt: toStringValue(row.completedAt, "") || null,
+    settlementId: toNumberValue(row.settlementId ?? row.settlement_id ?? row.id),
+    matchId: toNumberValue(row.matchId ?? row.match_id),
+    totalFare: toNumberValue(row.totalFare ?? row.total_fare),
+    driverPayout: toNumberValue(row.driverPayout ?? row.driver_payout),
+    settlementStatus: toStringValue(row.settlementStatus ?? row.settlement_status ?? row.status, "") || null,
+    completedAt: toStringValue(row.completedAt ?? row.completed_at, "") || null,
   };
 }
 
 function mapBackendQuote(raw: unknown): BackendQuote {
   const row = toRecord(raw);
   return {
-    quoteId: toNumberValue(row.quoteId ?? row.id),
-    quotePublicId: toStringValue(row.quotePublicId, "") || null,
-    originAddress: toStringValue(row.originAddress, "-"),
-    destinationAddress: toStringValue(row.destinationAddress, "-"),
-    cargoName: toStringValue(row.cargoName, "") || null,
-    desiredPrice: toNumberValue(row.desiredPrice),
-    finalPrice: toNumberValue(row.finalPrice),
+    quoteId: toNumberValue(row.quoteId ?? row.quote_id ?? row.id),
+    quotePublicId: toStringValue(row.quotePublicId ?? row.quote_public_id, "") || null,
+    originAddress: toStringValue(row.originAddress ?? row.origin_address, "-"),
+    destinationAddress: toStringValue(row.destinationAddress ?? row.destination_address, "-"),
+    cargoName: toStringValue(row.cargoName ?? row.cargo_name, "") || null,
+    desiredPrice: toNumberValue(row.desiredPrice ?? row.desired_price),
+    finalPrice: toNumberValue(row.finalPrice ?? row.final_price),
   };
 }
 
@@ -236,27 +239,80 @@ async function fetchSettlementsByPath(path: string): Promise<BackendSettlement[]
 
 async function fetchQuotes(): Promise<BackendQuote[]> {
   try {
-    const response = await apiClient.get<unknown>(apiPaths.shipperQuotes);
+    const response = await apiClient.get<unknown>(apiPaths.adminTransportQuotes);
     return pickListPayload(response.data).map(mapBackendQuote);
-  } catch {
+  } catch (error) {
+    if (!axios.isAxiosError(error) || error.response?.status !== 404) {
+      return [];
+    }
+    if (!USE_ROLE_DELIVERY_ENDPOINT_FALLBACK) {
+      return [];
+    }
+
+    try {
+      const response = await apiClient.get<unknown>(apiPaths.shipperQuotes);
+      return pickListPayload(response.data).map(mapBackendQuote);
+    } catch {
+      return [];
+    }
+  }
+}
+
+async function fetchAdminMatches(): Promise<BackendMatch[] | null> {
+  try {
+    const response = await apiClient.get<unknown>(apiPaths.adminTransportMatches);
+    return pickListPayload(response.data).map(mapBackendMatch);
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response?.status === 404) {
+      return null;
+    }
     return [];
   }
 }
 
-async function buildLiveRows(): Promise<DeliveryHistoryRow[]> {
-  const [shipperMatches, openDriverMatches, myDriverMatches, shipperSettlements, driverSettlements, quotes] =
-    await Promise.all([
-      fetchMatchesByPath(apiPaths.shipperMatchesMe),
-      fetchMatchesByPath(apiPaths.driverMatches),
-      fetchMatchesByPath(resolveDriverMyMatchesPath()),
-      fetchSettlementsByPath(resolveSettlementMePath(apiPaths.shipperSettlements)),
-      fetchSettlementsByPath(resolveSettlementMePath(apiPaths.driverSettlements)),
-      fetchQuotes(),
-    ]);
+async function fetchAdminSettlements(): Promise<BackendSettlement[] | null> {
+  try {
+    const response = await apiClient.get<unknown>(apiPaths.adminTransportSettlements);
+    return pickListPayload(response.data).map(mapBackendSettlement);
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response?.status === 404) {
+      return null;
+    }
+    return [];
+  }
+}
 
-  const matches = mergeMatches([...shipperMatches, ...openDriverMatches, ...myDriverMatches]);
+async function fetchLegacySettlements(): Promise<BackendSettlement[]> {
+  if (!USE_ROLE_DELIVERY_ENDPOINT_FALLBACK) return [];
+  const [shipperSettlements, driverSettlements] = await Promise.all([
+    fetchSettlementsByPath(resolveSettlementMePath(apiPaths.shipperSettlements)),
+    fetchSettlementsByPath(resolveSettlementMePath(apiPaths.driverSettlements)),
+  ]);
+  return [...shipperSettlements, ...driverSettlements];
+}
+
+async function fetchLegacyMatches(): Promise<BackendMatch[]> {
+  if (!USE_ROLE_DELIVERY_ENDPOINT_FALLBACK) return [];
+  const [shipperMatches, openDriverMatches, myDriverMatches] = await Promise.all([
+    fetchMatchesByPath(apiPaths.shipperMatchesMe),
+    fetchMatchesByPath(apiPaths.driverMatches),
+    fetchMatchesByPath(resolveDriverMyMatchesPath()),
+  ]);
+  return mergeMatches([...shipperMatches, ...openDriverMatches, ...myDriverMatches]);
+}
+
+async function buildLiveRows(): Promise<DeliveryHistoryRow[]> {
+  const [adminMatches, adminSettlements, quotes] = await Promise.all([
+    fetchAdminMatches(),
+    fetchAdminSettlements(),
+    fetchQuotes(),
+  ]);
+
+  const matches = adminMatches === null ? await fetchLegacyMatches() : mergeMatches(adminMatches);
+  const settlements = adminSettlements === null ? await fetchLegacySettlements() : adminSettlements;
+
   const settlementMap = new Map<number, BackendSettlement>();
-  for (const settlement of [...shipperSettlements, ...driverSettlements]) {
+  for (const settlement of settlements) {
     if (typeof settlement.matchId !== "number") continue;
     settlementMap.set(settlement.matchId, settlement);
   }
