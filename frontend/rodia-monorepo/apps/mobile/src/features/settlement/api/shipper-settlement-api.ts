@@ -1,14 +1,12 @@
 // src/features/settlement/api/shipper-settlement-api.ts
 //
-// Generated 함수:
-//   getByMatch() ← shipper-settlement (GET /api/shipper/settlements?matchId=…)
-// Generated 스키마:
-//   GetByMatchParams, SettlementResponse
-//
-// UI 레이어가 generated/ 세부사항에 의존하지 않도록 래핑·재공개한다.
+// shipper-settings wrapper를 경유해 응답 정규화 규칙을 단일화한다.
 
-import { getByMatch as getByMatchGenerated } from "@/shared/api/generated/shipper-settlement/shipper-settlement";
-import type { GetByMatchParams, SettlementResponse } from "@/shared/api/generated/schemas";
+import {
+  getShipperSettlementByMatch as getShipperSettlementByMatchFromSettings,
+  type SettlementResponse,
+} from "@/features/shipper-settings/api/shipper-settlement-api";
+import type { GetByMatchParams } from "@/shared/api/generated/schemas";
 
 // ─── 타입 재공개 ──────────────────────────────────────────────────────────────
 
@@ -20,5 +18,5 @@ export type { SettlementResponse };
  * 매칭별 정산 조회
  */
 export async function getShipperSettlementByMatch(params: GetByMatchParams): Promise<SettlementResponse> {
-  return getByMatchGenerated(params);
+  return getShipperSettlementByMatchFromSettings(params.matchId);
 }

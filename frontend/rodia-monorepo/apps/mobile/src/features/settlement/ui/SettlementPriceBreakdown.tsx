@@ -1,16 +1,28 @@
 import React from "react";
 import { StyleSheet, View } from "react-native";
 
-import type { SettlementResponse } from "@/shared/api/generated/schemas/settlementResponse";
 import { formatDateTime, formatKrw } from "@/shared/lib/format/display";
 import { safeNumber, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles } from "@/shared/theme/useAppTheme";
 import { AppCard } from "@/shared/ui/kit/AppCard";
 import { AppText } from "@/shared/ui/kit/AppText";
 
+export type SettlementPriceBreakdownData = {
+  driverPayout?: number;
+  totalFare?: number;
+  platformFee?: number;
+  fastFee?: number;
+  dueDate?: string;
+  paymentStatus?: string;
+  paidAt?: string;
+};
+
+type SettlementPriceBreakdownMode = "driver" | "shipper";
+
 type SettlementPriceBreakdownProps = {
   title?: string;
-  settlement: SettlementResponse;
+  settlement: SettlementPriceBreakdownData;
+  mode?: SettlementPriceBreakdownMode;
 };
 
 type BreakdownRow = {
@@ -29,7 +41,43 @@ function toDateTimeText(value: string | undefined): string {
   return formatDateTime(value, "-");
 }
 
-function buildRows(settlement: SettlementResponse): BreakdownRow[] {
+function toStatusToken(value: string | undefined): string {
+  return String(value ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "_")
+    .replace(/-/g, "_");
+}
+
+function isCompletedPayment(settlement: SettlementPriceBreakdownData): boolean {
+  if (typeof settlement.paidAt === "string" && settlement.paidAt.trim().length > 0) return true;
+  const token = toStatusToken(settlement.paymentStatus);
+  return token === "COMPLETED" || token === "PAID" || token === "REFUNDED";
+}
+
+function buildRows(settlement: SettlementPriceBreakdownData, mode: SettlementPriceBreakdownMode): BreakdownRow[] {
+  if (mode === "shipper") {
+    const shipperRows: BreakdownRow[] = [
+      {
+        key: "totalFare",
+        label: "총 결제 금액",
+        value: toMoneyText(settlement.totalFare),
+        valueVariant: "title",
+      },
+    ];
+
+    if (!isCompletedPayment(settlement) && settlement.dueDate) {
+      shipperRows.push({
+        key: "dueDate",
+        label: "결제 예정일",
+        value: toDateTimeText(settlement.dueDate),
+        valueVariant: "detail",
+      });
+    }
+
+    return shipperRows;
+  }
+
   const rows: BreakdownRow[] = [
     {
       key: "driverPayout",
@@ -114,9 +162,13 @@ const useStyles = createThemedStyles((theme) => {
   });
 });
 
-export function SettlementPriceBreakdown({ title = "정산 금액 내역", settlement }: SettlementPriceBreakdownProps) {
+export function SettlementPriceBreakdown({
+  title = "정산 금액 내역",
+  settlement,
+  mode = "driver",
+}: SettlementPriceBreakdownProps) {
   const styles = useStyles();
-  const rows = React.useMemo(() => buildRows(settlement), [settlement]);
+  const rows = React.useMemo(() => buildRows(settlement, mode), [mode, settlement]);
 
   return (
     <View style={styles.section}>
