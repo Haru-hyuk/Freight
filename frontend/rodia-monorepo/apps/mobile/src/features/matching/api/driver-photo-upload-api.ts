@@ -5,6 +5,15 @@ import { getApiBaseUrl, isMockMode } from "@/shared/lib/config/env";
 import { parseMatchPositiveInt } from "./shipper-match-parser";
 
 type AnyObject = Record<string, unknown>;
+type DriverPhotoUploadRequest = {
+  localUri: string;
+  type: UploadDriverPhotoType;
+  takenAt?: string;
+  lat?: number;
+  lng?: number;
+  stopOrder?: number;
+  stopLabel?: string;
+};
 
 const UPLOAD_FALLBACK_HTTP_STATUSES = new Set([404, 405, 415, 501]);
 
@@ -108,6 +117,32 @@ function shouldUseFallbackUpload(error: unknown): boolean {
   return UPLOAD_FALLBACK_HTTP_STATUSES.has(status);
 }
 
+export async function uploadDriverPhotoMultipart(matchId: number, payload: DriverPhotoUploadRequest): Promise<unknown> {
+  const safeMatchId = parseMatchPositiveInt(matchId);
+  const safeUri = toText(payload.localUri);
+  if (safeMatchId <= 0) throw new Error("유효하지 않은 matchId입니다.");
+  if (!safeUri) throw new Error("유효하지 않은 이미지 URI입니다.");
+
+  const ext = resolveUriExtension(safeUri);
+  const mimeType = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
+  const takenAt = toText(payload.takenAt) || new Date().toISOString();
+
+  return uploadDriverPhotoGenerated(
+    safeMatchId,
+    {
+      file: { uri: safeUri, name: `photo.${ext}`, type: mimeType } as unknown as Blob,
+    },
+    {
+      type: payload.type,
+      takenAt,
+      ...(typeof payload.lat === "number" ? { lat: payload.lat } : {}),
+      ...(typeof payload.lng === "number" ? { lng: payload.lng } : {}),
+      ...(toPositiveInt(payload.stopOrder) > 0 ? { stopOrder: toPositiveInt(payload.stopOrder) } : {}),
+      ...(toText(payload.stopLabel) ? { stopLabel: toText(payload.stopLabel) } : {}),
+    }
+  );
+}
+
 export async function uploadImage(
   matchId: number,
   localUri: string,
@@ -123,16 +158,7 @@ export async function uploadImage(
   }
 
   try {
-    const ext = resolveUriExtension(safeUri);
-    const mimeType = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
-    const takenAt = new Date().toISOString();
-    const payload = await uploadDriverPhotoGenerated(
-      safeMatchId,
-      {
-        file: { uri: safeUri, name: `photo.${ext}`, type: mimeType } as unknown as Blob,
-      },
-      { type, takenAt }
-    );
+    const payload = await uploadDriverPhotoMultipart(safeMatchId, { localUri: safeUri, type });
     const uploadedUrl = resolveUploadedUrlFromPayload(payload);
     if (uploadedUrl) return uploadedUrl;
     return buildFallbackUploadedUrl(safeMatchId, type, safeUri);
@@ -145,5 +171,4 @@ export async function uploadImage(
 }
 
 export type { UploadDriverPhotoType as DriverPhotoUploadType };
-
 
