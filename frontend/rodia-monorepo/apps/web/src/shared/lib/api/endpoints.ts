@@ -11,6 +11,8 @@ type ApiPathEnv = {
   VITE_API_ADMIN_SHIPPERS_PATH?: string;
   VITE_API_ADMIN_DRIVERS_PATH?: string;
   VITE_API_ADMIN_USERS_PATH?: string;
+  VITE_API_ADMIN_DASHBOARD_PATH?: string;
+  VITE_API_ADMIN_SANCTIONS_PATH?: string;
   VITE_API_ADMIN_DEVIATIONS_PATH?: string;
   VITE_API_ADMIN_SANCTIONS_LOGS_PATH?: string;
   VITE_API_ADMIN_ACTIVITY_LOGS_PATH?: string;
@@ -82,9 +84,11 @@ export const apiPaths = {
   shipperQuotes: resolvePath(env.VITE_API_SHIPPER_QUOTES_PATH, "/api/shipper/quotes"),
   driverTrucks: resolvePath(env.VITE_API_DRIVER_TRUCKS_PATH, "/api/driver/trucks"),
 
-  adminShippers: resolvePath(env.VITE_API_ADMIN_SHIPPERS_PATH, "/api/admin/users/shippers"),
-  adminDrivers: resolvePath(env.VITE_API_ADMIN_DRIVERS_PATH, "/api/admin/users/drivers"),
+  adminShippers: resolvePath(env.VITE_API_ADMIN_SHIPPERS_PATH, "/api/admin/users"),
+  adminDrivers: resolvePath(env.VITE_API_ADMIN_DRIVERS_PATH, "/api/admin/users"),
   adminUsers: resolvePath(env.VITE_API_ADMIN_USERS_PATH, "/api/admin/users"),
+  adminDashboard: resolvePath(env.VITE_API_ADMIN_DASHBOARD_PATH, "/api/admin/dashboard"),
+  adminSanctions: resolvePath(env.VITE_API_ADMIN_SANCTIONS_PATH, "/api/admin/sanctions"),
   adminDeviations: resolvePath(env.VITE_API_ADMIN_DEVIATIONS_PATH, "/api/admin/ops/deviations"),
   adminSanctionsLogs: resolvePath(env.VITE_API_ADMIN_SANCTIONS_LOGS_PATH, "/api/admin/sanctions"),
   adminActivityLogs: resolvePath(env.VITE_API_ADMIN_ACTIVITY_LOGS_PATH, "/api/admin/ops/activity-logs"),

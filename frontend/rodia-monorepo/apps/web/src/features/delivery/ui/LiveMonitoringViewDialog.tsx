@@ -1,6 +1,6 @@
-import type { LiveDeliveryDetail } from "@/features/delivery/model/liveTypes";
+﻿import type { LiveDeliveryDetail } from "@/features/delivery/model/liveTypes";
 import { LiveRouteMiniMap } from "@/features/delivery/ui/LiveRouteMiniMap";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/shared/ui/shadcn/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/shared/ui/shadcn/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/shared/ui/shadcn/table";
 
 type Props = {
@@ -18,11 +18,19 @@ function calculateCurrentKm(totalRouteKm: number, routeProgressPercent: number):
 }
 
 export function LiveMonitoringViewDialog({ detail, open, onOpenChange }: Props) {
+  const descriptionId = "live-monitoring-view-description";
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[85vh] w-full max-w-5xl flex-col overflow-hidden rounded-lg border border-border bg-background p-0">
+      <DialogContent
+        aria-describedby={descriptionId}
+        className="flex max-h-[85vh] w-full max-w-5xl flex-col overflow-hidden rounded-lg border border-border bg-background p-0"
+      >
         <DialogHeader className="border-b border-border bg-background px-6 py-4">
-          <DialogTitle className="text-xl font-semibold">배송 경로 보기</DialogTitle>
+          <DialogTitle className="text-xl font-semibold">Live Route Detail</DialogTitle>
+          <DialogDescription id={descriptionId} className="sr-only">
+            Live delivery route detail with cargo and timeline information.
+          </DialogDescription>
         </DialogHeader>
 
         {detail ? (
@@ -31,28 +39,28 @@ export function LiveMonitoringViewDialog({ detail, open, onOpenChange }: Props) 
               <LiveRouteMiniMap plannedRoute={detail.plannedRoute} currentRoute={detail.currentRoute} />
 
               <div className="space-y-2">
-                <InfoCard label="화물 종류" value={detail.cargoType} />
-                <InfoCard label="화물 중량" value={`${detail.cargoWeightKg.toLocaleString()} kg`} />
-                <InfoCard label="차종" value={detail.truckType} />
-                <InfoCard label="차량 톤수" value={`${detail.truckWeightTon} ton`} />
-                <InfoCard label="차량 적재량" value={`${detail.truckVolumeCbm} cbm`} />
-                <InfoCard label="총 경로 길이" value={toKmText(detail.totalRouteKm)} />
+                <InfoCard label="Cargo Type" value={detail.cargoType} />
+                <InfoCard label="Cargo Weight" value={`${detail.cargoWeightKg.toLocaleString()} kg`} />
+                <InfoCard label="Truck Type" value={detail.truckType} />
+                <InfoCard label="Truck Tonnage" value={`${detail.truckWeightTon} ton`} />
+                <InfoCard label="Truck Volume" value={`${detail.truckVolumeCbm} cbm`} />
+                <InfoCard label="Total Route" value={toKmText(detail.totalRouteKm)} />
                 <InfoCard
-                  label="현재 위치"
+                  label="Current Position"
                   value={`${toKmText(calculateCurrentKm(detail.totalRouteKm, detail.routeProgressPercent))} / ${toKmText(detail.totalRouteKm)}`}
                 />
               </div>
             </div>
 
             <div className="rounded-lg border border-border bg-background">
-              <div className="border-b border-border bg-muted px-3 py-2 text-base font-semibold">이행 로그</div>
+              <div className="border-b border-border bg-muted px-3 py-2 text-base font-semibold">Timeline</div>
               <div className="max-h-[40vh] overflow-auto">
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted hover:bg-muted">
-                      <TableHead className="text-base font-semibold text-foreground">이벤트</TableHead>
-                      <TableHead className="text-base font-semibold text-foreground">시각</TableHead>
-                      <TableHead className="text-base font-semibold text-foreground">상세</TableHead>
+                      <TableHead className="text-base font-semibold text-foreground">Event</TableHead>
+                      <TableHead className="text-base font-semibold text-foreground">Time</TableHead>
+                      <TableHead className="text-base font-semibold text-foreground">Detail</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -69,7 +77,9 @@ export function LiveMonitoringViewDialog({ detail, open, onOpenChange }: Props) 
             </div>
           </div>
         ) : (
-          <div className="m-6 rounded-lg border border-border bg-muted p-4 text-base text-foreground/70">조회 가능한 상세 데이터가 없습니다.</div>
+          <div className="m-6 rounded-lg border border-border bg-muted p-4 text-base text-foreground/70">
+            No detail data is available for this delivery.
+          </div>
         )}
       </DialogContent>
     </Dialog>

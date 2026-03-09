@@ -1,6 +1,7 @@
 import { apiClient } from "@/shared/lib/api/client";
 import { apiPaths } from "@/shared/lib/api/endpoints";
 import { isMockModeEnabled } from "@/shared/lib/mock-mode";
+import axios from "axios";
 
 export enum DriverStatus {
   ACTIVE = "ACTIVE",
@@ -168,6 +169,8 @@ const MOCK_DELIVERY_STATUSES: ReadonlyArray<DeliveryLog["status"]> = [
 ];
 
 const liveStatusOverrides = new Map<string, DriverStatus>();
+const USE_ROLE_ENDPOINT_FALLBACK =
+  String(import.meta.env.VITE_USE_ROLE_ENDPOINT_FALLBACK ?? "").toLowerCase() === "true";
 
 const ALL_DRIVERS: Driver[] = Array.from({ length: 80 }, (_, index) => {
   const totalMatches = 20 + (index % 30) * 3;
@@ -364,20 +367,35 @@ function mapBackendAdminDriverUser(raw: unknown): BackendAdminDriverUser | null 
   const id = toStringValue(row.id, "").trim();
   if (!id) return null;
   return {
-    id,
-    role: toStringValue(row.role, "").trim(),
-    name: toStringValue(row.name, "").trim(),
-    phone: toStringValue(row.phone, "").trim(),
-    status: toStringValue(row.status, "").trim(),
+    notificationId,
+    matchId: toOptionalNumberValue(row.matchId ?? row.match_id),
+    type: toStringValue(row.type, "") || null,
+    message: toStringValue(row.message, ""),
+    isRead: Boolean(row.isRead ?? row.is_read),
     createdAt: toStringValue(row.createdAt ?? row.created_at, "") || null,
   };
 }
 
-function isDriverUser(row: BackendAdminDriverUser): boolean {
-  const role = row.role.trim().toUpperCase();
-  if (role === "DRIVER") return true;
-  return row.id.trim().toUpperCase().startsWith("D-");
-}
+async function fetchMatches(): Promise<BackendMatch[]> {
+  try {
+    const response = await apiClient.get<unknown>(apiPaths.adminTransportMatches);
+    return pickListPayload(response.data).map(mapBackendMatch);
+  } catch (error) {
+    if (!axios.isAxiosError(error) || error.response?.status !== 404) {
+      return [];
+    }
+  }
+  if (!USE_ROLE_ENDPOINT_FALLBACK) {
+    return [];
+  }
+
+  const driverMyPath = `${apiPaths.driverMatches.replace(/\/$/, "")}/me`;
+
+  const [shipperRows, driverOpenRows, driverRows] = await Promise.all([
+    apiClient.get<unknown>(apiPaths.shipperMatchesMe).then((res) => pickListPayload(res.data).map(mapBackendMatch)).catch(() => []),
+    apiClient.get<unknown>(apiPaths.driverMatches).then((res) => pickListPayload(res.data).map(mapBackendMatch)).catch(() => []),
+    apiClient.get<unknown>(driverMyPath).then((res) => pickListPayload(res.data).map(mapBackendMatch)).catch(() => []),
+  ]);
 
 async function fetchMatches(): Promise<BackendMatch[]> {
   try {
@@ -392,8 +410,20 @@ async function fetchQuotes(): Promise<BackendQuote[]> {
   try {
     const response = await apiClient.get<unknown>(apiPaths.adminTransportQuotes);
     return pickListPayload(response.data).map(mapBackendQuote);
-  } catch {
-    return [];
+  } catch (error) {
+    if (!axios.isAxiosError(error) || error.response?.status !== 404) {
+      return [];
+    }
+    if (!USE_ROLE_ENDPOINT_FALLBACK) {
+      return [];
+    }
+
+    try {
+      const response = await apiClient.get<unknown>(apiPaths.shipperQuotes);
+      return pickListPayload(response.data).map(mapBackendQuote);
+    } catch {
+      return [];
+    }
   }
 }
 
@@ -401,8 +431,29 @@ async function fetchSettlements(): Promise<BackendSettlement[]> {
   try {
     const response = await apiClient.get<unknown>(apiPaths.adminTransportSettlements);
     return pickListPayload(response.data).map(mapBackendSettlement);
-  } catch {
+  } catch (error) {
+    if (!axios.isAxiosError(error) || error.response?.status !== 404) {
+      return [];
+    }
+  }
+  if (!USE_ROLE_ENDPOINT_FALLBACK) {
     return [];
+  }
+
+  const [shipperRows, driverRows] = await Promise.all([
+    apiClient
+      .get<unknown>(resolveSettlementMePath(apiPaths.shipperSettlements))
+      .then((res) => pickListPayload(res.data).map(mapBackendSettlement))
+      .catch(() => []),
+    apiClient
+      .get<unknown>(resolveSettlementMePath(apiPaths.driverSettlements))
+      .then((res) => pickListPayload(res.data).map(mapBackendSettlement))
+      .catch(() => []),
+  ]);
+
+  const merged = new Map<number, BackendSettlement>();
+  for (const row of [...shipperRows, ...driverRows]) {
+    if (typeof row.settlementId === "number") merged.set(row.settlementId, row);
   }
 }
 
@@ -410,8 +461,20 @@ async function fetchTrucks(): Promise<BackendTruck[]> {
   try {
     const response = await apiClient.get<unknown>(apiPaths.adminTrucksPending);
     return pickListPayload(response.data).map(mapBackendTruck);
-  } catch {
-    return [];
+  } catch (error) {
+    if (!axios.isAxiosError(error) || error.response?.status !== 404) {
+      return [];
+    }
+    if (!USE_ROLE_ENDPOINT_FALLBACK) {
+      return [];
+    }
+
+    try {
+      const response = await apiClient.get<unknown>(apiPaths.driverTrucks);
+      return pickListPayload(response.data).map(mapBackendTruck);
+    } catch {
+      return [];
+    }
   }
 }
 

@@ -15,12 +15,16 @@ const ACTION_LABELS: Record<AdminActivityLog["action"], string> = {
   QUOTE_NOTIFICATION_SENT: "견적 알림 발송",
   PRICING_UPDATED: "요율 수정",
   PRICING_NOTIFICATION_SENT: "요율 알림 발송",
+  SANCTION_CREATED: "제재 생성",
+  DEVIATION_ACTIONED: "이상징후 조치",
   DISPATCH_ASSIGNED: "배차 지정",
   DRIVER_APPROVAL_REVIEWED: "차주 승인 검토",
   TRUCK_APPROVAL_REVIEWED: "차량 승인 검토",
   SETTLEMENT_REVIEWED: "정산 검토",
   ORDER_CANCELLATION_REVIEWED: "주문 취소 검토",
   LIVE_ALERT_SENT: "실시간 알림 발송",
+  MATCHING_CANCELLED: "매칭 취소 처리",
+  ADMIN_LOGOUT: "로그아웃",
 };
 
 function formatDateTime(value: string): string {
@@ -54,13 +58,11 @@ export function ActivityLogView() {
     void load();
   }, [load, mockModeEnabled]);
 
-  const logs = React.useMemo(
-    () =>
-      remoteLogs
-        .filter((row) => row.mode === "REAL")
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
-    [remoteLogs],
+  const visibleLocalLogs = React.useMemo(
+    () => (mockModeEnabled ? localLogs : localLogs.filter((row) => row.mode === "REAL")),
+    [localLogs, mockModeEnabled],
   );
+  const logs = React.useMemo(() => mergeLogs(visibleLocalLogs, remoteLogs), [visibleLocalLogs, remoteLogs]);
 
   return (
     <div className="min-h-screen space-y-6 bg-background text-foreground">

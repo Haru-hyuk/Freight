@@ -1,5 +1,5 @@
 import { AlertCircle, CheckCircle2, Clock } from "lucide-react";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 import type { KpiData } from "@/features/dashboard/model/types";
 import { Badge } from "@/shared/ui/shadcn/badge";
@@ -18,8 +18,11 @@ type Props = {
 };
 
 export function DashboardQuickActions({ loading, kpi, pendingApprovals }: Props) {
+  const navigate = useNavigate();
   const deviationCount = kpi?.deviationCasesOpen ?? 0;
   const pendingTotal = pendingApprovals.drivers + pendingApprovals.trucks;
+  const approvalRoute =
+    pendingApprovals.trucks >= pendingApprovals.drivers ? "/trucks/approvals" : "/drivers/approvals";
 
   return (
     <Card className="border-border/70 bg-gradient-to-br from-background to-muted lg:min-h-[24rem]">
@@ -44,7 +47,9 @@ export function DashboardQuickActions({ loading, kpi, pendingApprovals }: Props)
                   <p className="text-base font-semibold">승인 대기</p>
                   <Badge variant={pendingTotal > 0 ? "default" : "outline"}>{pendingTotal}건</Badge>
                 </div>
-                <p className="mt-1 text-sm text-foreground/70">기사 {pendingApprovals.drivers}건 / 차량 {pendingApprovals.trucks}건</p>
+                <p className="mt-1 text-sm text-foreground/70">
+                  기사 {pendingApprovals.drivers}건 / 차량 {pendingApprovals.trucks}건
+                </p>
               </div>
             </div>
 
@@ -75,14 +80,14 @@ export function DashboardQuickActions({ loading, kpi, pendingApprovals }: Props)
             <Separator className="my-2" />
 
             <div className="grid grid-cols-1 gap-2">
-              <Button asChild variant="default" className="text-base">
-                <Link to="/drivers/approvals">승인 대기 상세 보기</Link>
+              <Button variant="default" className="text-base" onClick={() => navigate(approvalRoute)}>
+                승인 대기 상세 보기
               </Button>
-              <Button asChild variant="secondary" className="text-base">
-                <Link to="/ops/deviations">이상 징후 검토</Link>
+              <Button variant="secondary" className="text-base" onClick={() => navigate("/ops/deviations")}>
+                이상 징후 검토
               </Button>
-              <Button asChild variant="outline" className="text-base">
-                <Link to="/settlement/history">정산 내역 이동</Link>
+              <Button variant="outline" className="text-base" onClick={() => navigate("/settlement/history")}>
+                정산 이력 이동
               </Button>
             </div>
           </>

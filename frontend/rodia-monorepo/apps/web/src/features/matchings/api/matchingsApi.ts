@@ -1,6 +1,8 @@
 import { apiPaths } from "@/shared/lib/api/endpoints";
 import { apiClient } from "@/shared/lib/api/client";
 import { isMockModeEnabled } from "@/shared/lib/mock-mode";
+import axios from "axios";
+import { appendActivityLog } from "@/shared/lib/activity-log";
 
 export enum MatchingStatus {
   READY = "READY",
@@ -81,7 +83,9 @@ type BackendNotification = {
 };
 
 const env = import.meta.env as MatchingApiEnv;
-const ADMIN_MATCHINGS_PATH = env.VITE_API_ADMIN_MATCHINGS_PATH?.trim() ?? "";
+const ADMIN_MATCHINGS_PATH = (env.VITE_API_ADMIN_MATCHINGS_PATH?.trim() || apiPaths.adminTransportMatches).trim();
+const USE_ROLE_MATCHINGS_FETCH_FALLBACK =
+  String(import.meta.env.VITE_USE_ROLE_MATCHINGS_FETCH_FALLBACK ?? "").toLowerCase() === "true";
 
 const TERMINAL_STATUSES = new Set<MatchingStatus>([
   MatchingStatus.CANCELLED,
@@ -139,10 +143,10 @@ function buildMockRows(): MatchingItem[] {
         status === MatchingStatus.CANCELLED
           ? "화주/차주 취소 알림"
           : status === MatchingStatus.IN_TRANSIT
-            ? "운송 진행 신호"
+            ? "배송 진행 신호"
             : status === MatchingStatus.COMPLETED
-              ? "완료 처리됨"
-              : "배차 대기",
+              ? "배송 완료 처리"
+              : "배송 대기",
       relatedNotificationIds: index % 2 === 0 ? [19000 + index] : [],
       createdAt,
       updatedAt,
@@ -155,6 +159,11 @@ function buildMockRows(): MatchingItem[] {
 }
 
 const MOCK_ROWS = buildMockRows();
+const USE_MATCH_CANCEL_ENDPOINTS =
+  String(import.meta.env.VITE_USE_MATCH_CANCEL_ENDPOINTS ?? "").toLowerCase() === "true";
+const USE_ROLE_MATCH_CANCEL_ENDPOINTS =
+  String(import.meta.env.VITE_USE_ROLE_MATCH_CANCEL_ENDPOINTS ?? "").toLowerCase() === "true";
+let isMatchCancelEndpointAvailable = USE_MATCH_CANCEL_ENDPOINTS;
 
 function toRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
@@ -290,7 +299,7 @@ function mapNotificationRow(row: BackendNotification): MatchingItem | null {
     accepted: status !== MatchingStatus.READY,
     status,
     source: MatchingSource.NOTIFICATION,
-    signal: row.message || row.type || "알림 시그널",
+    signal: row.message || row.type || "알림 신호",
     relatedNotificationIds: [row.notificationId],
     createdAt: date,
     updatedAt: date,
@@ -441,18 +450,29 @@ function resolveShipperBasePath(): string {
 }
 
 async function fetchLiveRows(): Promise<MatchingItem[]> {
-  const adminRowsPromise =
-    ADMIN_MATCHINGS_PATH.length > 0
-      ? fetchMatchRows(ADMIN_MATCHINGS_PATH, MatchingSource.ADMIN)
-      : Promise.resolve<MatchingItem[]>([]);
+  let adminRows: MatchingItem[] | null = [];
+  try {
+    const response = await apiClient.get<unknown>(ADMIN_MATCHINGS_PATH);
+    adminRows = pickListPayload(response.data).map((row) => mapMatchRow(row, MatchingSource.ADMIN));
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response?.status === 404) {
+      adminRows = null;
+    } else {
+      adminRows = [];
+    }
+  }
 
-  const [adminRows, shipperRows, driverOpenRows, driverRows, notifications] = await Promise.all([
-    adminRowsPromise,
-    fetchMatchRows(apiPaths.shipperMatchesMe, MatchingSource.SHIPPER),
-    fetchMatchRows(apiPaths.driverMatches, MatchingSource.OPEN_POOL),
-    fetchMatchRows(resolveDriverMyPath(), MatchingSource.DRIVER),
-    fetchNotifications(),
-  ]);
+  const notifications = await fetchNotifications();
+  let shipperRows: MatchingItem[] = [];
+  let driverOpenRows: MatchingItem[] = [];
+  let driverRows: MatchingItem[] = [];
+  if (adminRows === null && USE_ROLE_MATCHINGS_FETCH_FALLBACK) {
+    [shipperRows, driverOpenRows, driverRows] = await Promise.all([
+      fetchMatchRows(apiPaths.shipperMatchesMe, MatchingSource.SHIPPER),
+      fetchMatchRows(apiPaths.driverMatches, MatchingSource.OPEN_POOL),
+      fetchMatchRows(resolveDriverMyPath(), MatchingSource.DRIVER),
+    ]);
+  }
 
   const notificationRows = notifications
     .map(mapNotificationRow)
@@ -460,7 +480,7 @@ async function fetchLiveRows(): Promise<MatchingItem[]> {
 
   return applyLiveOverrides(
     mergeRows([
-      ...adminRows,
+      ...(adminRows ?? []),
       ...shipperRows,
       ...driverOpenRows,
       ...driverRows,
@@ -483,16 +503,34 @@ function resolveMatchId(input: string | number): number | null {
 }
 
 async function tryCancelRemote(matchId: number): Promise<boolean> {
-  const shipperBasePath = resolveShipperBasePath();
-  const driverBasePath = apiPaths.driverMatches.replace(/\/$/, "");
-  const candidates = [`${shipperBasePath}/${matchId}`, `${driverBasePath}/${matchId}`];
+  if (!isMatchCancelEndpointAvailable) return false;
+
+  const candidates: string[] = [];
+  if (ADMIN_MATCHINGS_PATH.length > 0) {
+    candidates.push(`${ADMIN_MATCHINGS_PATH.replace(/\/$/, "")}/${matchId}`);
+  }
+  if (USE_ROLE_MATCH_CANCEL_ENDPOINTS) {
+    const shipperBasePath = resolveShipperBasePath();
+    const driverBasePath = apiPaths.driverMatches.replace(/\/$/, "");
+    candidates.push(`${shipperBasePath}/${matchId}`, `${driverBasePath}/${matchId}`);
+  }
+  if (candidates.length === 0) return false;
 
   for (const path of candidates) {
     try {
       await apiClient.delete(path);
       return true;
-    } catch {
-      // try next
+    } catch (error) {
+      if (
+        axios.isAxiosError(error) &&
+        (error.response?.status === 400 ||
+          error.response?.status === 403 ||
+          error.response?.status === 404 ||
+          error.response?.status === 405)
+      ) {
+        isMatchCancelEndpointAvailable = false;
+        return false;
+      }
     }
   }
 
@@ -520,7 +558,7 @@ export async function cancelMatching(target: string | number): Promise<MatchingA
     return {
       success: false,
       mode: "LOCAL_SESSION",
-      message: "유효한 매칭 ID가 아닙니다.",
+      message: "유효한 매칭 ID가 필요합니다.",
     };
   }
 
@@ -534,6 +572,12 @@ export async function cancelMatching(target: string | number): Promise<MatchingA
       row.signal = mergeSignals(row.signal, "관리자 취소 처리");
       row.canCancel = false;
     }
+    appendActivityLog({
+      action: "MATCHING_CANCELLED",
+      targetId: `M-${matchId}`,
+      mode: "MOCK",
+      message: `매칭 M-${matchId} 취소 처리 (MOCK)`,
+    });
     return { success: true, mode: "REMOTE" };
   }
 
@@ -546,6 +590,12 @@ export async function cancelMatching(target: string | number): Promise<MatchingA
       signal: "취소 요청 반영",
       syncMode: "REMOTE",
     });
+    appendActivityLog({
+      action: "MATCHING_CANCELLED",
+      targetId: `M-${matchId}`,
+      mode: "REAL",
+      message: `매칭 M-${matchId} 취소 처리 완료`,
+    });
     return { success: true, mode: "REMOTE" };
   }
 
@@ -555,10 +605,18 @@ export async function cancelMatching(target: string | number): Promise<MatchingA
     signal: "서버 취소 API 미확인으로 세션 반영",
     syncMode: "LOCAL_SESSION",
   });
+  appendActivityLog({
+    action: "MATCHING_CANCELLED",
+    targetId: `M-${matchId}`,
+    mode: "REAL",
+    message: `매칭 M-${matchId} 취소 API 실패, 세션 반영 처리`,
+  });
 
   return {
     success: true,
     mode: "LOCAL_SESSION",
-    message: "서버 취소 API 접근이 제한되어 현재 세션 화면에만 반영했습니다.",
+    message: "서버 취소 API 연결이 제한되어 현재 세션 화면에만 반영됩니다.",
   };
 }
+
+

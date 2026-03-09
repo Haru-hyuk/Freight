@@ -9,6 +9,7 @@ import type {
   DispatchPaymentStatus,
   DispatchSettlementStatus,
 } from "@/features/dispatch/model/types";
+import axios from "axios";
 import { apiPaths } from "@/shared/lib/api/endpoints";
 import { apiClient } from "@/shared/lib/api/client";
 import { appendActivityLog } from "@/shared/lib/activity-log";
@@ -263,11 +264,11 @@ function mapBackendNotification(raw: unknown): BackendNotification | null {
 
   return {
     notificationId,
-    matchId: toNumberValue(row.matchId),
+    matchId: toNumberValue(row.matchId ?? row.match_id),
     type: toStringValue(row.type, "") || null,
     message: toStringValue(row.message, ""),
-    isRead: Boolean(row.isRead),
-    createdAt: toStringValue(row.createdAt, "") || null,
+    isRead: Boolean(row.isRead ?? row.is_read),
+    createdAt: toStringValue(row.createdAt ?? row.created_at, "") || null,
   };
 }
 
@@ -324,8 +325,17 @@ async function fetchQuotes(): Promise<BackendQuote[]> {
   try {
     const response = await apiClient.get<unknown>(apiPaths.adminTransportQuotes);
     return pickListPayload(response.data).map(mapBackendQuote);
-  } catch {
-    return [];
+  } catch (error) {
+    if (!axios.isAxiosError(error) || error.response?.status !== 404) {
+      return [];
+    }
+
+    try {
+      const response = await apiClient.get<unknown>(apiPaths.shipperQuotes);
+      return pickListPayload(response.data).map(mapBackendQuote);
+    } catch {
+      return [];
+    }
   }
 }
 
@@ -353,9 +363,59 @@ async function fetchTrucks(): Promise<BackendTruck[]> {
   try {
     const response = await apiClient.get<unknown>(apiPaths.adminTrucksPending);
     return pickListPayload(response.data).map(mapBackendTruck);
-  } catch {
+  } catch (error) {
+    if (!axios.isAxiosError(error) || error.response?.status !== 404) {
+      return [];
+    }
+
+    try {
+      const response = await apiClient.get<unknown>(apiPaths.driverTrucks);
+      return pickListPayload(response.data).map(mapBackendTruck);
+    } catch {
+      return [];
+    }
+  }
+}
+
+async function fetchAdminMatches(): Promise<BackendMatch[] | null> {
+  try {
+    const response = await apiClient.get<unknown>(apiPaths.adminTransportMatches);
+    return pickListPayload(response.data).map(mapBackendMatch);
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response?.status === 404) {
+      return null;
+    }
     return [];
   }
+}
+
+async function fetchAdminSettlements(): Promise<BackendSettlement[] | null> {
+  try {
+    const response = await apiClient.get<unknown>(apiPaths.adminTransportSettlements);
+    return pickListPayload(response.data).map(mapBackendSettlement);
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response?.status === 404) {
+      return null;
+    }
+    return [];
+  }
+}
+
+async function fetchLegacyMatches(): Promise<BackendMatch[]> {
+  const [shipperMatches, openDriverMatches, myDriverMatches] = await Promise.all([
+    fetchMatchesByPath(apiPaths.shipperMatchesMe),
+    fetchMatchesByPath(apiPaths.driverMatches),
+    fetchMatchesByPath(resolveDriverMyMatchesPath()),
+  ]);
+  return mergeMatches([...shipperMatches, ...openDriverMatches, ...myDriverMatches]);
+}
+
+async function fetchLegacySettlements(): Promise<BackendSettlement[]> {
+  const [shipperSettlements, driverSettlements] = await Promise.all([
+    fetchSettlementsByPath(resolveSettlementMePath(apiPaths.shipperSettlements)),
+    fetchSettlementsByPath(resolveSettlementMePath(apiPaths.driverSettlements)),
+  ]);
+  return [...shipperSettlements, ...driverSettlements];
 }
 
 function applyAssignmentOverrides(rows: DispatchRow[]): DispatchRow[] {
@@ -412,13 +472,16 @@ function paginateRows(rows: DispatchRow[], page: number, size: number): Dispatch
 }
 
 async function buildLiveRows(): Promise<DispatchRow[]> {
-  const [adminMatches, quotes, settlements, notifications, trucks] = await Promise.all([
-    fetchMatchesByPath(apiPaths.adminTransportMatches),
+  const [adminMatches, adminSettlements, quotes, notifications, trucks] = await Promise.all([
+    fetchAdminMatches(),
+    fetchAdminSettlements(),
     fetchQuotes(),
-    fetchSettlementsByPath(apiPaths.adminTransportSettlements),
     fetchNotifications(),
     fetchTrucks(),
   ]);
+
+  const mergedMatches = adminMatches === null ? await fetchLegacyMatches() : mergeMatches(adminMatches);
+  const settlements = adminSettlements === null ? await fetchLegacySettlements() : adminSettlements;
 
   const quoteMap = new Map<number, BackendQuote>();
   for (const quote of quotes) {
@@ -448,8 +511,6 @@ async function buildLiveRows(): Promise<DispatchRow[]> {
     const previous = signalByMatch.get(notification.matchId) ?? "";
     signalByMatch.set(notification.matchId, `${previous} ${notification.type ?? ""} ${notification.message}`);
   }
-
-  const mergedMatches = mergeMatches(adminMatches);
 
   const rows = mergedMatches
     .filter((match) => typeof match.matchId === "number")

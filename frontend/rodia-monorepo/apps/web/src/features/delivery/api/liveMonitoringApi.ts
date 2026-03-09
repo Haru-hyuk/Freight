@@ -1,5 +1,6 @@
 import { LIVE_DELIVERY_DETAIL_MOCK_BY_MATCH_ID, LIVE_DELIVERY_MOCK_ROWS } from "@/features/delivery/model/liveMockData";
 import type { KakaoAlertPayload, LiveDeliveryDetail, LiveDeliveryRow, LiveDeliveryStatus } from "@/features/delivery/model/liveTypes";
+import axios from "axios";
 import { apiPaths } from "@/shared/lib/api/endpoints";
 import { apiClient } from "@/shared/lib/api/client";
 import { appendActivityLog } from "@/shared/lib/activity-log";
@@ -35,6 +36,15 @@ type BackendQuote = {
   weightKg: number | null;
   volumeCbm: number | null;
 };
+
+const USE_MATCH_DETAIL_ENDPOINTS =
+  String(import.meta.env.VITE_USE_MATCH_DETAIL_ENDPOINTS ?? "").toLowerCase() === "true";
+const USE_QUOTE_DETAIL_ENDPOINTS =
+  String(import.meta.env.VITE_USE_QUOTE_DETAIL_ENDPOINTS ?? "").toLowerCase() === "true";
+const USE_ROLE_LIVE_ENDPOINT_FALLBACK =
+  String(import.meta.env.VITE_USE_ROLE_LIVE_ENDPOINT_FALLBACK ?? "").toLowerCase() === "true";
+let isMatchDetailEndpointAvailable = USE_MATCH_DETAIL_ENDPOINTS;
+let isQuoteDetailEndpointAvailable = USE_QUOTE_DETAIL_ENDPOINTS;
 
 function toRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
@@ -212,9 +222,50 @@ async function fetchQuotes(): Promise<BackendQuote[]> {
   try {
     const response = await apiClient.get<unknown>(apiPaths.adminTransportQuotes);
     return pickListPayload(response.data).map(mapBackendQuote);
-  } catch {
+  } catch (error) {
+    if (!axios.isAxiosError(error) || error.response?.status !== 404) {
+      return [];
+    }
+    if (!USE_ROLE_LIVE_ENDPOINT_FALLBACK) {
+      return [];
+    }
+
+    try {
+      const response = await apiClient.get<unknown>(apiPaths.shipperQuotes);
+      return pickListPayload(response.data).map(mapBackendQuote);
+    } catch {
+      return [];
+    }
+  }
+}
+
+async function fetchAdminMatches(): Promise<BackendMatch[] | null> {
+  try {
+    const response = await apiClient.get<unknown>(apiPaths.adminTransportMatches);
+    return pickListPayload(response.data).map(mapBackendMatch);
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response?.status === 404) {
+      return null;
+    }
     return [];
   }
+}
+
+async function fetchLiveMatches(): Promise<BackendMatch[]> {
+  const adminRows = await fetchAdminMatches();
+  if (adminRows !== null) {
+    return mergeMatches(adminRows);
+  }
+  if (!USE_ROLE_LIVE_ENDPOINT_FALLBACK) {
+    return [];
+  }
+
+  const [shipperMatches, openDriverMatches, myDriverMatches] = await Promise.all([
+    fetchMatchesByPath(apiPaths.shipperMatchesMe),
+    fetchMatchesByPath(apiPaths.driverMatches),
+    fetchMatchesByPath(resolveDriverMyMatchesPath()),
+  ]);
+  return mergeMatches([...shipperMatches, ...openDriverMatches, ...myDriverMatches]);
 }
 
 function buildRowsFromLive(
@@ -276,16 +327,28 @@ function parseMatchIdText(matchId: string): number | null {
 }
 
 async function fetchLiveMatchDetail(matchId: number): Promise<BackendMatch | null> {
-  const paths = [
-    `${apiPaths.adminTransportMatches.replace(/\/$/, "")}/${matchId}`,
-  ];
+  if (!isMatchDetailEndpointAvailable) return null;
+
+  const paths = [`${apiPaths.adminTransportMatches.replace(/\/$/, "")}/${matchId}`];
+  if (USE_ROLE_LIVE_ENDPOINT_FALLBACK) {
+    paths.push(
+      `${apiPaths.driverMatches.replace(/\/$/, "")}/${matchId}`,
+      `${apiPaths.shipperMatchesMe.replace(/\/me\/?$/, "").replace(/\/$/, "")}/${matchId}`,
+    );
+  }
 
   for (const path of paths) {
     try {
       const response = await apiClient.get<unknown>(path);
       return mapBackendMatch(response.data);
-    } catch {
-      // try next path
+    } catch (error) {
+      if (
+        axios.isAxiosError(error) &&
+        (error.response?.status === 400 || error.response?.status === 403 || error.response?.status === 405)
+      ) {
+        isMatchDetailEndpointAvailable = false;
+        return null;
+      }
     }
   }
 
@@ -293,11 +356,31 @@ async function fetchLiveMatchDetail(matchId: number): Promise<BackendMatch | nul
 }
 
 async function fetchQuoteDetailById(quoteId: number): Promise<BackendQuote | null> {
+  if (!isQuoteDetailEndpointAvailable) return null;
+
   try {
     const response = await apiClient.get<unknown>(`${apiPaths.adminTransportQuotes.replace(/\/$/, "")}/${quoteId}`);
     return mapBackendQuote(response.data);
-  } catch {
-    return null;
+  } catch (error) {
+    if (
+      axios.isAxiosError(error) &&
+      (error.response?.status === 400 || error.response?.status === 403 || error.response?.status === 405)
+    ) {
+      isQuoteDetailEndpointAvailable = false;
+      return null;
+    }
+
+    if (!axios.isAxiosError(error) || error.response?.status !== 404) {
+      return null;
+    }
+    if (!USE_ROLE_LIVE_ENDPOINT_FALLBACK) return null;
+
+    try {
+      const response = await apiClient.get<unknown>(`${apiPaths.shipperQuotes.replace(/\/$/, "")}/${quoteId}`);
+      return mapBackendQuote(response.data);
+    } catch {
+      return null;
+    }
   }
 }
 
@@ -313,14 +396,13 @@ function buildRoutePoints(baseLat: number, baseLng: number, span: number) {
 export async function fetchLiveDeliveryRows(): Promise<LiveDeliveryRow[]> {
   if (isMockModeEnabled()) return [...LIVE_DELIVERY_MOCK_ROWS];
 
-  const [adminMatches, notifications, quotes] = await Promise.all([
-    fetchMatchesByPath(apiPaths.adminTransportMatches),
+  const [matches, notifications, quotes] = await Promise.all([
+    fetchLiveMatches(),
     fetchNotifications(),
     fetchQuotes(),
   ]);
 
-  const mergedMatches = mergeMatches(adminMatches);
-  return buildRowsFromLive(mergedMatches, notifications, quotes);
+  return buildRowsFromLive(matches, notifications, quotes);
 }
 
 export async function fetchLiveDeliveryDetail(matchId: string): Promise<LiveDeliveryDetail | null> {

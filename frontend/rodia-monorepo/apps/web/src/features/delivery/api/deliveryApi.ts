@@ -5,6 +5,7 @@ import type {
   DeliveryMatchStatus,
   DeliverySettlementStatus,
 } from "@/features/delivery/model/types";
+import axios from "axios";
 import { apiPaths } from "@/shared/lib/api/endpoints";
 import { apiClient } from "@/shared/lib/api/client";
 import { isMockModeEnabled } from "@/shared/lib/mock-mode";
@@ -68,6 +69,8 @@ const MOCK_DELIVERY_HISTORY: DeliveryHistoryRow[] = [
     driverPayout: 640000,
   },
 ];
+const USE_ROLE_DELIVERY_ENDPOINT_FALLBACK =
+  String(import.meta.env.VITE_USE_ROLE_DELIVERY_ENDPOINT_FALLBACK ?? "").toLowerCase() === "true";
 
 function toRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
@@ -229,19 +232,76 @@ async function fetchQuotes(): Promise<BackendQuote[]> {
   try {
     const response = await apiClient.get<unknown>(apiPaths.adminTransportQuotes);
     return pickListPayload(response.data).map(mapBackendQuote);
-  } catch {
+  } catch (error) {
+    if (!axios.isAxiosError(error) || error.response?.status !== 404) {
+      return [];
+    }
+    if (!USE_ROLE_DELIVERY_ENDPOINT_FALLBACK) {
+      return [];
+    }
+
+    try {
+      const response = await apiClient.get<unknown>(apiPaths.shipperQuotes);
+      return pickListPayload(response.data).map(mapBackendQuote);
+    } catch {
+      return [];
+    }
+  }
+}
+
+async function fetchAdminMatches(): Promise<BackendMatch[] | null> {
+  try {
+    const response = await apiClient.get<unknown>(apiPaths.adminTransportMatches);
+    return pickListPayload(response.data).map(mapBackendMatch);
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response?.status === 404) {
+      return null;
+    }
     return [];
   }
 }
 
+async function fetchAdminSettlements(): Promise<BackendSettlement[] | null> {
+  try {
+    const response = await apiClient.get<unknown>(apiPaths.adminTransportSettlements);
+    return pickListPayload(response.data).map(mapBackendSettlement);
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response?.status === 404) {
+      return null;
+    }
+    return [];
+  }
+}
+
+async function fetchLegacySettlements(): Promise<BackendSettlement[]> {
+  if (!USE_ROLE_DELIVERY_ENDPOINT_FALLBACK) return [];
+  const [shipperSettlements, driverSettlements] = await Promise.all([
+    fetchSettlementsByPath(resolveSettlementMePath(apiPaths.shipperSettlements)),
+    fetchSettlementsByPath(resolveSettlementMePath(apiPaths.driverSettlements)),
+  ]);
+  return [...shipperSettlements, ...driverSettlements];
+}
+
+async function fetchLegacyMatches(): Promise<BackendMatch[]> {
+  if (!USE_ROLE_DELIVERY_ENDPOINT_FALLBACK) return [];
+  const [shipperMatches, openDriverMatches, myDriverMatches] = await Promise.all([
+    fetchMatchesByPath(apiPaths.shipperMatchesMe),
+    fetchMatchesByPath(apiPaths.driverMatches),
+    fetchMatchesByPath(resolveDriverMyMatchesPath()),
+  ]);
+  return mergeMatches([...shipperMatches, ...openDriverMatches, ...myDriverMatches]);
+}
+
 async function buildLiveRows(): Promise<DeliveryHistoryRow[]> {
-  const [matches, settlements, quotes] = await Promise.all([
-    fetchMatchesByPath(apiPaths.adminTransportMatches),
-    fetchSettlementsByPath(apiPaths.adminTransportSettlements),
+  const [adminMatches, adminSettlements, quotes] = await Promise.all([
+    fetchAdminMatches(),
+    fetchAdminSettlements(),
     fetchQuotes(),
   ]);
 
-  const mergedMatches = mergeMatches(matches);
+  const matches = adminMatches === null ? await fetchLegacyMatches() : mergeMatches(adminMatches);
+  const settlements = adminSettlements === null ? await fetchLegacySettlements() : adminSettlements;
+
   const settlementMap = new Map<number, BackendSettlement>();
   for (const settlement of settlements) {
     if (typeof settlement.matchId !== "number") continue;

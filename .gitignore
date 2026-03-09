@@ -46,6 +46,10 @@ build/
 .gradle/
 .gradletasknamecache
 
+# Gradle User Home (local cache)
+.gradle-user-home/
+**/.gradle-user-home/
+
 # Package files
 *.jar
 *.war

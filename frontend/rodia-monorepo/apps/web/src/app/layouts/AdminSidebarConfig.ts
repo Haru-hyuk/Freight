@@ -4,7 +4,6 @@
   disabled?: boolean;
   icon?: string;
   badge?: {
-    count: number;
     variant: "danger" | "warning" | "info";
   };
 };
@@ -86,6 +85,7 @@ export const ADMIN_NAV_GROUPS: NavGroup[] = [
         label: "차량 승인",
         to: "/trucks/approvals",
         icon: "truck-check",
+        badge: { variant: "warning" },
       },
     ],
   },
@@ -97,6 +97,7 @@ export const ADMIN_NAV_GROUPS: NavGroup[] = [
         label: "정산 관리",
         to: "/settlement",
         icon: "wallet",
+        badge: { variant: "info" },
       },
     ],
   },
@@ -113,6 +114,7 @@ export const ADMIN_NAV_GROUPS: NavGroup[] = [
         label: "이상 징후",
         to: "/ops/deviations",
         icon: "alert-circle",
+        badge: { variant: "danger" },
       },
       {
         label: "매칭 취소 요청",

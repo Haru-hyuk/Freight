@@ -1,5 +1,6 @@
 ﻿import { DRIVER_APPROVAL_MOCK_ROWS } from "@/features/drivers/model/mockData";
 import type { DriverApprovalReviewPayload, DriverApprovalRow } from "@/features/drivers/model/types";
+import axios from "axios";
 import { appendActivityLog } from "@/shared/lib/activity-log";
 import { apiClient } from "@/shared/lib/api/client";
 import { apiPaths } from "@/shared/lib/api/endpoints";
@@ -29,6 +30,8 @@ const reviewOverrides = new Map<
 >();
 
 let driverRowsStore: DriverApprovalRow[] = [...DRIVER_APPROVAL_MOCK_ROWS];
+const USE_DRIVER_TRUCKS_FALLBACK =
+  String(import.meta.env.VITE_USE_DRIVER_TRUCKS_FALLBACK ?? "").toLowerCase() === "true";
 
 function toRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
@@ -166,16 +169,26 @@ async function fetchBackendTrucks(): Promise<BackendTruck[]> {
   try {
     const response = await apiClient.get<unknown>(apiPaths.adminTrucksPending);
     return pickListPayload(response.data).map(mapBackendTruck);
-  } catch {
-    return [];
+  } catch (error) {
+    if (!axios.isAxiosError(error) || error.response?.status !== 404) {
+      return [];
+    }
+    if (!USE_DRIVER_TRUCKS_FALLBACK) {
+      return [];
+    }
+
+    try {
+      const response = await apiClient.get<unknown>(apiPaths.driverTrucks);
+      return pickListPayload(response.data).map(mapBackendTruck);
+    } catch {
+      return [];
+    }
   }
 }
 
 async function tryUpdateTruckApproval(truckId: number, approved: boolean): Promise<boolean> {
   try {
-    await apiClient.patch(apiPaths.adminTruckApproval(String(truckId)), {
-      approved,
-    });
+    await apiClient.patch(apiPaths.adminTruckApproval(String(truckId)), { approved });
     return true;
   } catch {
     return false;
@@ -242,4 +255,3 @@ export async function reviewDriverApproval(payload: DriverApprovalReviewPayload)
       : `차주 ${payload.driverId} 승인 검토 결과를 세션에만 반영했습니다(백엔드 API 미지원).`,
   });
 }
-

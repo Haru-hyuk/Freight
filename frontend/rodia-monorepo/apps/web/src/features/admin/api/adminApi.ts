@@ -8,6 +8,7 @@ import type {
 import { apiPaths } from "@/shared/lib/api/endpoints";
 import { apiClient } from "@/shared/lib/api/client";
 import { isMockModeEnabled } from "@/shared/lib/mock-mode";
+import axios from "axios";
 
 type BackendAnnouncement = {
   announcementId: number;
@@ -39,6 +40,9 @@ type BackendMatch = {
   createdAt: string | null;
   updatedAt: string | null;
 };
+
+const USE_ROLE_ADMIN_DASHBOARD_MATCH_FALLBACK =
+  String(import.meta.env.VITE_USE_ROLE_ADMIN_DASHBOARD_MATCH_FALLBACK ?? "").toLowerCase() === "true";
 
 const MOCK_DASHBOARD_DATA: AdminDashboardData = {
   kpi: {
@@ -263,10 +267,23 @@ async function fetchNotifications(): Promise<BackendNotification[]> {
 
 async function fetchDriverMatches(): Promise<BackendMatch[]> {
   try {
-    const response = await apiClient.get<BackendMatch[]>(apiPaths.driverMatches);
+    const response = await apiClient.get<BackendMatch[]>(apiPaths.adminTransportMatches);
     return Array.isArray(response.data) ? response.data : [];
-  } catch {
-    return [];
+  } catch (error) {
+    if (
+      !USE_ROLE_ADMIN_DASHBOARD_MATCH_FALLBACK ||
+      !axios.isAxiosError(error) ||
+      error.response?.status !== 404
+    ) {
+      return [];
+    }
+
+    try {
+      const response = await apiClient.get<BackendMatch[]>(apiPaths.driverMatches);
+      return Array.isArray(response.data) ? response.data : [];
+    } catch {
+      return [];
+    }
   }
 }
 

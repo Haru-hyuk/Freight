@@ -29,5 +29,6 @@ Thumbs.db
 *.patch
 *.tmp
 
-# AI
-.codex
+# Gradle User Home (local cache)
+.gradle-user-home/
+**/.gradle-user-home/

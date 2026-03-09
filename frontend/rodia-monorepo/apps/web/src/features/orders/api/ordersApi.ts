@@ -1,4 +1,4 @@
-﻿import {
+import {
   ORDER_CANCELLATION_REQUEST_MOCK_ROWS,
   ORDER_MONITORING_MOCK_ROWS,
 } from "@/features/orders/model/mockData";
@@ -28,6 +28,7 @@ import { appendActivityLog } from "@/shared/lib/activity-log";
 import { apiClient } from "@/shared/lib/api/client";
 import { apiPaths } from "@/shared/lib/api/endpoints";
 import { isMockModeEnabled } from "@/shared/lib/mock-mode";
+import axios from "axios";
 
 type BackendQuote = {
   quoteId: number | null;
@@ -79,6 +80,7 @@ type BackendSettlement = {
 type BackendUser = {
   id: number | null;
   code: string;
+  role: "SHIPPER" | "DRIVER" | "UNKNOWN";
   name: string;
   phone: string;
   email?: string;
@@ -90,9 +92,40 @@ type ReviewOverride = Pick<CancellationRequestRow, "approvalStatus" | "reviewedA
 const REVIEWER_ID = "admin.web";
 const DERIVED_REASON_TEXT = "백엔드 취소 사유 필드가 없어 상태 기반으로 생성된 요청입니다.";
 const liveReviewOverrides = new Map<string, ReviewOverride>();
-const DEFAULT_ADMIN_ORDER_CANCELLATION_REQUESTS_PATH = "/api/admin/orders/cancellations";
-const DEFAULT_ADMIN_SHIPPERS_PATH = "/api/admin/users/shippers";
-const DEFAULT_ADMIN_DRIVERS_PATH = "/api/admin/users/drivers";
+const LEGACY_CANCELLATION_REQUESTS_PATH = "/api/admin/orders/cancellations";
+const USE_ADMIN_USERS_ENDPOINT =
+  String(import.meta.env.VITE_USE_ADMIN_USERS_ENDPOINT ?? "").toLowerCase() === "true";
+const USE_ADMIN_TRANSPORT_DETAIL_ENDPOINTS =
+  String(import.meta.env.VITE_USE_ADMIN_TRANSPORT_DETAIL_ENDPOINTS ?? "").toLowerCase() === "true";
+let isAdminUsersEndpointAvailable = USE_ADMIN_USERS_ENDPOINT;
+let isAdminQuoteDetailEndpointAvailable = USE_ADMIN_TRANSPORT_DETAIL_ENDPOINTS;
+let isAdminMatchDetailEndpointAvailable = USE_ADMIN_TRANSPORT_DETAIL_ENDPOINTS;
+
+function normalizeApiPath(path: string): string {
+  return path.replace(/\/+$/, "");
+}
+
+function shouldCallLegacyCancellationRequests(): boolean {
+  return normalizeApiPath(apiPaths.adminOrderCancellationRequests) !== normalizeApiPath(LEGACY_CANCELLATION_REQUESTS_PATH);
+}
+
+function normalizeBackendUserRole(value: unknown, code: string): "SHIPPER" | "DRIVER" | "UNKNOWN" {
+  const text = toStringValue(value).trim().toUpperCase();
+  if (text === "SHIPPER") return "SHIPPER";
+  if (text === "DRIVER") return "DRIVER";
+
+  const codeUpper = code.trim().toUpperCase();
+  if (codeUpper.startsWith("S-")) return "SHIPPER";
+  if (codeUpper.startsWith("D-")) return "DRIVER";
+  return "UNKNOWN";
+}
+
+function isMatchingUserRole(user: BackendUser, role: "SHIPPER" | "DRIVER"): boolean {
+  if (user.role === role) return true;
+  if (user.role !== "UNKNOWN") return false;
+  const code = user.code.trim().toUpperCase();
+  return role === "SHIPPER" ? code.startsWith("S-") : code.startsWith("D-");
+}
 
 function toRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
@@ -310,9 +343,12 @@ function mapBackendUser(raw: unknown): BackendUser {
     row.id ?? row.userId ?? row.user_id ?? row.shipperId ?? row.shipper_id ?? row.driverId ?? row.driver_id,
     "",
   );
+  const role = normalizeBackendUserRole(row.role ?? row.userRole ?? row.user_role, code);
+
   return {
     id: toNumberValue(row.id ?? row.shipperId ?? row.shipper_id ?? row.driverId ?? row.driver_id ?? code),
     code,
+    role,
     name: toStringValue(row.name, "정보 없음"),
     phone: toStringValue(row.phone, "-"),
     email: toStringValue(row.email, "") || undefined,
@@ -427,10 +463,17 @@ async function fetchAdminQuotes(): Promise<BackendQuote[]> {
 
 async function fetchAdminQuoteDetail(quoteId: number | null): Promise<BackendQuote | null> {
   if (quoteId === null) return null;
+  if (!isAdminQuoteDetailEndpointAvailable) return null;
   try {
     const response = await apiClient.get<unknown>(`${apiPaths.adminTransportQuotes}/${encodeURIComponent(String(quoteId))}`);
     return mapBackendQuote(response.data);
-  } catch {
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      const status = error.response?.status;
+      if (status === 400 || status === 403 || status === 405) {
+        isAdminQuoteDetailEndpointAvailable = false;
+      }
+    }
     return null;
   }
 }
@@ -446,10 +489,17 @@ async function fetchAdminMatches(): Promise<BackendMatch[]> {
 
 async function fetchAdminMatchDetail(matchId: number | null): Promise<BackendMatch | null> {
   if (matchId === null) return null;
+  if (!isAdminMatchDetailEndpointAvailable) return null;
   try {
     const response = await apiClient.get<unknown>(`${apiPaths.adminTransportMatches}/${encodeURIComponent(String(matchId))}`);
     return mapBackendMatch(response.data);
-  } catch {
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      const status = error.response?.status;
+      if (status === 400 || status === 403 || status === 405) {
+        isAdminMatchDetailEndpointAvailable = false;
+      }
+    }
     return null;
   }
 }
@@ -474,10 +524,13 @@ async function fetchAdminSettlements(): Promise<BackendSettlement[]> {
 
 async function fetchAdminUsersByRole(role: "SHIPPER" | "DRIVER"): Promise<Map<number, BackendUser>> {
   const users = new Map<number, BackendUser>();
+  if (!isAdminUsersEndpointAvailable) return users;
 
   const ingest = (payload: unknown) => {
     for (const raw of pickListPayload(payload)) {
       const mapped = mapBackendUser(raw);
+      if (!isMatchingUserRole(mapped, role)) continue;
+
       const fromCode = toNumericIdFromText(mapped.code);
       const id = mapped.id ?? fromCode;
       if (id === null) continue;
@@ -487,25 +540,16 @@ async function fetchAdminUsersByRole(role: "SHIPPER" | "DRIVER"): Promise<Map<nu
 
   try {
     const response = await apiClient.get<unknown>(apiPaths.adminUsers, {
-      params: { role, page: 1, size: 500 },
+      params: { role },
     });
     ingest(response.data);
-    return users;
-  } catch {
-    // fallback to legacy split endpoints
-  }
-
-  const legacyPath = role === "SHIPPER" ? apiPaths.adminShippers : apiPaths.adminDrivers;
-  const defaultLegacyPath = role === "SHIPPER" ? DEFAULT_ADMIN_SHIPPERS_PATH : DEFAULT_ADMIN_DRIVERS_PATH;
-  if (legacyPath === defaultLegacyPath) {
-    return users;
-  }
-
-  try {
-    const response = await apiClient.get<unknown>(legacyPath);
-    ingest(response.data);
-  } catch {
-    // no-op
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      const status = error.response?.status;
+      if (status === 400 || status === 403 || status === 404 || status === 405) {
+        isAdminUsersEndpointAvailable = false;
+      }
+    }
   }
 
   return users;
@@ -525,7 +569,7 @@ function pickLatestByTimestamp<T>(values: T[], getKey: (value: T) => number | nu
 }
 
 async function fetchRemoteCancellationRequests(): Promise<CancellationRequestRow[] | null> {
-  if (apiPaths.adminOrderCancellationRequests === DEFAULT_ADMIN_ORDER_CANCELLATION_REQUESTS_PATH) {
+  if (!shouldCallLegacyCancellationRequests()) {
     return null;
   }
 
@@ -910,5 +954,8 @@ export async function fetchOrderMonitoringSnapshot(): Promise<OrderMonitoringSna
     summary: buildMonitoringSummary(rows),
   };
 }
+
+
+
 
 

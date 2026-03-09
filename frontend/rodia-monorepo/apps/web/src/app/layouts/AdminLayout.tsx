@@ -2,9 +2,13 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 
 import { ADMIN_NAV_GROUPS, getPageName, type NavItem } from "@/app/layouts/AdminSidebarConfig";
+import { fetchDeviationStats } from "@/features/ops/api/deviationApi";
+import { fetchSettlementApprovals } from "@/features/settlements/api/settlementsApi";
+import { fetchTruckApprovals } from "@/features/trucks/api/truckApprovalsApi";
 import { apiPaths } from "@/shared/lib/api/endpoints";
 import { apiClient } from "@/shared/lib/api/client";
 import { clearSession } from "@/shared/lib/auth/session";
+import { appendActivityLog } from "@/shared/lib/activity-log";
 import { useMockMode } from "@/shared/lib/hooks/useMockMode";
 import { Badge } from "@/shared/ui/shadcn/badge";
 import { Button } from "@/shared/ui/shadcn/button";
@@ -61,11 +65,15 @@ const iconMap: Record<string, React.ReactNode> = {
 type NavItemLinkProps = {
   item: NavItem;
   isChild?: boolean;
+  badgeCount?: number;
 };
+
+type SidebarBadgePath = "/trucks/approvals" | "/settlement" | "/ops/deviations";
+type SidebarBadgeCounts = Partial<Record<SidebarBadgePath, number>>;
 
 const OPERATIONS_GROUP_TITLE = "운영 관리";
 
-function NavItemLink({ item, isChild = false }: NavItemLinkProps) {
+function NavItemLink({ item, isChild = false, badgeCount }: NavItemLinkProps) {
   if (item.disabled) {
     return (
       <div className={`flex cursor-not-allowed items-center justify-between rounded-lg border border-transparent px-3 py-2 text-sm font-medium opacity-50 ${isChild ? "ml-4" : ""}`}>
@@ -82,6 +90,7 @@ function NavItemLink({ item, isChild = false }: NavItemLinkProps) {
       ? "destructive"
       : ("secondary" as const)
     : undefined;
+  const visibleBadgeCount = typeof badgeCount === "number" ? badgeCount : 0;
 
   return (
     <NavLink
@@ -96,9 +105,9 @@ function NavItemLink({ item, isChild = false }: NavItemLinkProps) {
         {item.icon ? iconMap[item.icon] : null}
         <span>{item.label}</span>
       </div>
-      {item.badge ? (
+      {item.badge && visibleBadgeCount > 0 ? (
         <Badge variant={badgeVariant} className="ml-2 text-xs">
-          {item.badge.count}
+          {visibleBadgeCount}
         </Badge>
       ) : null}
     </NavLink>
@@ -109,6 +118,28 @@ export default function AdminLayout() {
   const location = useLocation();
   const pageName = React.useMemo(() => getPageName(location.pathname), [location.pathname]);
   const { enabled: mockModeEnabled, setEnabled: setMockModeEnabled } = useMockMode();
+  const [badgeCounts, setBadgeCounts] = React.useState<SidebarBadgeCounts>({});
+
+  const loadBadgeCounts = React.useCallback(async () => {
+    const [truckRows, pendingSettlements, deviationStats] = await Promise.all([
+      fetchTruckApprovals().catch(() => []),
+      fetchSettlementApprovals().catch(() => []),
+      fetchDeviationStats().catch(() => null),
+    ]);
+
+    const pendingTruckCount = truckRows.filter((row) => row.approvalStatus === "PENDING").length;
+    const pendingDeviationCount = (deviationStats?.open ?? 0) + (deviationStats?.investigating ?? 0);
+
+    setBadgeCounts({
+      "/trucks/approvals": pendingTruckCount,
+      "/settlement": pendingSettlements.length,
+      "/ops/deviations": pendingDeviationCount,
+    });
+  }, []);
+
+  React.useEffect(() => {
+    void loadBadgeCounts();
+  }, [loadBadgeCounts, location.pathname, mockModeEnabled]);
 
   const [expandedGroups, setExpandedGroups] = React.useState<Record<string, boolean>>(() => {
     const initialState: Record<string, boolean> = {};
@@ -130,6 +161,11 @@ export default function AdminLayout() {
   };
 
   const handleLogout = () => {
+    appendActivityLog({
+      action: "ADMIN_LOGOUT",
+      mode: "REAL",
+      message: "관리자 로그아웃",
+    });
     void apiClient.post(apiPaths.authLogout).catch(() => undefined);
     clearSession();
     localStorage.removeItem("rodia_admin_token");
@@ -163,7 +199,7 @@ export default function AdminLayout() {
                   return (
                     <div key={group.title} className="mb-2">
                       {group.items.map((item) => (
-                        <NavItemLink key={item.to} item={item} />
+                        <NavItemLink key={item.to} item={item} badgeCount={badgeCounts[item.to as SidebarBadgePath]} />
                       ))}
                     </div>
                   );
@@ -184,7 +220,12 @@ export default function AdminLayout() {
                     {isExpanded ? (
                       <div className="space-y-1 border-l border-background/15 pl-2">
                         {group.items.map((item) => (
-                          <NavItemLink key={item.to} item={item} isChild={true} />
+                          <NavItemLink
+                            key={item.to}
+                            item={item}
+                            isChild={true}
+                            badgeCount={badgeCounts[item.to as SidebarBadgePath]}
+                          />
                         ))}
                       </div>
                     ) : null}
@@ -241,4 +282,3 @@ export default function AdminLayout() {
     </div>
   );
 }
-

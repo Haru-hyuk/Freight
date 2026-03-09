@@ -1,5 +1,6 @@
 import { apiClient } from "@/shared/lib/api/client";
 import { apiPaths } from "@/shared/lib/api/endpoints";
+import axios from "axios";
 import type {
   DashboardResponse,
   DeviationFeedItem,
@@ -7,6 +8,9 @@ import type {
   KpiData,
   TimeRange,
 } from "../model/types";
+
+const USE_ROLE_DASHBOARD_ENDPOINT_FALLBACK =
+  String(import.meta.env.VITE_USE_ROLE_DASHBOARD_ENDPOINT_FALLBACK ?? "").toLowerCase() === "true";
 
 type BackendQuote = {
   quoteId: number | null;
@@ -183,14 +187,40 @@ function averageAcceptanceMinutes(matches: BackendMatch[]): number {
 
 async function fetchQuotes(): Promise<BackendQuote[]> {
   try {
-    const response = await apiClient.get<unknown>(apiPaths.shipperQuotes);
+    const response = await apiClient.get<unknown>(apiPaths.adminTransportQuotes);
     return pickListPayload(response.data).map(mapQuote);
-  } catch {
-    return [];
+  } catch (error) {
+    if (
+      !USE_ROLE_DASHBOARD_ENDPOINT_FALLBACK ||
+      !axios.isAxiosError(error) ||
+      error.response?.status !== 404
+    ) {
+      return [];
+    }
+
+    try {
+      const response = await apiClient.get<unknown>(apiPaths.shipperQuotes);
+      return pickListPayload(response.data).map(mapQuote);
+    } catch {
+      return [];
+    }
   }
 }
 
 async function fetchMatches(): Promise<BackendMatch[]> {
+  try {
+    const response = await apiClient.get<unknown>(apiPaths.adminTransportMatches);
+    return pickListPayload(response.data).map(mapMatch);
+  } catch (error) {
+    if (
+      !USE_ROLE_DASHBOARD_ENDPOINT_FALLBACK ||
+      !axios.isAxiosError(error) ||
+      error.response?.status !== 404
+    ) {
+      return [];
+    }
+  }
+
   const driverMyPath = `${apiPaths.driverMatches.replace(/\/$/, "")}/me`;
   const [shipperRows, driverOpenRows, driverRows] = await Promise.all([
     apiClient.get<unknown>(apiPaths.shipperMatchesMe).then((res) => pickListPayload(res.data).map(mapMatch)).catch(() => []),
@@ -212,6 +242,19 @@ function resolveSettlementMePath(basePath: string): string {
 }
 
 async function fetchSettlements(): Promise<BackendSettlement[]> {
+  try {
+    const response = await apiClient.get<unknown>(apiPaths.adminTransportSettlements);
+    return pickListPayload(response.data).map(mapSettlement);
+  } catch (error) {
+    if (
+      !USE_ROLE_DASHBOARD_ENDPOINT_FALLBACK ||
+      !axios.isAxiosError(error) ||
+      error.response?.status !== 404
+    ) {
+      return [];
+    }
+  }
+
   const [shipperRows, driverRows] = await Promise.all([
     apiClient
       .get<unknown>(resolveSettlementMePath(apiPaths.shipperSettlements))
