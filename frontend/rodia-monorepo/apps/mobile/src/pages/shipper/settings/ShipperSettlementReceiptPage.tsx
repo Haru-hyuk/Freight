@@ -4,10 +4,11 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import type { QuoteDetailResponse } from "@/entities/quote/model/quote.types";
+import { getLatestPaymentForMatch } from "@/features/payment/api";
 import { getShipperQuoteDetailByIdentifier } from "@/features/quote/api";
 import { CargoDetailList } from "@/features/quote/ui/CargoDetailList";
+import { getShipperSettlementByMatch, type SettlementResponse } from "@/features/shipper-settings/api/shipper-settlement-api";
 import { SettlementPriceBreakdown } from "@/features/settlement/ui/SettlementPriceBreakdown";
-import { getShipperSettlementByMatch, type SettlementResponse } from "@/features/settlement/api/shipper-settlement-api";
 import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
 import { formatDateTime, formatKrw } from "@/shared/lib/format/display";
 import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
@@ -21,6 +22,8 @@ type RouteParams = {
   matchId?: string | string[];
   quoteId?: string | string[];
 };
+
+type LatestPayment = Awaited<ReturnType<typeof getLatestPaymentForMatch>>;
 
 function readRouteParamText(value: string | string[] | undefined): string {
   const raw = Array.isArray(value) ? value[0] : value;
@@ -42,9 +45,11 @@ function toMoneyText(value: number | undefined): string {
 }
 
 function toPaymentStatusLabel(status: string | undefined): string {
-  if (status === "PAID") return "결제 완료";
-  if (status === "PENDING") return "결제 대기";
-  if (status === "FAILED") return "결제 실패";
+  const token = status?.trim().toUpperCase() ?? "";
+  if (token === "PAID" || token === "COMPLETED") return "결제 완료";
+  if (token === "PENDING") return "결제 대기";
+  if (token === "FAILED") return "결제 실패";
+  if (token === "REFUNDED") return "환불 완료";
   return "결제 상태 확인 필요";
 }
 
@@ -59,7 +64,8 @@ function toPaymentMethodLabel(method: string | undefined): string {
   const token = method?.trim().toUpperCase() ?? "";
   if (!token) return "-";
   if (token === "CARD") return "카드";
-  if (token === "BANK_TRANSFER") return "계좌이체";
+  if (token === "TRANSFER" || token === "BANK_TRANSFER") return "계좌이체";
+  if (token === "PREPAID") return "선불";
   if (token === "VIRTUAL_ACCOUNT") return "가상계좌";
   if (token === "EASY_PAY") return "간편결제";
   if (token === "TOSS_PAY") return "토스페이";
@@ -79,16 +85,27 @@ function resolvePaidAt(settlement: SettlementResponse): string | undefined {
   return settlement.shipperPaidAt ?? settlement.completedAt ?? settlement.createdAt;
 }
 
-function buildShareText(settlement: SettlementResponse, quote: QuoteDetailResponse | null): string {
+function buildShareText(
+  settlement: SettlementResponse,
+  quote: QuoteDetailResponse | null,
+  latestPayment: LatestPayment
+): string {
   const routeText =
     quote?.originAddress && quote?.destinationAddress ? `${quote.originAddress} -> ${quote.destinationAddress}` : "";
+  const paymentAmount =
+    typeof latestPayment?.totalAmount === "number" && Number.isFinite(latestPayment.totalAmount)
+      ? latestPayment.totalAmount
+      : settlement.totalFare;
+  const paymentStatus = latestPayment?.status ?? settlement.shipperPaymentStatus;
+  const paymentMethod = latestPayment?.method ?? settlement.shipperPaymentMethod;
+  const paidAt = latestPayment?.paidAt ?? resolvePaidAt(settlement);
 
   const lines = [
     "[Rodia 운송 결제 영수증]",
-    `총 결제 금액: ${toMoneyText(settlement.totalFare)}`,
-    `결제 상태: ${toPaymentStatusLabel(settlement.shipperPaymentStatus)}`,
-    `결제 일자: ${toDisplayDateTime(resolvePaidAt(settlement))}`,
-    `결제 수단: ${toPaymentMethodLabel(settlement.shipperPaymentMethod)}`,
+    `총 결제 금액: ${toMoneyText(paymentAmount)}`,
+    `결제 상태: ${toPaymentStatusLabel(paymentStatus)}`,
+    `결제 일자: ${toDisplayDateTime(paidAt)}`,
+    `결제 수단: ${toPaymentMethodLabel(paymentMethod)}`,
   ];
 
   if (routeText) {
@@ -226,6 +243,7 @@ export default function ShipperSettlementReceiptPage() {
   const quoteId = React.useMemo(() => parsePositiveInt(readRouteParamText(params.quoteId)), [params.quoteId]);
 
   const [settlement, setSettlement] = React.useState<SettlementResponse | null>(null);
+  const [latestPayment, setLatestPayment] = React.useState<LatestPayment>(null);
   const [quoteDetail, setQuoteDetail] = React.useState<QuoteDetailResponse | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
@@ -236,6 +254,7 @@ export default function ShipperSettlementReceiptPage() {
     async (refresh = false) => {
       if (matchId <= 0) {
         setSettlement(null);
+        setLatestPayment(null);
         setQuoteDetail(null);
         setErrorMessage("유효한 매칭 ID를 찾지 못했습니다.");
         setIsLoading(false);
@@ -251,8 +270,14 @@ export default function ShipperSettlementReceiptPage() {
       setErrorMessage(null);
 
       try {
-        const settlementData = await getShipperSettlementByMatch({ matchId });
+        const settlementData = await getShipperSettlementByMatch(matchId);
         setSettlement(settlementData);
+        try {
+          const latestPaymentData = await getLatestPaymentForMatch(matchId);
+          setLatestPayment(latestPaymentData);
+        } catch {
+          setLatestPayment(null);
+        }
 
         if (quoteId > 0) {
           try {
@@ -266,6 +291,7 @@ export default function ShipperSettlementReceiptPage() {
         }
       } catch (error) {
         setSettlement(null);
+        setLatestPayment(null);
         setQuoteDetail(null);
         setErrorMessage(readApiErrorMessage(error, "정산 영수증을 불러오지 못했습니다."));
       } finally {
@@ -296,15 +322,25 @@ export default function ShipperSettlementReceiptPage() {
     if (!settlement || isLoading || isRefreshing || isSharing) return;
     setIsSharing(true);
     try {
-      await Share.share({ message: buildShareText(settlement, quoteDetail) });
+      await Share.share({ message: buildShareText(settlement, quoteDetail, latestPayment) });
     } catch (error) {
       Alert.alert("공유 실패", readApiErrorMessage(error, "영수증 공유에 실패했습니다."));
     } finally {
       setIsSharing(false);
     }
-  }, [isLoading, isRefreshing, isSharing, quoteDetail, settlement]);
+  }, [isLoading, isRefreshing, isSharing, latestPayment, quoteDetail, settlement]);
 
-  const paidAtText = settlement ? toDisplayDateTime(resolvePaidAt(settlement)) : "-";
+  const paymentAmount = React.useMemo(() => {
+    if (typeof latestPayment?.totalAmount === "number" && Number.isFinite(latestPayment.totalAmount)) {
+      return latestPayment.totalAmount;
+    }
+    return settlement?.totalFare;
+  }, [latestPayment?.totalAmount, settlement?.totalFare]);
+  const paymentStatus = latestPayment?.status ?? settlement?.shipperPaymentStatus;
+  const paymentMethod = latestPayment?.method ?? settlement?.shipperPaymentMethod;
+  const paidAtText = settlement
+    ? toDisplayDateTime(latestPayment?.paidAt ?? resolvePaidAt(settlement))
+    : "-";
 
   return (
     <View style={styles.modalRoot}>
@@ -364,7 +400,7 @@ export default function ShipperSettlementReceiptPage() {
                         총 결제 금액
                       </AppText>
                       <AppText variant="display" weight="900" style={styles.summaryAmount}>
-                        {toMoneyText(settlement.totalFare)}
+                        {toMoneyText(paymentAmount)}
                       </AppText>
                     </View>
 
@@ -374,7 +410,7 @@ export default function ShipperSettlementReceiptPage() {
                           결제 상태
                         </AppText>
                         <AppText variant="detail" weight="700" style={styles.keyValue}>
-                          {toPaymentStatusLabel(settlement.shipperPaymentStatus)}
+                          {toPaymentStatusLabel(paymentStatus)}
                         </AppText>
                       </View>
                       <View style={styles.keyValueRow}>
@@ -382,7 +418,7 @@ export default function ShipperSettlementReceiptPage() {
                           결제 수단
                         </AppText>
                         <AppText variant="detail" weight="700" style={styles.keyValue}>
-                          {toPaymentMethodLabel(settlement.shipperPaymentMethod)}
+                          {toPaymentMethodLabel(paymentMethod)}
                         </AppText>
                       </View>
                       <View style={styles.keyValueRow}>
@@ -408,7 +444,15 @@ export default function ShipperSettlementReceiptPage() {
                     <CargoDetailList title="화물 상세 내역" items={quoteDetail.quoteItems} />
                   ) : null}
 
-                  <SettlementPriceBreakdown settlement={settlement} />
+                  <SettlementPriceBreakdown
+                    mode="shipper"
+                    settlement={{
+                      totalFare: paymentAmount ?? settlement.totalFare,
+                      dueDate: settlement.dueDate,
+                      paymentStatus,
+                      paidAt: latestPayment?.paidAt ?? settlement.shipperPaidAt ?? settlement.completedAt,
+                    }}
+                  />
                 </>
               ) : (
                 <View style={styles.emptyWrap}>
