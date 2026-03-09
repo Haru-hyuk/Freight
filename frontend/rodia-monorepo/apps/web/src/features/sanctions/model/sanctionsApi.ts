@@ -247,19 +247,6 @@ export async function fetchSanctionRows(): Promise<SanctionRow[]> {
     }
   }
 
-  if (primaryPath !== CANONICAL_ADMIN_SANCTIONS_PATH) {
-    try {
-      const response = await apiClient.get<BackendSanctionListPayload | unknown[]>(CANONICAL_ADMIN_SANCTIONS_PATH);
-      const payload = response.data;
-      const rows = Array.isArray(payload) ? payload : Array.isArray(payload.items) ? payload.items : [];
-      return rows
-        .map(mapLiveSanction)
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    } catch {
-      // fallback below
-    }
-  }
-
   try {
     const response = await apiClient.get<BackendAnnouncement[]>(apiPaths.adminAnnouncements);
     if (!Array.isArray(response.data)) return mergeWithSessionRows([]);

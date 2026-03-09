@@ -10,10 +10,8 @@ import { apiClient } from "@/shared/lib/api/client";
 import { appendActivityLog } from "@/shared/lib/activity-log";
 import { isMockModeEnabled } from "@/shared/lib/mock-mode";
 
-type BackendPricingRate = {
-  rangeKey: string | null;
-  minDistanceKm: number | null;
-  maxDistanceKm: number | null;
+type BackendQuote = {
+  quoteId: number | null;
   vehicleType: string | null;
   vehicleBodyType: string | null;
   tonnage: number | null;
@@ -28,12 +26,6 @@ type BackendChecklist = {
   name: string | null;
   hasExtraFee: boolean;
   baseExtraFee: number | null;
-};
-
-type BackendTruckSpec = {
-  vehicleType: string | null;
-  vehicleBodyType: string | null;
-  categoryKr: string | null;
 };
 
 const FALLBACK_VEHICLE_ROWS: VehiclePricingRow[] = [
@@ -84,17 +76,6 @@ const FALLBACK_ADDITIONAL_ROWS: AdditionalPricingRow[] = [
   },
 ];
 
-const MOBILE_STEP3_BODY_TYPES: VehiclePricingRow["bodyType"][] = ["일반카고", "윙바디", "탑차"];
-
-const BODY_TYPE_SORT_ORDER: Record<VehiclePricingRow["bodyType"], number> = {
-  일반카고: 0,
-  윙바디: 1,
-  탑차: 2,
-  냉장차: 3,
-  사다리차: 4,
-  추레라: 5,
-};
-
 const vehicleOverrides = new Map<string, VehiclePricingUpdatePayload>();
 const additionalOverrides = new Map<string, AdditionalPricingUpdatePayload>();
 
@@ -127,7 +108,7 @@ function pickListPayload(payload: unknown): unknown[] {
   return [];
 }
 
-function mapBackendPricingRate(raw: unknown): BackendPricingRate {
+function mapBackendQuote(raw: unknown): BackendQuote {
   const row = toRecord(raw);
   const vehicle = toRecord(row.vehicle);
   const truck = toRecord(row.truck);
@@ -180,15 +161,6 @@ function mapBackendChecklist(raw: unknown): BackendChecklist {
     name: toStringValue(row.name, "") || null,
     hasExtraFee: Boolean(row.hasExtraFee),
     baseExtraFee: toNumberValue(row.baseExtraFee),
-  };
-}
-
-function mapBackendTruckSpec(raw: unknown): BackendTruckSpec {
-  const row = toRecord(raw);
-  return {
-    vehicleType: toStringValue(row.vehicleType ?? row.vehicle_type, "") || null,
-    vehicleBodyType: toStringValue(row.vehicleBodyType ?? row.vehicle_body_type, "") || null,
-    categoryKr: toStringValue(row.categoryKr ?? row.category_kr, "") || null,
   };
 }
 
@@ -282,31 +254,6 @@ async function fetchBackendChecklistItems(): Promise<BackendChecklist[]> {
   }
 }
 
-async function fetchBackendTruckSpecs(): Promise<BackendTruckSpec[]> {
-  try {
-    const response = await apiClient.get<unknown>("/api/reference/truck-specs");
-    return pickListPayload(response.data).map(mapBackendTruckSpec);
-  } catch {
-    return [];
-  }
-}
-
-function normalizeBodyType(
-  vehicleBodyType: string | null,
-  categoryKr: string | null
-): VehiclePricingRow["bodyType"] | null {
-  const body = (vehicleBodyType ?? "").trim().toUpperCase();
-  if (body === "CARGO") return "일반카고";
-  if (body === "WINGBODY") return "윙바디";
-  if (body === "TOP") return "탑차";
-
-  const category = (categoryKr ?? "").trim();
-  if (category.includes("카고")) return "일반카고";
-  if (category.includes("윙")) return "윙바디";
-  if (category.includes("탑") || category.includes("냉장") || category.includes("냉동")) return "탑차";
-  return null;
-}
-
 function applyVehicleOverrides(rows: VehiclePricingRow[]): VehiclePricingRow[] {
   return rows.map((row) => {
     const override = vehicleOverrides.get(row.vehiclePricingId);
@@ -341,8 +288,8 @@ function applyAdditionalOverrides(rows: AdditionalPricingRow[]): AdditionalPrici
 export async function fetchVehiclePricingRows(): Promise<VehiclePricingRow[]> {
   if (isMockModeEnabled()) return applyVehicleOverrides([...FALLBACK_VEHICLE_ROWS]);
 
-  const [pricingRates, truckSpecs] = await Promise.all([fetchBackendPricingRates(), fetchBackendTruckSpecs()]);
-  if (pricingRates.length === 0) return applyVehicleOverrides([...FALLBACK_VEHICLE_ROWS]);
+  const quotes = await fetchBackendQuotes();
+  if (quotes.length === 0) return applyVehicleOverrides([...FALLBACK_VEHICLE_ROWS]);
 
   const grouped = new Map<
     string,
@@ -382,10 +329,12 @@ export async function fetchVehiclePricingRows(): Promise<VehiclePricingRow[]> {
     grouped.set(key, current);
   }
 
-  const rows: VehiclePricingRow[] = Array.from(grouped.values()).flatMap((group) => {
-    const resolvedBodyTypes = Array.from(bodyTypesByVehicle.get(group.vehicleType) ?? []);
-    const mobileStep3BodyTypes = resolvedBodyTypes.filter((bodyType) => MOBILE_STEP3_BODY_TYPES.includes(bodyType));
-    const bodyTypes = mobileStep3BodyTypes.length > 0 ? mobileStep3BodyTypes : [...MOBILE_STEP3_BODY_TYPES];
+  const rows: VehiclePricingRow[] = Array.from(grouped.entries()).map(([key, group]) => {
+    const avgBase = Math.round(group.prices.reduce((sum, value) => sum + value, 0) / Math.max(group.prices.length, 1));
+    const avgAdditional = Math.round(
+      group.additional.reduce((sum, value) => sum + value, 0) / Math.max(group.additional.length, 1),
+    );
+    const surchargeRate = avgBase > 0 ? Number((avgAdditional / avgBase).toFixed(2)) : 0;
 
     return {
       vehiclePricingId: `VP-${key.replace(/[^A-Z0-9_]/g, "_")}`,
@@ -400,18 +349,14 @@ export async function fetchVehiclePricingRows(): Promise<VehiclePricingRow[]> {
     };
   });
 
-  return applyVehicleOverrides(rows).sort((a, b) => {
-    const tonnageCompare = a.tonnageLabel.localeCompare(b.tonnageLabel);
-    if (tonnageCompare !== 0) return tonnageCompare;
-    return (BODY_TYPE_SORT_ORDER[a.bodyType] ?? 999) - (BODY_TYPE_SORT_ORDER[b.bodyType] ?? 999);
-  });
+  return applyVehicleOverrides(rows);
 }
 
 export async function fetchAdditionalPricingRows(): Promise<AdditionalPricingRow[]> {
   if (isMockModeEnabled()) return applyAdditionalOverrides([...FALLBACK_ADDITIONAL_ROWS]);
 
   const items = await fetchBackendChecklistItems();
-  if (items.length === 0) return applyAdditionalOverrides([]);
+  if (items.length === 0) return applyAdditionalOverrides([...FALLBACK_ADDITIONAL_ROWS]);
 
   const rows = items
     .filter((item) => item.hasExtraFee || (item.baseExtraFee ?? 0) > 0)
@@ -429,7 +374,7 @@ export async function fetchAdditionalPricingRows(): Promise<AdditionalPricingRow
       } satisfies AdditionalPricingRow;
     });
 
-  if (rows.length === 0) return applyAdditionalOverrides([]);
+  if (rows.length === 0) return applyAdditionalOverrides([...FALLBACK_ADDITIONAL_ROWS]);
   return applyAdditionalOverrides(rows);
 }
 

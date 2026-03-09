@@ -18,8 +18,6 @@ function shouldCallLegacyActivityLogs(): boolean {
   return normalizeApiPath(apiPaths.adminActivityLogs) !== normalizeApiPath(LEGACY_ACTIVITY_LOGS_PATH);
 }
 
-const LEGACY_ADMIN_ACTIVITY_PATH = "/api/admin/ops/activity-logs";
-
 function toRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
 }
@@ -121,7 +119,6 @@ export async function fetchRemoteActivityLogs(): Promise<AdminActivityLog[]> {
     try {
       const response = await apiClient.get<BackendActivityPayload | unknown[]>(apiPaths.adminActivityLogs);
       const items = pickListPayload(response.data);
-
       return items
         .map(mapLiveActivity)
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -141,4 +138,3 @@ export async function fetchRemoteActivityLogs(): Promise<AdminActivityLog[]> {
     return [];
   }
 }
-

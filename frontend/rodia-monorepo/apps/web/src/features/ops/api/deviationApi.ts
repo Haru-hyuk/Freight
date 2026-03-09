@@ -1,4 +1,4 @@
-import { apiPaths } from "@/shared/lib/api/endpoints";
+﻿import { apiPaths } from "@/shared/lib/api/endpoints";
 import { apiClient } from "@/shared/lib/api/client";
 import { isMockModeEnabled } from "@/shared/lib/mock-mode";
 import { appendActivityLog } from "@/shared/lib/activity-log";
@@ -283,7 +283,7 @@ function normalizeMatchStatus(value: string): "READY" | "IN_TRANSIT" | "COMPLETE
 
 function inferDeviationType(text: string): DeviationType {
   if (/(route|gps|detour|경로|이탈)/i.test(text)) return DeviationType.ROUTE_DEVIATION;
-  if (/(vehicle|truck|damage|inspection|차량|점검)/i.test(text)) return DeviationType.VEHICLE_CONDITION;
+  if (/(vehicle|truck|damage|inspection|차량|파손)/i.test(text)) return DeviationType.VEHICLE_CONDITION;
   if (/(safety|violation|accident|사고|안전|위반)/i.test(text)) return DeviationType.SAFETY_VIOLATION;
   if (/(complaint|claim|cancel|민원|취소)/i.test(text)) return DeviationType.CUSTOMER_COMPLAINT;
   return DeviationType.LATE_DELIVERY;
@@ -300,7 +300,7 @@ function inferDeviationSeverity(text: string): DeviationSeverity {
 }
 
 function inferOwner(type: DeviationType, text: string): DeviationProcessOwner {
-  if (type === DeviationType.CUSTOMER_COMPLAINT || /(sanction|penalty|정지|제재)/i.test(text)) {
+  if (type === DeviationType.CUSTOMER_COMPLAINT || /(sanction|penalty|징계|제재)/i.test(text)) {
     return "회원관리";
   }
   if (/(settlement|payout|정산|출금)/i.test(text)) {
@@ -323,19 +323,19 @@ function buildRecommendedAction(
 ): string {
   if (status === DeviationStatus.OPEN) {
     if (severity === DeviationSeverity.CRITICAL || severity === DeviationSeverity.SEVERE) {
-      return "즉시 조사 시작 후 담당자 배정";
+      return "즉시 조사 시작 및 담당자 배정";
     }
     if (overdueHours >= 24) {
-      return "지연 원인 확인 및 차주/화주 양측 통지";
+      return "지연 원인 확인 및 차주/화주 연락";
     }
     return "운영 담당자 확인 후 조사 전환";
   }
 
   if (status === DeviationStatus.INVESTIGATING) {
     if (type === DeviationType.CUSTOMER_COMPLAINT) {
-      return "회원관리팀 확인 후 제재 로그와 연동";
+      return "회원관리팀 확인 및 제재 로그 연동";
     }
-    return "증빙 확인 후 해결 또는 기각 처리";
+    return "증빙 확인 후 종결 또는 경고 처리";
   }
 
   if (status === DeviationStatus.RESOLVED) {
@@ -364,7 +364,7 @@ function mapAdminDeviation(raw: unknown): Deviation {
     severity,
     status,
     source,
-    sourceRef: toStringValue(row.sourceRef ?? row.referenceId, "관리 집계"),
+    sourceRef: toStringValue(row.sourceRef ?? row.referenceId, "관리지침"),
     driverId: toStringValue(row.driverId, "-"),
     driverName: toStringValue(row.driverName, "-"),
     orderId: toStringValue(row.orderId ?? row.matchId, "-"),
@@ -436,7 +436,7 @@ function mapAnnouncementDeviation(row: BackendAnnouncement): Deviation {
     severity,
     status: DeviationStatus.INVESTIGATING,
     source: DeviationSource.ANNOUNCEMENT,
-    sourceRef: `공지#${row.announcementId}`,
+    sourceRef: `怨듭?#${row.announcementId}`,
     driverId: "-",
     driverName: "-",
     orderId: "-",
@@ -848,7 +848,7 @@ function buildMockRows(count: number): Deviation[] {
       driverName: `기사 ${(index % 24) + 1}`,
       orderId: `M-${6100 + index}`,
       quoteId: `Q-${7900 + index}`,
-      description: "관리자가 확인할 수 있도록 표준 프로세스 기반으로 생성된 목업 이상 징후입니다.",
+      description: "관리자가 확인할 수 있도록 생성된 모의 이상 징후입니다.",
       evidence: index % 2 === 0 ? "GPS_LOG" : undefined,
       processOwner: index % 3 === 0 ? "회원관리" : "운영",
       recommendedAction: buildRecommendedAction(status, type, severity, overdueHours),

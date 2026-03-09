@@ -1,4 +1,4 @@
-import {
+﻿import {
   ORDER_CANCELLATION_REQUEST_MOCK_ROWS,
   ORDER_MONITORING_MOCK_ROWS,
 } from "@/features/orders/model/mockData";
@@ -90,7 +90,7 @@ type BackendUser = {
 type ReviewOverride = Pick<CancellationRequestRow, "approvalStatus" | "reviewedAt" | "reviewedBy" | "reviewMemo">;
 
 const REVIEWER_ID = "admin.web";
-const DERIVED_REASON_TEXT = "백엔드 취소 사유 필드가 없어 상태 기반으로 생성된 요청입니다.";
+const DERIVED_REASON_TEXT = "백엔드에 취소 사유 필드가 없어 상태 기반으로 생성된 요청입니다.";
 const liveReviewOverrides = new Map<string, ReviewOverride>();
 const LEGACY_CANCELLATION_REQUESTS_PATH = "/api/admin/orders/cancellations";
 const USE_ADMIN_USERS_ENDPOINT =
@@ -928,7 +928,7 @@ export async function reviewCancellationRequest(payload: CancellationReviewPaylo
     mode: "REAL",
     message: remoteApplied
       ? `취소 요청 ${payload.requestId} 검토 결과가 관리자 API에 반영되었습니다.`
-      : `취소 요청 ${payload.requestId} 검토 결과를 로컬 세션에 저장했습니다.`,
+      : `취소 요청 ${payload.requestId} 검토 결과를 로컬 세션으로 처리했습니다.`,
   });
 }
 
