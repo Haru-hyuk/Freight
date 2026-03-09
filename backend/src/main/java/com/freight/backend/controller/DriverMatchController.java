@@ -53,8 +53,8 @@ public class DriverMatchController {
     public ResponseEntity<List<MatchResponse>> getOpenMatches(
             @AuthenticationPrincipal UserDetails userDetails
     ) {
-        SecurityUtils.requireDriverId(userDetails);
-        List<MatchResponse> matches = matchService.getOpenMatches();
+        Long driverId = SecurityUtils.requireDriverId(userDetails);
+        List<MatchResponse> matches = matchService.getOpenMatches(driverId);
         return ResponseEntity.ok(matches);
     }
 

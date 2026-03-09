@@ -393,8 +393,18 @@ export function RecoRouteMapCard({
         {displayStops.map((stop, index) => {
           const stopOrder = index + 1;
           const isSelected = selectedStopOrder === stopOrder;
-          const hasLat = typeof stop.lat === "number" && Number.isFinite(stop.lat);
-          const hasLng = typeof stop.lng === "number" && Number.isFinite(stop.lng);
+          const hasLat =
+            typeof stop.lat === "number" &&
+            Number.isFinite(stop.lat) &&
+            stop.lat !== 0 &&
+            stop.lat >= -90 &&
+            stop.lat <= 90;
+          const hasLng =
+            typeof stop.lng === "number" &&
+            Number.isFinite(stop.lng) &&
+            stop.lng !== 0 &&
+            stop.lng >= -180 &&
+            stop.lng <= 180;
           const typeLabel = stop.type ? `[${stop.type}] ` : "";
           const title = stop.name || `지점 ${index + 1}`;
           const coordText =

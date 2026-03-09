@@ -15,7 +15,11 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useActiveOrder } from "@/entities/order/model/active-order.store";
-import { listDriverTrucks, type DriverTruck } from "@/features/driver-profile/api/driver-profile-api";
+import {
+  listDriverTrucks,
+  selectDriverActiveTruck,
+  type DriverTruck,
+} from "@/features/driver-profile/api/driver-profile-api";
 import {
   acceptDriverMatch,
   buildDriverOrderDetailParams,
@@ -744,6 +748,14 @@ export function DriverOrdersBoard({
       setAvailableTrucks(candidates);
       setIsTruckMenuOpen(false);
 
+      const selectedFromServer = candidates.find((truck) => truck.selected === true);
+      if (selectedFromServer) {
+        const safeId = toPositiveInt(selectedFromServer.truckId);
+        setSelectedTruckId(safeId > 0 ? safeId : null);
+        await writeDriverOrdersActiveTruckId(safeId > 0 ? safeId : null);
+        return;
+      }
+
       const savedId = await readDriverOrdersActiveTruckId();
       const matchSaved = candidates.find((truck) => toPositiveInt(truck.truckId) === toPositiveInt(savedId));
       if (matchSaved) {
@@ -1305,6 +1317,7 @@ export function DriverOrdersBoard({
         orders: baseMarketOrders,
         mode: recommendMode,
         maxQuotesPerRoute,
+        selectedTruckId,
       });
       setRecommendAnalysis(analysis);
       const firstKey = analysis.routes[0]?.key ?? null;
@@ -1316,15 +1329,22 @@ export function DriverOrdersBoard({
       isRecommendingRef.current = false;
       setIsRecommending(false);
     }
-  }, [baseMarketOrders, maxQuotesPerRoute, recommendMode]);
+  }, [baseMarketOrders, maxQuotesPerRoute, recommendMode, selectedTruckId]);
 
-  const handleSelectTruck = useCallback((truckId: number) => {
+  const handleSelectTruck = useCallback(async (truckId: number) => {
     const safeId = toPositiveInt(truckId);
     if (safeId <= 0) return;
-    setSelectedTruckId(safeId);
     setIsTruckMenuOpen(false);
-    void writeDriverOrdersActiveTruckId(safeId);
-  }, []);
+    try {
+      const selectedId = await selectDriverActiveTruck(safeId);
+      const nextId = toPositiveInt(selectedId) || safeId;
+      setSelectedTruckId(nextId);
+      await writeDriverOrdersActiveTruckId(nextId);
+      await loadOrders("refresh");
+    } catch {
+      showToast("활성 차량 변경에 실패했습니다.");
+    }
+  }, [loadOrders, showToast]);
 
   useEffect(() => {
     if (assignedOnly) return;

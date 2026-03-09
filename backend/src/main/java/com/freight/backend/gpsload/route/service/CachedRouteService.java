@@ -92,6 +92,10 @@ public class CachedRouteService {
      * Returns road distance and duration for two points.
      */
     public RouteDistance getDistance(Place from, Place to) {
+        if (!isValidPlace(from) || !isValidPlace(to)) {
+            return calculateFallback(from, to);
+        }
+
         String cacheKey = buildCacheKey(from, to, liveTrafficEnabled);
         Duration cacheTtl = resolveCacheTtl();
 
@@ -206,6 +210,22 @@ public class CachedRouteService {
             putMemoryCache(cacheKey, fallback);
             return fallback;
         }
+    }
+
+    private boolean isValidPlace(Place place) {
+        if (place == null || place.latitude() == null || place.longitude() == null) {
+            return false;
+        }
+        double lat = place.latitude();
+        double lng = place.longitude();
+        return Double.isFinite(lat)
+                && Double.isFinite(lng)
+                && lat != 0.0
+                && lng != 0.0
+                && lat >= -90.0
+                && lat <= 90.0
+                && lng >= -180.0
+                && lng <= 180.0;
     }
 
     private boolean canCallApi() {

@@ -173,6 +173,7 @@ type DriverRouteRecommendInput = {
   orders: DriverOrderCard[];
   mode: DriverRouteRecommendationMode;
   maxQuotesPerRoute: number;
+  selectedTruckId?: number | null;
 };
 
 const ROUTE_RECOMMEND_MAX_QUOTES_MIN = 2;
@@ -1081,6 +1082,7 @@ export async function recommendDriverOrderRoutes(
     ROUTE_RECOMMEND_MAX_QUOTES_MIN,
     ROUTE_RECOMMEND_MAX_QUOTES_MAX
   );
+  const safeSelectedTruckId = parseDriverOrderPositiveInt(input.selectedTruckId);
 
   const totalQuotes = safeOrders.length;
   const combinableQuotes = safeOrders.filter(
@@ -1157,6 +1159,7 @@ export async function recommendDriverOrderRoutes(
         selectedQuoteIds: safeOrders
           .map((order) => parseDriverOrderPositiveInt(order.quoteId))
           .filter((quoteId) => quoteId > 0),
+        ...(safeSelectedTruckId > 0 ? { truckId: safeSelectedTruckId } : {}),
       };
 
       const raw = await recommendRoutesGenerated(payload as any);
