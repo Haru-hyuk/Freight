@@ -12,7 +12,7 @@ import com.freight.backend.repository.ShipperRepository;
 import java.math.BigDecimal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -20,7 +20,7 @@ import org.springframework.stereotype.Service;
 public class ShipperSignupService {
 
     private final ShipperRepository shipperRepository;
-    private final BCryptPasswordEncoder passwordEncoder;
+    private final PasswordEncoder passwordEncoder;
     private final OdcloudClient odcloudClient;
     @Value("${odcloud.verify-enabled:false}")
     private boolean odcloudVerifyEnabled;

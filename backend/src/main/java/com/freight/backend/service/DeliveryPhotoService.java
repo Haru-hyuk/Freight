@@ -21,6 +21,8 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -41,6 +43,14 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 @RequiredArgsConstructor
 public class DeliveryPhotoService {
+    private static final Set<String> ALLOWED_IMAGE_CONTENT_TYPES = Set.of(
+            "image/jpeg",
+            "image/jpg",
+            "image/png",
+            "image/webp",
+            "image/heic",
+            "image/heif"
+    );
 
     private final DeliveryPhotoRepository deliveryPhotoRepository;
     private final MatchRepository matchRepository;
@@ -51,7 +61,7 @@ public class DeliveryPhotoService {
     @Value("${delivery-photo.storage-dir:uploads/delivery-photos}")
     private String storageDir;
 
-    /** 상하차 사진 업로드 (PICKUP: 운송시작, DELIVERY: 운송완료 트리거) */
+    /** 상하차 사진 업로드 (PICKUP: 운송시작 트리거, DELIVERY: 증빙만 저장) */
     @Transactional
     public DeliveryPhotoResponse uploadByDriver(
             Long driverId,
@@ -60,13 +70,18 @@ public class DeliveryPhotoService {
             MultipartFile file,
             LocalDateTime takenAt,
             BigDecimal lat,
-            BigDecimal lng
+            BigDecimal lng,
+            Integer stopOrder,
+            String stopLabel
     ) {
         if (type == null || file == null || file.isEmpty()) {
             throw new CustomException(ErrorCode.INVALID_REQUEST);
         }
+        if (stopOrder != null && stopOrder < 1) {
+            throw new CustomException(ErrorCode.INVALID_REQUEST);
+        }
         String mimeType = file.getContentType();
-        if (mimeType == null || !mimeType.startsWith("image/")) {
+        if (!isAllowedImageMimeType(mimeType)) {
             throw new CustomException(ErrorCode.INVALID_REQUEST);
         }
 
@@ -95,6 +110,8 @@ public class DeliveryPhotoService {
                 .lng(lng)
                 .fileSize(file.getSize())
                 .mimeType(mimeType)
+                .stopOrder(stopOrder)
+                .stopLabel(normalizeStopLabel(stopLabel))
                 .build();
         DeliveryPhoto saved = deliveryPhotoRepository.save(photo);
         saved.updateFileUrl("/api/delivery-photos/" + saved.getPhotoId() + "/file");
@@ -126,7 +143,7 @@ public class DeliveryPhotoService {
                 .orElseThrow(() -> new CustomException(ErrorCode.MATCH_NOT_FOUND));
         Quote quote = quoteRepository.findById(match.getQuoteId())
                 .orElseThrow(() -> new CustomException(ErrorCode.INVALID_REQUEST));
-        if (!quote.getShipperId().equals(shipperId)) {
+        if (quote.getShipperId() == null || !quote.getShipperId().equals(shipperId)) {
             throw new CustomException(ErrorCode.AUTH_FORBIDDEN);
         }
         return deliveryPhotoRepository.findByMatchIdOrderByCreatedAtAsc(matchId)
@@ -141,7 +158,7 @@ public class DeliveryPhotoService {
                 .orElseThrow(() -> new CustomException(ErrorCode.INVALID_REQUEST));
         authorizeViewer(userId, role, photo.getMatchId());
 
-        Path path = Paths.get(storageDir).resolve(photo.getStorageKey()).normalize();
+        Path path = resolveStoragePath(photo.getStorageKey());
         if (!Files.exists(path)) {
             throw new CustomException(ErrorCode.INVALID_REQUEST);
         }
@@ -179,10 +196,6 @@ public class DeliveryPhotoService {
                 throw new CustomException(ErrorCode.MATCH_PAYMENT_REQUIRED);
             }
             match.startTransit();
-            return;
-        }
-        if (type == DeliveryPhoto.Type.DELIVERY && match.getStatus() == Match.Status.IN_TRANSIT) {
-            match.complete();
         }
     }
 
@@ -227,6 +240,7 @@ public class DeliveryPhotoService {
                 && match.getDriverId() != null
                 && match.getDriverId().equals(userId);
         boolean isShipper = "ROLE_SHIPPER".equals(role)
+                && quote.getShipperId() != null
                 && quote.getShipperId().equals(userId);
         if (!isDriver && !isShipper) {
             throw new CustomException(ErrorCode.AUTH_FORBIDDEN);
@@ -234,7 +248,7 @@ public class DeliveryPhotoService {
     }
 
     private void storeFile(MultipartFile file, String storageKey) {
-        Path fullPath = Paths.get(storageDir).resolve(storageKey).normalize();
+        Path fullPath = resolveStoragePath(storageKey);
         try {
             Files.createDirectories(fullPath.getParent());
             Files.copy(file.getInputStream(), fullPath, StandardCopyOption.REPLACE_EXISTING);
@@ -250,7 +264,10 @@ public class DeliveryPhotoService {
 
     private String resolveExtension(String originalName, String mimeType) {
         if (originalName != null && originalName.contains(".")) {
-            return originalName.substring(originalName.lastIndexOf('.'));
+            String ext = sanitizeExtension(originalName.substring(originalName.lastIndexOf('.')));
+            if (!ext.isBlank()) {
+                return ext;
+            }
         }
         if ("image/png".equalsIgnoreCase(mimeType)) {
             return ".png";
@@ -258,6 +275,68 @@ public class DeliveryPhotoService {
         if ("image/webp".equalsIgnoreCase(mimeType)) {
             return ".webp";
         }
+        if ("image/heic".equalsIgnoreCase(mimeType)) {
+            return ".heic";
+        }
+        if ("image/heif".equalsIgnoreCase(mimeType)) {
+            return ".heif";
+        }
         return ".jpg";
+    }
+
+    private String normalizeStopLabel(String stopLabel) {
+        if (stopLabel == null) {
+            return null;
+        }
+        String trimmed = stopLabel.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        if (trimmed.length() > 255) {
+            return trimmed.substring(0, 255);
+        }
+        return trimmed;
+    }
+    private Path resolveStoragePath(String storageKey) {
+        if (storageKey == null || storageKey.isBlank()) {
+            throw new CustomException(ErrorCode.INVALID_REQUEST);
+        }
+
+        Path root = Paths.get(storageDir).toAbsolutePath().normalize();
+        Path target = root.resolve(storageKey).normalize();
+        if (!target.startsWith(root)) {
+            throw new CustomException(ErrorCode.INVALID_REQUEST);
+        }
+        return target;
+    }
+
+    private String sanitizeExtension(String extension) {
+        String candidate = extension == null ? "" : extension.trim().toLowerCase(Locale.ROOT);
+        if (!candidate.startsWith(".")) {
+            candidate = "." + candidate;
+        }
+        candidate = candidate.replaceAll("[^a-z0-9.]", "");
+        int dotCount = 0;
+        for (int i = 0; i < candidate.length(); i++) {
+            if (candidate.charAt(i) == '.') {
+                dotCount++;
+            }
+        }
+        if (dotCount != 1 || candidate.length() < 2 || candidate.length() > 10) {
+            return "";
+        }
+        return candidate;
+    }
+
+    private boolean isAllowedImageMimeType(String mimeType) {
+        if (mimeType == null || mimeType.isBlank()) {
+            return false;
+        }
+        String normalized = mimeType.trim().toLowerCase(Locale.ROOT);
+        int delimiterIndex = normalized.indexOf(';');
+        if (delimiterIndex >= 0) {
+            normalized = normalized.substring(0, delimiterIndex).trim();
+        }
+        return ALLOWED_IMAGE_CONTENT_TYPES.contains(normalized);
     }
 }

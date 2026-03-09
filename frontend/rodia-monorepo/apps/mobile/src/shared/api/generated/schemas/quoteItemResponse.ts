@@ -25,4 +25,5 @@ export interface QuoteItemResponse {
   maxStackWeightKg?: number;
   handlingTags?: string;
   sortOrder?: number;
+  dropStopSeq?: number;
 }

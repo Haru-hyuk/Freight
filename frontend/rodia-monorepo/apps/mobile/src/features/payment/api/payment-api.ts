@@ -1,8 +1,8 @@
-import {
+﻿import {
   confirm as confirmPaymentGenerated,
   getByMatchId as getPaymentsByMatchIdGenerated,
   prepare as preparePaymentGenerated,
-} from "@/shared/api/generated/payment-controller/payment-controller";
+} from "@/shared/api/generated/payment/payment";
 import type {
   PaymentConfirmRequest,
   PaymentPrepareRequest,
@@ -378,3 +378,8 @@ export async function hasCompletedPaymentForMatch(matchId: number): Promise<bool
   const list = await listPaymentsByMatchId(safeMatchId);
   return list.some((payment) => payment.status === "COMPLETED");
 }
+
+// ─── 타입 재공개 ──────────────────────────────────────────────────────────────
+
+export type { PaymentResponseMethod, PaymentResponseStatus };
+

@@ -6,6 +6,8 @@
  */
 
 export interface InquiryCreateRequest {
+  /** @minLength 1 */
   title: string;
+  /** @minLength 1 */
   content: string;
 }

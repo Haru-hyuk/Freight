@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
-import { Alert, Image, Modal, Pressable, StyleSheet, View } from "react-native";
+import { Alert, Image, Modal, Platform, Pressable, StyleSheet, View } from "react-native";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { useRouter } from "expo-router";
 
 import type { AppTheme } from "@/shared/theme/types";
@@ -53,6 +54,13 @@ function toFiniteNumber(value: unknown): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function formatDateYmd(value: Date): string {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function findBestTruckSpec(
   specs: TruckSpecReference[],
   vehicleTypeToken: string,
@@ -99,6 +107,12 @@ function createStyles(theme: AppTheme) {
       fontSize: 13,
       fontWeight: "800",
       marginBottom: 2,
+    },
+    helperText: {
+      color: theme.colors.textMuted,
+      fontSize: 12,
+      lineHeight: 17,
+      marginTop: 4,
     },
     optionWrap: {
       flexDirection: "row",
@@ -166,6 +180,30 @@ function createStyles(theme: AppTheme) {
       fontSize: 14,
       fontWeight: "600",
     },
+    infoBox: {
+      borderWidth: 1,
+      borderColor: theme.colors.borderDefault,
+      borderRadius: 10,
+      backgroundColor: theme.colors.bgSurfaceAlt,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      gap: 4,
+    },
+    infoLabel: {
+      color: theme.colors.textSub,
+      fontSize: 12,
+      fontWeight: "700",
+    },
+    infoValue: {
+      color: theme.colors.textMain,
+      fontSize: 14,
+      fontWeight: "800",
+    },
+    infoWarn: {
+      color: theme.colors.semanticWarning,
+      fontSize: 12,
+      fontWeight: "700",
+    },
     truckNumberShell: {
       minHeight: 56,
       borderRadius: 12,
@@ -202,6 +240,30 @@ function createStyles(theme: AppTheme) {
       fontSize: 14,
       fontWeight: "700",
     },
+    iosDateSheet: {
+      borderRadius: 12,
+      backgroundColor: theme.colors.bgSurface,
+      borderWidth: 1,
+      borderColor: theme.colors.borderDefault,
+      overflow: "hidden",
+    },
+    iosDateHeader: {
+      minHeight: 44,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 14,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.borderDefault,
+    },
+    iosDateActionText: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: theme.colors.textMain,
+    },
+    iosDateActionConfirmText: {
+      color: theme.colors.brandPrimary,
+    },
   });
 }
 
@@ -213,7 +275,10 @@ export default function DriverTruckCreatePage() {
   const [truckNumber, setTruckNumber] = useState("");
   const [vehicleType, setVehicleType] = useState<string>("");
   const [tonnage, setTonnage] = useState<string>("");
-  const [insurance, setInsurance] = useState("");
+  const [insuranceCompany, setInsuranceCompany] = useState("");
+  const [insuranceExpiryDate, setInsuranceExpiryDate] = useState<Date | null>(null);
+  const [insuranceDatePickerOpen, setInsuranceDatePickerOpen] = useState(false);
+  const [insuranceDateDraft, setInsuranceDateDraft] = useState<Date>(new Date());
   const [specCatalog, setSpecCatalog] = useState<TruckSpecReference[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCatalogLoading, setIsCatalogLoading] = useState(false);
@@ -274,18 +339,64 @@ export default function DriverTruckCreatePage() {
     if (resolvedMaxWeight > 0) return `${resolvedMaxWeight.toLocaleString("ko-KR")}kg`;
     return "-";
   }, [resolvedMaxWeight, resolvedSpec?.maxWeightDisplay]);
+  const selectedVehicleLabel = React.useMemo(() => {
+    const found = VEHICLE_TYPE_OPTIONS.find((item) => item.key === vehicleType);
+    return found?.label ?? "-";
+  }, [vehicleType]);
+  const insuranceExpiryText = React.useMemo(
+    () => (insuranceExpiryDate ? formatDateYmd(insuranceExpiryDate) : ""),
+    [insuranceExpiryDate]
+  );
+  const resolvedInsurance = React.useMemo(() => {
+    const company = insuranceCompany.trim();
+    if (!company) return "";
+    if (!insuranceExpiryText) return company;
+    return `${company} / 만료일 ${insuranceExpiryText}`;
+  }, [insuranceCompany, insuranceExpiryText]);
+
+  const openInsuranceDatePicker = React.useCallback(() => {
+    const base = insuranceExpiryDate ?? new Date();
+    setInsuranceDateDraft(base);
+    setInsuranceDatePickerOpen(true);
+  }, [insuranceExpiryDate]);
+
+  const closeInsuranceDatePicker = React.useCallback(() => {
+    setInsuranceDatePickerOpen(false);
+  }, []);
+
+  const handleInsuranceDateChange = React.useCallback(
+    (event: any, date?: Date) => {
+      if (Platform.OS === "android") {
+        if (event?.type === "dismissed") {
+          setInsuranceDatePickerOpen(false);
+          return;
+        }
+        if (date) setInsuranceExpiryDate(date);
+        setInsuranceDatePickerOpen(false);
+        return;
+      }
+      if (date) setInsuranceDateDraft(date);
+    },
+    []
+  );
+
+  const confirmInsuranceDateIos = React.useCallback(() => {
+    setInsuranceExpiryDate(insuranceDateDraft);
+    setInsuranceDatePickerOpen(false);
+  }, [insuranceDateDraft]);
 
   const isFormValid =
     truckNumber.trim().length > 0 &&
     vehicleType.length > 0 &&
     (!requiresTonnage || tonnage.length > 0) &&
-    insurance.trim().length > 0 &&
+    insuranceCompany.trim().length > 0 &&
+    insuranceExpiryDate !== null &&
     resolvedMaxWeight > 0 &&
     resolvedVehicleTypeToken.length > 0;
 
   const onSubmit = async () => {
     if (!isFormValid) {
-      Alert.alert("입력 확인", "차량번호/차량종류/보험정보를 입력하고, 해당되는 경우 톤수를 선택해 주세요.");
+      Alert.alert("입력 확인", "차량번호/차량종류/보험사/보험 만료일을 입력하고, 해당되는 경우 톤수를 선택해 주세요.");
       return;
     }
     try {
@@ -296,7 +407,7 @@ export default function DriverTruckCreatePage() {
         tonnage: resolvedTonnageValue,
         maxWeight: resolvedMaxWeight,
         name: truckNumber,
-        insurance,
+        insurance: resolvedInsurance,
         approved: false,
       });
       Alert.alert("차량 등록", "차량이 등록되었습니다.");
@@ -321,8 +432,8 @@ export default function DriverTruckCreatePage() {
     >
       <AppCard outlined elevated={false} style={styles.card}>
         <AppInput
-          label="차량번호"
-          placeholder="예: 12가3456"
+          label="차량번호 (등록증 기준)"
+          placeholder="예: 12가3456 (공백/하이픈 없이)"
           value={truckNumber}
           onChangeText={setTruckNumber}
           maxLength={20}
@@ -332,7 +443,7 @@ export default function DriverTruckCreatePage() {
         />
 
         <View>
-          <AppText style={styles.sectionLabel}>차량 종류</AppText>
+          <AppText style={styles.sectionLabel}>차량 종류(차체)</AppText>
           <View style={styles.optionWrap}>
             {VEHICLE_TYPE_OPTIONS.map((item) => {
               const active = vehicleType === item.key;
@@ -353,6 +464,7 @@ export default function DriverTruckCreatePage() {
               );
             })}
           </View>
+          <AppText style={styles.helperText}>차량 종류를 먼저 선택해 주세요. (다마스/라보는 톤수 선택 없음)</AppText>
         </View>
 
         {requiresTonnage ? (
@@ -363,16 +475,38 @@ export default function DriverTruckCreatePage() {
                 {tonnage || "톤수를 선택해 주세요"}
               </AppText>
             </Pressable>
+            <AppText style={styles.helperText}>등록 요청에는 선택한 톤수 기준 차량 타입 토큰이 자동 반영됩니다.</AppText>
           </View>
         ) : null}
 
+        <View style={styles.infoBox}>
+          <AppText style={styles.infoLabel}>선택 요약</AppText>
+          <AppText style={styles.infoValue}>
+            {selectedVehicleLabel}{requiresTonnage ? ` / ${tonnage || "톤수 미선택"}` : ""}
+          </AppText>
+          <AppText style={styles.infoLabel}>최대 적재중량(자동 계산)</AppText>
+          <AppText style={styles.infoValue}>{isCatalogLoading ? "스펙 조회 중..." : resolvedMaxWeightDisplay}</AppText>
+          {!isCatalogLoading && resolvedMaxWeight <= 0 ? (
+            <AppText style={styles.infoWarn}>스펙 매칭 실패: 차량 종류/톤수를 다시 확인해 주세요.</AppText>
+          ) : null}
+        </View>
+
         <AppInput
-          label="보험 정보"
-          placeholder="예: 삼성화재 / 2026-12-31 만료"
-          value={insurance}
-          onChangeText={setInsurance}
+          label="보험사"
+          placeholder="예: 삼성화재"
+          value={insuranceCompany}
+          onChangeText={setInsuranceCompany}
           maxLength={60}
         />
+        <View>
+          <AppText style={styles.sectionLabel}>보험 만료일</AppText>
+          <Pressable style={styles.dropdownTrigger} onPress={openInsuranceDatePicker}>
+            <AppText style={insuranceExpiryText ? styles.dropdownTriggerText : styles.dropdownPlaceholder}>
+              {insuranceExpiryText || "만료일을 선택해 주세요"}
+            </AppText>
+          </Pressable>
+        </View>
+        <AppText style={styles.helperText}>보험사는 텍스트로, 만료일은 날짜 선택으로 입력됩니다.</AppText>
 
       </AppCard>
 
@@ -399,6 +533,27 @@ export default function DriverTruckCreatePage() {
           </View>
         </Pressable>
       </Modal>
+
+      {insuranceDatePickerOpen && Platform.OS === "android" ? (
+        <DateTimePicker value={insuranceDateDraft} mode="date" onChange={handleInsuranceDateChange} />
+      ) : null}
+      {insuranceDatePickerOpen && Platform.OS === "ios" ? (
+        <Modal transparent visible animationType="fade" onRequestClose={closeInsuranceDatePicker}>
+          <Pressable style={styles.modalOverlay} onPress={closeInsuranceDatePicker}>
+            <View style={styles.iosDateSheet}>
+              <View style={styles.iosDateHeader}>
+                <Pressable onPress={closeInsuranceDatePicker}>
+                  <AppText style={styles.iosDateActionText}>취소</AppText>
+                </Pressable>
+                <Pressable onPress={confirmInsuranceDateIos}>
+                  <AppText style={[styles.iosDateActionText, styles.iosDateActionConfirmText]}>확인</AppText>
+                </Pressable>
+              </View>
+              <DateTimePicker value={insuranceDateDraft} mode="date" display="spinner" onChange={handleInsuranceDateChange} />
+            </View>
+          </Pressable>
+        </Modal>
+      ) : null}
     </PageScaffold>
   );
 }

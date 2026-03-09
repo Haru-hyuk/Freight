@@ -25,10 +25,6 @@ Thumbs.db
 **/web-build/
 **/coverage/
 
-# Documentation (아까 요청한 내역)
-docs/
-!docs/*.md
-
 # Patch & Temp
 *.patch
 *.tmp
@@ -36,3 +32,5 @@ docs/
 # Gradle User Home (local cache)
 .gradle-user-home/
 **/.gradle-user-home/
+# AI
+.codex

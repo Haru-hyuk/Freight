@@ -9,4 +9,5 @@ export interface QuoteChecklistItemResponse {
   checklistItemId?: number;
   extraInput?: string;
   extraFee?: number;
+  stopSeq?: number;
 }

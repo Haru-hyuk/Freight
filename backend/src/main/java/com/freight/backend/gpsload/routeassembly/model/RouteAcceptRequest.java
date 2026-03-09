@@ -9,11 +9,15 @@ public record RouteAcceptRequest(
         Long driverId,
         List<Long> quoteIds
 ) {
-    public boolean isValid() {
-        return driverId != null
-                && quoteIds != null
+    public boolean hasValidQuoteIds() {
+        return quoteIds != null
                 && !quoteIds.isEmpty()
                 && quoteIds.stream().allMatch(id -> id != null && id > 0);
+    }
+
+    public boolean isValid() {
+        // driverId is optional in request body. The authenticated JWT principal is the source of truth.
+        return hasValidQuoteIds();
     }
 }
 

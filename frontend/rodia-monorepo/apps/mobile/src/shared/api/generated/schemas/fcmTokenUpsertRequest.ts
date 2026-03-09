@@ -8,5 +8,6 @@ import type { FcmTokenUpsertRequestDeviceType } from './fcmTokenUpsertRequestDev
 
 export interface FcmTokenUpsertRequest {
   deviceType: FcmTokenUpsertRequestDeviceType;
+  /** @minLength 1 */
   fcmToken: string;
 }

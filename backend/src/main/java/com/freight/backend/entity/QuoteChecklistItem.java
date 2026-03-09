@@ -5,6 +5,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
@@ -16,7 +17,12 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 @Entity
-@Table(name = "quote_checklist_items")
+@Table(
+        name = "quote_checklist_items",
+        indexes = {
+                @Index(name = "idx_quote_checklist_items_quote_id", columnList = "quote_id")
+        }
+)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
@@ -36,6 +42,9 @@ public class QuoteChecklistItem {
 
     @Column(name = "extra_input")
     private String extraInput;
+
+    @Column(name = "stop_seq")
+    private Integer stopSeq;
 
     @Column(name = "extra_fee", nullable = false)
     private BigDecimal extraFee;

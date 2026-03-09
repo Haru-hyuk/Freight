@@ -262,6 +262,7 @@ export function QuoteCreateStep1() {
 
   const [pickerMode, setPickerMode] = useState<"date" | "time" | null>(null);
   const [iosPickerValue, setIosPickerValue] = useState<Date | null>(null);
+  const [pendingDate, setPendingDate] = useState<Date | null>(null);
   const [savedAddresses, setSavedAddresses] = useState<ShipperAddressBookItem[]>([]);
   const [isAddressBookLoading, setIsAddressBookLoading] = useState(false);
   const coordRequestIdRef = useRef(0);
@@ -568,25 +569,40 @@ export function QuoteCreateStep1() {
     </View>
   );
 
-  // 날짜 선택기 관련
-  const openPicker = (mode: "date" | "time") => {
-    setPickerMode(mode);
-    if (Platform.OS === "ios") setIosPickerValue(mode === "date" ? draft?.date : draft?.time);
+  // 날짜 선택기 관련 (단일 운송 일시 필드: date → time 2-step)
+  const openSchedulePicker = () => {
+    setPickerMode("date");
+    if (Platform.OS === "ios") setIosPickerValue(draft?.date ?? new Date());
   };
-  const closePicker = () => { setPickerMode(null); setIosPickerValue(null); };
+  const closePicker = () => { setPickerMode(null); setIosPickerValue(null); setPendingDate(null); };
   const handlePickerChange = (event: any, date?: Date) => {
     if (Platform.OS === "android") {
-        if (!date) { closePicker(); return; }
-        if (pickerMode === "date") patchDraft({ date });
-        if (pickerMode === "time") patchDraft({ time: date });
+      if (!date) { closePicker(); return; }
+      if (pickerMode === "date") {
+        setPendingDate(date);
+        setPickerMode("time");
+      } else if (pickerMode === "time") {
+        const base = pendingDate ?? draft?.date ?? new Date();
+        const combined = new Date(base);
+        combined.setHours(date.getHours(), date.getMinutes(), 0, 0);
+        patchDraft({ date: combined, time: combined });
         closePicker();
+      }
     } else if (date) setIosPickerValue(date);
   };
   const confirmIos = () => {
     const next = iosPickerValue ?? new Date();
-    if (pickerMode === "date") patchDraft({ date: next });
-    if (pickerMode === "time") patchDraft({ time: next });
-    closePicker();
+    if (pickerMode === "date") {
+      setPendingDate(next);
+      setPickerMode("time");
+      setIosPickerValue(draft?.time ?? new Date());
+    } else if (pickerMode === "time") {
+      const base = pendingDate ?? draft?.date ?? new Date();
+      const combined = new Date(base);
+      combined.setHours(next.getHours(), next.getMinutes(), 0, 0);
+      patchDraft({ date: combined, time: combined });
+      closePicker();
+    }
   };
 
   return (
@@ -764,25 +780,16 @@ export function QuoteCreateStep1() {
               <AppText style={styles.cardTitle}>운송 일정</AppText>
            </View>
 
-           <View style={styles.scheduleRow}>
-              <Pressable style={styles.scheduleItem} onPress={() => openPicker("date")}>
-                 <AppText style={styles.scheduleLabel}>날짜</AppText>
-                 <View style={styles.scheduleBox}>
-                     <Ionicons name="calendar" size={16} color={theme.colors.textMain} />
-                     <AppText style={styles.scheduleValue}>{draft?.date?.toLocaleDateString("ko-KR")}</AppText>
-                 </View>
-              </Pressable>
-
-              <View style={styles.divider} />
-
-              <Pressable style={styles.scheduleItem} onPress={() => openPicker("time")}>
-                 <AppText style={styles.scheduleLabel}>상차 시간</AppText>
-                 <View style={styles.scheduleBox}>
-                     <Ionicons name="time-outline" size={16} color={theme.colors.textMain} />
-                     <AppText style={styles.scheduleValue}>{draft?.time?.toLocaleTimeString("ko-KR", {hour:'2-digit', minute:'2-digit'})}</AppText>
-                 </View>
-              </Pressable>
-           </View>
+           <Pressable onPress={openSchedulePicker}>
+              <AppText style={styles.scheduleLabel}>운송 일시</AppText>
+              <View style={styles.scheduleBox}>
+                  <Ionicons name="calendar" size={16} color={theme.colors.textMain} />
+                  <AppText style={styles.scheduleValue}>
+                    {draft?.date?.toLocaleDateString("ko-KR")}{' '}
+                    {draft?.time?.toLocaleTimeString("ko-KR", { hour: '2-digit', minute: '2-digit' })}
+                  </AppText>
+              </View>
+           </Pressable>
         </View>
 
         {/* 3. 상·하차 작업 방식 */}

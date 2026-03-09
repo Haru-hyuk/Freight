@@ -25,22 +25,22 @@ public class ReferenceCatalogController {
 
     @GetMapping("/truck-specs")
     public ResponseEntity<List<TruckSpecReferenceResponse>> getTruckSpecs(
-            @RequestParam(required = false) String vehicleType
+            @RequestParam(name = "vehicleType", required = false) String vehicleType
     ) {
         return ResponseEntity.ok(referenceCatalogQueryService.getTruckSpecs(vehicleType));
     }
 
     @GetMapping("/pricing-rates")
     public ResponseEntity<List<PricingRateReferenceResponse>> getPricingRates(
-            @RequestParam(required = false) String vehicleType
+            @RequestParam(name = "vehicleType", required = false) String vehicleType
     ) {
         return ResponseEntity.ok(referenceCatalogQueryService.getPricingRates(vehicleType));
     }
 
     @GetMapping("/pricing-rate")
     public ResponseEntity<PricingRateReferenceResponse> getPricingRate(
-            @RequestParam int distanceKm,
-            @RequestParam String vehicleType
+            @RequestParam(name = "distanceKm") int distanceKm,
+            @RequestParam(name = "vehicleType") String vehicleType
     ) {
         return ResponseEntity.ok(referenceCatalogQueryService.getPricingRate(distanceKm, vehicleType));
     }

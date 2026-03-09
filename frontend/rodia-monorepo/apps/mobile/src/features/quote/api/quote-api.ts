@@ -1,4 +1,4 @@
-// rodia-monorepo/apps/mobile/src/features/quote/api/quote-api.ts
+﻿// rodia-monorepo/apps/mobile/src/features/quote/api/quote-api.ts
 import type {
   QuoteChecklistItemDto,
   QuoteItemDto,
@@ -16,7 +16,7 @@ import type {
 import { apiClient } from "@/shared/lib/api/apiClient";
 import {
   listChecklistItems as listChecklistItemsGenerated,
-} from "@/shared/api/generated/checklist-item-controller/checklist-item-controller";
+} from "@/shared/api/generated/checklist-item/checklist-item";
 import {
   createQuote as createQuoteGenerated,
   deleteQuote as deleteQuoteGenerated,
@@ -24,7 +24,7 @@ import {
   listQuotes as listQuotesGenerated,
   updateQuote as updateQuoteGenerated,
   validateQuote as validateQuoteGenerated,
-} from "@/shared/api/generated/quote-controller/quote-controller";
+} from "@/shared/api/generated/quote/quote";
 import type { ChecklistItemResponse } from "@/shared/api/generated/schemas/checklistItemResponse";
 import type {
   LoadAnalysis,
@@ -54,6 +54,8 @@ import {
   waitRandom,
 } from "@/shared/lib/mock-flow";
 import { normalizeQuoteStatusApi } from "@/shared/lib/policy/quoteStatusResolver";
+import type { QuoteCreateDraft } from "@/features/quote/model/quoteCreateDraft";
+import { buildQuoteCreateRequest } from "@/features/quote/model/quoteCreateRequestMapper";
 
 export type QuotePricePreview = QuoteValidationResponse;
 
@@ -269,6 +271,8 @@ function mapChecklistItems(input: unknown): QuoteDetailResponse["checklistItems"
         checklistItemId,
         extraInput: safeString(source.extraInput, ""),
         extraFee: Math.max(0, safeInt(source.extraFee, 0)),
+        name: safeString(source.name, ""),
+        category: safeString(source.category, ""),
       };
     });
 
@@ -352,6 +356,8 @@ function sanitizeChecklistItems(input: unknown): QuoteChecklistItemRequest[] {
         checklistItemId,
         extraInput: safeString(source.extraInput, ""),
         extraFee: Math.max(0, safeInt(source.extraFee, 0)),
+        name: safeString(source.name, ""),
+        category: safeString(source.category, ""),
       };
     });
 
@@ -450,6 +456,8 @@ async function resolveChecklistItemsForRequest(input: unknown): Promise<QuoteChe
         checklistItemId,
         extraInput: safeString(source.extraInput, ""),
         extraFee: Math.max(0, safeInt(source.extraFee, 0)),
+        name: safeString(source.name, ""),
+        category: safeString(source.category, ""),
       };
     });
 
@@ -990,6 +998,10 @@ export function createShipperQuote(payload: QuoteCreateRequest): Promise<QuoteCr
   return quoteApi.createShipperQuote(payload);
 }
 
+export function mapToQuoteCreateRequest(draft: QuoteCreateDraft): QuoteCreateRequest {
+  return buildQuoteCreateRequest(draft);
+}
+
 export function previewShipperQuote(payload: QuoteCreateRequest): Promise<QuotePricePreview | null> {
   return quoteApi.previewShipperQuote(payload);
 }
@@ -1001,3 +1013,4 @@ export function updateShipperQuote(quoteIdentifier: string, payload: QuoteUpdate
 export function deleteShipperQuote(quoteIdentifier: string): Promise<void> {
   return quoteApi.deleteShipperQuote(quoteIdentifier);
 }
+

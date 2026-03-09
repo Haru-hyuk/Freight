@@ -126,8 +126,16 @@ public class AdminSanctionService {
             throw new CustomException(ErrorCode.INVALID_REQUEST);
         }
         String[] parts = targetId.split("-", 2);
+        if (parts.length < 2 || parts[1].isBlank()) {
+            throw new CustomException(ErrorCode.INVALID_REQUEST);
+        }
         String prefix = parts[0].toUpperCase(Locale.ROOT);
-        Long id = Long.parseLong(parts[1]);
+        Long id;
+        try {
+            id = Long.parseLong(parts[1]);
+        } catch (NumberFormatException e) {
+            throw new CustomException(ErrorCode.INVALID_REQUEST);
+        }
 
         if ("S".equals(prefix)) {
             Shipper shipper = shipperRepository.findById(id)

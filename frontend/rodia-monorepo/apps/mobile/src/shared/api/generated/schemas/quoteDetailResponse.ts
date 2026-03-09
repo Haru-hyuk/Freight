@@ -14,7 +14,13 @@ export interface QuoteDetailResponse {
   shipperId?: number;
   truckId?: number;
   originAddress?: string;
+  originAddressDetail?: string;
   destinationAddress?: string;
+  destinationAddressDetail?: string;
+  senderName?: string;
+  senderPhone?: string;
+  receiverName?: string;
+  receiverPhone?: string;
   originLat?: number;
   originLng?: number;
   destinationLat?: number;
@@ -35,6 +41,9 @@ export interface QuoteDetailResponse {
   allowCombine?: boolean;
   loadMethod?: string;
   unloadMethod?: string;
+  pickupScheduleStart?: string;
+  deliveryDeadline?: string;
+  deliverySchedule?: string;
   status?: string;
   createdAt?: string;
   updatedAt?: string;

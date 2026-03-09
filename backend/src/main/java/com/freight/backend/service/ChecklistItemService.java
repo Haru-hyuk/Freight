@@ -11,12 +11,12 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class ChecklistItemService {
+    private static final String REQUEST_CATEGORY = "REQUEST";
 
     private final ChecklistItemRepository checklistItemRepository;
 
     public List<ChecklistItemResponse> listEnabledItems() {
-        return checklistItemRepository.findByEnabledTrueOrderBySortOrderAsc().stream()
-                .filter(item -> "REQUEST".equals(item.getCategory()))
+        return checklistItemRepository.findByCategoryAndEnabledTrueOrderBySortOrderAsc(REQUEST_CATEGORY).stream()
                 .map(this::toResponse)
                 .collect(Collectors.toList());
     }

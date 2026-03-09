@@ -2,6 +2,9 @@ package com.freight.backend.util;
 
 import com.freight.backend.exception.CustomException;
 import com.freight.backend.exception.ErrorCode;
+import java.util.Collection;
+import java.util.Set;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
@@ -9,6 +12,13 @@ import org.springframework.security.core.userdetails.UserDetails;
  * 인증/인가 관련 유틸리티 메서드
  */
 public final class SecurityUtils {
+
+    private static final Set<String> ADMIN_AUTHORITIES = Set.of(
+            "ROLE_ADMIN",
+            "ROLE_SUPER",
+            "ROLE_OPERATOR",
+            "ROLE_CS"
+    );
 
     private SecurityUtils() {
     }
@@ -34,7 +44,7 @@ public final class SecurityUtils {
         if (userDetails == null) {
             throw new CustomException(ErrorCode.AUTH_UNAUTHORIZED);
         }
-        if (!userDetails.getAuthorities().contains(new SimpleGrantedAuthority(role))) {
+        if (!hasAuthority(userDetails, role)) {
             throw new CustomException(ErrorCode.AUTH_FORBIDDEN);
         }
         try {
@@ -51,8 +61,8 @@ public final class SecurityUtils {
         if (userDetails == null) {
             throw new CustomException(ErrorCode.AUTH_UNAUTHORIZED);
         }
-        boolean isShipper = userDetails.getAuthorities().contains(new SimpleGrantedAuthority("ROLE_SHIPPER"));
-        boolean isAdmin = userDetails.getAuthorities().contains(new SimpleGrantedAuthority("ROLE_ADMIN"));
+        boolean isShipper = hasAuthority(userDetails, "ROLE_SHIPPER");
+        boolean isAdmin = isAdmin(userDetails);
         if (!isShipper && !isAdmin) {
             throw new CustomException(ErrorCode.AUTH_FORBIDDEN);
         }
@@ -70,8 +80,8 @@ public final class SecurityUtils {
         if (userDetails == null) {
             throw new CustomException(ErrorCode.AUTH_UNAUTHORIZED);
         }
-        boolean isDriver = userDetails.getAuthorities().contains(new SimpleGrantedAuthority("ROLE_DRIVER"));
-        boolean isAdmin = userDetails.getAuthorities().contains(new SimpleGrantedAuthority("ROLE_ADMIN"));
+        boolean isDriver = hasAuthority(userDetails, "ROLE_DRIVER");
+        boolean isAdmin = isAdmin(userDetails);
         if (!isDriver && !isAdmin) {
             throw new CustomException(ErrorCode.AUTH_FORBIDDEN);
         }
@@ -86,6 +96,30 @@ public final class SecurityUtils {
      * 관리자 ID 추출 (ROLE_ADMIN 필요)
      */
     public static Long requireAdminId(UserDetails userDetails) {
-        return requireUserId(userDetails, "ROLE_ADMIN");
+        if (userDetails == null || !isAdmin(userDetails)) {
+            throw new CustomException(ErrorCode.AUTH_FORBIDDEN);
+        }
+        return getUserId(userDetails);
+    }
+
+    public static boolean isAdmin(UserDetails userDetails) {
+        return hasAnyAuthority(userDetails, ADMIN_AUTHORITIES);
+    }
+
+    public static boolean hasAuthority(UserDetails userDetails, String authority) {
+        if (userDetails == null || authority == null || authority.isBlank()) {
+            return false;
+        }
+        return userDetails.getAuthorities().contains(new SimpleGrantedAuthority(authority));
+    }
+
+    public static boolean hasAnyAuthority(UserDetails userDetails, Collection<String> authorities) {
+        if (userDetails == null || authorities == null || authorities.isEmpty()) {
+            return false;
+        }
+        Set<String> authoritySet = userDetails.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .collect(java.util.stream.Collectors.toSet());
+        return authorities.stream().anyMatch(authoritySet::contains);
     }
 }

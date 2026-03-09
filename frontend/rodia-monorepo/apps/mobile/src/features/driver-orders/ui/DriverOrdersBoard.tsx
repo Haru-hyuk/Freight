@@ -19,6 +19,8 @@ import { listDriverTrucks, type DriverTruck } from "@/features/driver-profile/ap
 import {
   acceptDriverMatch,
   buildDriverOrderDetailParams,
+  DRIVER_ORDER_SCOPE_LEGACY,
+  DRIVER_ORDERS_TAB_ALIAS,
   getDriverOrderFilterLabel,
   getDriverMatch,
   getDriverQuoteSummaryByQuoteId,
@@ -34,6 +36,8 @@ import {
   type DriverRouteRecommendationMode,
   type DriverOrdersOverview,
   type DriverOrdersTabKey,
+  toDriverOrdersTabAlias,
+  toLegacyDriverOrdersTabKey,
 } from "@/features/matching/api";
 import {
   getDriverAcceptedRunGroups,
@@ -60,25 +64,20 @@ import {
 } from "@/shared/lib/storage/driverOrdersStorage";
 import {
   API_ERROR_CODE,
-  BADGE_TONE,
-  DRIVER_CTA_ID,
   DRIVER_UI_STATE,
   getApiErrorCode,
-  type BadgeTone,
   type DriverUiState,
 } from "@/shared/lib/policy";
 import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
-import { AppButton } from "@/shared/ui/kit/AppButton";
-import { AppCard } from "@/shared/ui/kit/AppCard";
 import { AppEmptyState } from "@/shared/ui/kit/AppEmptyState";
-import { AppErrorState } from "@/shared/ui/kit/AppErrorState";
-import { AppSpinner } from "@/shared/ui/kit/AppSpinner";
+import { AppRequestState } from "@/shared/ui/kit/AppRequestState";
 import { AppText } from "@/shared/ui/kit/AppText";
 import { PageScaffold } from "@/widgets/layout/PageScaffold";
 
 type DriverOrdersBoardProps = {
   assignedOnly?: boolean;
+  initialRunStatusFilter?: string | null;
 };
 
 type ToastState = {
@@ -89,7 +88,6 @@ type ToastState = {
 const NETWORK_ERROR_TEXT = "네트워크 요청이 실패했습니다. 잠시 후 다시 시도해 주세요.";
 const TOAST_DURATION_MS = 2000;
 const FOCUS_REFETCH_THROTTLE_MS = 1500;
-const RUN_AUTO_SYNC_INTERVAL_MS = 12_000;
 const ROUTE_RECOMMEND_STEPS = [2, 3, 4, 5] as const;
 const ROUTE_RECOMMEND_STEP_HINT: Record<(typeof ROUTE_RECOMMEND_STEPS)[number], string> = {
   2: "빠른 운행",
@@ -114,12 +112,26 @@ type DriverOrdersListItem =
 
 const RUN_STATUS_FILTER_LABELS: Record<RunStatusFilterKey, string> = {
   ALL: "전체",
-  NEGOTIATING: "협의중",
-  ASSIGNED: "배차완료",
-  PICKUP: "상차중",
-  TRANSIT: "운송중",
+  NEGOTIATING: "협의 중",
+  ASSIGNED: "배차 확정",
+  PICKUP: "상차 중",
+  TRANSIT: "운송 중",
   COMPLETED: "완료",
 };
+
+function normalizeRunStatusFilterKey(value: unknown): RunStatusFilterKey {
+  const token = String(value ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "_")
+    .replace(/-/g, "_");
+
+  if (token === "IN_TRANSIT") return "TRANSIT";
+  if ((RUN_STATUS_FILTER_ORDER as readonly string[]).includes(token)) {
+    return token as RunStatusFilterKey;
+  }
+  return "ALL";
+}
 
 function toPositiveInt(value: unknown): number {
   const parsed = Number(value);
@@ -212,46 +224,14 @@ const EMPTY_OVERVIEW: DriverOrdersOverview = {
   capability: { supportsRichFilters: false, supportsAiFab: false },
 };
 
-function resolveStatusPalette(tone: BadgeTone, colors: Record<string, string>) {
-  if (tone === BADGE_TONE.ATTENTION) {
-    return {
-      bg: tint(colors.brandPrimary, 0.1, colors.bgSurface),
-      text: colors.brandPrimary,
-    };
-  }
-  if (tone === BADGE_TONE.PROGRESS) {
-    return {
-      bg: tint(colors.semanticSuccess, 0.1, colors.bgSurface),
-      text: colors.semanticSuccess,
-    };
-  }
-  if (tone === BADGE_TONE.CLOSED) {
-    return {
-      bg: tint(colors.semanticInfo, 0.1, colors.bgSurface),
-      text: colors.semanticInfo,
-    };
-  }
-  return {
-    bg: tint(colors.textMuted, 0.1, colors.bgSurface),
-    text: colors.textMuted,
-  };
-}
-
 const useStyles = createThemedStyles((theme) => {
   const spacing = safeNumber(theme?.layout?.spacing?.base, 4);
   const radii = theme?.layout?.radii;
   const buttonSm = theme?.components?.button?.sizes?.sm;
-  const buttonLg = theme?.components?.button?.sizes?.lg;
   const cardPaddingMd = safeNumber(theme?.components?.card?.paddingMd, spacing * 5);
 
   const detailScale = theme?.typography?.scale?.detail;
   const captionScale = theme?.typography?.scale?.caption;
-  const titleScale = theme?.typography?.scale?.title;
-
-  const radiusCard = safeNumber(
-    theme?.components?.card?.radius,
-    safeNumber(radii?.card, spacing * 4)
-  );
   const radiusControl = safeNumber(radii?.control, spacing * 3);
   const radiusPill = safeNumber(radii?.pill, 999);
 
@@ -348,157 +328,6 @@ const useStyles = createThemedStyles((theme) => {
     separator: { height: spacing * 4 },
 
     flex1: { flex: 1 },
-
-    cardPressable: {},
-    cardWrap: {
-      borderRadius: radiusCard,
-      padding: cardPaddingMd,
-      borderWidth: 0,
-    },
-    cardPressed: { transform: [{ scale: 0.98 }], opacity: 0.9 },
-
-    // Layout & Alignment (badge + meta)
-    cardTop: {
-      flexDirection: "row",
-      alignItems: "flex-start",
-      justifyContent: "flex-start",
-      marginBottom: cardPaddingMd,
-      gap: spacing * 2,
-    },
-    badge: {
-      paddingHorizontal: spacing * 2.5,
-      paddingVertical: spacing * 1.5,
-      borderRadius: radiusControl,
-      flexShrink: 0,
-      alignSelf: "flex-start",
-    },
-    cardTopMeta: {
-      flex: 1,
-      minWidth: 0,
-      marginLeft: spacing * 4,
-      alignItems: "flex-end",
-      gap: spacing * 0.5,
-    },
-    timeText: {
-      textAlign: "right",
-      flexShrink: 1,
-    },
-
-    timelineWrap: {
-      flexDirection: "row",
-      alignItems: "stretch",
-      marginBottom: cardPaddingMd,
-    },
-    rail: { width: spacing * 6, alignItems: "center", marginRight: spacing * 3 },
-    dotStart: {
-      width: spacing * 3,
-      height: spacing * 3,
-      borderRadius: spacing * 1.5,
-      backgroundColor: cInfo,
-      zIndex: 2,
-      borderWidth: Math.max(1, Math.round(spacing / 2)),
-      borderColor: tint(cInfo, 0.2, cSurface),
-    },
-    dotEnd: {
-      width: spacing * 3,
-      height: spacing * 3,
-      borderRadius: spacing * 1.5,
-      backgroundColor: cPrimary,
-      zIndex: 2,
-      borderWidth: Math.max(1, Math.round(spacing / 2)),
-      borderColor: tint(cPrimary, 0.2, cSurface),
-    },
-    line: {
-      width: Math.max(1, Math.round(spacing / 2)),
-      flex: 1,
-      backgroundColor: tint(cLine, 0.5, cSurfaceAlt),
-      marginVertical: spacing * 0.5,
-    },
-
-    addressWrap: { flex: 1, justifyContent: "space-between" },
-    addressSpacer: { height: cardPaddingMd },
-    distanceWrap: {
-      position: "absolute",
-      left: spacing * 8,
-      top: "50%",
-      marginTop: -safeNumber(captionScale?.lineHeight, 16),
-    },
-    addressBlock: { gap: spacing },
-    addressLabel: { color: cTextMuted },
-    addressText: { color: cTextMain },
-
-    distanceChip: {
-      backgroundColor: tint(cTextMuted, 0.08, cSurface),
-      paddingHorizontal: spacing * 2,
-      paddingVertical: spacing,
-      borderRadius: radiusPill,
-    },
-
-    cardBottom: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "flex-end",
-      paddingTop: cardPaddingMd,
-      borderTopWidth: 1,
-      borderTopColor: tint(cLine, 0.5, cSurfaceAlt),
-    },
-    tagWrap: {
-      flex: 1,
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: spacing * 1.5,
-      paddingRight: spacing * 3,
-    },
-    specPill: {
-      backgroundColor: tint(cTextMuted, 0.06, cSurfaceAlt),
-      paddingHorizontal: spacing * 2,
-      paddingVertical: spacing,
-      borderRadius: radiusControl,
-      minHeight: safeNumber(buttonSm?.minHeight, 36) - spacing * 4,
-      justifyContent: "center",
-    },
-
-    priceWrap: { alignItems: "flex-end", gap: spacing * 0.5 },
-
-    prepareWrap: { marginTop: spacing * 4 },
-    prepareBtn: {
-      minHeight: safeNumber(buttonLg?.minHeight, spacing * 13),
-      borderRadius: safeNumber(buttonLg?.radius, radiusControl),
-    },
-    dualCtaRow: {
-      marginTop: spacing * 4,
-      flexDirection: "row",
-      gap: spacing * 2,
-    },
-    dualCtaButton: {
-      flex: 1,
-      minHeight: safeNumber(buttonLg?.minHeight, spacing * 13),
-      borderRadius: safeNumber(buttonLg?.radius, radiusControl),
-    },
-    negotiatingMetaWrap: {
-      marginTop: spacing * 4,
-      padding: spacing * 3,
-      borderRadius: radiusControl,
-      backgroundColor: tint(cTextMuted, 0.06, cSurfaceAlt),
-      gap: spacing * 1.5,
-    },
-    negotiatingMetaRow: {
-      flexDirection: "row",
-      alignItems: "flex-start",
-      justifyContent: "space-between",
-      gap: spacing * 2,
-    },
-    negotiatingMetaLabel: {
-      flexShrink: 0,
-    },
-    negotiatingMetaValue: {
-      flex: 1,
-      textAlign: "right",
-    },
-    negotiatingMetaMessage: {
-      flex: 1,
-      textAlign: "right",
-    },
 
     marketRecommendWrap: {
       gap: spacing * 3,
@@ -781,7 +610,6 @@ const useStyles = createThemedStyles((theme) => {
     },
     filterChipTextActive: { color: cOnBrand, fontWeight: "900" },
 
-    errorWrap: { paddingHorizontal: spacing * 5, paddingTop: spacing * 8 },
     refreshBtn: { padding: spacing },
 
     toastWrap: {
@@ -809,245 +637,12 @@ const useStyles = createThemedStyles((theme) => {
       fontWeight: "800",
     },
 
-    // kept for AppText variant="title" parity
-    priceValText: {
-      color: cPrimary,
-      fontSize: safeNumber(titleScale?.size, 22),
-      lineHeight: safeNumber(titleScale?.lineHeight, 30),
-      fontWeight: "900",
-      letterSpacing: safeNumber(titleScale?.letterSpacing, -0.1),
-    },
   });
 });
 
-type DriverOrdersBoardStyles = ReturnType<typeof useStyles>;
-
-function DriverOrderCardView({
-  item,
-  onPress,
-  onAcceptClick,
-  onOfferClick,
-  acceptingMatchId,
-  isSubmittingOffer,
-  activeTab,
-  onPrepareClick,
-  styles,
-  colors,
-}: {
-  item: DriverOrderCard;
-  onPress: (card: DriverOrderCard) => void;
-  onAcceptClick: (card: DriverOrderCard) => void;
-  onOfferClick: (card: DriverOrderCard) => void;
-  acceptingMatchId?: number | null;
-  isSubmittingOffer: boolean;
-  activeTab: DriverOrdersTabKey;
-  onPrepareClick: (card: DriverOrderCard) => void;
-  styles: DriverOrdersBoardStyles;
-  colors: Record<string, string>;
-}) {
-  const pal = resolveStatusPalette(item.statusTone, colors);
-
-  const ctaPolicy = item.cta;
-  const ctaVariant =
-    ctaPolicy.variant === "primary"
-      ? "primary"
-      : ctaPolicy.variant === "destructive"
-        ? "destructive"
-        : "secondary";
-  const counterOfferPriceText =
-    Number.isFinite(item.counterOfferProposedPrice) && Number(item.counterOfferProposedPrice) > 0
-      ? formatKrw(Number(item.counterOfferProposedPrice))
-      : undefined;
-  const counterOfferMessage =
-    typeof item.counterOfferMessage === "string" && item.counterOfferMessage.trim()
-      ? item.counterOfferMessage.trim()
-      : undefined;
-
-  return (
-    <Pressable
-      onPress={() => onPress(item)}
-      style={({ pressed }) => [styles.cardPressable, pressed ? styles.cardPressed : null]}
-    >
-      <AppCard style={styles.cardWrap} outlined={false} elevated>
-        <View style={styles.cardTop}>
-          <View style={[styles.badge, { backgroundColor: pal.bg }]}>
-            <AppText variant="caption" weight="800" color={pal.text}>
-              {item.statusLabel}
-            </AppText>
-          </View>
-
-          <View style={styles.cardTopMeta}>
-            <AppText
-              variant="caption"
-              weight="700"
-              color="textMuted"
-              numberOfLines={1}
-              style={styles.timeText}
-            >
-              {item.requestedAtText || ""}
-            </AppText>
-          </View>
-        </View>
-
-        <View style={styles.timelineWrap}>
-          <View style={styles.rail}>
-            <View style={styles.dotStart} />
-            <View style={styles.line} />
-            <View style={styles.dotEnd} />
-          </View>
-
-          <View style={styles.addressWrap}>
-            <View style={styles.addressBlock}>
-              <AppText variant="caption" weight="800" color="textMuted" style={styles.addressLabel}>
-                출발
-              </AppText>
-              <AppText
-                variant="heading"
-                weight="900"
-                color="textMain"
-                numberOfLines={1}
-                style={styles.addressText}
-              >
-                {item.originAddress || "-"}
-              </AppText>
-            </View>
-
-            <View style={styles.addressSpacer} />
-
-            <View style={styles.addressBlock}>
-              <AppText variant="caption" weight="800" color="textMuted" style={styles.addressLabel}>
-                도착
-              </AppText>
-              <AppText
-                variant="heading"
-                weight="900"
-                color="textMain"
-                numberOfLines={1}
-                style={styles.addressText}
-              >
-                {item.destinationAddress || "-"}
-              </AppText>
-            </View>
-          </View>
-
-          {item.routeDistanceText ? (
-            <View style={styles.distanceWrap}>
-              <View style={styles.distanceChip}>
-                <AppText variant="caption" weight="800" color="textSub">
-                  {item.routeDistanceText}
-                </AppText>
-              </View>
-            </View>
-          ) : null}
-        </View>
-
-        <View style={styles.cardBottom}>
-          <View style={styles.tagWrap}>
-            {item.tags.map((tag, idx) => (
-              <View key={`${tag.label}-${idx}`} style={styles.specPill}>
-                <AppText variant="caption" weight="700" color="textSub" numberOfLines={1}>
-                  {tag.label}
-                </AppText>
-              </View>
-            ))}
-          </View>
-
-          <View style={styles.priceWrap}>
-            <AppText variant="caption" weight="800" color="textMuted">
-              총 운임
-            </AppText>
-            <AppText variant="title" weight="900" color="brandPrimary" style={styles.priceValText}>
-              {item.priceText || "-"}
-            </AppText>
-          </View>
-        </View>
-
-        {activeTab === "my" && item.uiState === DRIVER_UI_STATE.NEGOTIATING ? (
-          <View style={styles.negotiatingMetaWrap}>
-            <View style={styles.negotiatingMetaRow}>
-              <AppText
-                variant="caption"
-                weight="800"
-                color="textMuted"
-                numberOfLines={1}
-                style={styles.negotiatingMetaLabel}
-              >
-                제안 금액
-              </AppText>
-              <AppText
-                variant="detail"
-                weight="900"
-                color="brandPrimary"
-                numberOfLines={1}
-                style={styles.negotiatingMetaValue}
-              >
-                {counterOfferPriceText ?? "-"}
-              </AppText>
-            </View>
-            <View style={styles.negotiatingMetaRow}>
-              <AppText
-                variant="caption"
-                weight="800"
-                color="textMuted"
-                numberOfLines={1}
-                style={styles.negotiatingMetaLabel}
-              >
-                제안 사유
-              </AppText>
-              <AppText
-                variant="caption"
-                weight="700"
-                color="textSub"
-                numberOfLines={2}
-                style={styles.negotiatingMetaMessage}
-              >
-                {counterOfferMessage ?? "-"}
-              </AppText>
-            </View>
-          </View>
-        ) : null}
-
-        {activeTab === "my" &&
-        item.uiState === DRIVER_UI_STATE.ASSIGNED &&
-        item.cta?.id !== DRIVER_CTA_ID.START_DRIVE ? (
-          <View style={styles.prepareWrap}>
-            <AppButton
-              onPress={ctaPolicy.enabled ? () => onPrepareClick(item) : undefined}
-              variant={ctaPolicy.enabled ? ctaVariant : "secondary"}
-              disabled={!ctaPolicy.enabled}
-              style={styles.prepareBtn}
-              title={ctaPolicy.label}
-              textStyle={{ fontWeight: "900" }}
-            />
-          </View>
-        ) : activeTab === "market" && item.uiState === DRIVER_UI_STATE.READY_TO_ACCEPT ? (
-          <View style={styles.dualCtaRow}>
-            <AppButton
-              onPress={() => onOfferClick(item)}
-              variant="secondary"
-              style={styles.dualCtaButton}
-              disabled={isSubmittingOffer || acceptingMatchId === item.matchId}
-              title="운임 제안"
-              textStyle={{ fontWeight: "900" }}
-            />
-            <AppButton
-              onPress={ctaPolicy.enabled ? () => onAcceptClick(item) : undefined}
-              variant={ctaPolicy.enabled ? ctaVariant : "secondary"}
-              disabled={!ctaPolicy.enabled}
-              loading={acceptingMatchId === item.matchId}
-              style={styles.dualCtaButton}
-              title={ctaPolicy.label}
-              textStyle={{ fontWeight: "900" }}
-            />
-          </View>
-        ) : null}
-      </AppCard>
-    </Pressable>
-  );
-}
-
 export function DriverOrdersBoard({
   assignedOnly,
+  initialRunStatusFilter,
 }: DriverOrdersBoardProps) {
   const router = useRouter();
   const theme = useAppTheme();
@@ -1072,12 +667,19 @@ export function DriverOrdersBoard({
   const [isRecommending, setIsRecommending] = useState(false);
   const [recommendAnalysis, setRecommendAnalysis] = useState<DriverRouteRecommendationAnalysis | null>(null);
   const [selectedRecommendKey, setSelectedRecommendKey] = useState<string | null>(null);
-  const [runStatusFilter, setRunStatusFilter] = useState<RunStatusFilterKey>("ALL");
+  const normalizedInitialRunStatusFilter = useMemo(
+    () => normalizeRunStatusFilterKey(initialRunStatusFilter),
+    [initialRunStatusFilter]
+  );
+  const [runStatusFilter, setRunStatusFilter] = useState<RunStatusFilterKey>(normalizedInitialRunStatusFilter);
   const [availableTrucks, setAvailableTrucks] = useState<DriverTruck[]>([]);
   const [selectedTruckId, setSelectedTruckId] = useState<number | null>(null);
   const [isTruckMenuOpen, setIsTruckMenuOpen] = useState(false);
 
-  const resolvedActiveTab: DriverOrdersTabKey = assignedOnly ? "my" : "market";
+  const resolvedActiveTab: DriverOrdersTabKey = toLegacyDriverOrdersTabKey(
+    assignedOnly ? DRIVER_ORDERS_TAB_ALIAS.ASSIGNED : DRIVER_ORDERS_TAB_ALIAS.OPEN
+  );
+  const resolvedActiveTabAlias = toDriverOrdersTabAlias(resolvedActiveTab);
   const refreshIconColor = safeString(
     theme.colors?.textSub,
     safeString(theme.colors?.textMain, safeString(theme.colors?.brandPrimary, ""))
@@ -1171,16 +773,17 @@ export function DriverOrdersBoard({
   useEffect(() => {
     if (!assignedOnly) return;
     setActiveFilter("ALL");
-    setRunStatusFilter("ALL");
-  }, [assignedOnly]);
+    setRunStatusFilter(normalizedInitialRunStatusFilter);
+  }, [assignedOnly, normalizedInitialRunStatusFilter]);
 
   useEffect(() => {
-    if (resolvedActiveTab !== "market") {
+    if (resolvedActiveTabAlias !== DRIVER_ORDERS_TAB_ALIAS.OPEN) {
       setIsTruckMenuOpen(false);
     }
-  }, [resolvedActiveTab]);
+  }, [resolvedActiveTabAlias]);
 
   useEffect(() => {
+    if (assignedOnly) return undefined;
     return subscribeDriverRunSyncEvent((event) => {
       if (
         event.type !== DRIVER_RUN_SYNC_EVENT.COUNTER_OFFER_SUBMITTED &&
@@ -1191,10 +794,12 @@ export function DriverOrdersBoard({
       }
       void loadOrders("refresh");
     });
-  }, [loadOrders]);
+  }, [assignedOnly, loadOrders]);
 
   useFocusEffect(
     useCallback(() => {
+      if (assignedOnly) return undefined;
+
       const meta = focusRefetchMetaRef.current;
       if (!meta.hasFocusedOnce) {
         meta.hasFocusedOnce = true;
@@ -1206,15 +811,7 @@ export function DriverOrdersBoard({
           void loadTruckOptions();
         }
       }
-
-      const shouldRunInterval = assignedOnly && shouldAutoSyncAssignedRunTab(overview);
-      if (!shouldRunInterval) return undefined;
-
-      const intervalId = setInterval(() => {
-        void loadOrders("refresh");
-      }, RUN_AUTO_SYNC_INTERVAL_MS);
-
-      return () => clearInterval(intervalId);
+      return undefined;
     }, [assignedOnly, loadOrders, loadTruckOptions, overview])
   );
 
@@ -1469,14 +1066,51 @@ export function DriverOrdersBoard({
         return;
       }
 
-      if (resolvedActiveTab === "market") {
+      if (resolvedActiveTabAlias === DRIVER_ORDERS_TAB_ALIAS.OPEN) {
         router.push({
           pathname: DRIVER_ROUTE_PATH.ORDER_DETAIL,
-          params: { id: String(card.matchId), source: "market" },
+          params: { id: String(card.matchId), source: DRIVER_ORDER_SCOPE_LEGACY.OPEN },
         });
+      } else if (
+        assignedOnly &&
+        (card.uiState === DRIVER_UI_STATE.TRANSIT_IN_PROGRESS ||
+          card.uiState === DRIVER_UI_STATE.PICKUP_IN_PROGRESS ||
+          card.uiState === DRIVER_UI_STATE.ASSIGNED)
+      ) {
+        const safeCardMatchId = Number(card.matchId);
+        if (!Number.isInteger(safeCardMatchId) || safeCardMatchId <= 0) {
+          showToast("유효하지 않은 매칭입니다.");
+          cardNavLockRef.current = false;
+          return;
+        }
+        try {
+          const runMatch = await getDriverMatch(safeCardMatchId);
+          if (!runMatch) {
+            showToast("매칭 정보를 불러오지 못했습니다.");
+            cardNavLockRef.current = false;
+            return;
+          }
+          const resolvedQuoteIdForRun =
+            Number.isInteger(Number(runMatch.quoteId)) && Number(runMatch.quoteId) > 0
+              ? Number(runMatch.quoteId)
+              : Number.isInteger(Number(card.quoteId)) && Number(card.quoteId) > 0
+                ? Number(card.quoteId)
+                : 0;
+          const runSummary =
+            resolvedQuoteIdForRun > 0 ? await getDriverQuoteSummaryByQuoteId(resolvedQuoteIdForRun) : null;
+          const matchForRunEntry =
+            typeof runMatch.status === "string" && runMatch.status.trim()
+              ? runMatch
+              : { ...runMatch, status: card.status };
+          setActiveRun(runSummary ? { match: matchForRunEntry, summary: runSummary } : { match: matchForRunEntry });
+          router.replace(DRIVER_ROUTE_PATH.RUN_TAB);
+        } catch {
+          showToast(NETWORK_ERROR_TEXT);
+          cardNavLockRef.current = false;
+        }
       } else {
         const detailParams = buildDriverOrderDetailParams(card);
-        const source = assignedOnly ? "run" : "my";
+        const source = assignedOnly ? "run" : DRIVER_ORDER_SCOPE_LEGACY.ASSIGNED;
         const pathname = source === "run" ? DRIVER_ROUTE_PATH.RUN_DETAIL : DRIVER_ROUTE_PATH.ORDER_DETAIL;
         router.push({
           pathname,
@@ -1491,7 +1125,7 @@ export function DriverOrdersBoard({
         cardNavLockRef.current = false;
       }, 450);
     },
-    [assignedOnly, resolvedActiveTab, router, showToast]
+    [assignedOnly, resolvedActiveTabAlias, router, setActiveRun, showToast]
   );
 
   const handlePrepareForDrive = useCallback(
@@ -1694,9 +1328,9 @@ export function DriverOrdersBoard({
 
   useEffect(() => {
     if (assignedOnly) return;
-    if (resolvedActiveTab !== "market") return;
+    if (resolvedActiveTabAlias !== DRIVER_ORDERS_TAB_ALIAS.OPEN) return;
     void handleAnalyzeRecommendations();
-  }, [assignedOnly, handleAnalyzeRecommendations, resolvedActiveTab]);
+  }, [assignedOnly, handleAnalyzeRecommendations, resolvedActiveTabAlias]);
 
   const handleOpenRecommendationDetail = useCallback(
     (route: DriverRouteRecommendation) => {
@@ -1708,7 +1342,7 @@ export function DriverOrdersBoard({
         )
       );
       if (safeQuoteIds.length <= 0) {
-        showToast("추천 노선에 유효한 견적 ID가 없습니다.");
+        showToast("추천 노선에 유효한 오더 정보가 없습니다.");
         return;
       }
 
@@ -1746,14 +1380,14 @@ export function DriverOrdersBoard({
       });
       router.push({
         pathname: DRIVER_ROUTE_PATH.ORDER_DETAIL,
-        params: { id: String(primaryMatchId), source: "market", recommendKey: route.key },
+        params: { id: String(primaryMatchId), source: DRIVER_ORDER_SCOPE_LEGACY.OPEN, recommendKey: route.key },
       });
     },
     [baseMarketOrders, maxQuotesPerRoute, recommendMode, router, selectedTruckId, showToast]
   );
 
   const renderListHeader = useCallback(() => {
-    const showRecommendPanel = resolvedActiveTab === "market" && !assignedOnly;
+    const showRecommendPanel = resolvedActiveTabAlias === DRIVER_ORDERS_TAB_ALIAS.OPEN && !assignedOnly;
     const recommendationRows = recommendAnalysis?.routes ?? [];
     const showRunStatusFilter = assignedOnly && runStatusOptions.length > 1;
 
@@ -2019,7 +1653,7 @@ export function DriverOrdersBoard({
     overview.availableFilters,
     recommendAnalysis,
     recommendMode,
-    resolvedActiveTab,
+    resolvedActiveTabAlias,
     runStatusFilter,
     runStatusOptions,
     selectedTruck,
@@ -2100,19 +1734,15 @@ export function DriverOrdersBoard({
         }
       >
         <View style={styles.flex1}>
-          {isLoading ? (
-            <AppSpinner label="목록을 불러오는 중입니다." />
-          ) : errorMessage ? (
-            <View style={styles.errorWrap}>
-              <AppErrorState
-                title="오더 목록을 불러오지 못했어요"
-                description={errorMessage}
-                retryLabel="다시 시도"
-                onRetry={() => void loadOrders("initial")}
-                fullScreen={false}
-              />
-            </View>
-          ) : (
+          <AppRequestState
+            isLoading={isLoading}
+            loadingLabel="목록을 불러오는 중입니다."
+            errorMessage={errorMessage}
+            errorTitle="오더 목록을 불러오지 못했어요"
+            retryLabel="다시 시도"
+            onRetry={() => void loadOrders("initial")}
+            fullScreen={false}
+          >
             <FlatList
               key={resolvedActiveTab}
               extraData={`${activeFilter}:${runStatusFilter}:${selectedRecommendKey ?? ""}:${recommendAnalysis?.recommendedCount ?? 0}:${preparingRunMatchId ?? ""}`}
@@ -2141,7 +1771,7 @@ export function DriverOrdersBoard({
                 )
               }
             />
-          )}
+          </AppRequestState>
         </View>
 
         {toast.visible ? (

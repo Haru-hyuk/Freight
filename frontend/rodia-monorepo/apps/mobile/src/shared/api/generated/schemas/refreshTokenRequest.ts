@@ -6,5 +6,6 @@
  */
 
 export interface RefreshTokenRequest {
+  /** @minLength 1 */
   refreshToken: string;
 }

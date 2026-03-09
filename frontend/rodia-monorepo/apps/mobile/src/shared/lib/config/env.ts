@@ -92,6 +92,16 @@ export function getApiBaseUrl(): string {
     );
   }
 
+  // production 환경에서 http:// 사용 시 경고 (cleartext/ATS 플러그인은 production에서 비활성화됨)
+  if (process.env.APP_ENV === "production" && url.startsWith("http://")) {
+    warnOnce(
+      "env.api.base_url.production_http",
+      "[env] production 빌드에서 API_BASE_URL이 http:// 입니다. " +
+        "cleartext/ATS 허용 플러그인은 production에서 비활성화되므로 네트워크 요청이 차단될 수 있습니다. " +
+        "production 서버는 반드시 https:// 를 사용하세요."
+    );
+  }
+
   return url;
 }
 

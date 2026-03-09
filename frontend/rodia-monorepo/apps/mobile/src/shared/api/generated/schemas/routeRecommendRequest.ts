@@ -34,5 +34,10 @@ export interface RouteRecommendRequest {
   loadedVolumeCbm?: number;
   /** @minimum 0 */
   maxPickupDistanceKm?: number;
+  maxCombineCount?: number;
+  maxRecommendations?: number;
+  /** @minimum 1 */
+  maxVisitCount?: number;
   selectedQuoteIds?: number[];
+  truckId?: number;
 }

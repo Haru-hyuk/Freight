@@ -26,8 +26,9 @@ public class FcmService {
     private final FcmTokenRepository fcmTokenRepository;
     private final ObjectProvider<FirebaseMessaging> firebaseMessagingProvider;
 
-    @Value("${fcm.enabled:false}")
+    @Value("${fcm.enabled:true}")
     private boolean enabled;
+    private volatile boolean missingMessagingClientLogged;
 
     @Transactional
     public void upsertToken(FcmToken.UserType userType, Long userId, FcmToken.DeviceType deviceType, String rawToken) {
@@ -62,8 +63,15 @@ public class FcmService {
 
     @Transactional
     public void sendToUser(FcmToken.UserType userType, Long userId, String title, String body, Map<String, String> data) {
+        if (!enabled) {
+            return;
+        }
         FirebaseMessaging firebaseMessaging = firebaseMessagingProvider.getIfAvailable();
-        if (!enabled || firebaseMessaging == null) {
+        if (firebaseMessaging == null) {
+            if (!missingMessagingClientLogged) {
+                missingMessagingClientLogged = true;
+                log.warn("FCM is enabled but FirebaseMessaging client is unavailable. Check fcm.service-account-path.");
+            }
             return;
         }
 
@@ -72,6 +80,9 @@ public class FcmService {
             sendToToken(firebaseMessaging, token, title, body, data);
         }
     }
+
+    private static final int MAX_RETRY_ATTEMPTS = 3;
+    private static final long RETRY_DELAY_MS = 500;
 
     private void sendToToken(FirebaseMessaging firebaseMessaging, FcmToken token, String title, String body, Map<String, String> data) {
         Message.Builder builder = Message.builder()
@@ -85,20 +96,66 @@ public class FcmService {
             builder.putAllData(data);
         }
 
-        try {
-            firebaseMessaging.send(builder.build());
-        } catch (FirebaseMessagingException e) {
-            MessagingErrorCode errorCode = e.getMessagingErrorCode();
-            if (MessagingErrorCode.UNREGISTERED == errorCode
-                    || MessagingErrorCode.INVALID_ARGUMENT == errorCode) {
-                token.deactivate();
-                fcmTokenRepository.save(token);
+        Message message = builder.build();
+        int attempt = 0;
+        Exception lastException = null;
+
+        while (attempt < MAX_RETRY_ATTEMPTS) {
+            attempt++;
+            try {
+                firebaseMessaging.send(message);
+                return; // 성공 시 즉시 반환
+            } catch (FirebaseMessagingException e) {
+                lastException = e;
+                MessagingErrorCode errorCode = e.getMessagingErrorCode();
+
+                // 영구 실패: 재시도 불필요
+                if (MessagingErrorCode.UNREGISTERED == errorCode
+                        || MessagingErrorCode.INVALID_ARGUMENT == errorCode) {
+                    token.deactivate();
+                    fcmTokenRepository.save(token);
+                    log.warn("[FCM] 토큰 비활성화 (영구 실패). userId={}, tokenId={}, reason={}",
+                            token.getUserId(), token.getId(), errorCode);
+                    return;
+                }
+
+                // 일시적 실패: 재시도 가능
+                if (isRetryable(errorCode) && attempt < MAX_RETRY_ATTEMPTS) {
+                    log.info("[FCM] 재시도 예정. userId={}, tokenId={}, attempt={}/{}, reason={}",
+                            token.getUserId(), token.getId(), attempt, MAX_RETRY_ATTEMPTS, errorCode);
+                    sleep(RETRY_DELAY_MS * attempt); // exponential backoff
+                    continue;
+                }
+
+                log.warn("[FCM] 전송 실패 (재시도 불가). userId={}, tokenId={}, attempt={}/{}, reason={}",
+                        token.getUserId(), token.getId(), attempt, MAX_RETRY_ATTEMPTS, errorCode);
+                return;
+            } catch (Exception e) {
+                lastException = e;
+                if (attempt < MAX_RETRY_ATTEMPTS) {
+                    log.info("[FCM] 재시도 예정 (일반 오류). userId={}, tokenId={}, attempt={}/{}",
+                            token.getUserId(), token.getId(), attempt, MAX_RETRY_ATTEMPTS);
+                    sleep(RETRY_DELAY_MS * attempt);
+                    continue;
+                }
             }
-            log.warn("Failed to send FCM message. userId={}, tokenId={}, reason={}",
-                    token.getUserId(), token.getId(), errorCode);
-        } catch (Exception e) {
-            log.warn("Failed to send FCM message. userId={}, tokenId={}",
-                    token.getUserId(), token.getId(), e);
+        }
+
+        log.error("[FCM] 최종 전송 실패. userId={}, tokenId={}, attempts={}",
+                token.getUserId(), token.getId(), attempt, lastException);
+    }
+
+    private boolean isRetryable(MessagingErrorCode errorCode) {
+        return errorCode == MessagingErrorCode.UNAVAILABLE
+                || errorCode == MessagingErrorCode.INTERNAL
+                || errorCode == MessagingErrorCode.QUOTA_EXCEEDED;
+    }
+
+    private void sleep(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
         }
     }
 

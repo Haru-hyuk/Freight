@@ -10,5 +10,6 @@ export type CargoVisitType = typeof CargoVisitType[keyof typeof CargoVisitType];
 
 export const CargoVisitType = {
   PICKUP: 'PICKUP',
+  WAYPOINT: 'WAYPOINT',
   DELIVERY: 'DELIVERY',
 } as const;

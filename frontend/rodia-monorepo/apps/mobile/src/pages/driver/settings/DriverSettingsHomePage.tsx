@@ -17,6 +17,7 @@ type MenuItem = {
   subtitle: string;
   path?: string;
   trailingText?: string;
+  showChevron?: boolean;
   onPress?: () => void;
 };
 
@@ -84,6 +85,14 @@ export default function DriverSettingsHomePage() {
 
   const truckTrailing =
     truckApproved === null ? "-" : truckApproved ? "승인완료" : "심사중";
+  const settlementBankName = (auth.user?.bankName ?? "").trim();
+  const settlementBankAccount = (auth.user?.bankAccount ?? "").trim();
+  const settlementAccountSummary = (() => {
+    if (settlementBankName && settlementBankAccount) return `${settlementBankName} ${settlementBankAccount}`;
+    if (settlementBankName) return `${settlementBankName} (계좌번호 미등록)`;
+    if (settlementBankAccount) return settlementBankAccount;
+    return "등록된 정산 계좌 정보가 없습니다.";
+  })();
 
   const menuGroups = useMemo(
     () =>
@@ -91,7 +100,7 @@ export default function DriverSettingsHomePage() {
         {
           id: "group-account",
           title: "내 정보",
-          description: "회원정보 확인 및 수정",
+          description: undefined,
           items: [
             {
               id: "menu-account",
@@ -104,7 +113,7 @@ export default function DriverSettingsHomePage() {
         {
           id: "group-truck",
           title: "차량",
-          description: "차량 목록 및 등록 관리",
+          description: undefined,
           items: [
             {
               id: "menu-trucks",
@@ -116,9 +125,28 @@ export default function DriverSettingsHomePage() {
           ] as MenuItem[],
         },
         {
+          id: "group-settlement",
+          title: "정산",
+          description: undefined,
+          items: [
+            {
+              id: "menu-settlement-account",
+              title: "정산 계좌",
+              subtitle: settlementAccountSummary,
+              showChevron: false,
+            },
+            {
+              id: "menu-settlement",
+              title: "정산 내역",
+              subtitle: "지급 상태 확인",
+              path: "/(driver)/settlement",
+            },
+          ] as MenuItem[],
+        },
+        {
           id: "group-support",
           title: "고객 지원",
-          description: "문의/정책 안내",
+          description: undefined,
           items: [
             {
               id: "menu-help",
@@ -137,7 +165,7 @@ export default function DriverSettingsHomePage() {
         {
           id: "group-auth",
           title: "계정",
-          description: "로그아웃",
+          description: undefined,
           items: [
             {
               id: "menu-logout",
@@ -154,8 +182,8 @@ export default function DriverSettingsHomePage() {
             },
           ] as MenuItem[],
         },
-      ] as Array<{ id: string; title: string; description: string; items: MenuItem[] }>,
-    [auth, truckTrailing]
+      ] as Array<{ id: string; title: string; description?: string; items: MenuItem[] }>,
+    [auth, settlementAccountSummary, truckTrailing]
   );
 
   return (
@@ -175,6 +203,7 @@ export default function DriverSettingsHomePage() {
                 title={item.title}
                 subtitle={item.subtitle}
                 trailingText={item.trailingText}
+                showChevron={item.showChevron}
                 onPress={() => (item.onPress ? item.onPress() : item.path ? pushOnce(item.path) : undefined)}
               />
             ))}

@@ -1,6 +1,7 @@
 import React from "react";
 import { Alert } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
+import { useLocalSearchParams } from "expo-router";
 
 import { useActiveOrder } from "@/entities/order/model/active-order.store";
 import { DriverOrdersBoard } from "@/features/driver-orders/ui/DriverOrdersBoard";
@@ -66,6 +67,8 @@ function mergeMatchWithPrevious(input: {
 }
 
 export default function DriverRunPage() {
+  const params = useLocalSearchParams<{ status?: string | string[] }>();
+  const requestedRunStatus = Array.isArray(params.status) ? params.status[0] : params.status;
   const { activeRun, setActiveRun, clearActiveRun } = useActiveOrder();
   const [isRunSyncing, setIsRunSyncing] = React.useState(false);
   const focusRefetchMetaRef = React.useRef({ hasFocusedOnce: false, lastRefetchAt: 0 });
@@ -147,7 +150,7 @@ export default function DriverRunPage() {
   );
 
   if (!activeRun) {
-    return <DriverOrdersBoard assignedOnly />;
+    return <DriverOrdersBoard assignedOnly initialRunStatusFilter={requestedRunStatus ?? null} />;
   }
 
   const uiState = getDriverUiStateFromStatusPayload({

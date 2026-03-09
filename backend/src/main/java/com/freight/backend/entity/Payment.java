@@ -7,6 +7,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
@@ -22,7 +23,20 @@ import lombok.NoArgsConstructor;
  * - 토스 결제 시: orderNo에 orderId 저장, pgRef에 토스 paymentKey 저장
  */
 @Entity
-@Table(name = "payments")
+@Table(
+        name = "payments",
+        indexes = {
+                @Index(name = "idx_payments_match_id", columnList = "match_id"),
+                @Index(name = "idx_payments_status", columnList = "status"),
+                @Index(name = "idx_payments_order_no", columnList = "order_no"),
+                @Index(name = "idx_payments_match_id_status", columnList = "match_id, status"),
+                @Index(name = "idx_payments_pg_ref", columnList = "pg_ref")
+        },
+        uniqueConstraints = {
+                @jakarta.persistence.UniqueConstraint(name = "uk_payments_order_no", columnNames = "order_no"),
+                @jakarta.persistence.UniqueConstraint(name = "uk_payments_pg_ref", columnNames = "pg_ref")
+        }
+)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor

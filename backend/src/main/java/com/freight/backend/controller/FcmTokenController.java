@@ -5,6 +5,10 @@ import com.freight.backend.entity.FcmToken;
 import com.freight.backend.exception.CustomException;
 import com.freight.backend.exception.ErrorCode;
 import com.freight.backend.service.FcmService;
+import com.freight.backend.util.SecurityUtils;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -21,6 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/push-tokens")
 @RequiredArgsConstructor
+@Tag(name = "FCM Token", description = "푸시 알림 토큰 관리 API")
 public class FcmTokenController {
 
     private final FcmService fcmService;
@@ -42,12 +47,14 @@ public class FcmTokenController {
         if (userDetails.getAuthorities().contains(new SimpleGrantedAuthority("ROLE_SHIPPER"))) {
             return FcmToken.UserType.SHIPPER;
         }
-        if (userDetails.getAuthorities().contains(new SimpleGrantedAuthority("ROLE_ADMIN"))) {
+        if (SecurityUtils.isAdmin(userDetails)) {
             return FcmToken.UserType.ADMIN;
         }
         throw new CustomException(ErrorCode.AUTH_FORBIDDEN);
     }
 
+    @Operation(summary = "FCM 토큰 등록/갱신")
+    @ApiResponse(responseCode = "204", description = "토큰 등록 완료")
     @PostMapping("/me")
     public ResponseEntity<Void> upsertMyToken(
             @AuthenticationPrincipal UserDetails userDetails,
@@ -59,6 +66,8 @@ public class FcmTokenController {
         return ResponseEntity.noContent().build();
     }
 
+    @Operation(summary = "FCM 토큰 비활성화")
+    @ApiResponse(responseCode = "204", description = "토큰 비활성화 완료")
     @DeleteMapping("/me")
     public ResponseEntity<Void> deactivateMyToken(
             @AuthenticationPrincipal UserDetails userDetails,

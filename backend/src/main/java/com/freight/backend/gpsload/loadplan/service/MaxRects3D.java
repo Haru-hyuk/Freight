@@ -9,17 +9,11 @@ import java.util.List;
  */
 public class MaxRects3D {
 
-    private final int truckL;
-    private final int truckW;
-    private final int truckH;
     private List<FreeBox> freeBoxes;
 
     private static final int MIN_VOLUME = 1000; // 최소 1000cm³ 이하는 무시
 
     public MaxRects3D(int truckL, int truckW, int truckH) {
-        this.truckL = truckL;
-        this.truckW = truckW;
-        this.truckH = truckH;
         this.freeBoxes = new ArrayList<>();
         // 초기 빈 공간 = 전체 트럭
         this.freeBoxes.add(new FreeBox(0, 0, 0, truckW, truckH, truckL));

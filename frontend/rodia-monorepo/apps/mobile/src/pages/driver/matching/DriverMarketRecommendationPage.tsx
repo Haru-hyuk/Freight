@@ -1,17 +1,24 @@
-import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, Pressable, StyleSheet, View } from "react-native";
+import { Alert, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import type { QuoteDetailResponse } from "@/entities/quote/model/quote.types";
+import { addDriverAcceptedRunGroup } from "@/features/driver-orders/model/acceptedRunGroups";
+import {
+  clearDriverMarketRecommendationSelection,
+  getDriverMarketRecommendationSelection,
+} from "@/features/driver-orders/model/marketRecommendationSelection";
 import {
   buildEmptyRouteSummary,
   fetchRouteSummary,
+  normalizeRouteSummary,
   type NormalizedRouteSummary,
 } from "@/features/driver-reco/model/routeSummary";
 import RecoLoadSimulationCard, {
+  type RecoRecommendedOrderSummary,
   type RecoSelectedOrderDetail,
+  type RecoVisitStep,
 } from "@/features/driver-reco/ui/RecoLoadSimulationCard";
 import RecoRouteMapCard from "@/features/driver-reco/ui/RecoRouteMapCard";
 import {
@@ -20,24 +27,20 @@ import {
   postCounterOffer,
   type DriverOrderCard,
 } from "@/features/matching/api";
-import CounterOfferModal, { type CounterOfferSubmitPayload } from "@/features/matching/ui/CounterOfferModal";
-import {
-  getDriverMarketRecommendationSelection,
-  clearDriverMarketRecommendationSelection,
-} from "@/features/driver-orders/model/marketRecommendationSelection";
-import { DRIVER_ROUTE_PATH } from "@/features/matching/model/driverRunUiApiGrounding";
 import {
   DRIVER_RUN_SYNC_EVENT,
   publishDriverRunSyncEvent,
 } from "@/features/matching/model/driverRunSyncEvents";
-import { addDriverAcceptedRunGroup } from "@/features/driver-orders/model/acceptedRunGroups";
-import { previewLoadPlan as previewLoadPlanGenerated } from "@/shared/api/generated/driver-optimization-controller/driver-optimization-controller";
-import type { LoadPlanResponse, Placement, TruckSpecReferenceResponse } from "@/shared/api/generated/schemas";
+import { DRIVER_ROUTE_PATH } from "@/features/matching/model/driverRunUiApiGrounding";
+import CounterOfferModal, { type CounterOfferSubmitPayload } from "@/features/matching/ui/CounterOfferModal";
+import { previewDriverLoadPlan, type LoadPlanResponse, type Placement, type TruckSpecReferenceResponse } from "@/features/matching/api";
+import { previewRouteSelection } from "@/shared/api/generated/driver-optimization/driver-optimization";
+import type { CargoVisit } from "@/shared/api/generated/schemas/cargoVisit";
 import { readApiErrorMessage } from "@/shared/lib/api/readApiErrorMessage";
 import { formatKrw } from "@/shared/lib/format/display";
 import { API_ERROR_CODE, getApiErrorCode } from "@/shared/lib/policy";
 import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
-import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
+import { createThemedStyles } from "@/shared/theme/useAppTheme";
 import { AppButton } from "@/shared/ui/kit/AppButton";
 import { AppCard } from "@/shared/ui/kit/AppCard";
 import { AppErrorState } from "@/shared/ui/kit/AppErrorState";
@@ -57,6 +60,9 @@ type AnyObject = Record<string, unknown>;
 type ParsedRecommendationPlan = {
   loadPlan: LoadPlanResponse | null;
   truckSpec: TruckSpecReferenceResponse | null;
+};
+type RecommendationVisitStep = RecoVisitStep & {
+  visitType?: "START" | "PICKUP" | "DELIVERY" | "WAYPOINT" | "MOVE";
 };
 const PALETTE = ["#4F46E5", "#0EA5E9", "#22C55E", "#F59E0B", "#EF4444", "#EC4899"];
 
@@ -82,12 +88,6 @@ function toPositiveNumber(value: unknown, fallback = 0): number {
 function toPositiveInt(value: unknown): number {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
-}
-
-function toOneDecimalText(value: unknown): string {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return "0.0";
-  return parsed.toFixed(1);
 }
 
 function asObject(value: unknown): AnyObject {
@@ -133,10 +133,10 @@ function normalizeTruckSpec(value: unknown): TruckSpecReferenceResponse | null {
   const source = asObject(value);
   if (Object.keys(source).length <= 0) return null;
 
-  const length = toPositiveNumber(source.cargoLengthCm ?? source.cargoLength, 0);
-  const width = toPositiveNumber(source.cargoWidthCm ?? source.cargoWidth, 0);
-  const height = toPositiveNumber(source.cargoHeightCm ?? source.cargoHeight, 0);
-  const maxWeight = toPositiveNumber(source.maxWeight ?? source.weightLimit, 0);
+  const length = toPositiveNumber(source.cargoLengthCm ?? source.cargoLength ?? source.length, 0);
+  const width = toPositiveNumber(source.cargoWidthCm ?? source.cargoWidth ?? source.width, 0);
+  const height = toPositiveNumber(source.cargoHeightCm ?? source.cargoHeight ?? source.height, 0);
+  const maxWeight = toPositiveNumber(source.maxWeight ?? source.maxWeightKg ?? source.weightLimit, 0);
   const vehicleType = toOptionalText(source.vehicleType ?? source.type);
   const vehicleBodyType = toOptionalText(source.vehicleBodyType ?? source.bodyType);
 
@@ -179,7 +179,25 @@ function resolvePreviewPayload(payload: unknown): ParsedRecommendationPlan {
     if (!loadPlan) {
       const placements = normalizePlacementList(source.placements);
       if (Array.isArray(source.placements) || placements.length > 0) {
-        loadPlan = { placements };
+        const statsSource = asObject(source.stats);
+        const utilization = toFiniteNumber(statsSource.utilization, NaN);
+        const totalWeight = toFiniteNumber(statsSource.totalWeight, NaN);
+        const placedCount = toFiniteNumber(statsSource.placedCount, NaN);
+        const unplacedCount = toFiniteNumber(statsSource.unplacedCount, NaN);
+
+        loadPlan = {
+          placements,
+          stats:
+            Object.keys(statsSource).length > 0
+              ? {
+                  ...(Number.isFinite(utilization) ? { utilization } : {}),
+                  ...(Number.isFinite(totalWeight) ? { totalWeight } : {}),
+                  ...(Number.isFinite(placedCount) ? { placedCount: Math.max(0, Math.trunc(placedCount)) } : {}),
+                  ...(Number.isFinite(unplacedCount) ? { unplacedCount: Math.max(0, Math.trunc(unplacedCount)) } : {}),
+                }
+              : undefined,
+          unplaced: Array.isArray(source.unplaced) ? source.unplaced : undefined,
+        };
       }
     }
 
@@ -199,6 +217,13 @@ function resolvePreviewPayload(payload: unknown): ParsedRecommendationPlan {
   }
 
   return { loadPlan, truckSpec };
+}
+
+function hasUnplacedLoadPlan(plan: LoadPlanResponse | null | undefined): boolean {
+  if (!plan) return false;
+  const unplacedCount = toPositiveInt(plan.stats?.unplacedCount);
+  if (unplacedCount > 0) return true;
+  return Array.isArray(plan.unplaced) && plan.unplaced.length > 0;
 }
 
 function resolveTruckDimensions(spec: TruckSpecReferenceResponse | null | undefined) {
@@ -232,7 +257,326 @@ function inferTruckSpecFromQuotes(quotes: QuoteDetailResponse[]): TruckSpecRefer
   };
 }
 
-function buildFallbackPlacements(quotes: QuoteDetailResponse[], spec: TruckSpecReferenceResponse | null): Placement[] {
+function buildDeliveryStopOrderMap(visitOrder: CargoVisit[] | undefined, fallbackQuoteIds: number[]): Map<number, number> {
+  const map = new Map<number, number>();
+  const source = Array.isArray(visitOrder) ? visitOrder : [];
+
+  source.forEach((visit) => {
+    const quoteId = toPositiveInt(visit?.quoteId);
+    const type = toOptionalText(visit?.type)?.toUpperCase();
+    if (quoteId <= 0 || type !== "DELIVERY" || map.has(quoteId)) return;
+    map.set(quoteId, map.size + 1);
+  });
+
+  fallbackQuoteIds.forEach((quoteId) => {
+    if (quoteId <= 0 || map.has(quoteId)) return;
+    map.set(quoteId, map.size + 1);
+  });
+
+  return map;
+}
+
+function normalizeVisitSteps(
+  visitOrder: CargoVisit[] | undefined,
+  deliveryStopOrderByQuoteId: Map<number, number>
+): RecommendationVisitStep[] {
+  if (!Array.isArray(visitOrder)) return [];
+
+  const steps = visitOrder
+    .map((visit, index) => {
+      const quoteId = toPositiveInt(visit?.quoteId) || 0;
+      const type = toOptionalText(visit?.type)?.toUpperCase();
+      const location = asObject(visit?.location);
+      const address = toOptionalText(location.address ?? visit?.address) ?? "-";
+      const title =
+        toOptionalText(location.name ?? location.address ?? visit?.address) ??
+        (quoteId > 0 ? `오더 ${quoteId}` : `단계 ${index + 1}`);
+      const typeLabel =
+        type === "PICKUP" ? "상차" : type === "DELIVERY" ? "하차" : type === "WAYPOINT" ? "경유" : "이동";
+      return {
+        key: `${quoteId || "x"}-${type || "unknown"}-${index + 1}`,
+        sequence: toPositiveInt(visit?.sequence) || index + 1,
+        stopOrder: deliveryStopOrderByQuoteId.get(quoteId) ?? null,
+        quoteId: quoteId > 0 ? quoteId : undefined,
+        visitType:
+          type === "PICKUP"
+            ? ("PICKUP" as const)
+            : type === "DELIVERY"
+              ? ("DELIVERY" as const)
+              : type === "WAYPOINT"
+                ? ("WAYPOINT" as const)
+                : ("MOVE" as const),
+        typeLabel,
+        title,
+        subtitle: address,
+      };
+    })
+    .filter((step) => typeof step.quoteId === "number" || step.typeLabel === "경유");
+
+  if (steps.length <= 0) return [];
+  return [
+    {
+      key: "start-empty",
+      sequence: 0,
+      stopOrder: null,
+      visitType: "START" as const,
+      typeLabel: "시작",
+      title: "빈차 출발",
+      subtitle: "아직 적재된 화물이 없습니다.",
+    },
+    ...steps,
+  ];
+}
+
+function buildSyntheticVisitSteps(
+  quoteCards: Array<{
+    quoteId: number;
+    stopOrder: number;
+    order: DriverOrderCard | null;
+    quote: QuoteDetailResponse | null;
+  }>
+): RecommendationVisitStep[] {
+  if (quoteCards.length <= 0) return [];
+
+  const pickups = quoteCards.map((entry, index) => ({
+    key: `pickup-${entry.quoteId}-${index + 1}`,
+    sequence: index + 1,
+    stopOrder: entry.stopOrder,
+    quoteId: entry.quoteId,
+    visitType: "PICKUP" as const,
+    typeLabel: "상차",
+    title: entry.order?.originAddress ?? entry.quote?.originAddress ?? `오더 ${entry.quoteId}`,
+    subtitle: entry.quote?.cargoName ?? entry.order?.cargoText ?? "상차",
+  }));
+
+  const deliveries = [...quoteCards].sort((a, b) => a.stopOrder - b.stopOrder).map((entry, index) => ({
+    key: `delivery-${entry.quoteId}-${index + 1}`,
+    sequence: pickups.length + index + 1,
+    stopOrder: entry.stopOrder,
+    quoteId: entry.quoteId,
+    visitType: "DELIVERY" as const,
+    typeLabel: "하차",
+    title: entry.order?.destinationAddress ?? entry.quote?.destinationAddress ?? `오더 ${entry.quoteId}`,
+    subtitle: entry.quote?.cargoName ?? entry.order?.cargoText ?? "하차",
+  }));
+
+  return [
+    {
+      key: "start-empty",
+      sequence: 0,
+      stopOrder: null,
+      visitType: "START" as const,
+      typeLabel: "시작",
+      title: "빈차 출발",
+      subtitle: "아직 적재된 화물이 없습니다.",
+    },
+    ...pickups,
+    ...deliveries,
+  ];
+}
+
+function findLoadedStartStepIndex(steps: RecommendationVisitStep[]): number {
+  if (steps.length <= 0) return 0;
+  let lastPickupIndex = -1;
+  steps.forEach((step, index) => {
+    if (step.visitType === "PICKUP") {
+      lastPickupIndex = index;
+    }
+  });
+  if (lastPickupIndex >= 0) return lastPickupIndex;
+  return Math.min(1, steps.length - 1);
+}
+
+function buildActiveLoadPlanQuoteIds(
+  steps: RecommendationVisitStep[],
+  selectedStepIndex: number,
+  fallbackQuoteIds: number[]
+): number[] {
+  if (steps.length <= 0) return fallbackQuoteIds;
+
+  const activeQuoteIds = new Set<number>();
+  const deliveredQuoteIds = new Set<number>();
+  const lastIndex = Math.min(selectedStepIndex, steps.length - 1);
+
+  for (let index = 0; index <= lastIndex; index += 1) {
+    const step = steps[index];
+    const quoteId = toPositiveInt(step?.quoteId);
+    if (quoteId <= 0) continue;
+    if (step.visitType === "PICKUP") {
+      activeQuoteIds.add(quoteId);
+      continue;
+    }
+    if (step.visitType === "DELIVERY") {
+      activeQuoteIds.delete(quoteId);
+      deliveredQuoteIds.add(quoteId);
+    }
+  }
+
+  const orderedActiveQuoteIds = steps
+    .filter((step) => step.visitType === "DELIVERY")
+    .map((step) => toPositiveInt(step.quoteId))
+    .filter((quoteId) => quoteId > 0 && activeQuoteIds.has(quoteId) && !deliveredQuoteIds.has(quoteId))
+    .filter((quoteId, index, list) => list.indexOf(quoteId) === index);
+
+  if (orderedActiveQuoteIds.length > 0) {
+    return orderedActiveQuoteIds;
+  }
+
+  return fallbackQuoteIds.filter((quoteId) => activeQuoteIds.has(quoteId));
+}
+
+function remapPlacementStopOrders(
+  placements: Placement[],
+  orderedQuoteIds: number[],
+  stopOrderByQuoteId: Map<number, number>
+): Placement[] {
+  if (placements.length <= 0 || orderedQuoteIds.length <= 0) return placements;
+
+  const localToGlobalStopOrder = new Map<number, number>();
+  orderedQuoteIds.forEach((quoteId, index) => {
+    const globalStopOrder = stopOrderByQuoteId.get(quoteId);
+    if (globalStopOrder && globalStopOrder > 0) {
+      localToGlobalStopOrder.set(index + 1, globalStopOrder);
+    }
+  });
+
+  return placements.map((placement) => {
+    const localStopOrder = toPositiveInt(placement.stopOrder);
+    const globalStopOrder = localToGlobalStopOrder.get(localStopOrder);
+    if (!globalStopOrder) return placement;
+    return { ...placement, stopOrder: globalStopOrder };
+  });
+}
+
+function filterPlacementsByStopOrders(placements: Placement[], stopOrders: Set<number>): Placement[] {
+  if (placements.length <= 0 || stopOrders.size <= 0) return [];
+  return placements.filter((placement) => {
+    const stopOrder = toPositiveInt(placement.stopOrder);
+    return stopOrder > 0 && stopOrders.has(stopOrder);
+  });
+}
+
+function resolveOrderQuoteId(order: DriverOrderCard | null | undefined): number {
+  return toPositiveInt(order?.quoteId);
+}
+
+async function loadQuoteEntriesSequentially(quoteIds: number[]): Promise<Array<readonly [number, QuoteDetailResponse | null]>> {
+  const entries: Array<readonly [number, QuoteDetailResponse | null]> = [];
+  for (const quoteId of quoteIds) {
+    try {
+      const quote = await getDriverQuoteSummaryDetail(quoteId);
+      entries.push([quoteId, quote] as const);
+    } catch {
+      entries.push([quoteId, null] as const);
+    }
+  }
+  return entries;
+}
+
+function mergePlacementsByStopOrder(placements: Placement[]): Placement[] {
+  if (placements.length <= 1) return placements;
+
+  const grouped = new Map<number, Placement[]>();
+  placements.forEach((placement) => {
+    const stopOrder = toPositiveInt(placement.stopOrder);
+    const key = stopOrder > 0 ? stopOrder : 0;
+    const bucket = grouped.get(key);
+    if (bucket) {
+      bucket.push(placement);
+      return;
+    }
+    grouped.set(key, [placement]);
+  });
+
+  return Array.from(grouped.entries())
+    .map(([stopOrder, bucket]) => {
+      if (bucket.length <= 1) {
+        return bucket[0];
+      }
+
+      let minX = Number.POSITIVE_INFINITY;
+      let minY = Number.POSITIVE_INFINITY;
+      let minZ = Number.POSITIVE_INFINITY;
+      let maxX = Number.NEGATIVE_INFINITY;
+      let maxY = Number.NEGATIVE_INFINITY;
+      let maxZ = Number.NEGATIVE_INFINITY;
+      let totalWeight = 0;
+
+      bucket.forEach((placement) => {
+        const x = toFiniteNumber(placement.x, 0);
+        const y = toFiniteNumber(placement.y, 0);
+        const z = toFiniteNumber(placement.z, 0);
+        const width = Math.max(20, toFiniteNumber(placement.width, 80));
+        const height = Math.max(20, toFiniteNumber(placement.height, 80));
+        const length = Math.max(20, toFiniteNumber(placement.length, 80));
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        minZ = Math.min(minZ, z);
+        maxX = Math.max(maxX, x + width);
+        maxY = Math.max(maxY, y + height);
+        maxZ = Math.max(maxZ, z + length);
+        totalWeight += Math.max(0, toFiniteNumber(placement.weight, 0));
+      });
+
+      const base = bucket[0];
+      return {
+        ...base,
+        id: `stop-${stopOrder || base.id}`,
+        x: minX,
+        y: minY,
+        z: minZ,
+        width: Math.max(20, maxX - minX),
+        height: Math.max(20, maxY - minY),
+        length: Math.max(20, maxZ - minZ),
+        weight: totalWeight > 0 ? totalWeight : base.weight,
+        stopOrder: stopOrder > 0 ? stopOrder : base.stopOrder,
+      };
+    })
+    .sort((a, b) => {
+      const firstStop = toPositiveInt(a.stopOrder) || 9999;
+      const secondStop = toPositiveInt(b.stopOrder) || 9999;
+      return firstStop - secondStop;
+    });
+}
+
+function reconcilePlacementDimensionsWithQuotes(
+  placements: Placement[],
+  stopOrderToQuote: Map<number, QuoteDetailResponse>
+): Placement[] {
+  if (placements.length <= 0 || stopOrderToQuote.size <= 0) return placements;
+
+  return placements.map((placement) => {
+    const stopOrder = toPositiveInt(placement.stopOrder);
+    if (stopOrder <= 0) return placement;
+
+    const quote = stopOrderToQuote.get(stopOrder);
+    const items = Array.isArray(quote?.quoteItems) ? quote.quoteItems : [];
+    if (items.length !== 1) return placement;
+
+    const item = items[0];
+    const quantity = Math.max(1, toPositiveInt(item?.quantity) || 1);
+    if (quantity !== 1) return placement;
+
+    const width = Math.max(20, toPositiveNumber(item?.widthCm, 0));
+    const length = Math.max(20, toPositiveNumber(item?.lengthCm, 0));
+    const height = Math.max(20, toPositiveNumber(item?.heightCm, 0));
+    if (width <= 0 || length <= 0 || height <= 0) return placement;
+
+    return {
+      ...placement,
+      width,
+      length,
+      height,
+      weight: Math.max(0, toPositiveNumber(item?.unitWeightKg, placement.weight ?? 0)),
+    };
+  });
+}
+
+function buildFallbackPlacements(
+  quotes: QuoteDetailResponse[],
+  spec: TruckSpecReferenceResponse | null,
+  stopOrderByQuoteId: Map<number, number>
+): Placement[] {
   const dimensions = resolveTruckDimensions(spec);
   const maxLength = dimensions.lengthCm;
   const maxWidth = dimensions.widthCm;
@@ -241,10 +585,11 @@ function buildFallbackPlacements(quotes: QuoteDetailResponse[], spec: TruckSpecR
   const placements: Placement[] = [];
   let cursorX = 0;
   let cursorZ = 0;
+  let cursorY = 0;
   let currentRowDepth = 0;
-  let stopOrder = 1;
-
-  quotes.forEach((quote) => {
+  let currentLayerHeight = 0;
+  quotes.forEach((quote, quoteIndex) => {
+    const stopOrder = stopOrderByQuoteId.get(toPositiveInt(quote.quoteId)) ?? quoteIndex + 1;
     const items = Array.isArray(quote.quoteItems) ? quote.quoteItems : [];
     const safeItems =
       items.length > 0
@@ -288,13 +633,18 @@ function buildFallbackPlacements(quotes: QuoteDetailResponse[], spec: TruckSpecR
         if (cursorZ + length > maxLength) {
           cursorX = 0;
           cursorZ = 0;
+          cursorY += currentLayerHeight + gap;
           currentRowDepth = 0;
+          currentLayerHeight = 0;
+        }
+        if (cursorY + height > dimensions.heightCm) {
+          continue;
         }
 
         placements.push({
           id: `q${quote.quoteId}-i${itemIndex + 1}-${i + 1}`,
           x: cursorX,
-          y: 0,
+          y: cursorY,
           z: cursorZ,
           width,
           length,
@@ -310,13 +660,50 @@ function buildFallbackPlacements(quotes: QuoteDetailResponse[], spec: TruckSpecR
 
         cursorX += width + gap;
         currentRowDepth = Math.max(currentRowDepth, length);
+        currentLayerHeight = Math.max(currentLayerHeight, height);
       }
     });
-
-    stopOrder += 1;
   });
 
   return placements;
+}
+
+function buildRouteSelectionPreviewRequest(
+  selection: NonNullable<ReturnType<typeof getDriverMarketRecommendationSelection>>,
+  quotes: QuoteDetailResponse[]
+) {
+  const firstPickup = quotes.find(
+    (quote) => Number.isFinite(quote.originLat) && Number.isFinite(quote.originLng) && Number(quote.originLat) !== 0 && Number(quote.originLng) !== 0
+  );
+  const firstDropoff = quotes.find(
+    (quote) =>
+      Number.isFinite(quote.destinationLat) &&
+      Number.isFinite(quote.destinationLng) &&
+      Number(quote.destinationLat) !== 0 &&
+      Number(quote.destinationLng) !== 0
+  );
+
+  return {
+    currentLat: Number(firstPickup?.originLat ?? 37.5665),
+    currentLng: Number(firstPickup?.originLng ?? 126.978),
+    ...(Number.isFinite(firstDropoff?.destinationLat) ? { endLat: Number(firstDropoff?.destinationLat) } : {}),
+    ...(Number.isFinite(firstDropoff?.destinationLng) ? { endLng: Number(firstDropoff?.destinationLng) } : {}),
+    combinePreference: selection.mode,
+    mode: selection.mode,
+    loadedWeightKg: Number(quotes.reduce((sum, quote) => sum + Math.max(0, toPositiveNumber(quote.weightKg, 0)), 0).toFixed(2)),
+    loadedVolumeCbm: Number(quotes.reduce((sum, quote) => sum + Math.max(0, toPositiveNumber(quote.volumeCbm, 0)), 0).toFixed(2)),
+    maxPickupDistanceKm: 60,
+    quoteIds: selection.recommendation.quoteIds,
+    selectedRouteRank: selection.recommendation.rank,
+    ...(toPositiveInt(selection.selectedTruckId) > 0 ? { truckId: toPositiveInt(selection.selectedTruckId) } : {}),
+  };
+}
+
+function shouldUseBundledFallbackStops(summary: NormalizedRouteSummary, quoteCount: number): boolean {
+  if (quoteCount <= 1) return false;
+  // Bundled recommendation should normally contain multiple pickup/dropoff points.
+  // If server returns only 2 points, keep map useful by switching to client fallback stops.
+  return summary.stops.length <= 2;
 }
 
 const useStyles = createThemedStyles((theme) => {
@@ -325,7 +712,8 @@ const useStyles = createThemedStyles((theme) => {
   return StyleSheet.create({
     content: {
       gap: spacing * 3,
-      paddingBottom: spacing * 24,
+      paddingTop: spacing * 4,
+      paddingBottom: spacing * 30,
     },
     summaryCard: {
       padding: spacing * 4,
@@ -354,73 +742,6 @@ const useStyles = createThemedStyles((theme) => {
       backgroundColor: tint(cBorder, 0.4, theme.colors.bgSurfaceAlt),
       gap: spacing * 0.5,
     },
-    quotesCard: {
-      padding: spacing * 4,
-      gap: spacing * 2,
-    },
-    quoteRow: {
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: cBorder,
-      backgroundColor: theme.colors.bgSurface,
-      paddingHorizontal: spacing * 3,
-      paddingVertical: spacing * 2.5,
-      gap: spacing,
-    },
-    quoteTop: {
-      flexDirection: "row",
-      alignItems: "flex-start",
-      justifyContent: "space-between",
-      gap: spacing * 2,
-    },
-    quoteSeqWrap: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing * 1.5,
-      flex: 1,
-    },
-    quoteSeqBadge: {
-      width: 24,
-      height: 24,
-      borderRadius: 12,
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: tint(theme.colors.brandPrimary, 0.9, theme.colors.brandPrimary),
-    },
-    quoteRouteWrap: {
-      gap: spacing,
-    },
-    quoteRouteRow: {
-      flexDirection: "row",
-      alignItems: "flex-start",
-      gap: spacing * 1.5,
-    },
-    quoteRouteIconWrap: {
-      width: 20,
-      height: 20,
-      borderRadius: 10,
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: tint(cBorder, 0.3, theme.colors.bgSurfaceAlt),
-      marginTop: 1,
-    },
-    quoteRouteText: {
-      flex: 1,
-      color: theme.colors.textSub,
-    },
-    quoteMetaRow: {
-      flexDirection: "row",
-      gap: spacing * 1.5,
-    },
-    quoteMetaCell: {
-      flex: 1,
-      borderRadius: 10,
-      backgroundColor: tint(cBorder, 0.38, theme.colors.bgSurfaceAlt),
-      paddingHorizontal: spacing * 1.5,
-      paddingVertical: spacing * 1.2,
-      alignItems: "center",
-      gap: spacing * 0.5,
-    },
     stateWrap: {
       paddingTop: spacing * 12,
     },
@@ -446,7 +767,6 @@ export default function DriverMarketRecommendationPage({
   const params = useLocalSearchParams<RouteParams>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const theme = useAppTheme();
   const styles = useStyles();
 
   const rawKey =
@@ -479,24 +799,27 @@ export default function DriverMarketRecommendationPage({
   const [routeSummary, setRouteSummary] = useState<NormalizedRouteSummary>(buildEmptyRouteSummary);
   const [routeLoading, setRouteLoading] = useState(false);
   const [routeError, setRouteError] = useState<string | null>(null);
+  const [visitSteps, setVisitSteps] = useState<RecommendationVisitStep[]>([]);
+  const [selectedStepIndex, setSelectedStepIndex] = useState(0);
+  const [hasInitializedStep, setHasInitializedStep] = useState(false);
+  const [stepPlacements, setStepPlacements] = useState<Placement[] | null>(null);
+  const [stepTruckSpec, setStepTruckSpec] = useState<TruckSpecReferenceResponse | null>(null);
 
   const safeQuoteIds = useMemo(() => {
     if (!selection) return [] as number[];
-    return selection.recommendation.quoteIds
-      .map((quoteId) => toPositiveInt(quoteId))
-      .filter((quoteId) => quoteId > 0);
+    return selection.recommendation.quoteIds.filter((quoteId) => quoteId > 0);
   }, [selection]);
 
   const orderedOrders = useMemo(() => {
     if (!selection) return [] as DriverOrderCard[];
     const orderMap = new Map<number, DriverOrderCard>();
     selection.orders.forEach((order) => {
-      const quoteId = toPositiveInt(order.quoteId);
+      const quoteId = resolveOrderQuoteId(order);
       if (quoteId > 0) orderMap.set(quoteId, order);
     });
 
     const ordered = selection.recommendation.quoteIds
-      .map((quoteId) => orderMap.get(toPositiveInt(quoteId)))
+      .map((quoteId) => orderMap.get(quoteId))
       .filter((order): order is DriverOrderCard => Boolean(order));
     if (ordered.length > 0) return ordered;
     return [...selection.orders];
@@ -509,11 +832,10 @@ export default function DriverMarketRecommendationPage({
     const seen = new Set<number>();
     const ids: number[] = [];
     orderedOrders.forEach((order) => {
-      const safeMatchId = toPositiveInt(order.matchId);
-      if (safeMatchId <= 0) return;
-      if (seen.has(safeMatchId)) return;
-      seen.add(safeMatchId);
-      ids.push(safeMatchId);
+      if (order.matchId <= 0) return;
+      if (seen.has(order.matchId)) return;
+      seen.add(order.matchId);
+      ids.push(order.matchId);
     });
     return ids;
   }, [orderedOrders]);
@@ -525,6 +847,7 @@ export default function DriverMarketRecommendationPage({
       if (!selection) {
         setErrorMessage("추천 상세 정보를 찾지 못했습니다. 오더 마켓에서 다시 선택해 주세요.");
         setRouteSummary(buildEmptyRouteSummary());
+        setVisitSteps([]);
         setIsLoading(false);
         return;
       }
@@ -532,6 +855,7 @@ export default function DriverMarketRecommendationPage({
       if (safeQuoteIds.length <= 0) {
         setErrorMessage("추천 항목에 유효한 견적 ID가 없습니다.");
         setRouteSummary(buildEmptyRouteSummary());
+        setVisitSteps([]);
         setIsLoading(false);
         return;
       }
@@ -539,17 +863,14 @@ export default function DriverMarketRecommendationPage({
       setIsLoading(true);
       setErrorMessage(null);
       setRouteSummary(buildEmptyRouteSummary());
-      setRouteError(null);
+      setVisitSteps([]);
+      setSelectedStepIndex(0);
+      setHasInitializedStep(false);
+      setStepPlacements(null);
+      setStepTruckSpec(null);
       try {
-        const quoteEntries = await Promise.all(
-          safeQuoteIds.map(async (quoteId) => {
-            const quote = await getDriverQuoteSummaryDetail(quoteId);
-            return [quoteId, quote] as const;
-          })
-        );
-
+        const quoteEntries = await loadQuoteEntriesSequentially(safeQuoteIds);
         if (cancelled) return;
-
         const quoteMap: Record<number, QuoteDetailResponse> = {};
         quoteEntries.forEach(([quoteId, quote]) => {
           if (quote) quoteMap[quoteId] = quote;
@@ -562,33 +883,79 @@ export default function DriverMarketRecommendationPage({
 
         // fetchRouteSummary: passes candidateQuotes so server can resolve route geometry
         setRouteLoading(true);
-        const resolvedRouteSummary = await fetchRouteSummary({ selectedQuoteIds: safeQuoteIds, quotes: quoteList });
+        let resolvedRouteSummary: NormalizedRouteSummary = buildEmptyRouteSummary();
+        let resolvedVisitOrder = Array.isArray(selection.recommendation.visitOrder)
+          ? selection.recommendation.visitOrder
+          : [];
+        try {
+          const previewPayload = await previewRouteSelection(buildRouteSelectionPreviewRequest(selection, quoteList));
+          const previewSource = asObject(previewPayload);
+          const selectedRouteSource = asObject(previewSource.selectedRoute);
+          resolvedVisitOrder = Array.isArray(selectedRouteSource.visitOrder)
+            ? (selectedRouteSource.visitOrder as CargoVisit[])
+            : resolvedVisitOrder;
+          resolvedRouteSummary = normalizeRouteSummary(previewSource.routeSummary ?? previewSource, safeQuoteIds);
+        } catch {
+          try {
+            resolvedRouteSummary = await fetchRouteSummary({ selectedQuoteIds: safeQuoteIds, quotes: quoteList });
+          } catch {
+            resolvedRouteSummary = {
+              ...buildEmptyRouteSummary("route summary failed"),
+              isError: true,
+            };
+          }
+        }
         if (cancelled) return;
         setRouteLoading(false);
-        if (resolvedRouteSummary.isError) setRouteError(resolvedRouteSummary.reason ?? "경로 계산 실패");
+        const normalizedRouteSummary = shouldUseBundledFallbackStops(resolvedRouteSummary, quoteList.length)
+          ? buildEmptyRouteSummary("bundled route fallback")
+          : resolvedRouteSummary;
+        if (normalizedRouteSummary.isError) setRouteError(normalizedRouteSummary.reason ?? "경로 계산 실패");
         const previewTruckId =
           toPositiveInt(selection?.selectedTruckId) || toPositiveInt(quoteList[0]?.truckId);
         let resolvedSpec: TruckSpecReferenceResponse | null = null;
         let resolvedPlacements: Placement[] = [];
 
         try {
-          const previewPayload = await previewLoadPlanGenerated({
-            quoteIds: safeQuoteIds,
-            ...(previewTruckId > 0 ? { truckId: previewTruckId } : {}),
-          });
+          const previewPayload = await previewRouteSelection(buildRouteSelectionPreviewRequest(selection, quoteList));
           if (cancelled) return;
-          const parsed = resolvePreviewPayload(previewPayload);
+          const previewSource = asObject(previewPayload);
+          const selectedRouteSource = asObject(previewSource.selectedRoute);
+          resolvedVisitOrder = Array.isArray(selectedRouteSource.visitOrder)
+            ? (selectedRouteSource.visitOrder as CargoVisit[])
+            : resolvedVisitOrder;
+          const parsed = resolvePreviewPayload(previewSource.loadPlan ?? previewPayload);
           resolvedSpec = parsed.truckSpec;
-          resolvedPlacements = normalizePlacementList(parsed.loadPlan?.placements);
+          resolvedPlacements = hasUnplacedLoadPlan(parsed.loadPlan)
+            ? []
+            : normalizePlacementList(parsed.loadPlan?.placements);
         } catch {
-          resolvedPlacements = [];
+          try {
+            const previewPayload = await previewDriverLoadPlan({
+              quoteIds: safeQuoteIds,
+              ...(previewTruckId > 0 ? { truckId: previewTruckId } : {}),
+            });
+            if (cancelled) return;
+            const parsed = resolvePreviewPayload(previewPayload);
+            resolvedSpec = parsed.truckSpec;
+            resolvedPlacements = hasUnplacedLoadPlan(parsed.loadPlan)
+              ? []
+              : normalizePlacementList(parsed.loadPlan?.placements);
+          } catch {
+            resolvedPlacements = [];
+          }
         }
+
+        const deliveryStopOrderByQuoteId = buildDeliveryStopOrderMap(resolvedVisitOrder, safeQuoteIds);
+        const normalizedVisitSteps = normalizeVisitSteps(resolvedVisitOrder, deliveryStopOrderByQuoteId);
 
         const expectedStopCount = quoteList.length;
         if (expectedStopCount > 1 && resolvedPlacements.length > 0) {
           const distinctStopCount = new Set(
             resolvedPlacements
-              .map((placement) => toPositiveInt(placement.stopOrder))
+              .map((placement) =>
+                typeof placement.stopOrder === "number" && placement.stopOrder > 0 ? placement.stopOrder : 0
+              )
               .filter((stopOrder) => stopOrder > 0)
           ).size;
           const previewLooksPartial =
@@ -601,18 +968,26 @@ export default function DriverMarketRecommendationPage({
         if (!resolvedSpec) {
           resolvedSpec = inferTruckSpecFromQuotes(quoteList);
         }
+        if (resolvedPlacements.length <= 0 && normalizedVisitSteps.length > 0 && quoteList.length > 1) {
+          throw new Error("invalid_recommendation_load_plan");
+        }
         if (resolvedPlacements.length <= 0) {
-          resolvedPlacements = buildFallbackPlacements(quoteList, resolvedSpec);
+          resolvedPlacements = buildFallbackPlacements(quoteList, resolvedSpec, deliveryStopOrderByQuoteId);
         }
 
         if (cancelled) return;
         setTruckSpec(resolvedSpec);
         setPlacements(resolvedPlacements);
-        setRouteSummary(resolvedRouteSummary);
+        setRouteSummary(normalizedRouteSummary);
+        setVisitSteps(normalizedVisitSteps);
+        setSelectedStepIndex(findLoadedStartStepIndex(normalizedVisitSteps));
+        setHasInitializedStep(true);
       } catch {
         if (cancelled) return;
         setErrorMessage("추천 상세를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
         setRouteSummary(buildEmptyRouteSummary());
+        setVisitSteps([]);
+        setHasInitializedStep(false);
       } finally {
         if (!cancelled) {
           setIsLoading(false);
@@ -631,55 +1006,107 @@ export default function DriverMarketRecommendationPage({
     if (routeLoading || safeQuoteIds.length === 0) return;
     setRouteLoading(true);
     setRouteError(null);
-    const quotes = safeQuoteIds
-      .map((id) => quotesById[id])
-      .filter((q): q is QuoteDetailResponse => Boolean(q));
-    const summary = await fetchRouteSummary({ selectedQuoteIds: safeQuoteIds, quotes });
-    setRouteSummary(summary);
+    try {
+      const quotes = safeQuoteIds
+        .map((id) => quotesById[id])
+        .filter((q): q is QuoteDetailResponse => Boolean(q));
+      const summary = await fetchRouteSummary({ selectedQuoteIds: safeQuoteIds, quotes });
+      const normalizedSummary = shouldUseBundledFallbackStops(summary, quotes.length)
+        ? buildEmptyRouteSummary("bundled route fallback")
+        : summary;
+      setRouteSummary(normalizedSummary);
+      if (normalizedSummary.isError) setRouteError(normalizedSummary.reason ?? "경로 계산 실패");
+    } catch {
+      setRouteSummary({
+        ...buildEmptyRouteSummary("경로 계산 실패"),
+        isError: true,
+      });
+      setRouteError("경로 계산 실패");
+    }
     setRouteLoading(false);
-    if (summary.isError) setRouteError(summary.reason ?? "경로 계산 실패");
   }, [routeLoading, safeQuoteIds, quotesById]);
+
+  const deliveryStopOrderByQuoteId = useMemo(
+    () => buildDeliveryStopOrderMap(selection?.recommendation.visitOrder, safeQuoteIds),
+    [safeQuoteIds, selection?.recommendation.visitOrder]
+  );
 
   const quoteCards = useMemo(() => {
     if (!selection) return [];
     return selection.recommendation.quoteIds
-      .map((quoteId) => ({
-        quoteId: toPositiveInt(quoteId),
-        order: orderedOrders.find((order) => toPositiveInt(order.quoteId) === toPositiveInt(quoteId)) ?? null,
-        quote: quotesById[toPositiveInt(quoteId)] ?? null,
-      }))
-      .filter((entry) => entry.quoteId > 0);
-  }, [orderedOrders, quotesById, selection]);
+      .map((quoteId, index) => {
+        const normalizedQuoteId = toPositiveInt(quoteId);
+        const matchedOrder =
+          orderedOrders.find((order) => resolveOrderQuoteId(order) === normalizedQuoteId) ??
+          orderedOrders[index] ??
+          null;
+        return {
+          quoteId: normalizedQuoteId,
+        stopOrder: deliveryStopOrderByQuoteId.get(quoteId) ?? index + 1,
+          order: matchedOrder,
+          quote: quotesById[normalizedQuoteId] ?? null,
+        };
+      })
+      .filter((entry) => entry.quoteId > 0)
+      .sort((a, b) => a.stopOrder - b.stopOrder);
+  }, [deliveryStopOrderByQuoteId, orderedOrders, quotesById, selection]);
+  const quoteByStopOrder = useMemo(() => {
+    const map = new Map<number, QuoteDetailResponse>();
+    quoteCards.forEach((entry) => {
+      if (entry.stopOrder > 0 && entry.quote) {
+        map.set(entry.stopOrder, entry.quote);
+      }
+    });
+    return map;
+  }, [quoteCards]);
 
   // Fallback stops built from quote origin/destination coordinates.
   // Used when routeSummary.stops is empty (route-assembly unavailable).
-  // Kakao web calculates the polyline itself — only 2 valid coordinate points are needed.
+  // For bundled routes, preserve all pickup/dropoff points to avoid collapsing to 2 points.
   const directRouteStops = useMemo(() => {
     if (routeSummary.stops.length >= 2) return [];
     const quoteList = safeQuoteIds
       .map((id) => quotesById[id])
       .filter((q): q is QuoteDetailResponse => Boolean(q));
     if (quoteList.length === 0) return [];
-    const first = quoteList[0];
-    const last = quoteList[quoteList.length - 1];
-    const candidates = [
-      { name: toOptionalText(first.originAddress), lat: first.originLat, lng: first.originLng, type: "pickup" as const },
-      { name: toOptionalText(last.destinationAddress), lat: last.destinationLat, lng: last.destinationLng, type: "dropoff" as const },
-    ];
-    return candidates.every(
-      (s) => Number.isFinite(s.lat) && Number.isFinite(s.lng)
-    ) ? candidates : [];
+    const pickups = quoteList.map((quote) => ({
+      name: toOptionalText(quote.originAddress),
+      lat: quote.originLat,
+      lng: quote.originLng,
+      type: "pickup" as const,
+    }));
+    const dropoffs = quoteList.map((quote) => ({
+      name: toOptionalText(quote.destinationAddress),
+      lat: quote.destinationLat,
+      lng: quote.destinationLng,
+      type: "dropoff" as const,
+    }));
+    const candidates = [...pickups, ...dropoffs].filter(
+      (stop) => Number.isFinite(stop.lat) && Number.isFinite(stop.lng)
+    );
+    return candidates.length >= 2 ? candidates : [];
   }, [routeSummary.stops, safeQuoteIds, quotesById]);
 
+  const effectiveTruckSpec = stepTruckSpec ?? truckSpec;
+  const effectivePlacements = stepPlacements ?? placements;
+
   const orderedPlacements = useMemo(
-    () => [...placements].sort((a, b) => (toPositiveInt(a.stopOrder) || 9999) - (toPositiveInt(b.stopOrder) || 9999)),
-    [placements]
+    () =>
+      reconcilePlacementDimensionsWithQuotes(
+        mergePlacementsByStopOrder(effectivePlacements),
+        quoteByStopOrder
+      ).sort((a, b) => {
+        const firstStop = typeof a.stopOrder === "number" && a.stopOrder > 0 ? a.stopOrder : 9999;
+        const secondStop = typeof b.stopOrder === "number" && b.stopOrder > 0 ? b.stopOrder : 9999;
+        return firstStop - secondStop;
+      }),
+    [effectivePlacements, quoteByStopOrder]
   );
   const stopColorMap = useMemo(() => {
     const map = new Map<number, string>();
     let cursor = 0;
     orderedPlacements.forEach((placement) => {
-      const stopOrder = toPositiveInt(placement.stopOrder) || 1;
+      const stopOrder = typeof placement.stopOrder === "number" && placement.stopOrder > 0 ? placement.stopOrder : 1;
       if (!map.has(stopOrder)) {
         map.set(stopOrder, PALETTE[cursor % PALETTE.length]);
         cursor += 1;
@@ -687,34 +1114,28 @@ export default function DriverMarketRecommendationPage({
     });
     return map;
   }, [orderedPlacements]);
-  const selectedEntry = selectedStopOrder ? quoteCards[selectedStopOrder - 1] ?? null : null;
+  const selectedEntry = selectedStopOrder ? quoteCards.find((entry) => entry.stopOrder === selectedStopOrder) ?? null : null;
   const selectedOrderDetail = useMemo<RecoSelectedOrderDetail | null>(() => {
     if (!selectedEntry) return null;
+    const selectedQuote = selectedEntry.quote;
+    const selectedOrder = selectedEntry.order;
     const stopOrder = selectedStopOrder ?? 1;
     const accentColor = stopColorMap.get(stopOrder) ?? PALETTE[(stopOrder - 1) % PALETTE.length];
-    const originAddress = selectedEntry.order?.originAddress || selectedEntry.quote?.originAddress || "-";
-    const destinationAddress = selectedEntry.order?.destinationAddress || selectedEntry.quote?.destinationAddress || "-";
-    const distanceText =
-      selectedEntry.order?.routeDistanceText ||
-      (toPositiveNumber(selectedEntry.quote?.distanceKm, 0) > 0
-        ? `${toOneDecimalText(selectedEntry.quote?.distanceKm)}km`
-        : "-");
-    const weightText =
-      toPositiveNumber(selectedEntry.order?.weightKg ?? selectedEntry.quote?.weightKg, 0) > 0
-        ? `${toOneDecimalText(selectedEntry.order?.weightKg ?? selectedEntry.quote?.weightKg)}kg`
-        : "-";
-    const cbmText =
-      toPositiveNumber(selectedEntry.order?.volumeCbm ?? selectedEntry.quote?.volumeCbm, 0) > 0
-        ? toOneDecimalText(selectedEntry.order?.volumeCbm ?? selectedEntry.quote?.volumeCbm)
-        : "-";
-    const quoteItems = Array.isArray(selectedEntry.quote?.quoteItems) ? selectedEntry.quote.quoteItems : [];
-    const cargoFallback = selectedEntry.order?.cargoText || selectedEntry.quote?.cargoName || "-";
+    const originAddress = selectedOrder?.originAddress || selectedQuote?.originAddress || "-";
+    const destinationAddress = selectedOrder?.destinationAddress || selectedQuote?.destinationAddress || "-";
+    const distanceText = selectedOrder?.routeDistanceText || (selectedQuote ? `${selectedQuote.distanceKm.toFixed(1)}km` : "-");
+    const weightValue = selectedOrder?.weightKg ?? selectedQuote?.weightKg ?? 0;
+    const weightText = weightValue > 0 ? `${weightValue.toFixed(1)}kg` : "-";
+    const cbmValue = selectedOrder?.volumeCbm ?? selectedQuote?.volumeCbm ?? 0;
+    const cbmText = cbmValue > 0 ? cbmValue.toFixed(1) : "-";
+    const quoteItems = selectedQuote?.quoteItems ?? [];
+    const cargoFallback = selectedOrder?.cargoText || selectedQuote?.cargoName || "-";
     const items =
       quoteItems.length > 0
         ? quoteItems.map((item, itemIndex) => ({
             key: `${item.quoteItemId ?? "item"}-${itemIndex}`,
-            title: `${item.itemName || `화물 ${itemIndex + 1}`} · ${Math.max(1, toPositiveInt(item.quantity) || 1)}개`,
-            subtitle: `${toPositiveNumber(item.widthCm, 0)}×${toPositiveNumber(item.lengthCm, 0)}×${toPositiveNumber(item.heightCm, 0)}cm · ${toOneDecimalText(item.unitWeightKg)}kg`,
+            title: `${item.itemName || `화물 ${itemIndex + 1}`} · ${Math.max(1, item.quantity ?? 1)}개`,
+            subtitle: `${item.widthCm ?? 0}×${item.lengthCm ?? 0}×${item.heightCm ?? 0}cm · ${(item.unitWeightKg ?? 0).toFixed(1)}kg`,
           }))
         : [{ key: "fallback", title: cargoFallback }];
 
@@ -729,9 +1150,165 @@ export default function DriverMarketRecommendationPage({
       items,
     };
   }, [selectedEntry, selectedStopOrder, stopColorMap]);
+  const recommendedOrders = useMemo<RecoRecommendedOrderSummary[]>(
+    () =>
+      quoteCards.map((entry) => {
+        const stopOrder = entry.stopOrder;
+        const accentColor = stopColorMap.get(stopOrder) ?? PALETTE[(stopOrder - 1) % PALETTE.length];
+        const priceValue = entry.order?.priceValue ?? entry.quote?.finalPrice ?? 0;
+        return {
+          stopOrder,
+          quoteId: entry.quoteId,
+          accentColor,
+          priceText: formatKrw(priceValue),
+          originAddress: entry.order?.originAddress ?? entry.quote?.originAddress ?? "-",
+          destinationAddress: entry.order?.destinationAddress ?? entry.quote?.destinationAddress ?? "-",
+        };
+      }),
+    [quoteCards, stopColorMap]
+  );
+
+  const displayVisitSteps = useMemo(
+    () => (visitSteps.length > 0 ? visitSteps : buildSyntheticVisitSteps(quoteCards)),
+    [quoteCards, visitSteps]
+  );
+
+  useEffect(() => {
+    if (hasInitializedStep) return;
+    if (displayVisitSteps.length <= 0) return;
+    setSelectedStepIndex(findLoadedStartStepIndex(displayVisitSteps));
+    setHasInitializedStep(true);
+  }, [displayVisitSteps, hasInitializedStep]);
+
+  const activeLoadPlanQuoteIds = useMemo(
+    () => buildActiveLoadPlanQuoteIds(displayVisitSteps, selectedStepIndex, safeQuoteIds),
+    [displayVisitSteps, safeQuoteIds, selectedStepIndex]
+  );
+  const activeStepStopOrders = useMemo(() => {
+    const stopOrders = new Set<number>();
+    activeLoadPlanQuoteIds.forEach((quoteId) => {
+      const stopOrder = deliveryStopOrderByQuoteId.get(quoteId);
+      if (stopOrder && stopOrder > 0) {
+        stopOrders.add(stopOrder);
+      }
+    });
+    return stopOrders;
+  }, [activeLoadPlanQuoteIds, deliveryStopOrderByQuoteId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadStepPreview = async () => {
+      if (!selection || safeQuoteIds.length <= 0) {
+        setStepPlacements(null);
+        setStepTruckSpec(null);
+        return;
+      }
+
+      if (activeLoadPlanQuoteIds.length <= 0) {
+        setStepPlacements([]);
+        setStepTruckSpec(null);
+        return;
+      }
+
+      const previewTruckId =
+        toPositiveInt(selection.selectedTruckId) ||
+        toPositiveInt(quotesById[safeQuoteIds[0] ?? 0]?.truckId);
+
+      try {
+        const previewPayload = await previewDriverLoadPlan({
+          quoteIds: activeLoadPlanQuoteIds,
+          ...(previewTruckId > 0 ? { truckId: previewTruckId } : {}),
+        });
+        if (cancelled) return;
+        const parsed = resolvePreviewPayload(previewPayload);
+        const remappedPlacements = remapPlacementStopOrders(
+          normalizePlacementList(parsed.loadPlan?.placements),
+          activeLoadPlanQuoteIds,
+          deliveryStopOrderByQuoteId
+        );
+        const nextPlacements =
+          hasUnplacedLoadPlan(parsed.loadPlan) || remappedPlacements.length <= 0
+            ? filterPlacementsByStopOrders(placements, activeStepStopOrders)
+            : remappedPlacements;
+        setStepPlacements(nextPlacements);
+        setStepTruckSpec(parsed.truckSpec);
+      } catch {
+        if (cancelled) return;
+        const activeQuotes = activeLoadPlanQuoteIds
+          .map((quoteId) => quotesById[quoteId])
+          .filter((quote): quote is QuoteDetailResponse => Boolean(quote));
+        setStepPlacements(buildFallbackPlacements(activeQuotes, truckSpec, deliveryStopOrderByQuoteId));
+        setStepTruckSpec(null);
+      }
+    };
+
+    void loadStepPreview();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeLoadPlanQuoteIds, activeStepStopOrders, deliveryStopOrderByQuoteId, placements, quotesById, safeQuoteIds, selection, truckSpec]);
+
+  const visibleStopOrders = useMemo(() => {
+    if (displayVisitSteps.length <= 0) {
+      return new Set<number>(recommendedOrders.map((entry) => entry.stopOrder));
+    }
+    const loaded = new Set<number>();
+    const lastIndex = Math.min(selectedStepIndex, displayVisitSteps.length - 1);
+    for (let index = 0; index <= lastIndex; index += 1) {
+      const step = displayVisitSteps[index];
+      const stopOrder = step?.stopOrder ?? null;
+      if (!stopOrder || stopOrder <= 0) continue;
+      if (step.visitType === "PICKUP") {
+        loaded.add(stopOrder);
+      } else if (step.visitType === "DELIVERY") {
+        loaded.delete(stopOrder);
+      }
+    }
+    return loaded;
+  }, [displayVisitSteps, recommendedOrders, selectedStepIndex]);
+
+  useEffect(() => {
+    if (displayVisitSteps.length > 0) return;
+    if (selectedStopOrder) return;
+    const fallbackStopOrder = recommendedOrders[0]?.stopOrder ?? null;
+    if (fallbackStopOrder) setSelectedStopOrder(fallbackStopOrder);
+  }, [displayVisitSteps.length, recommendedOrders, selectedStopOrder]);
+
+  useEffect(() => {
+    if (displayVisitSteps.length <= 0) return;
+    const nextStep = displayVisitSteps[Math.min(selectedStepIndex, displayVisitSteps.length - 1)];
+    if (!nextStep) return;
+    if (nextStep.stopOrder && nextStep.stopOrder > 0) {
+      setSelectedStopOrder(nextStep.stopOrder);
+      return;
+    }
+    const fallbackStopOrder = recommendedOrders[0]?.stopOrder ?? null;
+    if (fallbackStopOrder) setSelectedStopOrder(fallbackStopOrder);
+  }, [displayVisitSteps, recommendedOrders, selectedStepIndex]);
+
+  const handleSelectRecommendedStop = useCallback(
+    (nextStopOrder: number | null) => {
+      setSelectedStopOrder(nextStopOrder);
+      if (!nextStopOrder) return;
+      const nextStepIndex = displayVisitSteps.findIndex((step) => step.stopOrder === nextStopOrder);
+      if (nextStepIndex >= 0) {
+        setSelectedStepIndex(nextStepIndex);
+      }
+    },
+    [displayVisitSteps]
+  );
+
+  const handlePrevStep = useCallback(() => {
+    setSelectedStepIndex((prev) => Math.max(0, prev - 1));
+  }, []);
+
+  const handleNextStep = useCallback(() => {
+    setSelectedStepIndex((prev) => Math.min(Math.max(displayVisitSteps.length - 1, 0), prev + 1));
+  }, [displayVisitSteps.length]);
 
   const handleAccept = useCallback(() => {
-    if (isBusy || isSubmittingOffer) return;
+    if (routeLoading || isBusy || isSubmittingOffer) return;
     if (groupedMatchIds.length <= 0) {
       Alert.alert("안내", "수락 가능한 매칭 정보가 없습니다.");
       return;
@@ -753,7 +1330,7 @@ export default function DriverMarketRecommendationPage({
         const successMatchIds = Array.from(
           new Set(
             acceptedMatches
-              .map((item) => toPositiveInt(item.matchId))
+              .map((item) => item.matchId)
               .filter((matchId) => matchId > 0)
           )
         );
@@ -763,7 +1340,13 @@ export default function DriverMarketRecommendationPage({
         if (successCount <= 0) {
           Alert.alert("배차 수락 실패", "배차 수락에 실패했습니다.", [
             { text: "취소", style: "cancel" },
-            { text: "다시 시도", onPress: () => void runAcceptBatch() },
+            {
+              text: "다시 시도",
+              onPress: () => {
+                setErrorMessage(null);
+                void runAcceptBatch();
+              },
+            },
           ]);
           return;
         }
@@ -816,7 +1399,13 @@ export default function DriverMarketRecommendationPage({
         const message = readApiErrorMessage(error, "잠시 후 다시 시도해 주세요.");
         Alert.alert("배차 수락 실패", message, [
           { text: "취소", style: "cancel" },
-          { text: "다시 시도", onPress: () => void runAcceptBatch() },
+          {
+            text: "다시 시도",
+            onPress: () => {
+              setErrorMessage(null);
+              void runAcceptBatch();
+            },
+          },
         ]);
       } finally {
         setIsBusy(false);
@@ -827,13 +1416,13 @@ export default function DriverMarketRecommendationPage({
       { text: "취소", style: "cancel", onPress: () => setIsBusy(false) },
       { text: "수락", onPress: () => void runAcceptBatch() },
     ]);
-  }, [groupedMatchIds, isBusy, isGroupedRecommendation, isSubmittingOffer, router, selection]);
+  }, [groupedMatchIds, isBusy, isGroupedRecommendation, isSubmittingOffer, routeLoading, router, selection]);
 
   const handleSubmitOffer = useCallback(
     async (payload: CounterOfferSubmitPayload) => {
-      if (!primaryOrder || isSubmittingOffer) return;
-      const safeMatchId = toPositiveInt(primaryOrder.matchId);
-      const safeQuoteId = toPositiveInt(primaryOrder.quoteId);
+      if (!primaryOrder || routeLoading || isBusy || isSubmittingOffer) return;
+      const safeMatchId = primaryOrder.matchId;
+      const safeQuoteId = primaryOrder.quoteId ?? 0;
       if (safeMatchId <= 0 || safeQuoteId <= 0) {
         setOfferErrorMessage("유효하지 않은 추천 항목입니다.");
         return;
@@ -865,8 +1454,9 @@ export default function DriverMarketRecommendationPage({
         setIsSubmittingOffer(false);
       }
     },
-    [isSubmittingOffer, primaryOrder]
+    [isBusy, isSubmittingOffer, primaryOrder, routeLoading]
   );
+  const isActionLocked = isBusy || isSubmittingOffer || routeLoading;
 
   const bottomBar = (
     <View style={[styles.bottomWrap, { paddingBottom: (insets.bottom ?? 0) + 10 }]}>
@@ -875,7 +1465,7 @@ export default function DriverMarketRecommendationPage({
         variant="secondary"
         style={styles.bottomBtn}
         loading={isSubmittingOffer}
-        disabled={!primaryOrder || isBusy || isSubmittingOffer}
+        disabled={!primaryOrder || isActionLocked}
         onPress={() => {
           setOfferErrorMessage(null);
           setIsOfferOpen(true);
@@ -886,7 +1476,7 @@ export default function DriverMarketRecommendationPage({
         variant="primary"
         style={styles.bottomBtn}
         loading={isBusy}
-        disabled={groupedMatchIds.length <= 0 || isBusy || isSubmittingOffer}
+        disabled={groupedMatchIds.length <= 0 || isActionLocked}
         onPress={() => void handleAccept()}
       />
     </View>
@@ -934,7 +1524,7 @@ export default function DriverMarketRecommendationPage({
     );
   }
 
-  const dims = resolveTruckDimensions(truckSpec);
+  const dims = resolveTruckDimensions(effectiveTruckSpec);
 
   return (
     <>
@@ -987,130 +1577,34 @@ export default function DriverMarketRecommendationPage({
             </View>
           </AppCard>
 
-          <RecoLoadSimulationCard
-            dims={dims}
-            isGroupedRecommendation={isGroupedRecommendation}
-            isXray={isXray}
-            onToggleXray={() => setIsXray((prev) => !prev)}
-            routeSummary={routeSummary}
-            orderedPlacements={orderedPlacements}
-            stopColorMap={stopColorMap}
-            selectedStopOrder={selectedStopOrder}
-            onSelectStopOrder={setSelectedStopOrder}
-            selectedOrderDetail={selectedOrderDetail}
-          />
-
           <RecoRouteMapCard
             summaryText={routeSummary.summary}
             stops={routeSummary.stops}
             fallbackStops={directRouteStops}
             isError={routeSummary.isError}
             routeLoading={routeLoading}
+            selectedStopOrder={selectedStopOrder}
             onRetry={() => void refetchRoute()}
           />
 
-          <AppCard style={styles.quotesCard}>
-            <AppText variant="heading" weight="900" color="textMain">
-              추천 오더
-            </AppText>
-            {quoteCards.map((entry, index) => {
-              const stopOrder = index + 1;
-              const accentColor = stopColorMap.get(stopOrder) ?? PALETTE[(stopOrder - 1) % PALETTE.length];
-              const isCardSelected = selectedStopOrder === stopOrder;
-              const priceValue = toPositiveNumber(entry.order?.priceValue ?? entry.quote?.finalPrice, 0);
-              const originAddress = entry.order?.originAddress || entry.quote?.originAddress || "-";
-              const destinationAddress = entry.order?.destinationAddress || entry.quote?.destinationAddress || "-";
-              const distanceText =
-                entry.order?.routeDistanceText ||
-                (toPositiveNumber(entry.quote?.distanceKm, 0) > 0
-                  ? `${toOneDecimalText(entry.quote?.distanceKm)}km`
-                  : "-");
-              const weightText =
-                toPositiveNumber(entry.order?.weightKg ?? entry.quote?.weightKg, 0) > 0
-                  ? `${toOneDecimalText(entry.order?.weightKg ?? entry.quote?.weightKg)}kg`
-                  : "-";
-              const cbmText =
-                toPositiveNumber(entry.order?.volumeCbm ?? entry.quote?.volumeCbm, 0) > 0
-                  ? toOneDecimalText(entry.order?.volumeCbm ?? entry.quote?.volumeCbm)
-                  : "-";
-              const cargoText = entry.order?.cargoText || entry.quote?.cargoName || "-";
-              const vehicleText = entry.order?.vehicleText || entry.quote?.vehicleType || "-";
-              const methodText =
-                entry.order?.methodText ||
-                `${entry.quote?.loadMethod || "-"} · ${entry.quote?.unloadMethod || "-"}`;
-
-              return (
-                <Pressable
-                  key={`quote-${entry.quoteId}`}
-                  onPress={() => setSelectedStopOrder((prev) => (prev === stopOrder ? null : stopOrder))}
-                  style={[
-                    styles.quoteRow,
-                    isCardSelected
-                      ? {
-                          borderColor: accentColor,
-                          borderWidth: 2,
-                          backgroundColor: tint(accentColor, 0.08, theme.colors.bgSurface),
-                        }
-                      : null,
-                  ]}
-                >
-                  <View style={styles.quoteTop}>
-                    <View style={styles.quoteSeqWrap}>
-                      <View style={[styles.quoteSeqBadge, isCardSelected ? { backgroundColor: accentColor } : null]}>
-                        <AppText variant="caption" weight="900" color="#FFFFFF">
-                          {stopOrder}
-                        </AppText>
-                      </View>
-                      <AppText variant="detail" weight="900" color="textMain">
-                        추천 오더
-                      </AppText>
-                    </View>
-                    <AppText variant="detail" weight="900" color="brandPrimary">
-                      {formatKrw(priceValue)}
-                    </AppText>
-                  </View>
-                  <View style={styles.quoteRouteWrap}>
-                    <View style={styles.quoteRouteRow}>
-                      <View style={styles.quoteRouteIconWrap}>
-                        <Ionicons name="navigate" size={12} color={theme.colors.brandPrimary} />
-                      </View>
-                      <AppText variant="caption" style={styles.quoteRouteText}>
-                        {originAddress}
-                      </AppText>
-                    </View>
-                    <View style={styles.quoteRouteRow}>
-                      <View style={styles.quoteRouteIconWrap}>
-                        <Ionicons name="flag" size={12} color={theme.colors.semanticSuccess} />
-                      </View>
-                      <AppText variant="caption" style={styles.quoteRouteText}>
-                        {destinationAddress}
-                      </AppText>
-                    </View>
-                  </View>
-                  <View style={styles.quoteMetaRow}>
-                    <View style={styles.quoteMetaCell}>
-                      <AppText variant="caption" color="textMuted">거리</AppText>
-                      <AppText variant="detail" weight="900" color="brandPrimary">{distanceText}</AppText>
-                    </View>
-                    <View style={styles.quoteMetaCell}>
-                      <AppText variant="caption" color="textMuted">중량</AppText>
-                      <AppText variant="detail" weight="900" color="textMain">{weightText}</AppText>
-                    </View>
-                    <View style={styles.quoteMetaCell}>
-                      <AppText variant="caption" color="textMuted">CBM</AppText>
-                      <AppText variant="detail" weight="900" color="textMain">{cbmText}</AppText>
-                    </View>
-                  </View>
-                  <AppText variant="caption" color="textSub">
-                    화물: {cargoText}
-                  </AppText>
-                  <AppText variant="caption" color="textSub">
-                    차량/작업: {vehicleText} · {methodText}
-                  </AppText>
-                </Pressable>
-              );
-            })}
-          </AppCard>
+          <RecoLoadSimulationCard
+            dims={dims}
+            isGroupedRecommendation={isGroupedRecommendation}
+            isXray={isXray}
+            onToggleXray={() => setIsXray((prev) => !prev)}
+            routeLoading={routeLoading}
+            orderedPlacements={orderedPlacements}
+            visibleStopOrders={visibleStopOrders}
+            stopColorMap={stopColorMap}
+            selectedStopOrder={selectedStopOrder}
+            onSelectStopOrder={handleSelectRecommendedStop}
+            recommendedOrders={recommendedOrders}
+            selectedOrderDetail={selectedOrderDetail}
+            visitSteps={displayVisitSteps}
+            selectedStepIndex={selectedStepIndex}
+            onPrevStep={handlePrevStep}
+            onNextStep={handleNextStep}
+          />
         </View>
       </PageScaffold>
 

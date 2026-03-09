@@ -9,6 +9,7 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
@@ -46,6 +47,18 @@ public class PricingRateCatalog {
     @Column(name = "base_rate_won", nullable = false)
     private Integer baseRateWon;
 
+    @Column(name = "additional_fare_won")
+    private Integer additionalFareWon;
+
+    @Column(name = "surcharge_rate", precision = 6, scale = 4)
+    private BigDecimal surchargeRate;
+
+    @Column(name = "active")
+    private Boolean active;
+
+    @Column(name = "updated_by")
+    private String updatedBy;
+
     @Column(name = "source_name")
     private String sourceName;
 
@@ -81,12 +94,49 @@ public class PricingRateCatalog {
         this.maxDistanceKm = maxDistanceKm;
         this.baseRateWon = baseRateWon;
         this.sourceName = sourceName;
+        this.updatedBy = sourceName;
+    }
+
+    public void updateByAdmin(
+            Integer baseRateWon,
+            Integer additionalFareWon,
+            BigDecimal surchargeRate,
+            Boolean active,
+            String updatedBy
+    ) {
+        if (baseRateWon != null) {
+            this.baseRateWon = baseRateWon;
+        }
+        if (additionalFareWon != null) {
+            this.additionalFareWon = additionalFareWon;
+        }
+        if (surchargeRate != null) {
+            this.surchargeRate = surchargeRate;
+        }
+        if (active != null) {
+            this.active = active;
+        }
+        if (updatedBy != null && !updatedBy.isBlank()) {
+            this.updatedBy = updatedBy;
+        }
     }
 
     @PrePersist
     protected void onCreate() {
         if (createdAt == null) {
             createdAt = LocalDateTime.now();
+        }
+        if (additionalFareWon == null) {
+            additionalFareWon = 0;
+        }
+        if (surchargeRate == null) {
+            surchargeRate = BigDecimal.ZERO;
+        }
+        if (active == null) {
+            active = Boolean.TRUE;
+        }
+        if (updatedBy == null || updatedBy.isBlank()) {
+            updatedBy = sourceName == null || sourceName.isBlank() ? "system" : sourceName;
         }
         updatedAt = LocalDateTime.now();
     }
@@ -120,7 +170,27 @@ public class PricingRateCatalog {
         return baseRateWon;
     }
 
+    public Integer getAdditionalFareWon() {
+        return additionalFareWon;
+    }
+
+    public BigDecimal getSurchargeRate() {
+        return surchargeRate;
+    }
+
+    public Boolean getActive() {
+        return active;
+    }
+
+    public String getUpdatedBy() {
+        return updatedBy;
+    }
+
     public String getSourceName() {
         return sourceName;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
     }
 }

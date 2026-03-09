@@ -1,5 +1,10 @@
 // apps/mobile/src/features/auth/api/auth-api.ts
 
+import {
+  me as meGenerated,
+  updateMe as updateMeGenerated,
+} from "@/shared/api/generated/auth/auth";
+import type { MeResponse } from "@/shared/api/generated/schemas/meResponse";
 import { apiClient } from "@/shared/lib/api/apiClient";
 import { tokenStorage, type AuthTokens } from "@/shared/lib/storage/tokenStorage";
 import type { User, UserRole } from "@/entities/user/types";
@@ -618,6 +623,45 @@ export type MeProfile = {
   bankAccount?: string;
 };
 
+function asObj(value: unknown): AnyObj {
+  return value && typeof value === "object" ? (value as AnyObj) : {};
+}
+
+function resolveMeSource(raw: unknown): AnyObj {
+  const root = asObj(raw);
+  const nestedData = asObj(root?.data);
+  const nestedResult = asObj(root?.result);
+
+  if (pickString(root.id, root.role, root.email, root.name, root.phone, root.bankName, root.bankAccount)) {
+    return root;
+  }
+  if (pickString(nestedData.id, nestedData.role, nestedData.email, nestedData.name, nestedData.phone, nestedData.bankName, nestedData.bankAccount)) {
+    return nestedData;
+  }
+  if (pickString(nestedResult.id, nestedResult.role, nestedResult.email, nestedResult.name, nestedResult.phone, nestedResult.bankName, nestedResult.bankAccount)) {
+    return nestedResult;
+  }
+  return root;
+}
+
+/**
+ * MeResponse(서버 raw) → MeProfile(도메인)
+ * - 스펙 외 확장 필드(bankName/bankAccount)가 내려오면 보존하고, 없으면 undefined 처리
+ * - data/result envelope 응답도 허용
+ */
+function toMeProfile(raw: MeResponse | unknown): MeProfile {
+  const source = resolveMeSource(raw);
+  return {
+    id: pickString(source.id, source.userId),
+    role: pickString(source.role, source.userRole),
+    email: pickString(source.email),
+    name: pickString(source.name),
+    phone: pickString(source.phone),
+    bankName: pickString(source.bankName, source.bank_name, source.settlementBankName),
+    bankAccount: pickString(source.bankAccount, source.bank_account, source.settlementBankAccount),
+  };
+}
+
 export async function getMeProfile(): Promise<MeProfile | null> {
   if (isMockMode()) {
     const access = await tokenStorage.getAccessToken();
@@ -633,20 +677,10 @@ export async function getMeProfile(): Promise<MeProfile | null> {
     };
   }
 
+  // [교체] apiClient.get("/api/auth/me") → meGenerated()
   try {
-    const res = await apiClient.get("/api/auth/me");
-    const data = (res as any)?.data ?? null;
-    const d = (data ?? {}) as AnyObj;
-    const source = (d?.data ?? d?.result ?? d) as AnyObj;
-    return {
-      id: pickString(source?.id),
-      role: pickString(source?.role),
-      email: pickString(source?.email),
-      name: pickString(source?.name),
-      phone: pickString(source?.phone),
-      bankName: pickString(source?.bankName),
-      bankAccount: pickString(source?.bankAccount),
-    };
+    const data = await meGenerated();
+    return toMeProfile(data);
   } catch {
     return null;
   }
@@ -672,21 +706,10 @@ export async function updateMeProfile(input: MeUpdateInput): Promise<{ ok: boole
     };
   }
 
+  // [교체] apiClient.patch("/api/auth/me", input) → updateMeGenerated(input)
   try {
-    const res = await apiClient.patch("/api/auth/me", input);
-    const data = (res as any)?.data ?? null;
-    const d = (data ?? {}) as AnyObj;
-    const source = (d?.data ?? d?.result ?? d) as AnyObj;
-    return {
-      ok: true,
-      profile: {
-        id: pickString(source?.id),
-        role: pickString(source?.role),
-        email: pickString(source?.email),
-        name: pickString(source?.name),
-        phone: pickString(source?.phone),
-      },
-    };
+    const data = await updateMeGenerated(input);
+    return { ok: true, profile: toMeProfile(data) };
   } catch (err) {
     const meta = extractApiErrorMeta(err);
     return { ok: false, message: meta?.message ?? "저장에 실패했습니다." };

@@ -6,9 +6,11 @@ import com.freight.backend.gpsload.routeassembly.model.DriverState;
 import com.freight.backend.gpsload.routeassembly.model.Quote;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -17,8 +19,23 @@ public class CandidateFilterService {
 
     private static final Logger log = LoggerFactory.getLogger(CandidateFilterService.class);
 
-    private static final double AVG_SPEED_KMH = 40.0;
-    private static final int PICKUP_HANDLING_MINUTES = 20;
+    @Value("${route.candidate-filter.speed.default-kmh:40.0}")
+    private double defaultSpeedKmh;
+
+    @Value("${route.candidate-filter.speed.rush-kmh:28.0}")
+    private double rushHourSpeedKmh;
+
+    @Value("${route.candidate-filter.speed.night-kmh:48.0}")
+    private double nightSpeedKmh;
+
+    @Value("${route.candidate-filter.distance.factor:1.30}")
+    private double distanceFactor;
+
+    @Value("${route.candidate-filter.pickup-handling-minutes:20}")
+    private int pickupHandlingMinutes;
+
+    @Value("${route.candidate-filter.waypoint-handling-minutes:6}")
+    private int waypointHandlingMinutes;
     private static final double HOME_ROUTE_DETOUR_LIMIT = 1.45;
     private static final double GENERAL_DETOUR_LIMIT = 2.00;
     private static final double SCHEDULED_QUOTE_DETOUR_LIMIT = 1.60;
@@ -121,31 +138,40 @@ public class CandidateFilterService {
     }
 
     private boolean passesScheduleFilter(Place driverLocation, LocalDateTime availableTime, Quote quote) {
-        if (!quote.hasScheduledDate()) {
+        LocalDateTime pickupStart = quote.effectivePickupScheduleStart();
+        LocalDateTime deliveryDeadline = quote.effectiveDeliveryDeadline();
+        if (pickupStart == null && deliveryDeadline == null) {
             return true;
         }
 
         LocalDateTime now = availableTime != null ? availableTime : LocalDateTime.now();
-        LocalDateTime scheduled = quote.scheduledDate();
-        if (scheduled.isBefore(now)) {
+        if (deliveryDeadline != null && deliveryDeadline.isBefore(now)) {
             return false;
         }
 
-        double distKm = haversineDistance(
-                driverLocation.latitude(), driverLocation.longitude(),
-                quote.origin().latitude(), quote.origin().longitude()
-        ) * 1.3;
-
-        double travelMinutes = (distKm / AVG_SPEED_KMH) * 60;
-        double totalMinutes = travelMinutes + PICKUP_HANDLING_MINUTES;
-        LocalDateTime estimatedArrival = now.plusMinutes((long) Math.ceil(totalMinutes));
-
-        boolean canArrive = !estimatedArrival.isAfter(scheduled);
-        if (!canArrive) {
-            log.debug("schedule filter rejected - quoteId={}, estimatedArrival={}, scheduled={}",
-                    quote.quoteId(), estimatedArrival, scheduled);
+        long toPickupMinutes = calculateTravelMinutes(driverLocation, quote.origin(), now);
+        LocalDateTime pickupArrival = now.plusMinutes(toPickupMinutes);
+        if (pickupStart != null && pickupArrival.isBefore(pickupStart)) {
+            pickupArrival = pickupStart;
         }
-        return canArrive;
+
+        LocalDateTime departToDelivery = pickupArrival.plusMinutes(Math.max(0, pickupHandlingMinutes));
+        long deliveryLegMinutes = calculateDeliveryLegMinutes(quote, departToDelivery);
+        LocalDateTime estimatedDelivery = pickupArrival
+                .plusMinutes(Math.max(0, pickupHandlingMinutes))
+                .plusMinutes(deliveryLegMinutes);
+
+        boolean canDeliver = deliveryDeadline == null || !estimatedDelivery.isAfter(deliveryDeadline);
+        if (!canDeliver) {
+            log.debug(
+                    "schedule filter rejected - quoteId={}, pickupStart={}, deliveryDeadline={}, estimatedDelivery={}",
+                    quote.quoteId(),
+                    pickupStart,
+                    deliveryDeadline,
+                    estimatedDelivery
+            );
+        }
+        return canDeliver;
     }
 
     private Place resolveStartLocation(DriverState driverState) {
@@ -181,9 +207,10 @@ public class CandidateFilterService {
                         cursor.latitude(), cursor.longitude(),
                         stop.latitude(), stop.longitude()
                 ) * 1.3;
-                extraMinutes += (long) Math.ceil((distKm / AVG_SPEED_KMH) * 60);
+                double speedKmh = resolveExpectedSpeedKmh(base.plusMinutes(extraMinutes));
+                extraMinutes += (long) Math.ceil((distKm / Math.max(1.0, speedKmh)) * 60);
             }
-            extraMinutes += 10;
+            extraMinutes += Math.max(1, waypointHandlingMinutes);
             cursor = stop;
         }
 
@@ -195,26 +222,79 @@ public class CandidateFilterService {
         Place currentPos = driverLocation;
 
         for (Quote q : quotes) {
-            if (!q.hasScheduledDate()) continue;
+            LocalDateTime pickupStart = q.effectivePickupScheduleStart();
+            LocalDateTime deadline = q.effectiveDeliveryDeadline();
+            if (pickupStart == null && deadline == null) {
+                continue;
+            }
 
-            double distKm = haversineDistance(
-                    currentPos.latitude(), currentPos.longitude(),
-                    q.origin().latitude(), q.origin().longitude()
-            ) * 1.3;
+            long toPickupMinutes = calculateTravelMinutes(currentPos, q.origin(), cursor);
+            LocalDateTime pickupArrival = cursor.plusMinutes(toPickupMinutes);
+            if (pickupStart != null && pickupArrival.isBefore(pickupStart)) {
+                pickupArrival = pickupStart;
+            }
 
-            long travelMinutes = (long) Math.ceil((distKm / AVG_SPEED_KMH) * 60);
-            long handlingMinutes = PICKUP_HANDLING_MINUTES;
-
-            LocalDateTime arrivalAtPickup = cursor.plusMinutes(travelMinutes);
-            if (arrivalAtPickup.isAfter(q.scheduledDate())) {
+            LocalDateTime departToDelivery = pickupArrival.plusMinutes(Math.max(0, pickupHandlingMinutes));
+            long deliveryLegMinutes = calculateDeliveryLegMinutes(q, departToDelivery);
+            LocalDateTime estimatedDelivery = pickupArrival
+                    .plusMinutes(Math.max(0, pickupHandlingMinutes))
+                    .plusMinutes(deliveryLegMinutes);
+            if (deadline != null && estimatedDelivery.isAfter(deadline)) {
                 return false;
             }
 
-            cursor = arrivalAtPickup.plusMinutes(handlingMinutes);
-            currentPos = q.origin();
+            cursor = estimatedDelivery;
+            currentPos = q.destination() != null ? q.destination() : currentPos;
         }
 
         return true;
+    }
+
+    private long calculateDeliveryLegMinutes(Quote quote, LocalDateTime departAt) {
+        if (quote == null) {
+            return 0L;
+        }
+        long totalMinutes = 0L;
+        Place cursor = quote.origin();
+        LocalDateTime segmentDeparture = departAt != null ? departAt : LocalDateTime.now();
+        if (quote.waypoints() != null) {
+            for (Place waypoint : quote.waypoints()) {
+                long segment = calculateTravelMinutes(cursor, waypoint, segmentDeparture.plusMinutes(totalMinutes));
+                totalMinutes += segment;
+                totalMinutes += Math.max(0, waypointHandlingMinutes);
+                cursor = waypoint != null ? waypoint : cursor;
+            }
+        }
+        totalMinutes += calculateTravelMinutes(cursor, quote.destination(), segmentDeparture.plusMinutes(totalMinutes));
+        return totalMinutes;
+    }
+
+    private long calculateTravelMinutes(Place from, Place to, LocalDateTime departureAt) {
+        if (from == null || to == null
+                || from.latitude() == null || from.longitude() == null
+                || to.latitude() == null || to.longitude() == null) {
+            return 0L;
+        }
+        double distKm = haversineDistance(
+                from.latitude(), from.longitude(),
+                to.latitude(), to.longitude()
+        ) * Math.max(1.0, distanceFactor);
+        double speedKmh = resolveExpectedSpeedKmh(departureAt);
+        return (long) Math.ceil((distKm / Math.max(1.0, speedKmh)) * 60);
+    }
+
+    private double resolveExpectedSpeedKmh(LocalDateTime departureAt) {
+        LocalTime time = (departureAt != null ? departureAt : LocalDateTime.now()).toLocalTime();
+        // 출근/퇴근 혼잡 시간대는 보수적으로 평가
+        if ((time.isAfter(LocalTime.of(6, 29)) && time.isBefore(LocalTime.of(10, 1)))
+                || (time.isAfter(LocalTime.of(16, 29)) && time.isBefore(LocalTime.of(20, 1)))) {
+            return rushHourSpeedKmh;
+        }
+        // 심야 시간대는 상대적으로 빠른 평균 속도 사용
+        if (time.isAfter(LocalTime.of(22, 29)) || time.isBefore(LocalTime.of(5, 31))) {
+            return nightSpeedKmh;
+        }
+        return defaultSpeedKmh;
     }
 
     private boolean passesCapacityFilter(DriverState driverState, Quote quote) {
@@ -249,7 +329,7 @@ public class CandidateFilterService {
                 ? HOME_ROUTE_DETOUR_LIMIT
                 : GENERAL_DETOUR_LIMIT;
 
-        if (quote.hasScheduledDate()) {
+        if (quote.hasDeliverySchedule()) {
             detourLimit = Math.min(detourLimit, SCHEDULED_QUOTE_DETOUR_LIMIT);
         }
 

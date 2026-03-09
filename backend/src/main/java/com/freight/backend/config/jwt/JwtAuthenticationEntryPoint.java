@@ -26,7 +26,7 @@ public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
                 .success(false)
                 .code(ErrorCode.AUTH_UNAUTHORIZED.name())
                 .status(HttpServletResponse.SC_UNAUTHORIZED)
-                .message("Authentication required.")
+                .message(ErrorCode.AUTH_UNAUTHORIZED.getMessage())
                 .path(request.getRequestURI())
                 .timestamp(LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME))
                 .requestId(resolveRequestId(request))

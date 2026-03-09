@@ -6,7 +6,9 @@
  */
 
 export interface TruckCreateRequest {
+  /** @minLength 1 */
   vehicleType: string;
+  /** @minLength 1 */
   vehicleBodyType: string;
   tonnage: number;
   maxWeight: number;
@@ -21,6 +23,7 @@ export interface TruckCreateRequest {
   name: string;
   imageUrl?: string;
   approved?: boolean;
+  /** @minLength 1 */
   insurance: string;
   odometerKm?: number;
   lastInspectionDate?: string;

@@ -1,9 +1,8 @@
-﻿import * as React from "react";
-import { useSyncExternalStore } from "react";
+import * as React from "react";
 
 import { fetchRemoteActivityLogs } from "@/features/ops/api/activityApi";
-import type { AdminActivityLog } from "@/shared/lib/activity-log";
 import { getActivityLogs, subscribeActivityLogs } from "@/shared/lib/activity-log";
+import type { AdminActivityLog } from "@/shared/lib/activity-log";
 import { useMockMode } from "@/shared/lib/hooks/useMockMode";
 import { useRefreshCooldown } from "@/shared/lib/hooks/useRefreshCooldown";
 import { Alert, AlertDescription, AlertTitle } from "@/shared/ui/shadcn/alert";
@@ -36,15 +35,26 @@ function formatDateTime(value: string): string {
 }
 
 function mergeLogs(localLogs: AdminActivityLog[], remoteLogs: AdminActivityLog[]): AdminActivityLog[] {
-  const merged = [...remoteLogs, ...localLogs];
-  const unique = Array.from(new Map(merged.map((row) => [row.id, row])).values());
-  return unique.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const map = new Map<string, AdminActivityLog>();
+
+  for (const item of [...remoteLogs, ...localLogs]) {
+    const current = map.get(item.id);
+    if (!current) {
+      map.set(item.id, item);
+      continue;
+    }
+    if (new Date(item.createdAt).getTime() >= new Date(current.createdAt).getTime()) {
+      map.set(item.id, item);
+    }
+  }
+
+  return Array.from(map.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
 
 export function ActivityLogView() {
-  const localLogs = useSyncExternalStore(subscribeActivityLogs, getActivityLogs, getActivityLogs);
   const { enabled: mockModeEnabled } = useMockMode();
   const { remainingSeconds, isCoolingDown, startCooldown } = useRefreshCooldown(5);
+  const [localLogs, setLocalLogs] = React.useState<AdminActivityLog[]>(() => getActivityLogs());
   const [remoteLogs, setRemoteLogs] = React.useState<AdminActivityLog[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -64,6 +74,14 @@ export function ActivityLogView() {
   }, []);
 
   React.useEffect(() => {
+    setLocalLogs(getActivityLogs());
+    const unsubscribe = subscribeActivityLogs(() => {
+      setLocalLogs(getActivityLogs());
+    });
+    return unsubscribe;
+  }, []);
+
+  React.useEffect(() => {
     void load();
   }, [load, mockModeEnabled]);
 
@@ -79,7 +97,7 @@ export function ActivityLogView() {
         <div>
           <h1 className="text-3xl font-semibold">활동 로그</h1>
           <p className="text-base text-foreground opacity-70">
-            관리자 조치 내역과 서버 활동 이벤트를 함께 확인합니다.
+            관리자 조치 이력과 서버 활동 이벤트를 한곳에서 확인합니다.
           </p>
         </div>
         <Button
@@ -139,7 +157,7 @@ export function ActivityLogView() {
                       <TableCell>{item.targetId ?? "-"}</TableCell>
                       <TableCell>
                         <Badge variant={item.mode === "MOCK" ? "secondary" : "outline"}>
-                          {item.mode === "MOCK" ? "목업" : "실서비스"}
+                          {item.mode === "MOCK" ? "목업" : "실서버"}
                         </Badge>
                       </TableCell>
                       <TableCell>{item.message}</TableCell>

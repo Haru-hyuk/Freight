@@ -22,6 +22,9 @@ public class TruckResponse {
     private String name;
     private String imageUrl;
     private Boolean approved;
+    private String approvalStatus;
+    private String reviewMemo;
+    private Boolean selected;
     private String insurance;
     private BigDecimal odometerKm;
     private LocalDate lastInspectionDate;
