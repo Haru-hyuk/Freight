@@ -115,13 +115,16 @@ export async function fetchRemoteActivityLogs(): Promise<AdminActivityLog[]> {
     return [];
   }
 
-  try {
-    const response = await apiClient.get<BackendActivityPayload | unknown[]>(apiPaths.adminActivityLogs);
-    const payload = response.data;
-    const items = Array.isArray(payload) ? payload : Array.isArray(payload.items) ? payload.items : [];
-    return items.map(mapLiveActivity);
-  } catch {
-    // fallback below
+  if (shouldCallLegacyActivityLogs()) {
+    try {
+      const response = await apiClient.get<BackendActivityPayload | unknown[]>(apiPaths.adminActivityLogs);
+      const items = pickListPayload(response.data);
+      return items
+        .map(mapLiveActivity)
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    } catch {
+      // fallback below
+    }
   }
 
   try {
@@ -135,4 +138,3 @@ export async function fetchRemoteActivityLogs(): Promise<AdminActivityLog[]> {
     return [];
   }
 }
-

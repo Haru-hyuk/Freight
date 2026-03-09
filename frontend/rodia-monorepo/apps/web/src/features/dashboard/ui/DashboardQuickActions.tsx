@@ -1,6 +1,5 @@
 import { AlertCircle, CheckCircle2, Clock } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { Link } from "react-router-dom";
 
 import type { KpiData } from "@/features/dashboard/model/types";
 import { Badge } from "@/shared/ui/shadcn/badge";
