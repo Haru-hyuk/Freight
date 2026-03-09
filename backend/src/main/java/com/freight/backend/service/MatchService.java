@@ -31,6 +31,8 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Locale;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -95,10 +97,13 @@ public class MatchService {
     }
 
     /** 기사에게 노출되는 오픈 매칭 목록 조회 */
-    @Transactional(readOnly = true)
-    public List<MatchResponse> getOpenMatches() {
+    @Transactional
+    public List<MatchResponse> getOpenMatches(Long driverId) {
+        backfillMissingOpenMatches();
         LocalDateTime now = LocalDateTime.now();
-        return matchRepository.findOpenMatchesForMarket(Match.Status.READY, now)
+        List<Match> openMatches = matchRepository.findOpenMatchesForMarket(Match.Status.READY, now);
+        List<Match> filteredMatches = filterOpenMatchesBySelectedTruck(driverId, openMatches);
+        return filteredMatches
                 .stream()
                 .map(MatchResponse::from)
                 .collect(Collectors.toList());
@@ -401,6 +406,182 @@ public class MatchService {
             throw new CustomException(ErrorCode.DRIVER_TRUCK_REQUIRED);
         }
         return truck;
+    }
+
+    private List<Match> filterOpenMatchesBySelectedTruck(Long driverId, List<Match> openMatches) {
+        if (driverId == null || openMatches == null || openMatches.isEmpty()) {
+            return openMatches == null ? List.of() : openMatches;
+        }
+
+        Optional<Truck> truckOpt = resolveSelectedApprovedTruck(driverId);
+        if (truckOpt.isEmpty()) {
+            return openMatches;
+        }
+        Truck selectedTruck = truckOpt.orElseThrow();
+
+        List<Long> quoteIds = openMatches.stream()
+                .map(Match::getQuoteId)
+                .filter(id -> id != null && id > 0)
+                .distinct()
+                .toList();
+        if (quoteIds.isEmpty()) {
+            return openMatches;
+        }
+
+        Map<Long, Quote> quoteById = quoteRepository.findAllById(quoteIds).stream()
+                .collect(Collectors.toMap(Quote::getQuoteId, quote -> quote));
+        return openMatches.stream()
+                .filter(match -> canSelectedTruckHandleQuote(selectedTruck, quoteById.get(match.getQuoteId())))
+                .collect(Collectors.toList());
+    }
+
+    private void backfillMissingOpenMatches() {
+        List<Quote> openQuotes = quoteRepository.findByStatus("OPEN");
+        if (openQuotes.isEmpty()) {
+            return;
+        }
+
+        List<Long> openQuoteIds = openQuotes.stream()
+                .map(Quote::getQuoteId)
+                .filter(id -> id != null && id > 0)
+                .toList();
+        if (openQuoteIds.isEmpty()) {
+            return;
+        }
+
+        Set<Long> activeMatchQuoteIds = matchRepository.findByQuoteIdIn(openQuoteIds).stream()
+                .filter(match -> match.getStatus() != Match.Status.CANCELLED)
+                .map(Match::getQuoteId)
+                .filter(id -> id != null && id > 0)
+                .collect(Collectors.toSet());
+
+        List<Match> missingMatches = openQuotes.stream()
+                .filter(Quote::isOpen)
+                .filter(quote -> quote.getQuoteId() != null && quote.getQuoteId() > 0)
+                .filter(quote -> !activeMatchQuoteIds.contains(quote.getQuoteId()))
+                .map(quote -> Match.builder()
+                        .quoteId(quote.getQuoteId())
+                        .driverId(null)
+                        .accepted(false)
+                        .status(Match.Status.READY)
+                        .build())
+                .collect(Collectors.toList());
+
+        if (!missingMatches.isEmpty()) {
+            matchRepository.saveAll(missingMatches);
+        }
+    }
+
+    private Optional<Truck> resolveSelectedApprovedTruck(Long driverId) {
+        if (driverId == null) {
+            return Optional.empty();
+        }
+
+        return driverRepository.findById(driverId)
+                .flatMap(driver -> {
+                    Long selectedTruckId = driver.getSelectedTruckId();
+                    if (selectedTruckId == null) {
+                        return Optional.empty();
+                    }
+                    return truckRepository.findById(selectedTruckId)
+                            .filter(truck -> driverId.equals(truck.getDriverId()))
+                            .filter(this::isApprovedTruck);
+                });
+    }
+
+    private boolean canSelectedTruckHandleQuote(
+            Truck truck,
+            Quote quote
+    ) {
+        if (truck == null || quote == null) {
+            return false;
+        }
+        if (!isVehicleTypeCompatible(truck.getVehicleType(), quote.getVehicleType())) {
+            return false;
+        }
+        if (!isVehicleBodyTypeCompatible(truck.getVehicleBodyType(), quote.getVehicleBodyType())) {
+            return false;
+        }
+        return true;
+    }
+
+    private boolean isVehicleTypeCompatible(String truckVehicleType, String quoteVehicleType) {
+        String normalizedQuoteType = normalizeVehicleTypeToken(quoteVehicleType);
+        if (normalizedQuoteType == null) {
+            return true;
+        }
+        String normalizedTruckType = normalizeVehicleTypeToken(truckVehicleType);
+        if (normalizedTruckType == null) {
+            return false;
+        }
+        if (normalizedTruckType.equals(normalizedQuoteType)) {
+            return true;
+        }
+
+        Double truckTonnage = extractVehicleTonnage(truckVehicleType);
+        Double quoteTonnage = extractVehicleTonnage(quoteVehicleType);
+        if (truckTonnage != null && quoteTonnage != null) {
+            return truckTonnage >= quoteTonnage;
+        }
+        return false;
+    }
+
+    private boolean isVehicleBodyTypeCompatible(String truckBodyType, String quoteBodyType) {
+        String normalizedQuoteBodyType = normalizeVehicleBodyType(quoteBodyType);
+        if (normalizedQuoteBodyType == null) {
+            return true;
+        }
+        String normalizedTruckBodyType = normalizeVehicleBodyType(truckBodyType);
+        return normalizedTruckBodyType != null && normalizedTruckBodyType.equals(normalizedQuoteBodyType);
+    }
+
+    private String normalizeVehicleTypeToken(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String normalized = value.trim().toUpperCase(Locale.ROOT)
+                .replace("-", "")
+                .replace("_", "")
+                .replace(" ", "");
+        return normalized.isBlank() ? null : normalized;
+    }
+
+    private String normalizeVehicleBodyType(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String normalized = value.trim().toUpperCase(Locale.ROOT)
+                .replace('-', '_')
+                .replace(' ', '_');
+        if ("WINGBODY".equals(normalized) || "WING_BODY".equals(normalized) || "WING".equals(normalized)) {
+            return "WING_BODY";
+        }
+        if ("CARGO_TRUCK".equals(normalized) || "GENERAL".equals(normalized)) {
+            return "CARGO";
+        }
+        if ("TOP_OPEN".equals(normalized) || "TOPLOAD".equals(normalized)) {
+            return "TOP";
+        }
+        return normalized;
+    }
+
+    private Double extractVehicleTonnage(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String normalized = value.trim().toUpperCase(Locale.ROOT)
+                .replace("TON", "")
+                .replace("_", "")
+                .replace("-", "")
+                .replace(" ", "");
+        if (normalized.isBlank()) {
+            return null;
+        }
+        try {
+            return Double.parseDouble(normalized);
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
     }
 
     private boolean isApprovedTruck(Truck truck) {

@@ -25,10 +25,10 @@ public class KakaoRouteService {
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    @Value("${kakao.rest-api-key:}")
+    @Value("${routing.kakao.api-key:${kakao.rest-api-key:}}")
     private String kakaoRestApiKey;
 
-    @Value("${kakao.mobility-base-url:}")
+    @Value("${routing.kakao.base-url:${kakao.mobility-base-url:}}")
     private String kakaoMobilityBaseUrl;
 
     public KakaoRouteService(@Qualifier("externalApiRestTemplate") RestTemplate restTemplate) {
@@ -45,14 +45,22 @@ public class KakaoRouteService {
         Place destination = request.destination();
         List<Place> waypoints = request.waypoints();
 
+        validatePlace(origin, "origin");
+        validatePlace(destination, "destination");
+
         UriComponentsBuilder builder = UriComponentsBuilder
                 .fromUriString(kakaoMobilityBaseUrl + "/v1/directions")
                 .queryParam("origin", origin.longitude() + "," + origin.latitude())
                 .queryParam("destination", destination.longitude() + "," + destination.latitude())
-                .queryParam("priority", useLiveTraffic ? "TIME" : "RECOMMEND");
+                .queryParam("priority", useLiveTraffic ? "TIME" : "RECOMMEND")
+                .queryParam("car_fuel", "GASOLINE")
+                .queryParam("car_hipass", false)
+                .queryParam("alternatives", false)
+                .queryParam("road_details", false);
 
         if (waypoints != null && !waypoints.isEmpty()) {
             String wp = waypoints.stream()
+                    .peek(place -> validatePlace(place, "waypoint"))
                     .map(p -> p.longitude() + "," + p.latitude())
                     .collect(Collectors.joining("|"));
             builder.queryParam("waypoints", wp);
@@ -87,19 +95,59 @@ public class KakaoRouteService {
             JsonNode route = routes.get(0);
             JsonNode summary = route.path("summary");
             if (summary.isMissingNode() || summary.isNull()) {
+                JsonNode errorCode = root.path("code");
+                JsonNode errorMessage = root.path("message");
+                if (!errorCode.isMissingNode() || !errorMessage.isMissingNode()) {
+                    throw new IllegalStateException("Kakao route api error: code=" + errorCode.asText("") + ", message=" + errorMessage.asText(""));
+                }
                 throw new IllegalStateException("Kakao route summary is missing");
             }
-            int distance = summary.path("distance").asInt(-1);
-            int duration = summary.path("duration").asInt(-1);
+            int distance = readPositiveInt(summary, "distance");
+            int duration = readPositiveInt(summary, "duration");
             if (distance < 0 || duration < 0) {
                 throw new IllegalStateException("Kakao route summary fields are missing");
             }
             JsonNode sections = route.path("sections");
-            int segmentCount = sections.isArray() ? sections.size() : 0;
+            int segmentCount = sections.isArray() && !sections.isEmpty() ? sections.size() : 1;
 
             return new RouteResponse(distance, duration, segmentCount);
         } catch (Exception e) {
-            throw new IllegalStateException("Failed to parse Kakao route", e);
+            String snippet = response.getBody();
+            if (snippet != null && snippet.length() > 400) {
+                snippet = snippet.substring(0, 400);
+            }
+            throw new IllegalStateException("Failed to parse Kakao route. body=" + snippet, e);
+        }
+    }
+
+    private int readPositiveInt(JsonNode node, String field) {
+        JsonNode valueNode = node.path(field);
+        if (valueNode.isNumber()) {
+            return valueNode.asInt(-1);
+        }
+        if (valueNode.isTextual()) {
+            try {
+                return Integer.parseInt(valueNode.asText().trim());
+            } catch (NumberFormatException ignored) {
+                return -1;
+            }
+        }
+        return -1;
+    }
+
+    private void validatePlace(Place place, String label) {
+        if (place == null
+                || place.latitude() == null
+                || place.longitude() == null
+                || !Double.isFinite(place.latitude())
+                || !Double.isFinite(place.longitude())
+                || place.latitude() == 0.0
+                || place.longitude() == 0.0
+                || place.latitude() < -90.0
+                || place.latitude() > 90.0
+                || place.longitude() < -180.0
+                || place.longitude() > 180.0) {
+            throw new IllegalStateException("Invalid Kakao route " + label + " coordinates");
         }
     }
 

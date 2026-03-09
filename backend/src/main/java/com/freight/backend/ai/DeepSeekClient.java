@@ -3,6 +3,8 @@ package com.freight.backend.ai;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,6 +20,8 @@ import org.springframework.web.client.RestTemplate;
 @Service
 public class DeepSeekClient {
     private static final Logger log = LoggerFactory.getLogger(DeepSeekClient.class);
+    private static final int MAX_CONSECUTIVE_FAILURES_BEFORE_COOLDOWN = 2;
+    private static final long COOLDOWN_MS = 5 * 60 * 1000L;
 
     @Value("${deepseek.enabled:false}")
     private boolean enabled;
@@ -32,6 +36,8 @@ public class DeepSeekClient {
     private String model;
 
     private final RestTemplate restTemplate;
+    private final AtomicInteger consecutiveFailures = new AtomicInteger(0);
+    private final AtomicLong cooldownUntil = new AtomicLong(0);
 
     public DeepSeekClient(@Qualifier("externalApiRestTemplate") RestTemplate restTemplate) {
         this.restTemplate = restTemplate;
@@ -49,6 +55,9 @@ public class DeepSeekClient {
 
     public Optional<String> generateText(String systemPrompt, String userPrompt, double temperature, int maxTokens) {
         if (!enabled || apiKey == null || apiKey.isBlank()) {
+            return Optional.empty();
+        }
+        if (System.currentTimeMillis() < cooldownUntil.get()) {
             return Optional.empty();
         }
 
@@ -81,9 +90,18 @@ public class DeepSeekClient {
                 return Optional.empty();
             }
             String content = message.getContent().trim();
+            consecutiveFailures.set(0);
+            cooldownUntil.set(0);
             return content.isEmpty() ? Optional.empty() : Optional.of(content);
         } catch (RestClientException e) {
-            log.warn("DeepSeek API call failed: {}", e.getMessage());
+            int failures = consecutiveFailures.incrementAndGet();
+            if (failures >= MAX_CONSECUTIVE_FAILURES_BEFORE_COOLDOWN) {
+                long until = System.currentTimeMillis() + COOLDOWN_MS;
+                cooldownUntil.set(until);
+                log.warn("DeepSeek API call failed: {}. cooldownUntil={}", e.getMessage(), until);
+            } else {
+                log.warn("DeepSeek API call failed: {}", e.getMessage());
+            }
             return Optional.empty();
         }
     }

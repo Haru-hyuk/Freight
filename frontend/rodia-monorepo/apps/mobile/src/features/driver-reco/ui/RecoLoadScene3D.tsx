@@ -42,6 +42,69 @@ function toPositiveInt(value: unknown): number {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
 }
 
+function normalizedSize(value: unknown, fallback: number): number {
+  return Math.max(20, toFiniteNumber(value, fallback));
+}
+
+function overlaps1d(startA: number, endA: number, startB: number, endB: number): boolean {
+  return startA < endB && startB < endA;
+}
+
+function groundPlacements(placements: Placement[]): Placement[] {
+  if (placements.length <= 1) return placements;
+
+  const grounded: Placement[] = [];
+  const sorted = [...placements].sort((a, b) => {
+    const ay = toFiniteNumber(a.y, 0);
+    const by = toFiniteNumber(b.y, 0);
+    if (ay !== by) return ay - by;
+    const az = toFiniteNumber(a.z, 0);
+    const bz = toFiniteNumber(b.z, 0);
+    if (az !== bz) return az - bz;
+    return toFiniteNumber(a.x, 0) - toFiniteNumber(b.x, 0);
+  });
+
+  for (const placement of sorted) {
+    const x = Math.max(0, toFiniteNumber(placement.x, 0));
+    const z = Math.max(0, toFiniteNumber(placement.z, 0));
+    const originalY = Math.max(0, toFiniteNumber(placement.y, 0));
+    const width = normalizedSize(placement.width, 80);
+    const length = normalizedSize(placement.length, 80);
+
+    let groundedY = 0;
+    for (const candidate of grounded) {
+      const candidateX = Math.max(0, toFiniteNumber(candidate.x, 0));
+      const candidateY = Math.max(0, toFiniteNumber(candidate.y, 0));
+      const candidateZ = Math.max(0, toFiniteNumber(candidate.z, 0));
+      const candidateWidth = normalizedSize(candidate.width, 80);
+      const candidateLength = normalizedSize(candidate.length, 80);
+      const candidateHeight = normalizedSize(candidate.height, 80);
+
+      if (
+        overlaps1d(x, x + width, candidateX, candidateX + candidateWidth) &&
+        overlaps1d(z, z + length, candidateZ, candidateZ + candidateLength)
+      ) {
+        const candidateTop = candidateY + candidateHeight;
+        if (candidateTop <= originalY + 1 && candidateTop > groundedY) {
+          groundedY = candidateTop;
+        }
+      }
+    }
+
+    grounded.push({
+      ...placement,
+      x,
+      y: groundedY,
+      z,
+      width,
+      length,
+      height: normalizedSize(placement.height, 80),
+    });
+  }
+
+  return grounded;
+}
+
 function insideRR(px: number, py: number, x0: number, y0: number, x1: number, y1: number, r: number): boolean {
   const cx = Math.max(x0 + r, Math.min(x1 - r, px));
   const cy = Math.max(y0 + r, Math.min(y1 - r, py));
@@ -387,10 +450,10 @@ export function RecoLoadScene3D({
 
   const activePlacements = useMemo(
     () =>
-      orderedPlacements.filter((placement) => {
+      groundPlacements(orderedPlacements.filter((placement) => {
         const stopOrder = toPositiveInt(placement.stopOrder);
         return stopOrder > 0 && visibleStopOrders.has(stopOrder);
-      }),
+      })),
     [orderedPlacements, visibleStopOrders]
   );
 

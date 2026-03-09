@@ -80,6 +80,8 @@ function toSafeStops(stops: NormalizedRouteStop[]): RouteStopPoint[] {
       const lat = Number(stop.lat);
       const lng = Number(stop.lng);
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+      if (lat === 0 || lng === 0) return null;
+      if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
       const nextType = typeof stop.type === "string" ? stop.type : undefined;
       return {
         name: String(stop.name ?? `지점 ${index + 1}`).trim() || `지점 ${index + 1}`,
@@ -411,4 +413,3 @@ export function RecoRouteWebView({
 }
 
 export default RecoRouteWebView;
-

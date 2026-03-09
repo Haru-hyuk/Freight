@@ -1,6 +1,6 @@
 import { getTruckSpecs } from "@/shared/api/generated/reference-catalog/reference-catalog";
 import type { TruckCreateRequest } from "@/shared/api/generated/schemas/truckCreateRequest";
-import { createTruck, listTrucks } from "@/shared/api/generated/truck/truck";
+import { createTruck, listTrucks, selectActiveTruck } from "@/shared/api/generated/truck/truck";
 
 type AnyObj = Record<string, any>;
 type StableTruckCreatePayload = Pick<
@@ -41,6 +41,7 @@ function pickBool(v: unknown): boolean | undefined {
 export type DriverTruck = {
   truckId?: number;
   approved?: boolean;
+  selected?: boolean;
   tonnage?: number;
   name?: string;
   vehicleType?: string;
@@ -71,6 +72,7 @@ function toDriverTruck(source: unknown): DriverTruck {
   return {
     truckId: typeof it?.truckId === "number" ? it.truckId : (typeof it?.truck_id === "number" ? it.truck_id : undefined),
     approved: pickBool(it?.approved),
+    selected: pickBool(it?.selected),
     tonnage: typeof it?.tonnage === "number" ? it.tonnage : (typeof it?.tonnage === "string" ? Number(it.tonnage) : undefined),
     name: typeof it?.name === "string" ? it.name : undefined,
     vehicleType: typeof it?.vehicleType === "string" ? it.vehicleType : (typeof it?.vehicle_type === "string" ? it.vehicle_type : undefined),
@@ -151,4 +153,13 @@ export async function createDriverTruck(input: DriverTruckCreateInput): Promise<
   const data = asObj(unwrapApiData(raw));
   const truckId = Number(data?.truckId ?? data?.id ?? 0);
   return Number.isInteger(truckId) && truckId > 0 ? truckId : null;
+}
+
+export async function selectDriverActiveTruck(truckId: number): Promise<number | null> {
+  const safeTruckId = Number(truckId);
+  if (!Number.isInteger(safeTruckId) || safeTruckId <= 0) return null;
+  const raw = await selectActiveTruck(safeTruckId);
+  const truck = toDriverTruck(unwrapApiData(raw));
+  const selectedTruckId = Number(truck.truckId ?? 0);
+  return Number.isInteger(selectedTruckId) && selectedTruckId > 0 ? selectedTruckId : safeTruckId;
 }

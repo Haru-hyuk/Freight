@@ -54,6 +54,15 @@ function toOptionalFiniteNumber(value: unknown): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+function isValidCoordinatePair(lat?: number, lng?: number): boolean {
+  if (typeof lat !== "number" || typeof lng !== "number") return false;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+  if (lat === 0 || lng === 0) return false;
+  if (lat < -90 || lat > 90) return false;
+  if (lng < -180 || lng > 180) return false;
+  return true;
+}
+
 function asObject(value: unknown): AnyObject {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as AnyObject) : {};
 }
@@ -145,9 +154,11 @@ export function normalizeRouteSummary(payload: unknown, selectedQuoteIds: readon
         toOptionalFiniteNumber(visit.longitude) ??
         toOptionalFiniteNumber(visit.lng);
       const name = toOptionalText(location.name ?? location.address ?? visit.address);
+      const normalizedLat = isValidCoordinatePair(lat, lng) ? lat : undefined;
+      const normalizedLng = isValidCoordinatePair(lat, lng) ? lng : undefined;
 
-      if (!name && lat === undefined && lng === undefined && !type) return null;
-      return { name, lat, lng, type } as NormalizedRouteStop;
+      if (!name && normalizedLat === undefined && normalizedLng === undefined && !type) return null;
+      return { name, lat: normalizedLat, lng: normalizedLng, type } as NormalizedRouteStop;
     })
     .filter((entry): entry is NormalizedRouteStop => entry !== null);
 
@@ -207,4 +218,3 @@ export async function fetchRouteSummary({ selectedQuoteIds, quotes = [] }: Fetch
     return { ...buildEmptyRouteSummary("경로 계산 실패(서버 오류)"), isError: true };
   }
 }
-
