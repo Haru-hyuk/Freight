@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, StyleSheet, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
 import { useRouter } from "expo-router";
 
 import { listMyShipperSettlements, type SettlementItem } from "@/features/shipper-settings/api/shipper-settlement-api";
@@ -32,14 +32,16 @@ function toSettlementStatusLabel(status: string): string {
   if (status === "COMPLETED") return "정산완료";
   if (status === "PENDING") return "정산대기";
   if (status === "FAILED") return "실패";
-  return status || "-";
+  return "상태 확인 필요";
 }
 
 function toPaymentStatusLabel(status: string): string {
-  if (status === "PAID") return "결제완료";
-  if (status === "PENDING") return "결제대기";
-  if (status === "FAILED") return "결제실패";
-  return status || "-";
+  const token = status.trim().toUpperCase();
+  if (token === "PAID" || token === "COMPLETED") return "결제완료";
+  if (token === "PENDING") return "결제대기";
+  if (token === "FAILED") return "결제실패";
+  if (token === "REFUNDED") return "환불완료";
+  return "상태 확인 필요";
 }
 
 function filterByRange(items: SettlementItem[], range: RangeKey): SettlementItem[] {
@@ -125,12 +127,45 @@ function createStyles(theme: AppTheme) {
       textAlign: "center",
       paddingVertical: 8,
     },
+    disabledHint: {
+      color: theme.colors.textMuted,
+    },
   });
 }
 
 function SettlementCard({ item }: { item: SettlementItem }) {
+  const router = useRouter();
   const theme = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const navLockRef = React.useRef(false);
+  const unlockTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (unlockTimerRef.current) {
+        clearTimeout(unlockTimerRef.current);
+      }
+    };
+  }, []);
+
+  const handlePressReceipt = () => {
+    if (navLockRef.current) return;
+    if (item.matchId <= 0) return;
+
+    navLockRef.current = true;
+    router.push({
+      pathname: "/(shipper)/settings/tax-invoices/[matchId]",
+      params: { matchId: String(item.matchId) },
+    } as never);
+
+    if (unlockTimerRef.current) {
+      clearTimeout(unlockTimerRef.current);
+    }
+    unlockTimerRef.current = setTimeout(() => {
+      navLockRef.current = false;
+      unlockTimerRef.current = null;
+    }, 300);
+  };
 
   return (
     <AppCard outlined elevated={false} style={styles.settlementCard}>
@@ -144,19 +179,24 @@ function SettlementCard({ item }: { item: SettlementItem }) {
       </View>
 
       <KeyValueRow label="정산일" value={toDisplayDate(item.createdAt)} />
-      <KeyValueRow label="총 운임" value={formatKrw(item.totalFare, "0원")} />
-      <KeyValueRow label="플랫폼 수수료" value={formatKrw(item.platformFee, "0원")} />
-      <KeyValueRow label="기사 지급액" value={formatKrw(item.driverPayout, "0원")} />
+      <KeyValueRow label="총 결제 금액" value={formatKrw(item.totalFare, "0원")} />
       <KeyValueRow label="결제 상태" value={toPaymentStatusLabel(item.shipperPaymentStatus)} />
+      <KeyValueRow label="결제일" value={toDisplayDate(item.shipperPaidAt)} />
       {item.dueDate ? <KeyValueRow label="결제 기한" value={toDisplayDate(item.dueDate)} /> : null}
 
       <Divider />
+      {item.matchId <= 0 ? (
+        <AppText variant="caption" style={styles.disabledHint}>
+          매칭 정보가 없어 영수증을 열 수 없습니다.
+        </AppText>
+      ) : null}
 
       <AppButton
-        title="영수증 보기"
+        title={item.matchId > 0 ? "영수증 보기" : "영수증 정보 없음"}
         size="sm"
         variant="secondary"
-        onPress={() => Alert.alert("영수증", `정산 #${item.settlementId} 영수증 기능은 준비 중입니다.`)}
+        disabled={item.matchId <= 0}
+        onPress={handlePressReceipt}
       />
     </AppCard>
   );

@@ -7,7 +7,7 @@ import com.freight.backend.exception.CustomException;
 import com.freight.backend.exception.ErrorCode;
 import com.freight.backend.repository.DriverRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -15,7 +15,7 @@ import org.springframework.stereotype.Service;
 public class DriverSignupService {
 
     private final DriverRepository driverRepository;
-    private final BCryptPasswordEncoder passwordEncoder;
+    private final PasswordEncoder passwordEncoder;
 
     public DriverSignupResponse signup(DriverSignupRequest req) {
         if (driverRepository.findByEmail(req.getEmail()).isPresent()) {

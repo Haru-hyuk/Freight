@@ -2,9 +2,17 @@ package com.freight.backend.controller;
 
 import com.freight.backend.dto.match.BatchAcceptMatchRequest;
 import com.freight.backend.dto.match.BatchAcceptMatchResponse;
+import com.freight.backend.dto.match.BatchStartTransitRequest;
+import com.freight.backend.dto.match.BatchStartTransitResponse;
 import com.freight.backend.dto.match.MatchResponse;
 import com.freight.backend.service.MatchService;
 import com.freight.backend.util.SecurityUtils;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -27,14 +35,20 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/driver/matches")
 @RequiredArgsConstructor
+@Tag(name = "Driver Match", description = "기사용 매칭 API")
 public class DriverMatchController {
 
     private final MatchService matchService;
 
-    /**
-     * 수락 가능 매칭 목록 (아직 아무도 수락하지 않은 매칭)
-     * GET /api/driver/matches
-     */
+    @Operation(summary = "수락 가능 매칭 목록 조회")
+    @ApiResponse(
+            responseCode = "200",
+            description = "수락 가능한 매칭 목록 반환",
+            content = @Content(
+                    mediaType = "application/json",
+                    array = @ArraySchema(schema = @Schema(implementation = MatchResponse.class))
+            )
+    )
     @GetMapping
     public ResponseEntity<List<MatchResponse>> getOpenMatches(
             @AuthenticationPrincipal UserDetails userDetails
@@ -44,10 +58,15 @@ public class DriverMatchController {
         return ResponseEntity.ok(matches);
     }
 
-    /**
-     * 기사가 수락한 매칭 목록 (내 매칭)
-     * GET /api/driver/matches/me
-     */
+    @Operation(summary = "내 매칭 목록 조회")
+    @ApiResponse(
+            responseCode = "200",
+            description = "기사가 수락한 매칭 목록 반환",
+            content = @Content(
+                    mediaType = "application/json",
+                    array = @ArraySchema(schema = @Schema(implementation = MatchResponse.class))
+            )
+    )
     @GetMapping("/me")
     public ResponseEntity<List<MatchResponse>> getMyMatches(
             @AuthenticationPrincipal UserDetails userDetails
@@ -57,10 +76,15 @@ public class DriverMatchController {
         return ResponseEntity.ok(matches);
     }
 
-    /**
-     * 매칭 수락 (기사)
-     * POST /api/driver/matches/{matchId}/accept
-     */
+    @Operation(summary = "매칭 수락")
+    @ApiResponse(
+            responseCode = "200",
+            description = "수락된 매칭 정보 반환",
+            content = @Content(
+                    mediaType = "application/json",
+                    schema = @Schema(implementation = MatchResponse.class)
+            )
+    )
     @PostMapping("/{matchId}/accept")
     public ResponseEntity<MatchResponse> acceptMatch(
             @AuthenticationPrincipal UserDetails userDetails,
@@ -71,10 +95,15 @@ public class DriverMatchController {
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * 매칭 다건 수락 (기사)
-     * POST /api/driver/matches/accept-batch
-     */
+    @Operation(summary = "매칭 다건 수락")
+    @ApiResponse(
+            responseCode = "200",
+            description = "수락된 매칭 목록 반환",
+            content = @Content(
+                    mediaType = "application/json",
+                    schema = @Schema(implementation = BatchAcceptMatchResponse.class)
+            )
+    )
     @PostMapping("/accept-batch")
     public ResponseEntity<BatchAcceptMatchResponse> acceptMatches(
             @AuthenticationPrincipal UserDetails userDetails,
@@ -85,10 +114,15 @@ public class DriverMatchController {
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * 운송 시작 (기사)
-     * POST /api/driver/matches/{matchId}/start
-     */
+    @Operation(summary = "운송 시작")
+    @ApiResponse(
+            responseCode = "200",
+            description = "운송 시작된 매칭 정보 반환",
+            content = @Content(
+                    mediaType = "application/json",
+                    schema = @Schema(implementation = MatchResponse.class)
+            )
+    )
     @PostMapping("/{matchId}/start")
     public ResponseEntity<MatchResponse> startTransit(
             @AuthenticationPrincipal UserDetails userDetails,
@@ -99,10 +133,34 @@ public class DriverMatchController {
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * 운송 완료 (기사)
-     * POST /api/driver/matches/{matchId}/complete
-     */
+    @Operation(summary = "운송 다건 시작 (그룹 오더)")
+    @ApiResponse(
+            responseCode = "200",
+            description = "운송 시작된 매칭 목록 반환",
+            content = @Content(
+                    mediaType = "application/json",
+                    schema = @Schema(implementation = BatchStartTransitResponse.class)
+            )
+    )
+    @PostMapping("/start-batch")
+    public ResponseEntity<BatchStartTransitResponse> batchStartTransit(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @Valid @RequestBody BatchStartTransitRequest request
+    ) {
+        Long driverId = SecurityUtils.requireDriverId(userDetails);
+        BatchStartTransitResponse response = matchService.batchStartTransit(driverId, request);
+        return ResponseEntity.ok(response);
+    }
+
+    @Operation(summary = "운송 완료")
+    @ApiResponse(
+            responseCode = "200",
+            description = "운송 완료된 매칭 정보 반환",
+            content = @Content(
+                    mediaType = "application/json",
+                    schema = @Schema(implementation = MatchResponse.class)
+            )
+    )
     @PostMapping("/{matchId}/complete")
     public ResponseEntity<MatchResponse> completeTransit(
             @AuthenticationPrincipal UserDetails userDetails,
@@ -113,10 +171,8 @@ public class DriverMatchController {
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * 매칭 취소 (기사: 본인이 수락한 매칭만)
-     * DELETE /api/driver/matches/{matchId}
-     */
+    @Operation(summary = "매칭 취소")
+    @ApiResponse(responseCode = "204", description = "취소 완료")
     @DeleteMapping("/{matchId}")
     public ResponseEntity<Void> cancelMatch(
             @AuthenticationPrincipal UserDetails userDetails,
@@ -127,10 +183,15 @@ public class DriverMatchController {
         return ResponseEntity.noContent().build();
     }
 
-    /**
-     * 매칭 상세 조회 (기사: 본인이 수락한 매칭만)
-     * GET /api/driver/matches/{matchId}
-     */
+    @Operation(summary = "매칭 상세 조회")
+    @ApiResponse(
+            responseCode = "200",
+            description = "매칭 상세 정보 반환",
+            content = @Content(
+                    mediaType = "application/json",
+                    schema = @Schema(implementation = MatchResponse.class)
+            )
+    )
     @GetMapping("/{matchId}")
     public ResponseEntity<MatchResponse> getMatch(
             @AuthenticationPrincipal UserDetails userDetails,

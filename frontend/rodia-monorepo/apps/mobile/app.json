@@ -1,18 +1,18 @@
 {
   "expo": {
-    "name": "mobile",
+    "name": "Rodia",
     "slug": "mobile",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "scheme": "myapp",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-    "scheme": "myapp",
     "ios": {
       "supportsTablet": true
     },
@@ -30,6 +30,12 @@
     },
     "plugins": [
       "expo-router"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "dbdf6c36-2c84-4aa6-a26f-58b419d90460"
+      }
+    }
   }
 }

@@ -19,6 +19,9 @@ public class SettlementResponse {
     private BigDecimal totalFare;
     private BigDecimal platformFee;
     private BigDecimal fastFee;
+    private BigDecimal routeDistanceKm;
+    private BigDecimal fuelCost;
+    private BigDecimal tollFee;
     private BigDecimal driverPayout;
 
     private String shipperPaymentStatus;
@@ -42,6 +45,9 @@ public class SettlementResponse {
                 .totalFare(settlement.getTotalFare())
                 .platformFee(settlement.getPlatformFee())
                 .fastFee(settlement.getFastFee())
+                .routeDistanceKm(settlement.getRouteDistanceKm())
+                .fuelCost(settlement.getFuelCost())
+                .tollFee(settlement.getTollFee())
                 .driverPayout(settlement.getDriverPayout())
                 .shipperPaymentStatus(settlement.getShipperPaymentStatus() == null ? null : settlement.getShipperPaymentStatus().name())
                 .shipperPaymentMethod(settlement.getShipperPaymentMethod() == null ? null : settlement.getShipperPaymentMethod().name())

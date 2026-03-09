@@ -8,7 +8,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.Resource;
@@ -16,13 +17,13 @@ import org.springframework.core.io.ResourceLoader;
 
 @Slf4j
 @Configuration
-@ConditionalOnProperty(name = "fcm.enabled", havingValue = "true")
 public class FirebaseConfig {
 
     @Value("${fcm.service-account-path:${firebase.service-account.path:}}")
     private String serviceAccountPath;
 
     @Bean
+    @ConditionalOnExpression("'${fcm.enabled:false}' == 'true' and '${fcm.service-account-path:}' != ''")
     public FirebaseApp firebaseApp(ResourceLoader resourceLoader) {
         if (serviceAccountPath == null || serviceAccountPath.isBlank()) {
             throw new IllegalStateException("Missing Firebase service account path.");
@@ -46,6 +47,7 @@ public class FirebaseConfig {
     }
 
     @Bean
+    @ConditionalOnBean(FirebaseApp.class)
     public FirebaseMessaging firebaseMessaging(FirebaseApp firebaseApp) {
         return FirebaseMessaging.getInstance(firebaseApp);
     }

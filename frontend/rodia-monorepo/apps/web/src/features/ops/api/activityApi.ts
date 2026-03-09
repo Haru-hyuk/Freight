@@ -18,6 +18,8 @@ function shouldCallLegacyActivityLogs(): boolean {
   return normalizeApiPath(apiPaths.adminActivityLogs) !== normalizeApiPath(LEGACY_ACTIVITY_LOGS_PATH);
 }
 
+const LEGACY_ADMIN_ACTIVITY_PATH = "/api/admin/ops/activity-logs";
+
 function toRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
 }

@@ -1,11 +1,12 @@
 import { Canvas } from "@react-three/fiber/native";
 import React, { Suspense, useEffect, useMemo } from "react";
-import { ActivityIndicator, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import * as THREE from "three";
 
 import type { Placement } from "@/shared/api/generated/schemas";
 import { safeNumber, safeString } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
+import { AppText } from "@/shared/ui/kit/AppText";
 
 const SCALE = 0.01;
 const PALETTE = ["#4F46E5", "#0EA5E9", "#22C55E", "#F59E0B", "#EF4444", "#EC4899"];
@@ -197,23 +198,19 @@ const CargoMesh = ({ placement, color, stopOrder, isSelected, isXray, onSelect }
         <meshStandardMaterial
           color={color}
           transparent={isXray}
-          opacity={isXray ? 0.45 : 1}
+          opacity={isXray ? 0.32 : 1}
           depthWrite={!isXray}
           alphaTest={isXray ? 0.02 : 0}
           emissive={isSelected ? color : "#000000"}
           emissiveIntensity={isSelected ? 0.4 : 0}
         />
       </mesh>
-      {isSelected ? (
-        <mesh renderOrder={20} scale={[1.07, 1.07, 1.07]}>
-          <boxGeometry args={boxArgs} />
-          <meshBasicMaterial color="#FFFFFF" wireframe transparent opacity={0.55} depthWrite={false} />
-        </mesh>
+      {!isXray ? (
+        <lineSegments renderOrder={20}>
+          <edgesGeometry args={[new THREE.BoxGeometry(...boxArgs)]} />
+          <lineBasicMaterial color={isSelected ? "#F8FAFC" : "#1E293B"} linewidth={isSelected ? 2 : 1} />
+        </lineSegments>
       ) : null}
-      <lineSegments renderOrder={20}>
-        <edgesGeometry args={[new THREE.BoxGeometry(...boxArgs)]} />
-        <lineBasicMaterial color={isSelected ? "#FFFFFF" : "#1E293B"} />
-      </lineSegments>
       <LabelSprite text={String(stopOrder)} color={color} boxW={w} boxH={h} boxL={l} />
       {y <= 1 ? <ShadowDisc boxWW={w * SCALE} boxLW={l * SCALE} boxHW={h * SCALE} /> : null}
     </group>
@@ -345,6 +342,7 @@ type RecoLoadScene3DProps = {
     heightCm: number;
   };
   orderedPlacements: Placement[];
+  visibleStopOrders: ReadonlySet<number>;
   stopColorMap: Map<number, string>;
   selectedStopOrder: number | null;
   isXray: boolean;
@@ -369,6 +367,7 @@ const useStyles = createThemedStyles((theme) => {
       alignItems: "center",
       justifyContent: "center",
       padding: spacing * 2,
+      gap: spacing,
     },
   });
 });
@@ -376,6 +375,7 @@ const useStyles = createThemedStyles((theme) => {
 export function RecoLoadScene3D({
   dims,
   orderedPlacements,
+  visibleStopOrders,
   stopColorMap,
   selectedStopOrder,
   isXray,
@@ -385,9 +385,18 @@ export function RecoLoadScene3D({
   const styles = useStyles();
   const cameraDir = useMemo(() => new THREE.Vector3(1, 0.75, 1).normalize(), []);
 
+  const activePlacements = useMemo(
+    () =>
+      orderedPlacements.filter((placement) => {
+        const stopOrder = toPositiveInt(placement.stopOrder);
+        return stopOrder > 0 && visibleStopOrders.has(stopOrder);
+      }),
+    [orderedPlacements, visibleStopOrders]
+  );
+
   const renderPlacements = useMemo(() => {
-    if (!isXray) return orderedPlacements;
-    return [...orderedPlacements].sort((a, b) => {
+    if (!isXray) return activePlacements;
+    return [...activePlacements].sort((a, b) => {
       const ax = toFiniteNumber(a.x, 0) + Math.max(20, toFiniteNumber(a.width, 80)) / 2;
       const ay = toFiniteNumber(a.y, 0) + Math.max(20, toFiniteNumber(a.height, 80)) / 2;
       const az = toFiniteNumber(a.z, 0) + Math.max(20, toFiniteNumber(a.length, 80)) / 2;
@@ -398,7 +407,7 @@ export function RecoLoadScene3D({
       const bKey = bx * cameraDir.x + by * cameraDir.y + bz * cameraDir.z;
       return aKey - bKey;
     });
-  }, [cameraDir, isXray, orderedPlacements]);
+  }, [activePlacements, cameraDir, isXray]);
 
   const sW = dims.widthCm * SCALE;
   const sH = dims.heightCm * SCALE;
@@ -412,7 +421,7 @@ export function RecoLoadScene3D({
           const box = new THREE.Box3();
           box.expandByPoint(new THREE.Vector3(0, 0, 0));
           box.expandByPoint(new THREE.Vector3(sW, sH, sL));
-          orderedPlacements.forEach((p) => {
+          activePlacements.forEach((p) => {
             const px = toFiniteNumber(p.x, 0) * SCALE;
             const py = toFiniteNumber(p.y, 0) * SCALE;
             const pz = toFiniteNumber(p.z, 0) * SCALE;
@@ -457,9 +466,11 @@ export function RecoLoadScene3D({
           })}
         </Suspense>
       </Canvas>
-      {orderedPlacements.length <= 0 ? (
+      {activePlacements.length <= 0 ? (
         <View style={styles.loadingWrap}>
-          <ActivityIndicator color={theme.colors.brandPrimary} />
+          <AppText variant="caption" color="textMuted">
+            현재 단계에는 적재된 화물이 없습니다.
+          </AppText>
         </View>
       ) : null}
     </View>

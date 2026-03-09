@@ -4,6 +4,7 @@ import com.freight.backend.gpsload.route.model.Place;
 import com.freight.backend.gpsload.route.service.CachedRouteService;
 import com.freight.backend.gpsload.route.service.CachedRouteService.RouteDistance;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
@@ -19,6 +20,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/route")
+@CrossOrigin(origins = "*")
 public class KakaoDirectionsController {
 
     @Value("${kakao.rest-api-key:}")
@@ -27,11 +29,15 @@ public class KakaoDirectionsController {
     @Value("${kakao.mobility-base-url:}")
     private String kakaoMobilityBaseUrl;
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate;
     private final CachedRouteService cachedRouteService;
 
-    public KakaoDirectionsController(CachedRouteService cachedRouteService) {
+    public KakaoDirectionsController(
+            CachedRouteService cachedRouteService,
+            @Qualifier("externalApiRestTemplate") RestTemplate restTemplate
+    ) {
         this.cachedRouteService = cachedRouteService;
+        this.restTemplate = restTemplate;
     }
 
     /**

@@ -1,5 +1,5 @@
-import ShipperAccountEditPage from "@/pages/shipper/settings/ShipperAccountEditPage";
+import DriverAccountEditPage from "@/pages/driver/settings/DriverAccountEditPage";
 
 export default function Page() {
-  return <ShipperAccountEditPage />;
+  return <DriverAccountEditPage />;
 }

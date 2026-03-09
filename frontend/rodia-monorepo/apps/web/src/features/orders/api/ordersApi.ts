@@ -584,8 +584,10 @@ async function fetchRemoteCancellationRequests(): Promise<CancellationRequestRow
 }
 
 async function fetchDerivedCancellationRequests(): Promise<CancellationRequestRow[]> {
-  const [quotes, matches, shippers, drivers] = await Promise.all([
-    fetchAdminQuotes(),
+  const quotes = await fetchAdminQuotes();
+  if (quotes.length === 0) return [];
+
+  const [matches, shippers, drivers] = await Promise.all([
     fetchAdminMatches(),
     fetchAdminUsersByRole("SHIPPER"),
     fetchAdminUsersByRole("DRIVER"),

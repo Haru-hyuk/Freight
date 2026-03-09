@@ -75,4 +75,26 @@ public class SurchargeOptionEntity {
     protected void onUpdate() {
         updatedAt = LocalDateTime.now();
     }
+
+    public void updateByAdmin(
+            Integer additionalFare,
+            BigDecimal rateDelta,
+            Boolean enabled
+    ) {
+        if (additionalFare != null) {
+            BigDecimal amount = BigDecimal.valueOf(additionalFare);
+            this.fixedAddWon = amount;
+            this.minAddWon = amount;
+            this.maxAddWon = amount;
+        }
+        if (rateDelta != null) {
+            BigDecimal multiplier = BigDecimal.ONE.add(rateDelta);
+            this.minMultiplier = multiplier;
+            this.maxMultiplier = multiplier;
+        }
+        if (enabled != null) {
+            this.enabled = enabled;
+        }
+        this.updatedAt = LocalDateTime.now();
+    }
 }

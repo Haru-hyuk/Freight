@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useRouter } from "expo-router";
 
-import type { CounterOfferResponse, MatchResponse, QuoteListResponse } from "@/shared/api/generated/schemas";
 import {
   acceptMockFlowDriverMatch,
   advanceMockFlowMatchStatus,
@@ -15,7 +14,10 @@ import {
   listMockFlowShipperQuotes,
   removeMockFlowCounterOffer,
   resetMockFlowState,
-} from "@/shared/lib/mock-flow";
+  type CounterOfferResponse,
+  type MatchResponse,
+  type QuoteListResponse,
+} from "@/features/mock-flow/api";
 import { safeNumber } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppButton } from "@/shared/ui/kit/AppButton";

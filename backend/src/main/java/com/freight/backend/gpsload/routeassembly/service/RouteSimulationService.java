@@ -81,7 +81,9 @@ public class RouteSimulationService {
 
     public SimulationResult simulate(DriverState driverState, List<Quote> quotes) {
         try {
-            List<CargoVisit> visitOrder = optimizeVisitOrderWithHaversine(driverState, quotes);
+            Map<Long, Quote> quoteById = quotes.stream().collect(Collectors.toMap(Quote::quoteId, q -> q));
+            List<CargoVisit> baseOrder = optimizeVisitOrderWithHaversine(driverState, quotes);
+            List<CargoVisit> visitOrder = expandDeliveryWaypoints(baseOrder, quoteById);
             if (visitOrder.isEmpty()) {
                 return SimulationResult.failure("No visit order");
             }
@@ -137,7 +139,9 @@ public class RouteSimulationService {
 
     public SimulationResult simulateFast(DriverState driverState, List<Quote> quotes) {
         try {
-            List<CargoVisit> visitOrder = optimizeVisitOrderWithHaversine(driverState, quotes);
+            Map<Long, Quote> quoteById = quotes.stream().collect(Collectors.toMap(Quote::quoteId, q -> q));
+            List<CargoVisit> baseOrder = optimizeVisitOrderWithHaversine(driverState, quotes);
+            List<CargoVisit> visitOrder = expandDeliveryWaypoints(baseOrder, quoteById);
             if (visitOrder.isEmpty()) {
                 return SimulationResult.failure("No visit order");
             }
@@ -202,7 +206,9 @@ public class RouteSimulationService {
             }
 
             // 주어진 순서대로 픽업-배송 순서 생성 (LIFO: 1→2→3→3→2→1)
-            List<CargoVisit> visitOrder = createFixedLIFOVisitOrder(orderedQuotes);
+            Map<Long, Quote> quoteById = orderedQuotes.stream().collect(Collectors.toMap(Quote::quoteId, q -> q));
+            List<CargoVisit> baseOrder = createFixedLIFOVisitOrder(orderedQuotes);
+            List<CargoVisit> visitOrder = expandDeliveryWaypoints(baseOrder, quoteById);
             if (visitOrder.isEmpty()) {
                 return SimulationResult.failure("No visit order");
             }
@@ -345,7 +351,93 @@ public class RouteSimulationService {
             }
         }
 
-        return best.order();
+        List<CargoVisit> optimized = best.order();
+        if (shouldEnforceBundledLifo(driverState, quotes, optimized)) {
+            optimized = enforceBundledLifoOrder(optimized);
+        }
+        return optimized;
+    }
+
+    private boolean shouldEnforceBundledLifo(
+            DriverState driverState,
+            List<Quote> quotes,
+            List<CargoVisit> visits
+    ) {
+        if (driverState == null || quotes == null || visits == null) {
+            return false;
+        }
+        if (quotes.size() <= 1 || driverState.combinePreference() == DriverState.CombinePreference.DISALLOW) {
+            return false;
+        }
+
+        long pickupCount = visits.stream().filter(v -> v != null && v.type() == CargoVisit.VisitType.PICKUP).count();
+        long deliveryCount = visits.stream().filter(v -> v != null && v.type() == CargoVisit.VisitType.DELIVERY).count();
+        return pickupCount > 1 && deliveryCount > 1;
+    }
+
+    /**
+     * 합짐 추천은 상차를 모두 완료한 뒤 하차를 역순(LIFO)으로 수행하도록 방문 순서를 정규화한다.
+     */
+    private List<CargoVisit> enforceBundledLifoOrder(List<CargoVisit> visits) {
+        if (visits == null || visits.isEmpty()) {
+            return List.of();
+        }
+
+        List<CargoVisit> pickups = new ArrayList<>();
+        Map<Long, CargoVisit> deliveryByQuoteId = new HashMap<>();
+        Set<Long> pickupQuoteIds = new HashSet<>();
+
+        for (CargoVisit visit : visits) {
+            if (visit == null) {
+                continue;
+            }
+            if (visit.type() == CargoVisit.VisitType.PICKUP) {
+                Long quoteId = visit.quoteId();
+                if (quoteId == null || pickupQuoteIds.contains(quoteId)) {
+                    continue;
+                }
+                pickupQuoteIds.add(quoteId);
+                pickups.add(visit);
+            } else if (visit.type() == CargoVisit.VisitType.DELIVERY) {
+                Long quoteId = visit.quoteId();
+                if (quoteId != null && !deliveryByQuoteId.containsKey(quoteId)) {
+                    deliveryByQuoteId.put(quoteId, visit);
+                }
+            }
+        }
+
+        if (pickups.isEmpty()) {
+            return reSequenceVisits(visits);
+        }
+
+        List<CargoVisit> normalized = new ArrayList<>(pickups);
+        Set<Long> usedDeliveryQuoteIds = new HashSet<>();
+        for (int i = pickups.size() - 1; i >= 0; i--) {
+            Long quoteId = pickups.get(i).quoteId();
+            CargoVisit delivery = quoteId != null ? deliveryByQuoteId.get(quoteId) : null;
+            if (delivery == null) {
+                continue;
+            }
+            normalized.add(delivery);
+            usedDeliveryQuoteIds.add(quoteId);
+        }
+
+        // 예외적으로 상차 없이 존재하는 배송 노드가 있으면 원본 순서로 뒤에 보존.
+        for (CargoVisit visit : visits) {
+            if (visit == null || visit.type() != CargoVisit.VisitType.DELIVERY) {
+                continue;
+            }
+            Long quoteId = visit.quoteId();
+            if (quoteId != null && usedDeliveryQuoteIds.contains(quoteId)) {
+                continue;
+            }
+            normalized.add(visit);
+            if (quoteId != null) {
+                usedDeliveryQuoteIds.add(quoteId);
+            }
+        }
+
+        return reSequenceVisits(normalized);
     }
 
     private VisitOrderEval evaluateVisitOrder(
@@ -376,7 +468,7 @@ public class RouteSimulationService {
             return false;
         }
 
-        long scheduledCount = quotes.stream().filter(Quote::hasScheduledDate).count();
+        long scheduledCount = quotes.stream().filter(Quote::hasDeliverySchedule).count();
         boolean scheduleComplex = scheduledCount >= 2;
         boolean combineComplex = quotes.size() >= 4;
         boolean homeRouteComplex = driverState != null
@@ -704,16 +796,25 @@ public class RouteSimulationService {
 
             int segmentDistance = haversineDistanceM(currentPlace, nextPlace);
             int nextDistance = distanceM + segmentDistance;
-            long segmentSeconds = (long) (segmentDistance / 1000.0 / 40.0 * 3600.0);
+            long segmentSeconds = segmentDistance <= 0
+                    ? 0L
+                    : Math.max(1, calculateDurationWithTimeModel(segmentDistance, scheduleStart));
             LocalDateTime arrival = scheduleStart.plusSeconds(segmentSeconds);
 
             int nextViolations = scheduleViolations;
             LocalDateTime nextScheduleStart = arrival;
+            LocalDateTime deadline = quote.effectiveDeliveryDeadline();
             if (pickup) {
-                if (quote.hasScheduledDate() && arrival.isAfter(quote.scheduledDate())) {
+                LocalDateTime pickupStart = quote.effectivePickupScheduleStart();
+                if (pickupStart != null && nextScheduleStart.isBefore(pickupStart)) {
+                    nextScheduleStart = pickupStart;
+                }
+                if (deadline != null && nextScheduleStart.isAfter(deadline)) {
                     nextViolations++;
                 }
-                nextScheduleStart = arrival.plusSeconds(PICKUP_HANDLING_SECONDS);
+                nextScheduleStart = nextScheduleStart.plusSeconds(PICKUP_HANDLING_SECONDS);
+            } else if (deadline != null && nextScheduleStart.isAfter(deadline)) {
+                nextViolations++;
             }
 
             int nextPicked = pickedMask;
@@ -927,6 +1028,59 @@ public class RouteSimulationService {
             ));
         }
         return visits;
+    }
+
+    /**
+     * 배송 지점 앞에 quote_stops 경유지를 삽입한다.
+     * 예: PICKUP -> DELIVERY => PICKUP -> WAYPOINT* -> DELIVERY
+     */
+    private List<CargoVisit> expandDeliveryWaypoints(List<CargoVisit> visits, Map<Long, Quote> quoteById) {
+        if (visits == null || visits.isEmpty()) {
+            return List.of();
+        }
+        if (quoteById == null || quoteById.isEmpty()) {
+            return reSequenceVisits(visits);
+        }
+
+        List<CargoVisit> expanded = new ArrayList<>();
+        for (CargoVisit visit : visits) {
+            if (visit == null) {
+                continue;
+            }
+
+            if (visit.type() == CargoVisit.VisitType.DELIVERY && visit.quoteId() != null) {
+                Quote quote = quoteById.get(visit.quoteId());
+                List<Place> waypoints = quote != null && quote.waypoints() != null ? quote.waypoints() : List.of();
+                for (Place waypoint : waypoints) {
+                    if (waypoint == null || waypoint.latitude() == null || waypoint.longitude() == null) {
+                        continue;
+                    }
+                    expanded.add(new CargoVisit(
+                            0,
+                            visit.quoteId(),
+                            CargoVisit.VisitType.WAYPOINT,
+                            waypoint,
+                            waypoint.address(),
+                            null,
+                            null,
+                            null
+                    ));
+                }
+            }
+
+            expanded.add(new CargoVisit(
+                    0,
+                    visit.quoteId(),
+                    visit.type(),
+                    visit.location(),
+                    visit.address(),
+                    visit.estimatedArrivalTime(),
+                    visit.distanceFromPrev(),
+                    visit.durationFromPrev()
+            ));
+        }
+
+        return reSequenceVisits(expanded);
     }
 
     private List<List<CargoVisit>> groupNearbyVisitsHaversine(List<CargoVisit> visits, double radiusM) {
@@ -1266,41 +1420,71 @@ public class RouteSimulationService {
             Place startPlace,
             int totalDurationS
     ) {
-        Map<Long, LocalDateTime> scheduleMap = new HashMap<>();
+        Map<Long, Quote> quoteMap = new HashMap<>();
         for (Quote q : quotes) {
-            if (q.hasScheduledDate()) {
-                scheduleMap.put(q.quoteId(), q.scheduledDate());
+            if (q == null || q.quoteId() == null) {
+                continue;
+            }
+            if (q.effectivePickupScheduleStart() != null || q.effectiveDeliveryDeadline() != null) {
+                quoteMap.put(q.quoteId(), q);
             }
         }
-        if (scheduleMap.isEmpty()) return 0;
+        if (quoteMap.isEmpty()) return 0;
 
         LocalDateTime cursor = resolveScheduleValidationStartTime(driverState);
         Place prevPlace = startPlace;
         int violations = 0;
 
         for (CargoVisit visit : visitOrder) {
-            long segmentSeconds;
-            if (visit.durationFromPrev() != null && visit.durationFromPrev() > 0) {
-                segmentSeconds = visit.durationFromPrev();
-            } else {
-                int distM = haversineDistanceM(prevPlace, visit.location());
-                segmentSeconds = (long) (distM / 1000.0 / 40.0 * 3600.0);
-            }
+            long segmentSeconds = resolveSegmentDurationSeconds(visit, prevPlace, cursor);
 
             cursor = cursor.plusSeconds(segmentSeconds);
 
+            Quote quote = quoteMap.get(visit.quoteId());
+            if (quote == null) {
+                prevPlace = visit.location();
+                continue;
+            }
+
+            LocalDateTime pickupStart = quote.effectivePickupScheduleStart();
+            LocalDateTime deadline = quote.effectiveDeliveryDeadline();
+
             if (visit.type() == CargoVisit.VisitType.PICKUP) {
-                LocalDateTime scheduled = scheduleMap.get(visit.quoteId());
-                if (scheduled != null && cursor.isAfter(scheduled)) {
+                if (pickupStart != null && cursor.isBefore(pickupStart)) {
+                    cursor = pickupStart;
+                }
+                if (deadline != null && cursor.isAfter(deadline)) {
                     violations++;
                 }
                 cursor = cursor.plusSeconds(PICKUP_HANDLING_SECONDS);
+            } else if (visit.type() == CargoVisit.VisitType.DELIVERY
+                    && deadline != null
+                    && cursor.isAfter(deadline)) {
+                violations++;
             }
 
             prevPlace = visit.location();
         }
 
         return violations;
+    }
+
+    private long resolveSegmentDurationSeconds(CargoVisit visit, Place prevPlace, LocalDateTime departureTime) {
+        if (visit != null && visit.durationFromPrev() != null && visit.durationFromPrev() > 0) {
+            return visit.durationFromPrev();
+        }
+
+        int segmentDistanceM = 0;
+        if (visit != null && visit.distanceFromPrev() != null && visit.distanceFromPrev() > 0) {
+            segmentDistanceM = visit.distanceFromPrev();
+        } else if (visit != null && prevPlace != null && visit.location() != null) {
+            segmentDistanceM = haversineDistanceM(prevPlace, visit.location());
+        }
+
+        if (segmentDistanceM <= 0) {
+            return 0L;
+        }
+        return Math.max(1, calculateDurationWithTimeModel(segmentDistanceM, departureTime));
     }
 
     private LocalDateTime resolveScheduleValidationStartTime(DriverState driverState) {

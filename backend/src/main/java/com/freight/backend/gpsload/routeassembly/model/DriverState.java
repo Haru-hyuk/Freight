@@ -1,9 +1,12 @@
 package com.freight.backend.gpsload.routeassembly.model;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonValue;
 import com.freight.backend.gpsload.route.model.Place;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * 기사 상태 정보.
@@ -35,7 +38,26 @@ public record DriverState(
     public enum CombinePreference {
         ALLOW,
         DISALLOW,
-        HOME_ROUTE
+        HOME_ROUTE;
+
+        @JsonCreator
+        public static CombinePreference fromValue(String raw) {
+            if (raw == null || raw.isBlank()) {
+                return ALLOW;
+            }
+            String normalized = raw.trim().toUpperCase(Locale.ROOT);
+            return switch (normalized) {
+                case "ALLOW", "BUNDLED" -> ALLOW;
+                case "DISALLOW", "SINGLE" -> DISALLOW;
+                case "HOME_ROUTE" -> HOME_ROUTE;
+                default -> ALLOW;
+            };
+        }
+
+        @JsonValue
+        public String toValue() {
+            return name();
+        }
     }
 
     public boolean canLoad(double cbm, double weight) {

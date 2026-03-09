@@ -1,6 +1,6 @@
-import { completeTransit as completeTransitGenerated, startTransit as startTransitGenerated } from "@/shared/api/generated/driver-match-controller/driver-match-controller";
-import { getDriverMatchPhotos as getDriverMatchPhotosGenerated, uploadDriverPhoto as uploadDriverPhotoGenerated } from "@/shared/api/generated/delivery-photo-controller/delivery-photo-controller";
-import { submitDriverGps as submitDriverGpsGenerated, updateTrackingSharing as updateTrackingSharingGenerated } from "@/shared/api/generated/tracking-controller/tracking-controller";
+﻿import { completeTransit as completeTransitGenerated, startTransit as startTransitGenerated } from "@/shared/api/generated/driver-match/driver-match";
+import { getDriverMatchPhotos as getDriverMatchPhotosGenerated } from "@/shared/api/generated/delivery-photo/delivery-photo";
+import { submitDriverGps as submitDriverGpsGenerated, updateTrackingSharing as updateTrackingSharingGenerated } from "@/shared/api/generated/tracking/tracking";
 import type {
   DeliveryPhotoResponse,
   GpsLogUpsertRequest,
@@ -9,6 +9,7 @@ import type {
   TrackingShareUpdateRequest,
   UploadDriverPhotoType,
 } from "@/shared/api/generated/schemas";
+import { uploadDriverPhotoMultipart } from "@/features/matching/api/driver-photo-upload-api";
 import type { DriverMatchItem } from "@/features/matching/api/shipper-match-api";
 import { parseMatchPositiveInt, parseSingleMatchResponse } from "@/features/matching/api/shipper-match-parser";
 import { getApiBaseUrl } from "@/shared/lib/config/env";
@@ -24,6 +25,8 @@ export type DriverPhotoUploadInput = {
   takenAt?: string;
   lat?: number;
   lng?: number;
+  stopOrder?: number;
+  stopLabel?: string;
 };
 
 function asObject(value: unknown): AnyObject {
@@ -124,6 +127,8 @@ function toDeliveryPhotoResponse(value: unknown): DeliveryPhotoResponse | null {
   const lng = toOptionalFiniteNumber(source.lng);
   const fileSize = toOptionalFiniteNumber(source.fileSize);
   const mimeType = toText(source.mimeType);
+  const stopOrder = parseMatchPositiveInt(source.stopOrder);
+  const stopLabel = toText(source.stopLabel);
   const createdAt = toText(source.createdAt);
 
   if (
@@ -137,6 +142,8 @@ function toDeliveryPhotoResponse(value: unknown): DeliveryPhotoResponse | null {
     typeof lng === "undefined" &&
     typeof fileSize === "undefined" &&
     !mimeType &&
+    stopOrder <= 0 &&
+    !stopLabel &&
     !createdAt
   ) {
     return null;
@@ -153,6 +160,8 @@ function toDeliveryPhotoResponse(value: unknown): DeliveryPhotoResponse | null {
     ...(typeof lng === "number" ? { lng } : {}),
     ...(typeof fileSize === "number" ? { fileSize } : {}),
     ...(mimeType ? { mimeType } : {}),
+    ...(stopOrder > 0 ? { stopOrder } : {}),
+    ...(stopLabel ? { stopLabel } : {}),
     ...(createdAt ? { createdAt } : {}),
   };
 }
@@ -176,21 +185,6 @@ function toDeliveryPhotoList(value: unknown): DeliveryPhotoResponse[] {
   return items
     .map((item) => toDeliveryPhotoResponse(item))
     .filter((item): item is DeliveryPhotoResponse => item !== null);
-}
-
-function resolveUriExtension(uri: string): string {
-  const path = toText(uri).split("?")[0] ?? "";
-  const parts = path.split(".");
-  const ext = (parts[parts.length - 1] ?? "").toLowerCase();
-  if (ext === "png" || ext === "webp" || ext === "heic" || ext === "jpg" || ext === "jpeg") return ext;
-  return "jpg";
-}
-
-function resolveMimeType(extension: string): string {
-  if (extension === "png") return "image/png";
-  if (extension === "webp") return "image/webp";
-  if (extension === "heic") return "image/heic";
-  return "image/jpeg";
 }
 
 export async function startDriverTransit(matchId: number): Promise<DriverMatchItem | null> {
@@ -247,23 +241,15 @@ export async function uploadDriverRunPhoto(
   const safeUri = toText(payload.localUri);
   if (safeMatchId <= 0 || !safeUri) return null;
 
-  const ext = resolveUriExtension(safeUri);
-  const file = {
-    uri: safeUri,
-    name: `run-photo-${Date.now()}.${ext}`,
-    type: resolveMimeType(ext),
-  } as unknown as Blob;
-
-  const data = await uploadDriverPhotoGenerated(
-    safeMatchId,
-    { file },
-    {
-      type: payload.type,
-      takenAt: toText(payload.takenAt) || new Date().toISOString(),
-      ...(typeof payload.lat === "number" ? { lat: payload.lat } : {}),
-      ...(typeof payload.lng === "number" ? { lng: payload.lng } : {}),
-    }
-  );
+  const data = await uploadDriverPhotoMultipart(safeMatchId, {
+    localUri: safeUri,
+    type: payload.type,
+    takenAt: toText(payload.takenAt) || new Date().toISOString(),
+    ...(typeof payload.lat === "number" ? { lat: payload.lat } : {}),
+    ...(typeof payload.lng === "number" ? { lng: payload.lng } : {}),
+    ...(parseMatchPositiveInt(payload.stopOrder) > 0 ? { stopOrder: parseMatchPositiveInt(payload.stopOrder) } : {}),
+    ...(toText(payload.stopLabel) ? { stopLabel: toText(payload.stopLabel) } : {}),
+  });
 
   return toDeliveryPhotoResponse(data);
 }

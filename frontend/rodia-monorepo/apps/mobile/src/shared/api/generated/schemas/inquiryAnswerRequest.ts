@@ -6,5 +6,6 @@
  */
 
 export interface InquiryAnswerRequest {
+  /** @minLength 1 */
   answer: string;
 }

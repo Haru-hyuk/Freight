@@ -18,11 +18,14 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 @Component
 public class JwtTokenProvider {
 
     private static final Logger log = LoggerFactory.getLogger(JwtTokenProvider.class);
+    public static final String TOKEN_TYPE_ACCESS = "access";
+    public static final String TOKEN_TYPE_REFRESH = "refresh";
     private static final int MIN_SECRET_LENGTH = 32;
     private static final Set<String> WEAK_SECRETS = Set.of(
             "change-this-dev-jwt-secret-at-least-32-bytes-long",
@@ -68,6 +71,10 @@ public class JwtTokenProvider {
         return accessTokenExpirationMs / 1000L;
     }
 
+    public long getRefreshTokenExpirationSeconds() {
+        return refreshTokenExpirationMs / 1000L;
+    }
+
     public String resolveToken(HttpServletRequest request) {
         String bearer = request.getHeader("Authorization");
         if (bearer != null && bearer.startsWith("Bearer ")) {
@@ -81,6 +88,7 @@ public class JwtTokenProvider {
         Map<String, Object> claims = new HashMap<>();
         claims.put("email", email);
         claims.put("role", role);
+        claims.put("type", TOKEN_TYPE_ACCESS);
 
         return Jwts.builder()
                 .setClaims(claims)
@@ -92,15 +100,22 @@ public class JwtTokenProvider {
     }
 
     public String generateRefreshToken(Long userId, String email, String role) {
+        // 하위 호환: JTI 미전달 호출도 내부에서 고유 ID를 발급한다.
+        String randomJti = UUID.randomUUID().toString().replace("-", "");
+        return generateRefreshToken(userId, email, role, randomJti);
+    }
+
+    public String generateRefreshToken(Long userId, String email, String role, String jti) {
         Date now = new Date();
         Map<String, Object> claims = new HashMap<>();
         claims.put("email", email);
         claims.put("role", role);
-        claims.put("type", "refresh");
+        claims.put("type", TOKEN_TYPE_REFRESH);
 
         return Jwts.builder()
                 .setClaims(claims)
                 .setSubject(String.valueOf(userId))
+                .setId(jti)
                 .setIssuedAt(now)
                 .setExpiration(new Date(now.getTime() + refreshTokenExpirationMs))
                 .signWith(key, SignatureAlgorithm.HS256)
@@ -127,6 +142,23 @@ public class JwtTokenProvider {
         return parseClaims(token).get("role", String.class);
     }
 
+    public String getTokenTypeFromToken(String token) {
+        String tokenType = parseClaims(token).get("type", String.class);
+        return tokenType == null ? null : tokenType.trim();
+    }
+
+    public String getJtiFromToken(String token) {
+        return parseClaims(token).getId();
+    }
+
+    public Date getIssuedAtFromToken(String token) {
+        return parseClaims(token).getIssuedAt();
+    }
+
+    public Date getExpirationFromToken(String token) {
+        return parseClaims(token).getExpiration();
+    }
+
     public void validateTokenOrThrow(String token) {
         try {
             Jwts.parserBuilder()
@@ -136,5 +168,28 @@ public class JwtTokenProvider {
         } catch (JwtException | IllegalArgumentException e) {
             throw e;
         }
+    }
+
+    public void validateRefreshTokenOrThrow(String token) {
+        validateTokenOrThrow(token);
+        if (!isRefreshToken(token)) {
+            throw new JwtException("Invalid token type for refresh");
+        }
+    }
+
+    public void validateAccessTokenOrThrow(String token) {
+        validateTokenOrThrow(token);
+        String tokenType = getTokenTypeFromToken(token);
+        if (TOKEN_TYPE_REFRESH.equalsIgnoreCase(tokenType)) {
+            throw new JwtException("Refresh token cannot be used as access token");
+        }
+        if (tokenType != null && !tokenType.isBlank() && !TOKEN_TYPE_ACCESS.equalsIgnoreCase(tokenType)) {
+            throw new JwtException("Unsupported token type");
+        }
+    }
+
+    public boolean isRefreshToken(String token) {
+        String tokenType = getTokenTypeFromToken(token);
+        return TOKEN_TYPE_REFRESH.equalsIgnoreCase(tokenType);
     }
 }

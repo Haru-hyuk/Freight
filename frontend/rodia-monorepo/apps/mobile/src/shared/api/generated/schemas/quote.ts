@@ -11,11 +11,14 @@ export interface Quote {
   quoteId?: number;
   origin?: Place;
   destination?: Place;
+  waypoints?: Place[];
   volumeCbm?: number;
   weightKg?: number;
   allowCombine?: boolean;
   finalPrice?: number;
-  scheduledDate?: string;
+  pickupScheduleStart?: string;
+  deliveryDeadline?: string;
+  deliverySchedule?: string;
   lengthCm?: number;
   widthCm?: number;
   heightCm?: number;

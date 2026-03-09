@@ -5,13 +5,20 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "quote_items")
+@Table(
+        name = "quote_items",
+        indexes = {
+                @Index(name = "idx_quote_items_quote_id", columnList = "quote_id"),
+                @Index(name = "idx_quote_items_quote_id_drop_seq", columnList = "quote_id, drop_stop_seq")
+        }
+)
 public class QuoteItem {
 
     @Id
@@ -79,6 +86,9 @@ public class QuoteItem {
     @Column(name = "sort_order")
     private Integer sortOrder;
 
+    @Column(name = "drop_stop_seq")
+    private Integer dropStopSeq;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
@@ -113,6 +123,7 @@ public class QuoteItem {
     public Double getMaxStackWeightKg() { return maxStackWeightKg; }
     public String getHandlingTags() { return handlingTags; }
     public Integer getSortOrder() { return sortOrder; }
+    public Integer getDropStopSeq() { return dropStopSeq; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
 
@@ -173,6 +184,7 @@ public class QuoteItem {
         public Builder maxStackWeightKg(Double maxStackWeightKg) { target.maxStackWeightKg = maxStackWeightKg; return this; }
         public Builder handlingTags(String handlingTags) { target.handlingTags = handlingTags; return this; }
         public Builder sortOrder(Integer sortOrder) { target.sortOrder = sortOrder; return this; }
+        public Builder dropStopSeq(Integer dropStopSeq) { target.dropStopSeq = dropStopSeq; return this; }
         public QuoteItem build() { return target; }
     }
 }

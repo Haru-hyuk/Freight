@@ -96,10 +96,6 @@ function normalizeMatchStatus(value: string): "READY" | "IN_TRANSIT" | "COMPLETE
   return "READY";
 }
 
-function resolveDriverMyMatchesPath(): string {
-  return `${apiPaths.driverMatches.replace(/\/$/, "")}/me`;
-}
-
 function toSeed(matchId: number): number {
   return Math.abs(matchId * 7919 + 104729);
 }

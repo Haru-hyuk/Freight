@@ -1,9 +1,7 @@
-﻿import * as React from "react";
-import { useSyncExternalStore } from "react";
+import * as React from "react";
 
 import { fetchRemoteActivityLogs } from "@/features/ops/api/activityApi";
 import type { AdminActivityLog } from "@/shared/lib/activity-log";
-import { getActivityLogs, subscribeActivityLogs } from "@/shared/lib/activity-log";
 import { useMockMode } from "@/shared/lib/hooks/useMockMode";
 import { useRefreshCooldown } from "@/shared/lib/hooks/useRefreshCooldown";
 import { Alert, AlertDescription, AlertTitle } from "@/shared/ui/shadcn/alert";
@@ -35,14 +33,7 @@ function formatDateTime(value: string): string {
   return date.toLocaleString("ko-KR", { hour12: false });
 }
 
-function mergeLogs(localLogs: AdminActivityLog[], remoteLogs: AdminActivityLog[]): AdminActivityLog[] {
-  const merged = [...remoteLogs, ...localLogs];
-  const unique = Array.from(new Map(merged.map((row) => [row.id, row])).values());
-  return unique.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-}
-
 export function ActivityLogView() {
-  const localLogs = useSyncExternalStore(subscribeActivityLogs, getActivityLogs, getActivityLogs);
   const { enabled: mockModeEnabled } = useMockMode();
   const { remainingSeconds, isCoolingDown, startCooldown } = useRefreshCooldown(5);
   const [remoteLogs, setRemoteLogs] = React.useState<AdminActivityLog[]>([]);

@@ -1,4 +1,4 @@
-// OpenAPI grounding (route-assembly-controller.recommend):
+﻿// OpenAPI grounding (route-assembly-controller.recommend):
 // - POST /api/route-assembly/recommend → RouteAssemblyResponse
 // - RouteAssemblyRequest: { selectedQuoteIds?, candidateQuotes?: Quote[], mode?: "SIMPLE"|"SMART" }
 //   candidateQuotes with origin/destination Place coordinates is required at runtime (server 500 without it).
@@ -10,7 +10,10 @@
 
 import type { QuoteDetailResponse } from "@/entities/quote/model/quote.types";
 import { buildRouteAssemblyRequest } from "@/features/driver-reco/model/routeAssemblyRequest";
-import { recommend as recommendRouteAssemblyGenerated } from "@/shared/api/generated/route-assembly-controller/route-assembly-controller";
+import {
+  evaluate as evaluateRouteAssemblyGenerated,
+  recommend as recommendRouteAssemblyGenerated,
+} from "@/shared/api/generated/route-assembly/route-assembly";
 
 type AnyObject = Record<string, unknown>;
 
@@ -175,8 +178,28 @@ export async function fetchRouteSummary({ selectedQuoteIds, quotes = [] }: Fetch
   try {
     // Build request with candidateQuotes so server can resolve route geometry
     const request = buildRouteAssemblyRequest({ selectedQuoteIds: safeIds, quotes });
-    const payload = await recommendRouteAssemblyGenerated(request);
-    return normalizeRouteSummary(payload, safeIds);
+    const quoteIdSet = new Set(
+      quotes
+        .map((quote) => toPositiveInt((quote as { quoteId?: unknown }).quoteId))
+        .filter((id) => id > 0)
+    );
+    const hasAllSelectedQuotes = safeIds.every((id) => quoteIdSet.has(id));
+    // Detail page expects route for the selected quotes themselves.
+    // evaluate() keeps the selected set intact; recommend() remains fallback.
+    if (safeIds.length > 1 && hasAllSelectedQuotes) {
+      try {
+        const evaluatePayload = await evaluateRouteAssemblyGenerated(request);
+        const evaluated = normalizeRouteSummary(evaluatePayload, safeIds);
+        if (evaluated.stops.length >= 2) {
+          return evaluated;
+        }
+      } catch {
+        // fall through to recommend fallback
+      }
+    }
+
+    const recommendPayload = await recommendRouteAssemblyGenerated(request);
+    return normalizeRouteSummary(recommendPayload, safeIds);
   } catch {
     if (__DEV__) {
       console.warn("[fetchRouteSummary] route-assembly call failed");
@@ -184,3 +207,4 @@ export async function fetchRouteSummary({ selectedQuoteIds, quotes = [] }: Fetch
     return { ...buildEmptyRouteSummary("경로 계산 실패(서버 오류)"), isError: true };
   }
 }
+

@@ -16,6 +16,7 @@ import com.freight.backend.gpsload.routeassembly.model.Quote;
 import com.freight.backend.gpsload.routeassembly.model.RecommendedRoute;
 import com.freight.backend.gpsload.routeassembly.model.RouteAssemblyRequest;
 import com.freight.backend.gpsload.routeassembly.model.RouteAssemblyResponse;
+import com.freight.backend.util.StopOrderUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -30,6 +31,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
 public class RouteAssemblyService {
@@ -38,6 +40,12 @@ public class RouteAssemblyService {
 
     @Value("${route.assembly.top-n-real-distance:10}")
     private int topNForRealDistance;
+
+    @Value("${route.assembly.loadplan.fail-open-enabled:true}")
+    private boolean loadPlanFailOpenEnabled;
+
+    @Value("${route.assembly.loadplan.fail-open-max-consecutive:3}")
+    private int loadPlanFailOpenMaxConsecutive;
 
     // ========== 조합 평가 결과 캐시 ==========
     private static final int COMBINATION_CACHE_SIZE = 2000;
@@ -50,6 +58,8 @@ public class RouteAssemblyService {
                     return size() > COMBINATION_CACHE_SIZE;
                 }
             });
+
+    private final AtomicInteger consecutiveLoadPlanFailureCount = new AtomicInteger(0);
 
     private record CachedEvaluationResult(
             RecommendedRoute route,
@@ -392,8 +402,8 @@ public class RouteAssemblyService {
      */
     private OverflowCheckResultWithUnplacedIds checkOverflowWithUnplacedIds(
             RecommendedRoute route, List<Quote> quotes, DriverState driverState) {
+        List<CargoItem> cargoItems = new ArrayList<>();
         try {
-            List<CargoItem> cargoItems = new ArrayList<>();
             Map<Long, Integer> stopOrderByQuoteId = buildDeliveryStopOrder(route);
             Map<String, Long> cargoIdToQuoteId = new HashMap<>(); // 화물ID → QuoteID 매핑
 
@@ -425,6 +435,7 @@ public class RouteAssemblyService {
             Truck truck = resolveTruck(driverState);
             LoadPlanRequest loadRequest = new LoadPlanRequest(truck, cargoItems);
             LoadPlanResponse loadResult = loadPlanService.plan(loadRequest);
+            consecutiveLoadPlanFailureCount.set(0);
 
             int unplacedCount = loadResult.stats().unplacedCount();
             boolean overflow = unplacedCount > 0;
@@ -448,9 +459,49 @@ public class RouteAssemblyService {
                     new ArrayList<>(unplacedQuoteIdSet)
             );
         } catch (Exception e) {
-            log.warn("3D overflow check failed - fail-closed: {}", e.getMessage(), e);
+            int failureCount = consecutiveLoadPlanFailureCount.incrementAndGet();
+            boolean failOpen = shouldFailOpenOnLoadPlanException(e, failureCount);
+            if (failOpen) {
+                log.warn(
+                        "3D overflow check failed - fail-open (count={}/{}): {}",
+                        failureCount,
+                        Math.max(1, loadPlanFailOpenMaxConsecutive),
+                        e.getMessage(),
+                        e
+                );
+                return new OverflowCheckResultWithUnplacedIds(false, cargoItems.size(), 0, 0, List.of());
+            }
+
+            log.warn("3D overflow check failed - fail-closed (count={}): {}", failureCount, e.getMessage(), e);
             return new OverflowCheckResultWithUnplacedIds(true, 0, Integer.MAX_VALUE, 0, List.of());
         }
+    }
+
+    private boolean shouldFailOpenOnLoadPlanException(Exception exception, int failureCount) {
+        if (!loadPlanFailOpenEnabled) {
+            return false;
+        }
+        int maxConsecutive = Math.max(1, loadPlanFailOpenMaxConsecutive);
+        if (failureCount > maxConsecutive) {
+            return false;
+        }
+        return isTransientLoadPlanException(exception);
+    }
+
+    private boolean isTransientLoadPlanException(Throwable exception) {
+        if (exception == null) {
+            return false;
+        }
+        if (exception instanceof NullPointerException
+                || exception instanceof IllegalStateException
+                || exception instanceof java.util.ConcurrentModificationException) {
+            return true;
+        }
+        String simpleName = exception.getClass().getSimpleName().toLowerCase(java.util.Locale.ROOT);
+        return simpleName.contains("timeout")
+                || simpleName.contains("connection")
+                || simpleName.contains("redis")
+                || simpleName.contains("ioexception");
     }
 
     private Map<Long, Integer> buildDeliveryStopOrder(RecommendedRoute route) {
@@ -473,6 +524,9 @@ public class RouteAssemblyService {
         int width = qi != null && qi.getWidthCm() != null ? qi.getWidthCm() : (q.widthCm() != null ? q.widthCm() : 80);
         int height = qi != null && qi.getHeightCm() != null ? qi.getHeightCm() : (q.heightCm() != null ? q.heightCm() : 60);
         double weight = qi != null && qi.getUnitWeightKg() != null ? qi.getUnitWeightKg() : (q.weightKg() != null ? q.weightKg() : 50);
+        int effectiveStopOrder = qi != null
+                ? StopOrderUtils.mergeStopOrder(stopOrder, qi.getDropStopSeq())
+                : Math.max(1, stopOrder);
 
         Set<CargoHandling> handlingSet = new LinkedHashSet<>();
         if (q.handling() != null) {
@@ -514,7 +568,7 @@ public class RouteAssemblyService {
         return new CargoItem(
                 cargoId,
                 length, width, height, weight,
-                stopOrder,
+                effectiveStopOrder,
                 rotatable,
                 stackable,
                 fragile,
@@ -551,9 +605,8 @@ public class RouteAssemblyService {
 
     private Truck resolveTruck(DriverState driverState) {
         if (driverState.truckId() != null) {
-            Optional<TruckDimension> dims = truckDimensionRepository.findById(driverState.truckId());
-            if (dims.isPresent()) {
-                TruckDimension d = dims.get();
+            TruckDimension d = truckDimensionRepository.findById(driverState.truckId()).orElse(null);
+            if (d != null) {
                 int length = d.getLength() != null ? d.getLength() : 600;
                 int width = d.getWidth() != null ? d.getWidth() : 220;
                 int height = d.getHeight() != null ? d.getHeight() : 200;
@@ -647,6 +700,7 @@ public class RouteAssemblyService {
         RecommendedRoute bestRoute = null;
         double bestUtilization = 0.0;
         int bestUnplaced = Integer.MAX_VALUE;
+        int bestPlacedCount = 0;
 
         // 최대 3가지 순서 시도 (원본 + 2개 변형)
         List<List<Quote>> orderVariants = generateDeliveryOrderVariants(quotes);
@@ -668,6 +722,7 @@ public class RouteAssemblyService {
                         bestRoute = reorderedRoute;
                         bestUtilization = check.utilization();
                         bestUnplaced = check.unplacedCount();
+                        bestPlacedCount = check.placedCount();
                         log.info("순서 재조정 성공: utilization={}%, unplaced={}",
                                 String.format("%.1f", check.utilization() * 100), check.unplacedCount());
                         break; // 적재 가능한 순서 찾음
@@ -681,7 +736,7 @@ public class RouteAssemblyService {
         if (bestRoute != null) {
             return new LoadOptimizationResult(
                     false,
-                    (int) (bestUtilization * 100), // 근사치
+                    bestPlacedCount,
                     bestUnplaced,
                     bestUtilization,
                     java.util.Optional.of(bestRoute)
@@ -970,6 +1025,14 @@ public class RouteAssemblyService {
         if (route == null) {
             return RouteAssemblyResponse.failure("선택한 견적의 경로를 계산할 수 없습니다.");
         }
+        if (route.scheduleViolations() > 0) {
+            return RouteAssemblyResponse.failure(
+                    String.format(
+                            "선택한 노선은 운송 일정 위반 %d건으로 수락할 수 없습니다. 견적 조합/순서를 조정해주세요.",
+                            route.scheduleViolations()
+                    )
+            );
+        }
 
         RecommendedRoute rankedRoute = new RecommendedRoute(
                 1,
@@ -1020,7 +1083,7 @@ public class RouteAssemblyService {
             return candidates;
         }
 
-        TruckDimension truck = truckOpt.get();
+        TruckDimension truck = truckOpt.orElseThrow();
         Integer truckLength = truck.getLength();
         Integer truckWidth = truck.getWidth();
         Integer truckHeight = truck.getHeight();

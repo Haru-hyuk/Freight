@@ -6,19 +6,7 @@
  */
 
 export interface MeUpdateRequest {
-  /**
-   * @minLength 0
-   * @maxLength 100
-   */
   name?: string;
-  /**
-   * @minLength 0
-   * @maxLength 255
-   */
   email?: string;
-  /**
-   * @minLength 0
-   * @maxLength 30
-   */
   phone?: string;
 }

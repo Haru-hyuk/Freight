@@ -1,15 +1,12 @@
 import React from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { ActivityIndicator, InteractionManager, Pressable, StyleSheet, useWindowDimensions, View } from "react-native";
 
-import {
-  type NormalizedRouteSummary,
-} from "@/features/driver-reco/model/routeSummary";
 import RecoLoadScene3D from "@/features/driver-reco/ui/RecoLoadScene3D";
-import RecoRouteMapCard from "@/features/driver-reco/ui/RecoRouteMapCard";
 import type { Placement } from "@/shared/api/generated/schemas";
 import { safeNumber, safeString, tint } from "@/shared/theme/colorUtils";
-import { createThemedStyles } from "@/shared/theme/useAppTheme";
+import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
 import { AppCard } from "@/shared/ui/kit/AppCard";
+import { AppButton } from "@/shared/ui/kit/AppButton";
 import { AppText } from "@/shared/ui/kit/AppText";
 
 type SelectedOrderItem = {
@@ -29,6 +26,25 @@ export type RecoSelectedOrderDetail = {
   items: SelectedOrderItem[];
 };
 
+export type RecoVisitStep = {
+  key: string;
+  sequence: number;
+  stopOrder: number | null;
+  quoteId?: number;
+  typeLabel: string;
+  title: string;
+  subtitle?: string;
+};
+
+export type RecoRecommendedOrderSummary = {
+  stopOrder: number;
+  quoteId: number;
+  accentColor: string;
+  priceText: string;
+  originAddress: string;
+  destinationAddress: string;
+};
+
 type RecoLoadSimulationCardProps = {
   dims: {
     widthCm: number;
@@ -38,12 +54,18 @@ type RecoLoadSimulationCardProps = {
   isGroupedRecommendation: boolean;
   isXray: boolean;
   onToggleXray: () => void;
-  routeSummary: NormalizedRouteSummary;
+  routeLoading?: boolean;
   orderedPlacements: Placement[];
+  visibleStopOrders: ReadonlySet<number>;
   stopColorMap: Map<number, string>;
   selectedStopOrder: number | null;
   onSelectStopOrder: (nextStopOrder: number | null) => void;
+  recommendedOrders: RecoRecommendedOrderSummary[];
   selectedOrderDetail: RecoSelectedOrderDetail | null;
+  visitSteps: RecoVisitStep[];
+  selectedStepIndex: number;
+  onPrevStep: () => void;
+  onNextStep: () => void;
 };
 
 const useStyles = createThemedStyles((theme) => {
@@ -71,30 +93,28 @@ const useStyles = createThemedStyles((theme) => {
     xrayToggleText: {
       color: theme.colors.textMain,
     },
-    selectedPanel: {
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: tint(cBorder, 0.8, cBorder),
-      backgroundColor: theme.colors.bgSurface,
-      paddingHorizontal: spacing * 3,
-      paddingVertical: spacing * 2.5,
-      gap: spacing * 1.5,
-    },
-    selectedPanelHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing * 1.5,
-    },
-    selectedPanelBadge: {
-      minWidth: 24,
-      height: 24,
+    sceneViewport: {
       borderRadius: 12,
+      overflow: "hidden",
+    },
+    scenePlaceholder: {
+      flex: 1,
+      height: "100%",
+      minHeight: 140,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: tint(cBorder, 0.72, cBorder),
+      backgroundColor: tint(cBorder, 0.18, theme.colors.bgSurfaceAlt),
       alignItems: "center",
       justifyContent: "center",
-      paddingHorizontal: spacing,
-    },
-    selectedRouteWrap: {
       gap: spacing,
+      paddingHorizontal: spacing * 2,
+    },
+    selectedInlineWrap: {
+      gap: spacing * 1.5,
+      paddingTop: spacing * 1.5,
+      borderTopWidth: 1,
+      borderTopColor: tint(cBorder, 0.7, cBorder),
     },
     selectedMetaRow: {
       flexDirection: "row",
@@ -123,6 +143,62 @@ const useStyles = createThemedStyles((theme) => {
       paddingVertical: spacing,
       gap: spacing * 0.5,
     },
+    recommendedWrap: {
+      gap: spacing,
+    },
+    recommendedRow: {
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: tint(cBorder, 0.8, cBorder),
+      backgroundColor: theme.colors.bgSurface,
+      paddingHorizontal: spacing * 2,
+      paddingVertical: spacing * 1.5,
+      gap: spacing,
+    },
+    recommendedRowTop: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: spacing * 1.5,
+    },
+    recommendedSeqWrap: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing * 1.5,
+      flex: 1,
+    },
+    recommendedSeqBadge: {
+      minWidth: 22,
+      height: 22,
+      borderRadius: 11,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: spacing,
+    },
+    recommendedRouteText: {
+      color: theme.colors.textSub,
+    },
+    stepNavigator: {
+      gap: spacing,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: tint(cBorder, 0.8, cBorder),
+      backgroundColor: theme.colors.bgSurface,
+      padding: spacing * 2,
+    },
+    stepNavigatorTop: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: spacing,
+    },
+    stepNavigatorButtons: {
+      flexDirection: "row",
+      gap: spacing,
+    },
+    stepNavigatorButton: {
+      minWidth: 78,
+    },
   });
 });
 
@@ -131,14 +207,42 @@ export function RecoLoadSimulationCard({
   isGroupedRecommendation,
   isXray,
   onToggleXray,
-  routeSummary,
+  routeLoading = false,
   orderedPlacements,
+  visibleStopOrders,
   stopColorMap,
   selectedStopOrder,
   onSelectStopOrder,
+  recommendedOrders,
   selectedOrderDetail,
+  visitSteps,
+  selectedStepIndex,
+  onPrevStep,
+  onNextStep,
 }: RecoLoadSimulationCardProps) {
+  const theme = useAppTheme();
   const styles = useStyles();
+  const { height: screenHeight } = useWindowDimensions();
+  const maxSceneHeight = Math.floor(screenHeight * 0.34);
+  const sceneViewportHeight = Math.max(140, Math.min(300, maxSceneHeight));
+  const [isSceneReady, setIsSceneReady] = React.useState(false);
+
+  React.useEffect(() => {
+    if (routeLoading) {
+      setIsSceneReady(false);
+      return undefined;
+    }
+
+    const task = InteractionManager.runAfterInteractions(() => {
+      setIsSceneReady(true);
+    });
+
+    return () => task.cancel();
+  }, [routeLoading]);
+
+  const selectedStep = visitSteps[selectedStepIndex] ?? null;
+  const canPrevStep = selectedStepIndex > 0;
+  const canNextStep = selectedStepIndex >= 0 && selectedStepIndex < visitSteps.length - 1;
 
   return (
     <AppCard style={styles.loadCard}>
@@ -156,83 +260,162 @@ export function RecoLoadSimulationCard({
         적재함 {dims.widthCm} × {dims.lengthCm} × {dims.heightCm} cm 기준 · {isGroupedRecommendation ? "다건 순서 적재" : "단건 적재"}
       </AppText>
 
-      <RecoRouteMapCard summaryText={routeSummary.summary} stops={routeSummary.stops} />
-
-      <RecoLoadScene3D
-        dims={dims}
-        orderedPlacements={orderedPlacements}
-        stopColorMap={stopColorMap}
-        selectedStopOrder={selectedStopOrder}
-        isXray={isXray}
-        onSelectStopOrder={(stopOrder) => onSelectStopOrder(selectedStopOrder === stopOrder ? null : stopOrder)}
-      />
-
-      {selectedOrderDetail ? (
-        <View style={styles.selectedPanel}>
-          <View style={styles.selectedPanelHeader}>
-            <View style={[styles.selectedPanelBadge, { backgroundColor: selectedOrderDetail.accentColor }]}>
-              <AppText variant="caption" weight="900" color="#FFFFFF">
-                {selectedOrderDetail.stopOrder}
-              </AppText>
-            </View>
-            <AppText variant="detail" weight="900" color="textMain">
-              선택된 추천 오더
+      <View style={[styles.sceneViewport, { maxHeight: sceneViewportHeight, height: sceneViewportHeight }]}>
+        {isSceneReady ? (
+          <RecoLoadScene3D
+            dims={dims}
+            orderedPlacements={orderedPlacements}
+            visibleStopOrders={visibleStopOrders}
+            stopColorMap={stopColorMap}
+            selectedStopOrder={selectedStopOrder}
+            isXray={isXray}
+            onSelectStopOrder={(stopOrder) => onSelectStopOrder(selectedStopOrder === stopOrder ? null : stopOrder)}
+          />
+        ) : (
+          <View style={styles.scenePlaceholder}>
+            <ActivityIndicator />
+            <AppText variant="caption" color="textMuted">
+              {routeLoading ? "경로를 계산한 뒤 적재 시뮬레이션을 준비합니다." : "적재 시뮬레이션을 불러오는 중입니다."}
             </AppText>
           </View>
+        )}
+      </View>
 
-          <View style={styles.selectedRouteWrap}>
-            <AppText variant="caption" color="textSub">
-              출발: {selectedOrderDetail.originAddress}
-            </AppText>
-            <AppText variant="caption" color="textSub">
-              도착: {selectedOrderDetail.destinationAddress}
-            </AppText>
-          </View>
-
-          <View style={styles.selectedMetaRow}>
-            <View style={styles.selectedMetaCell}>
+      {selectedStep ? (
+        <View style={styles.stepNavigator}>
+          <View style={styles.stepNavigatorTop}>
+            <View style={{ flex: 1, gap: 2 }}>
               <AppText variant="caption" color="textMuted">
-                거리
-              </AppText>
-              <AppText variant="detail" weight="900" color="brandPrimary">
-                {selectedOrderDetail.distanceText}
-              </AppText>
-            </View>
-            <View style={styles.selectedMetaCell}>
-              <AppText variant="caption" color="textMuted">
-                중량
+                {`상하차 단계 ${selectedStepIndex + 1}/${visitSteps.length}`}
               </AppText>
               <AppText variant="detail" weight="900" color="textMain">
-                {selectedOrderDetail.weightText}
+                {`${selectedStep.typeLabel} · ${selectedStep.title}`}
               </AppText>
-            </View>
-            <View style={styles.selectedMetaCell}>
-              <AppText variant="caption" color="textMuted">
-                CBM
-              </AppText>
-              <AppText variant="detail" weight="900" color="textMain">
-                {selectedOrderDetail.cbmText}
-              </AppText>
-            </View>
-          </View>
-
-          <View style={styles.selectedItemsWrap}>
-            <AppText variant="caption" weight="800" color="textMuted">
-              화물 품목
-            </AppText>
-            {selectedOrderDetail.items.map((item) => (
-              <View key={item.key} style={styles.selectedItemRow}>
-                <AppText variant="caption" weight="800" color="textMain">
-                  {item.title}
+              {selectedStep.subtitle ? (
+                <AppText variant="caption" color="textSub">
+                  {selectedStep.subtitle}
                 </AppText>
-                {item.subtitle ? (
-                  <AppText variant="caption" color="textSub">
-                    {item.subtitle}
-                  </AppText>
-                ) : null}
-              </View>
-            ))}
+              ) : null}
+            </View>
+            <View style={styles.stepNavigatorButtons}>
+              <AppButton
+                title="이전"
+                size="sm"
+                variant="secondary"
+                style={styles.stepNavigatorButton}
+                disabled={!canPrevStep}
+                onPress={onPrevStep}
+              />
+              <AppButton
+                title="다음"
+                size="sm"
+                variant="primary"
+                style={styles.stepNavigatorButton}
+                disabled={!canNextStep}
+                onPress={onNextStep}
+              />
+            </View>
           </View>
+        </View>
+      ) : null}
+
+      {recommendedOrders.length > 0 ? (
+        <View style={styles.recommendedWrap}>
+          <AppText variant="caption" weight="800" color="textMuted">
+            추천 오더
+          </AppText>
+          {recommendedOrders.map((order) => {
+            const isSelected = selectedStopOrder === order.stopOrder;
+            const selectedDetail =
+              selectedOrderDetail && selectedOrderDetail.stopOrder === order.stopOrder
+                ? selectedOrderDetail
+                : null;
+            return (
+              <Pressable
+                key={`reco-order-${order.quoteId}-${order.stopOrder}`}
+                onPress={() => onSelectStopOrder(isSelected ? null : order.stopOrder)}
+                hitSlop={{ top: 6, right: 6, bottom: 6, left: 6 }}
+                style={[
+                  styles.recommendedRow,
+                  isSelected
+                    ? {
+                        borderColor: order.accentColor,
+                        borderWidth: 2,
+                        backgroundColor: tint(order.accentColor, 0.08, theme.colors.bgSurface),
+                      }
+                    : null,
+                ]}
+              >
+                <View style={styles.recommendedRowTop}>
+                  <View style={styles.recommendedSeqWrap}>
+                    <View style={[styles.recommendedSeqBadge, { backgroundColor: order.accentColor }]}>
+                      <AppText variant="caption" weight="900" color="textOnBrand">
+                        {order.stopOrder}
+                      </AppText>
+                    </View>
+                    <AppText variant="detail" weight="900" color="textMain">
+                      추천 오더
+                    </AppText>
+                  </View>
+                  <AppText variant="detail" weight="900" color="brandPrimary">
+                    {order.priceText}
+                  </AppText>
+                </View>
+                <AppText variant="caption" style={styles.recommendedRouteText}>
+                  {order.originAddress} → {order.destinationAddress}
+                </AppText>
+
+                {isSelected && selectedDetail ? (
+                  <View style={styles.selectedInlineWrap}>
+                    <View style={styles.selectedMetaRow}>
+                      <View style={styles.selectedMetaCell}>
+                        <AppText variant="caption" color="textMuted">
+                          거리
+                        </AppText>
+                        <AppText variant="detail" weight="900" color="brandPrimary">
+                          {selectedDetail.distanceText}
+                        </AppText>
+                      </View>
+                      <View style={styles.selectedMetaCell}>
+                        <AppText variant="caption" color="textMuted">
+                          중량
+                        </AppText>
+                        <AppText variant="detail" weight="900" color="textMain">
+                          {selectedDetail.weightText}
+                        </AppText>
+                      </View>
+                      <View style={styles.selectedMetaCell}>
+                        <AppText variant="caption" color="textMuted">
+                          CBM
+                        </AppText>
+                        <AppText variant="detail" weight="900" color="textMain">
+                          {selectedDetail.cbmText}
+                        </AppText>
+                      </View>
+                    </View>
+
+                    <View style={styles.selectedItemsWrap}>
+                      <AppText variant="caption" weight="800" color="textMuted">
+                        화물 품목
+                      </AppText>
+                      {selectedDetail.items.map((item) => (
+                        <View key={item.key} style={styles.selectedItemRow}>
+                          <AppText variant="caption" weight="800" color="textMain">
+                            {item.title}
+                          </AppText>
+                          {item.subtitle ? (
+                            <AppText variant="caption" color="textSub">
+                              {item.subtitle}
+                            </AppText>
+                          ) : null}
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                ) : null}
+              </Pressable>
+            );
+          })}
         </View>
       ) : null}
     </AppCard>

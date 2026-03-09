@@ -1,10 +1,13 @@
 import type { DriverUiState } from "@/shared/lib/policy";
 
+const DRIVER_ORDERS_TAB_PATH = "/(driver)/quotes";
+
 export const DRIVER_ROUTE_PATH = {
   ORDER_DETAIL: "/(driver)/(stack)/order/[id]",
   RUN_DETAIL: "/(driver)/(stack)/run/[id]",
   RUN_TAB: "/(driver)/run",
-  MARKET_TAB: "/(driver)/quotes",
+  ORDERS_TAB: DRIVER_ORDERS_TAB_PATH,
+  MARKET_TAB: DRIVER_ORDERS_TAB_PATH,
 } as const;
 
 export type DriverStatusFlowItem = {
@@ -38,4 +41,3 @@ export const DRIVER_STATUS_FLOW_MATRIX: readonly DriverStatusFlowItem[] = [
   },
   { serverRaw: "NEGOTIATING", parserStatus: "NEGOTIATING", uiState: "NEGOTIATING", ctaLabel: "운임 제안" },
 ] as const;
-

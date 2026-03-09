@@ -6,6 +6,7 @@ import com.freight.backend.dto.announcement.AnnouncementUpdateRequest;
 import com.freight.backend.exception.CustomException;
 import com.freight.backend.exception.ErrorCode;
 import com.freight.backend.service.AnnouncementService;
+import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -47,7 +48,7 @@ public class AdminAnnouncementController {
     @PostMapping
     public ResponseEntity<AnnouncementResponse> create(
             @AuthenticationPrincipal UserDetails userDetails,
-            @RequestBody AnnouncementCreateRequest request
+            @Valid @RequestBody AnnouncementCreateRequest request
     ) {
         Long adminId = requireAdminId(userDetails);
         return ResponseEntity.ok(announcementService.create(adminId, request));
@@ -57,7 +58,7 @@ public class AdminAnnouncementController {
     public ResponseEntity<AnnouncementResponse> update(
             @AuthenticationPrincipal UserDetails userDetails,
             @PathVariable Long announcementId,
-            @RequestBody AnnouncementUpdateRequest request
+            @Valid @RequestBody AnnouncementUpdateRequest request
     ) {
         requireAdminId(userDetails);
         return ResponseEntity.ok(announcementService.update(announcementId, request));

@@ -4,6 +4,9 @@
  * OpenAPI definition
  * OpenAPI spec version: v0
  */
+import type { QuoteChecklistItemResponse } from './quoteChecklistItemResponse';
+import type { QuoteItemResponse } from './quoteItemResponse';
+import type { QuoteStopResponse } from './quoteStopResponse';
 
 export interface DriverQuoteSummaryResponse {
   quoteId?: number;
@@ -26,4 +29,13 @@ export interface DriverQuoteSummaryResponse {
   vehicleBodyType?: string;
   loadMethod?: string;
   unloadMethod?: string;
+  pickupScheduleStart?: string;
+  deliveryDeadline?: string;
+  deliverySchedule?: string;
+  status?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  quoteItems?: QuoteItemResponse[];
+  checklistItems?: QuoteChecklistItemResponse[];
+  stops?: QuoteStopResponse[];
 }

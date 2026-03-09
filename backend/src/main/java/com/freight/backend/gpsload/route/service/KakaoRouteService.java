@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.freight.backend.gpsload.route.model.Place;
 import com.freight.backend.gpsload.route.model.RouteRequest;
 import com.freight.backend.gpsload.route.model.RouteResponse;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -21,7 +22,7 @@ import java.util.stream.Collectors;
 @Service
 public class KakaoRouteService {
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Value("${kakao.rest-api-key:}")
@@ -29,6 +30,10 @@ public class KakaoRouteService {
 
     @Value("${kakao.mobility-base-url:}")
     private String kakaoMobilityBaseUrl;
+
+    public KakaoRouteService(@Qualifier("externalApiRestTemplate") RestTemplate restTemplate) {
+        this.restTemplate = restTemplate;
+    }
 
     public RouteResponse findRoute(RouteRequest request) {
         return findRoute(request, false);
@@ -66,16 +71,31 @@ public class KakaoRouteService {
         );
 
         try {
-            JsonNode root = objectMapper.readTree(response.getBody());
+            if (!response.getStatusCode().is2xxSuccessful()) {
+                throw new IllegalStateException("Kakao route api returned non-2xx: " + response.getStatusCode());
+            }
+            String body = response.getBody();
+            if (body == null || body.isBlank()) {
+                throw new IllegalStateException("Kakao route api response body is empty");
+            }
+
+            JsonNode root = objectMapper.readTree(body);
             JsonNode routes = root.get("routes");
             if (routes == null || !routes.isArray() || routes.isEmpty()) {
                 throw new IllegalStateException("No routes found");
             }
             JsonNode route = routes.get(0);
-            JsonNode summary = route.get("summary");
-            int distance = summary.get("distance").asInt();
-            int duration = summary.get("duration").asInt();
-            int segmentCount = route.get("sections").size();
+            JsonNode summary = route.path("summary");
+            if (summary.isMissingNode() || summary.isNull()) {
+                throw new IllegalStateException("Kakao route summary is missing");
+            }
+            int distance = summary.path("distance").asInt(-1);
+            int duration = summary.path("duration").asInt(-1);
+            if (distance < 0 || duration < 0) {
+                throw new IllegalStateException("Kakao route summary fields are missing");
+            }
+            JsonNode sections = route.path("sections");
+            int segmentCount = sections.isArray() ? sections.size() : 0;
 
             return new RouteResponse(distance, duration, segmentCount);
         } catch (Exception e) {

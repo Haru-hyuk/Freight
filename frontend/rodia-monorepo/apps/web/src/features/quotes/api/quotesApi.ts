@@ -215,7 +215,7 @@ function toRowFromList(list: BackendQuoteList): QuoteRow {
     weightKg: 0,
     volumeCbm: 0,
     cargoType: list.cargoName ?? "화물",
-    desiredPrice: list.desiredPrice ?? 0,
+    desiredPrice: list.desiredPrice ?? list.finalPrice ?? 0,
     finalPrice: list.finalPrice ?? undefined,
     status: normalizeQuoteStatus(list.status),
     allowCombine: false,
@@ -450,7 +450,7 @@ export async function updateQuoteByAdmin(payload: QuoteUpdatePayload): Promise<Q
   };
 
   try {
-    const response = await apiClient.put<unknown>(`${apiPaths.shipperQuotes.replace(/\/$/, "")}/${identifier}`, requestBody);
+    const response = await apiClient.put<unknown>(`${apiPaths.adminTransportQuotes.replace(/\/$/, "")}/${identifier}`, requestBody);
     const updatedDetail = mapBackendQuoteDetail(response.data);
     const base = toRowFromList({
       quoteId: updatedDetail.quoteId,

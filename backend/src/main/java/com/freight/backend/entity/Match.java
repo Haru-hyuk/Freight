@@ -7,9 +7,11 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.time.LocalDateTime;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -25,7 +27,16 @@ import lombok.Setter;
  * - 기사가 수락하면 driverId 설정, accepted=true
  */
 @Entity
-@Table(name = "matches")
+@Table(
+        name = "matches",
+        indexes = {
+                @Index(name = "idx_matches_quote_id", columnList = "quote_id"),
+                @Index(name = "idx_matches_driver_id", columnList = "driver_id"),
+                @Index(name = "idx_matches_status", columnList = "status"),
+                @Index(name = "idx_matches_driver_id_status", columnList = "driver_id, status"),
+                @Index(name = "idx_matches_quote_id_status", columnList = "quote_id, status")
+        }
+)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
@@ -89,6 +100,11 @@ public class Match {
 
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    /** 낙관적 락을 위한 버전 필드 - Counter Offer 레이스 컨디션 방지 */
+    @Version
+    @Column(name = "version")
+    private Long version;
 
     @PrePersist
     protected void onCreate() {

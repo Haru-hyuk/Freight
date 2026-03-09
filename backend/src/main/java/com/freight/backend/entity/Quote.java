@@ -5,6 +5,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
@@ -25,7 +26,14 @@ import org.hibernate.type.SqlTypes;
  * - 상태: OPEN → MATCHED → IN_TRANSIT → DELIVERED
  */
 @Entity
-@Table(name = "quotes")
+@Table(
+        name = "quotes",
+        indexes = {
+                @Index(name = "idx_quotes_shipper_id", columnList = "shipper_id"),
+                @Index(name = "idx_quotes_status", columnList = "status"),
+                @Index(name = "idx_quotes_delivery_schedule", columnList = "delivery_schedule")
+        }
+)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
@@ -50,8 +58,26 @@ public class Quote {
     @Column(name = "origin_address")
     private String originAddress;
 
+    @Column(name = "origin_address_detail")
+    private String originAddressDetail;
+
     @Column(name = "destination_address")
     private String destinationAddress;
+
+    @Column(name = "destination_address_detail")
+    private String destinationAddressDetail;
+
+    @Column(name = "sender_name")
+    private String senderName;
+
+    @Column(name = "sender_phone")
+    private String senderPhone;
+
+    @Column(name = "receiver_name")
+    private String receiverName;
+
+    @Column(name = "receiver_phone")
+    private String receiverPhone;
 
     @Column(name = "origin_lat")
     private Double originLat;
@@ -113,6 +139,15 @@ public class Quote {
     @Column(name = "unload_method", nullable = false)
     private String unloadMethod;
 
+    @Column(name = "pickup_schedule_start")
+    private LocalDateTime pickupScheduleStart;
+
+    @Column(name = "delivery_deadline")
+    private LocalDateTime deliveryDeadline;
+
+    @Column(name = "delivery_schedule")
+    private LocalDateTime deliverySchedule;
+
     @Column(name = "status", nullable = false)
     private String status;
 
@@ -142,7 +177,13 @@ public class Quote {
     public void updateFrom(
             Long truckId,
             String originAddress,
+            String originAddressDetail,
             String destinationAddress,
+            String destinationAddressDetail,
+            String senderName,
+            String senderPhone,
+            String receiverName,
+            String receiverPhone,
             Double originLat,
             Double originLng,
             Double destinationLat,
@@ -162,11 +203,20 @@ public class Quote {
             Integer finalPrice,
             Boolean allowCombine,
             String loadMethod,
-            String unloadMethod
+            String unloadMethod,
+            LocalDateTime pickupScheduleStart,
+            LocalDateTime deliveryDeadline,
+            LocalDateTime deliverySchedule
     ) {
         this.truckId = truckId;
         this.originAddress = originAddress;
+        this.originAddressDetail = originAddressDetail;
         this.destinationAddress = destinationAddress;
+        this.destinationAddressDetail = destinationAddressDetail;
+        this.senderName = senderName;
+        this.senderPhone = senderPhone;
+        this.receiverName = receiverName;
+        this.receiverPhone = receiverPhone;
         this.originLat = originLat;
         this.originLng = originLng;
         this.destinationLat = destinationLat;
@@ -187,6 +237,85 @@ public class Quote {
         this.allowCombine = allowCombine;
         this.loadMethod = loadMethod;
         this.unloadMethod = unloadMethod;
+        this.pickupScheduleStart = pickupScheduleStart;
+        this.deliveryDeadline = deliveryDeadline;
+        this.deliverySchedule = deliverySchedule;
+    }
+
+    public void updateByAdmin(
+            String status,
+            String cargoType,
+            Integer desiredPrice,
+            Integer finalPrice,
+            Integer distanceKm,
+            Integer weightKg,
+            Integer volumeCbm,
+            String originAddress,
+            String destinationAddress,
+            Boolean allowCombine,
+            String loadMethod,
+            String unloadMethod,
+            LocalDateTime deliverySchedule,
+            String checklistSummary
+    ) {
+        if (status != null && !status.isBlank()) {
+            this.status = status;
+        }
+        if (cargoType != null) {
+            this.cargoType = cargoType;
+        }
+        if (desiredPrice != null) {
+            this.desiredPrice = desiredPrice;
+        }
+        if (finalPrice != null) {
+            this.finalPrice = finalPrice;
+        }
+        if (distanceKm != null) {
+            this.distanceKm = distanceKm;
+        }
+        if (weightKg != null) {
+            this.weightKg = weightKg;
+        }
+        if (volumeCbm != null) {
+            this.volumeCbm = volumeCbm;
+        }
+        if (originAddress != null) {
+            this.originAddress = originAddress;
+        }
+        if (destinationAddress != null) {
+            this.destinationAddress = destinationAddress;
+        }
+        if (allowCombine != null) {
+            this.allowCombine = allowCombine;
+        }
+        if (loadMethod != null && !loadMethod.isBlank()) {
+            this.loadMethod = loadMethod;
+        }
+        if (unloadMethod != null && !unloadMethod.isBlank()) {
+            this.unloadMethod = unloadMethod;
+        }
+        this.deliveryDeadline = deliverySchedule;
+        this.deliverySchedule = deliverySchedule;
+        if (this.pickupScheduleStart == null && deliverySchedule != null) {
+            this.pickupScheduleStart = deliverySchedule;
+        }
+        if (checklistSummary != null) {
+            this.cargoDesc = checklistSummary;
+        }
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    public void updateResolvedCoordinates(
+            Double originLat,
+            Double originLng,
+            Double destinationLat,
+            Double destinationLng
+    ) {
+        this.originLat = originLat;
+        this.originLng = originLng;
+        this.destinationLat = destinationLat;
+        this.destinationLng = destinationLng;
+        this.updatedAt = LocalDateTime.now();
     }
 
     /** 견적 상태를 IN_TRANSIT로 변경 (운송 시작 시) */

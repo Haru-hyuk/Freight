@@ -70,7 +70,9 @@ public class DeliveryPhotoController {
             @RequestParam(value = "takenAt", required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime takenAt,
             @RequestParam(value = "lat", required = false) BigDecimal lat,
-            @RequestParam(value = "lng", required = false) BigDecimal lng
+            @RequestParam(value = "lng", required = false) BigDecimal lng,
+            @RequestParam(value = "stopOrder", required = false) Integer stopOrder,
+            @RequestParam(value = "stopLabel", required = false) String stopLabel
     ) {
         Long driverId = requireDriverId(userDetails);
         DeliveryPhotoResponse response = deliveryPhotoService.uploadByDriver(
@@ -80,7 +82,9 @@ public class DeliveryPhotoController {
                 file,
                 takenAt,
                 lat,
-                lng
+                lng,
+                stopOrder,
+                stopLabel
         );
         return ResponseEntity.ok(response);
     }

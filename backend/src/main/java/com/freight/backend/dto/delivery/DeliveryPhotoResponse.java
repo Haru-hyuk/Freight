@@ -21,6 +21,8 @@ public class DeliveryPhotoResponse {
     private BigDecimal lng;
     private Long fileSize;
     private String mimeType;
+    private Integer stopOrder;
+    private String stopLabel;
     private LocalDateTime createdAt;
 
     public static DeliveryPhotoResponse from(DeliveryPhoto photo) {
@@ -35,6 +37,8 @@ public class DeliveryPhotoResponse {
                 .lng(photo.getLng())
                 .fileSize(photo.getFileSize())
                 .mimeType(photo.getMimeType())
+                .stopOrder(photo.getStopOrder())
+                .stopLabel(photo.getStopLabel())
                 .createdAt(photo.getCreatedAt())
                 .build();
     }

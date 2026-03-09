@@ -130,6 +130,8 @@ type BackendMatch = {
   updatedAt: string | null;
 };
 
+const DEFAULT_ADMIN_DEVIATIONS_PATH = "/api/admin/ops/deviations";
+
 const SOURCE_PRIORITY: Record<DeviationSource, number> = {
   [DeviationSource.ADMIN]: 4,
   [DeviationSource.MATCH]: 3,

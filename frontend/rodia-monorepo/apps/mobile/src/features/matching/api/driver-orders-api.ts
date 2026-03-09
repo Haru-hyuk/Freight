@@ -5,9 +5,10 @@ import {
   type CounterOfferItem,
 } from "@/features/counter-offer/api";
 import { getQuoteSummary } from "@/shared/api/generated";
-import { recommendRoutes as recommendRoutesGenerated } from "@/shared/api/generated/driver-optimization-controller/driver-optimization-controller";
+import { recommendRoutes as recommendRoutesGenerated } from "@/shared/api/generated/driver-optimization/driver-optimization";
 import type { DriverQuoteSummaryResponse } from "@/shared/api/generated/schemas/driverQuoteSummaryResponse";
 import { getDriverMatchMode } from "@/shared/lib/config/env";
+import type { CargoVisit } from "@/shared/api/generated/schemas/cargoVisit";
 import {
   BACKEND_STATUS,
   DRIVER_UI_STATE,
@@ -32,8 +33,11 @@ import {
 } from "./driver-orders-mapper";
 import {
   collectDriverOrderQuoteIds,
+  DRIVER_ORDER_SCOPE_ALIAS,
+  DRIVER_ORDER_SCOPE_LEGACY,
   parseDriverOrderPositiveInt,
   parseDriverOrderSource,
+  toLegacyDriverOrderScope,
 } from "./driver-orders-parser";
 
 import {
@@ -46,6 +50,37 @@ export type DriverOrderTagKey = "AI_RECOMMENDED" | "COMBINED" | "WAYPOINT" | "UR
 
 export type DriverOrderFilterKey = "ALL" | DriverOrderTagKey;
 export type DriverOrdersTabKey = "market" | "my";
+export type DriverOrdersTabAlias = "open" | "assigned";
+
+export const DRIVER_ORDERS_TAB_LEGACY = {
+  ORDERS_TAB: DRIVER_ORDER_SCOPE_LEGACY.OPEN,
+  ASSIGNED_TAB: DRIVER_ORDER_SCOPE_LEGACY.ASSIGNED,
+} as const;
+
+export const DRIVER_ORDERS_TAB_ALIAS = {
+  OPEN: DRIVER_ORDER_SCOPE_ALIAS.OPEN,
+  ASSIGNED: DRIVER_ORDER_SCOPE_ALIAS.ASSIGNED,
+} as const;
+
+export function toLegacyDriverOrdersTabKey(
+  tab: DriverOrdersTabKey | DriverOrdersTabAlias
+): DriverOrdersTabKey {
+  return toLegacyDriverOrderScope(tab);
+}
+
+export function toDriverOrdersTabAlias(
+  tab: DriverOrdersTabKey | DriverOrdersTabAlias
+): DriverOrdersTabAlias {
+  if (tab === DRIVER_ORDERS_TAB_LEGACY.ORDERS_TAB) return DRIVER_ORDERS_TAB_ALIAS.OPEN;
+  if (tab === DRIVER_ORDERS_TAB_LEGACY.ASSIGNED_TAB) return DRIVER_ORDERS_TAB_ALIAS.ASSIGNED;
+  return tab;
+}
+
+export {
+  DRIVER_ORDER_SCOPE_ALIAS,
+  DRIVER_ORDER_SCOPE_LEGACY,
+  toLegacyDriverOrderScope,
+} from "./driver-orders-parser";
 
 export type DriverOrderTag = {
   key: DriverOrderTagKey;
@@ -110,6 +145,7 @@ export type DriverRouteRecommendation = {
   key: string;
   rank: number;
   quoteIds: number[];
+  visitOrder?: CargoVisit[];
   routeType: DriverRouteRecommendationMode | "HOME_ROUTE" | "UNKNOWN";
   totalRevenue: number;
   estimatedTotalDistanceKm: number;
@@ -476,6 +512,7 @@ function parseRecommendedRoute(
     key: toOptionalText(source.calibrationId) ?? `server-${index + 1}-${quoteIds.join("-")}`,
     rank: Math.max(1, Math.trunc(toPositiveNumber(source.rank, index + 1))),
     quoteIds,
+    visitOrder: Array.isArray(source.visitOrder) ? (source.visitOrder as CargoVisit[]) : undefined,
     routeType,
     totalRevenue: toPositiveNumber(source.totalRevenue, 0),
     estimatedTotalDistanceKm: toPositiveNumber(source.estimatedTotalDistanceM, 0) / 1000,
@@ -930,7 +967,7 @@ export async function loadDriverOrdersOverview(): Promise<DriverOrdersOverview> 
   ]);
   const pendingCounterOfferByQuoteId = buildPendingCounterOfferByQuoteId(myCounterOffers);
 
-  const marketMatches = openMatches.filter((match) => {
+  const openMatchesForOrders = openMatches.filter((match) => {
     if (parseDriverOrderPositiveInt(match.driverId) > 0) return false;
     const quoteId = parseDriverOrderPositiveInt(match.quoteId);
     if (quoteId > 0 && pendingCounterOfferByQuoteId.has(quoteId)) return false;
@@ -945,32 +982,34 @@ export async function loadDriverOrdersOverview(): Promise<DriverOrdersOverview> 
     const normalized = normalizeStatus(match.status ?? "");
     return normalized === BACKEND_STATUS.READY || normalized === BACKEND_STATUS.IN_TRANSIT;
   });
-  const myPendingMatches = myMatches.filter((match) => !runMatches.includes(match));
+  const assignedPendingMatches = myMatches.filter((match) => !runMatches.includes(match));
   const negotiatingMarketMatches = openMatches.filter((match) => {
     if (parseDriverOrderPositiveInt(match.driverId) > 0) return false;
     const quoteId = parseDriverOrderPositiveInt(match.quoteId);
     return quoteId > 0 && pendingCounterOfferByQuoteId.has(quoteId);
   });
-  const myMatchesForBoard: typeof myMatches = [...myPendingMatches];
-  const seenMyMatchIds = new Set(myMatchesForBoard.map((match) => parseDriverOrderPositiveInt(match.matchId)));
+  const assignedMatchesForBoard: typeof myMatches = [...assignedPendingMatches];
+  const seenAssignedMatchIds = new Set(
+    assignedMatchesForBoard.map((match) => parseDriverOrderPositiveInt(match.matchId))
+  );
   negotiatingMarketMatches.forEach((match) => {
     const safeMatchId = parseDriverOrderPositiveInt(match.matchId);
     if (safeMatchId <= 0) return;
-    if (seenMyMatchIds.has(safeMatchId)) return;
-    seenMyMatchIds.add(safeMatchId);
-    myMatchesForBoard.push(match);
+    if (seenAssignedMatchIds.has(safeMatchId)) return;
+    seenAssignedMatchIds.add(safeMatchId);
+    assignedMatchesForBoard.push(match);
   });
 
-  const quoteIds = collectDriverOrderQuoteIds([...marketMatches, ...myMatches, ...negotiatingMarketMatches]);
+  const quoteIds = collectDriverOrderQuoteIds([...openMatchesForOrders, ...myMatches, ...negotiatingMarketMatches]);
   const quoteMap = await loadQuoteDetailsByIds(quoteIds);
 
-  const marketOrders = marketMatches.map((match, index) => {
+  const openOrders = openMatchesForOrders.map((match, index) => {
     const quoteId = parseDriverOrderPositiveInt(match.quoteId);
     const quote = quoteId > 0 ? quoteMap.get(quoteId) ?? null : null;
     const source = parseDriverOrderSource({
       match,
       quote,
-      scope: "market",
+      scope: toLegacyDriverOrderScope(DRIVER_ORDER_SCOPE_ALIAS.OPEN),
       index,
     });
     return mapDriverOrderCard({
@@ -986,7 +1025,7 @@ export async function loadDriverOrdersOverview(): Promise<DriverOrdersOverview> 
     const source = parseDriverOrderSource({
       match,
       quote,
-      scope: "my",
+      scope: toLegacyDriverOrderScope(DRIVER_ORDER_SCOPE_ALIAS.ASSIGNED),
       index,
     });
     return mapDriverOrderCard({
@@ -996,13 +1035,13 @@ export async function loadDriverOrdersOverview(): Promise<DriverOrdersOverview> 
     });
   });
 
-  const myOrdersWithNegotiating = myMatchesForBoard.map((match, index) => {
+  const assignedOrdersWithNegotiating = assignedMatchesForBoard.map((match, index) => {
     const quoteId = parseDriverOrderPositiveInt(match.quoteId);
     const quote = quoteId > 0 ? quoteMap.get(quoteId) ?? null : null;
     const source = parseDriverOrderSource({
       match,
       quote,
-      scope: "my",
+      scope: toLegacyDriverOrderScope(DRIVER_ORDER_SCOPE_ALIAS.ASSIGNED),
       index,
     });
     const baseCard = mapDriverOrderCard({
@@ -1013,13 +1052,13 @@ export async function loadDriverOrdersOverview(): Promise<DriverOrdersOverview> 
     return applyPendingCounterOfferOverlay(baseCard, pendingCounterOfferByQuoteId.get(quoteId));
   });
 
-  const availableFilters = resolveAvailableFilters(capability, marketOrders);
+  const availableFilters = resolveAvailableFilters(capability, openOrders);
 
   return {
-    marketOrders: sortDriverOrderCards(marketOrders),
-    myOrders: sortDriverOrderCards(myOrdersWithNegotiating),
+    marketOrders: sortDriverOrderCards(openOrders),
+    myOrders: sortDriverOrderCards(assignedOrdersWithNegotiating),
     runOrders: sortDriverOrderCards(runOrders),
-    myCount: myOrdersWithNegotiating.length,
+    myCount: assignedOrdersWithNegotiating.length,
     availableFilters,
     capability,
   };

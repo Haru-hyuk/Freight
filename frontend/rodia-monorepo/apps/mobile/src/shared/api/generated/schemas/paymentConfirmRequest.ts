@@ -6,7 +6,9 @@
  */
 
 export interface PaymentConfirmRequest {
+  /** @minLength 1 */
   paymentKey: string;
+  /** @minLength 1 */
   orderId: string;
   /** @minimum 100 */
   amount: number;

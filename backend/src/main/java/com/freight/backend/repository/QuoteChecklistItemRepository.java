@@ -6,5 +6,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface QuoteChecklistItemRepository extends JpaRepository<QuoteChecklistItem, Long> {
     List<QuoteChecklistItem> findByQuoteId(Long quoteId);
+    List<QuoteChecklistItem> findByQuoteIdIn(List<Long> quoteIds);
     void deleteByQuoteId(Long quoteId);
 }

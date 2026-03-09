@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import { Redirect, Stack, useRouter, useSegments } from "expo-router";
 import { ActivityIndicator, StyleSheet, View, type ViewStyle } from "react-native";
 
+import { useActiveOrder } from "@/entities/order/model/active-order.store";
 import { useAuth } from "@/features/auth/model/useAuth";
 import { safeString } from "@/shared/theme/colorUtils";
 import { useAppTheme } from "@/shared/theme/useAppTheme";
@@ -9,9 +10,30 @@ import { BottomTabBar } from "@/widgets/layout/BottomTabBar";
 
 type BottomTabKey = "home" | "quotes" | "run" | "settlement" | "profile";
 
+function toStatusToken(value: unknown): string {
+  return String(value ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "_")
+    .replace(/-/g, "_");
+}
+
+function shouldHideBottomBarForTransitRunDetail(input: {
+  segments: readonly string[] | undefined | null;
+  runStatus: unknown;
+}): boolean {
+  const segs = Array.isArray(input.segments) ? input.segments : [];
+  const isRunTab = segs[1] === "run";
+  if (!isRunTab) return false;
+  const token = toStatusToken(input.runStatus);
+  return token === "TRANSIT" || token === "IN_TRANSIT";
+}
+
 function shouldHideBottomBar(segments: readonly string[] | undefined | null): boolean {
   const segs = Array.isArray(segments) ? segments : [];
-  return segs.includes("verification") || segs.includes("(stack)");
+  const settlementIndex = segs.indexOf("settlement");
+  const isSettlementDetail = settlementIndex >= 0 && segs.length > settlementIndex + 1;
+  return segs.includes("verification") || segs.includes("(stack)") || isSettlementDetail;
 }
 
 function pickActiveKey(segments: readonly string[] | undefined | null): BottomTabKey {
@@ -49,6 +71,7 @@ export default function DriverLayout() {
   const theme = useAppTheme();
   const router = useRouter();
   const auth = useAuth();
+  const { activeRun } = useActiveOrder();
   const segments = useSegments();
   const tabNavLockedRef = useRef(false);
   const tabNavUnlockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -76,8 +99,14 @@ export default function DriverLayout() {
   const activeKey = useMemo(() => pickActiveKey(segments), [segments]);
   const requiresVerification = auth.pendingVerificationRole === "driver";
   const hideBottomBar = useMemo(
-    () => shouldHideBottomBar(segments) || requiresVerification,
-    [requiresVerification, segments]
+    () =>
+      shouldHideBottomBar(segments) ||
+      shouldHideBottomBarForTransitRunDetail({
+        segments,
+        runStatus: activeRun?.match?.status,
+      }) ||
+      requiresVerification,
+    [activeRun?.match?.status, requiresVerification, segments]
   );
 
   useEffect(() => {
@@ -145,7 +174,14 @@ export default function DriverLayout() {
             headerShown: false,
             contentStyle: { backgroundColor: cBgBase },
           }}
-        />
+        >
+          <Stack.Screen
+            name="settlement/[matchId]"
+            options={{
+              headerShown: false,
+            }}
+          />
+        </Stack>
       </View>
 
       {!hideBottomBar ? (

@@ -20,11 +20,13 @@ public class QuoteItemResponse {
     private final Double maxStackWeightKg;
     private final String handlingTags;
     private final Integer sortOrder;
+    private final Integer dropStopSeq;
 
     public QuoteItemResponse(Long quoteItemId, String itemName, String itemType, String itemDescription, Integer quantity,
                              Integer lengthCm, Integer widthCm, Integer heightCm, Double unitWeightKg, Double unitVolumeCbm,
                              Boolean fragile, Boolean upright, Boolean noStack, Boolean bottomOnly, Boolean rotatable,
-                             Boolean stackable, Double maxStackWeightKg, String handlingTags, Integer sortOrder) {
+                             Boolean stackable, Double maxStackWeightKg, String handlingTags, Integer sortOrder,
+                             Integer dropStopSeq) {
         this.quoteItemId = quoteItemId;
         this.itemName = itemName;
         this.itemType = itemType;
@@ -44,6 +46,7 @@ public class QuoteItemResponse {
         this.maxStackWeightKg = maxStackWeightKg;
         this.handlingTags = handlingTags;
         this.sortOrder = sortOrder;
+        this.dropStopSeq = dropStopSeq;
     }
 
     public Long getQuoteItemId() { return quoteItemId; }
@@ -65,4 +68,5 @@ public class QuoteItemResponse {
     public Double getMaxStackWeightKg() { return maxStackWeightKg; }
     public String getHandlingTags() { return handlingTags; }
     public Integer getSortOrder() { return sortOrder; }
+    public Integer getDropStopSeq() { return dropStopSeq; }
 }

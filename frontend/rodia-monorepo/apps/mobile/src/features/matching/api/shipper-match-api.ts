@@ -1,4 +1,4 @@
-import {
+﻿import {
   acceptMatch as acceptDriverMatchGenerated,
   acceptMatches as acceptDriverMatchesGenerated,
   cancelMatch1 as cancelDriverMatchGenerated,
@@ -6,7 +6,7 @@ import {
   getMyMatches1 as getMyDriverMatchesGenerated,
   getOpenMatches as getOpenDriverMatchesGenerated,
   startTransit as startDriverTransitGenerated,
-} from "@/shared/api/generated/driver-match-controller/driver-match-controller";
+} from "@/shared/api/generated/driver-match/driver-match";
 import {
   createDriverCounterOffer,
   type CounterOfferItem,
@@ -16,7 +16,8 @@ import {
   cancelMatch as cancelShipperMatchGenerated,
   createMatch as createShipperMatchGenerated,
   getMyMatches as getMyShipperMatchesGenerated,
-} from "@/shared/api/generated/shipper-match-controller/shipper-match-controller";
+} from "@/shared/api/generated/shipper-match/shipper-match";
+import { getShipperTracking as getShipperTrackingGenerated } from "@/shared/api/generated/tracking/tracking";
 import { isMockMode } from "@/shared/lib/config/env";
 import {
   acceptMockFlowDriverMatch,
@@ -82,6 +83,27 @@ export type DriverBatchAcceptInput = {
   orderedQuoteIds?: number[];
 };
 
+export type ShipperTrackingSnapshot = {
+  matchId: number;
+  matchStatus?: string;
+  locationSharingEnabled: boolean;
+  locationSharingUpdatedAt?: string;
+  lastReceivedAt?: string;
+  missingSignalWarning: boolean;
+  currentLocation?: {
+    lat: number;
+    lng: number;
+    speedKmh?: number;
+    bearing?: number;
+    loggedAt?: string;
+  };
+  recentPath: Array<{
+    lat: number;
+    lng: number;
+    loggedAt?: string;
+  }>;
+};
+
 const DRIVER_ACTION_GUARD_SERVER: DriverMatchActionGuard = {
   enabled: false,
   reason: "서버 권한/연동 준비중",
@@ -121,6 +143,64 @@ function toBatchAcceptedMatches(value: unknown): DriverMatchItem[] {
     return parseMatchListResponse(payload.matches);
   }
   return parseMatchListResponse(value);
+}
+
+function toOptionalFinite(value: unknown): number | undefined {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function toOptionalText(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function toShipperTrackingSnapshot(matchId: number, value: unknown): ShipperTrackingSnapshot {
+  const source = asObject(value);
+  const currentSource = asObject(source.currentLocation);
+  const pathSource = Array.isArray(source.recentPath) ? source.recentPath : [];
+  const currentLat = toOptionalFinite(currentSource.lat);
+  const currentLng = toOptionalFinite(currentSource.lng);
+  const currentLocation =
+    typeof currentLat === "number" && typeof currentLng === "number"
+      ? {
+          lat: currentLat,
+          lng: currentLng,
+          ...(typeof toOptionalFinite(currentSource.speedKmh) === "number"
+            ? { speedKmh: Number(currentSource.speedKmh) }
+            : {}),
+          ...(typeof toOptionalFinite(currentSource.bearing) === "number"
+            ? { bearing: Number(currentSource.bearing) }
+            : {}),
+          ...(toOptionalText(currentSource.loggedAt) ? { loggedAt: toOptionalText(currentSource.loggedAt) } : {}),
+        }
+      : undefined;
+
+  const recentPath = pathSource
+    .map((entry) => {
+      const point = asObject(entry);
+      const lat = toOptionalFinite(point.lat);
+      const lng = toOptionalFinite(point.lng);
+      if (typeof lat !== "number" || typeof lng !== "number") return null;
+      return {
+        lat,
+        lng,
+        ...(toOptionalText(point.loggedAt) ? { loggedAt: toOptionalText(point.loggedAt) } : {}),
+      };
+    })
+    .filter((entry): entry is { lat: number; lng: number; loggedAt?: string } => Boolean(entry));
+
+  return {
+    matchId,
+    ...(toOptionalText(source.matchStatus) ? { matchStatus: toOptionalText(source.matchStatus) } : {}),
+    locationSharingEnabled: source.locationSharingEnabled === true,
+    ...(toOptionalText(source.locationSharingUpdatedAt)
+      ? { locationSharingUpdatedAt: toOptionalText(source.locationSharingUpdatedAt) }
+      : {}),
+    ...(toOptionalText(source.lastReceivedAt) ? { lastReceivedAt: toOptionalText(source.lastReceivedAt) } : {}),
+    missingSignalWarning: source.missingSignalWarning === true,
+    ...(currentLocation ? { currentLocation } : {}),
+    recentPath,
+  };
 }
 
 export function getDriverMatchActionGuard(): DriverMatchActionGuard {
@@ -342,3 +422,22 @@ export async function cancelDriverMatch(matchId: number): Promise<void> {
 
   await cancelDriverMatchGenerated(safeMatchId);
 }
+
+export async function getShipperMatchTracking(matchId: number): Promise<ShipperTrackingSnapshot | null> {
+  const safeMatchId = parseMatchPositiveInt(matchId);
+  if (safeMatchId <= 0) return null;
+
+  if (isMockMode()) {
+    await waitRandom();
+    return {
+      matchId: safeMatchId,
+      locationSharingEnabled: false,
+      missingSignalWarning: false,
+      recentPath: [],
+    };
+  }
+
+  const data = await getShipperTrackingGenerated(safeMatchId);
+  return toShipperTrackingSnapshot(safeMatchId, data);
+}
+

@@ -90,7 +90,7 @@ export const apiPaths = {
   adminDashboard: resolvePath(env.VITE_API_ADMIN_DASHBOARD_PATH, "/api/admin/dashboard"),
   adminSanctions: resolvePath(env.VITE_API_ADMIN_SANCTIONS_PATH, "/api/admin/sanctions"),
   adminDeviations: resolvePath(env.VITE_API_ADMIN_DEVIATIONS_PATH, "/api/admin/ops/deviations"),
-  adminSanctionsLogs: resolvePath(env.VITE_API_ADMIN_SANCTIONS_LOGS_PATH, "/api/admin/ops/sanctions/logs"),
+  adminSanctionsLogs: resolvePath(env.VITE_API_ADMIN_SANCTIONS_LOGS_PATH, "/api/admin/sanctions"),
   adminActivityLogs: resolvePath(env.VITE_API_ADMIN_ACTIVITY_LOGS_PATH, "/api/admin/ops/activity-logs"),
   adminTrucksPending: resolvePath(env.VITE_API_ADMIN_TRUCKS_PENDING_PATH, "/api/admin/trucks/pending"),
   adminTruckApproval: (truckId: string) =>

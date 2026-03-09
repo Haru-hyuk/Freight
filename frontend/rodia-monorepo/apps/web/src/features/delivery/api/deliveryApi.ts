@@ -144,15 +144,6 @@ function parseMatchId(input: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function resolveDriverMyMatchesPath(): string {
-  return `${apiPaths.driverMatches.replace(/\/$/, "")}/me`;
-}
-
-function resolveSettlementMePath(basePath: string): string {
-  const base = basePath.replace(/\/$/, "");
-  return base.endsWith("/me") ? base : `${base}/me`;
-}
-
 function mapBackendMatch(raw: unknown): BackendMatch {
   const row = toRecord(raw);
   return {
@@ -323,7 +314,7 @@ async function buildLiveRows(): Promise<DeliveryHistoryRow[]> {
     quoteMap.set(quote.quoteId, quote);
   }
 
-  const rows = matches
+  const rows = mergedMatches
     .filter((match) => typeof match.matchId === "number")
     .map((match) => {
       const matchStatus = normalizeMatchStatus(match.status);

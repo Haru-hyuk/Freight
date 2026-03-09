@@ -13,14 +13,18 @@ import com.freight.backend.repository.CounterOfferRepository;
 import com.freight.backend.repository.MatchRepository;
 import com.freight.backend.repository.QuoteRepository;
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class CounterOfferService {
 
     private final CounterOfferRepository counterOfferRepository;
@@ -30,6 +34,9 @@ public class CounterOfferService {
 
     @Transactional
     public CounterOfferResponse createOffer(Long driverId, Long quoteId, CounterOfferCreateRequest request) {
+        // 바인딩/검증 편차와 무관하게 역제안 최소 입력 조건을 서비스에서 보장한다.
+        validateCreateRequest(request);
+
         Quote quote = quoteRepository.findById(quoteId)
                 .orElseThrow(() -> new CustomException(ErrorCode.INVALID_REQUEST));
 
@@ -51,16 +58,32 @@ public class CounterOfferService {
                 .build();
 
         CounterOffer saved = counterOfferRepository.save(offer);
+        Long notificationMatchId = requireNotificationMatchId(quoteId);
 
         notificationService.createNotification(
                 FcmToken.UserType.SHIPPER,
                 quote.getShipperId(),
-                null,
+                notificationMatchId,
                 com.freight.backend.entity.Notification.Type.COUNTER_OFFER_CREATED,
                 "Driver sent a counter offer."
         );
 
         return CounterOfferResponse.from(saved);
+    }
+
+    private void validateCreateRequest(CounterOfferCreateRequest request) {
+        if (request == null) {
+            throw new CustomException(ErrorCode.INVALID_REQUEST);
+        }
+        Integer proposedPrice = request.getProposedPrice();
+        String message = request.getMessage();
+        boolean hasMessage = message != null && !message.isBlank();
+        if (proposedPrice != null && proposedPrice <= 0) {
+            throw new CustomException(ErrorCode.INVALID_REQUEST);
+        }
+        if (proposedPrice == null && !hasMessage) {
+            throw new CustomException(ErrorCode.INVALID_REQUEST);
+        }
     }
 
     @Transactional(readOnly = true)
@@ -94,20 +117,33 @@ public class CounterOfferService {
         if (!quote.getShipperId().equals(shipperId)) {
             throw new CustomException(ErrorCode.AUTH_FORBIDDEN);
         }
-        if (offer.getStatus() != CounterOffer.Status.PENDING) {
-            throw new CustomException(ErrorCode.INVALID_REQUEST);
-        }
         if (!quote.isOpen()) {
             throw new CustomException(ErrorCode.QUOTE_NOT_OPEN);
         }
 
-        Match match = resolveOrCreateAcceptedMatch(quote.getQuoteId(), offer.getDriverId());
+        Match match = resolveAcceptedReadyMatch(quote.getQuoteId(), offer.getDriverId());
 
-        quote.markMatched();
-        quoteRepository.save(quote);
+        int quoteUpdated = quoteRepository.updateStatusIfCurrent(
+                quote.getQuoteId(),
+                "OPEN",
+                "MATCHED",
+                LocalDateTime.now()
+        );
+        if (quoteUpdated == 0) {
+            throw new CustomException(ErrorCode.QUOTE_NOT_OPEN);
+        }
 
-        offer.accept();
-        CounterOffer savedOffer = counterOfferRepository.save(offer);
+        int offerUpdated = counterOfferRepository.updateStatusIfCurrent(
+                offer.getCounterOfferId(),
+                CounterOffer.Status.PENDING,
+                CounterOffer.Status.ACCEPTED,
+                LocalDateTime.now()
+        );
+        if (offerUpdated == 0) {
+            throw new CustomException(ErrorCode.INVALID_REQUEST);
+        }
+        CounterOffer savedOffer = counterOfferRepository.findById(offer.getCounterOfferId())
+                .orElseThrow(() -> new CustomException(ErrorCode.INVALID_REQUEST));
 
         notificationService.createNotification(
                 FcmToken.UserType.DRIVER,
@@ -117,7 +153,7 @@ public class CounterOfferService {
                 "Shipper accepted your counter offer."
         );
 
-        return CounterOfferAcceptResponse.of(savedOffer, match, quote.getStatus());
+        return CounterOfferAcceptResponse.of(savedOffer, match, "MATCHED");
     }
 
     @Transactional
@@ -130,36 +166,28 @@ public class CounterOfferService {
         if (!quote.getShipperId().equals(shipperId)) {
             throw new CustomException(ErrorCode.AUTH_FORBIDDEN);
         }
-        if (offer.getStatus() != CounterOffer.Status.PENDING) {
+        int updated = counterOfferRepository.updateStatusIfCurrent(
+                offer.getCounterOfferId(),
+                CounterOffer.Status.PENDING,
+                CounterOffer.Status.REJECTED,
+                LocalDateTime.now()
+        );
+        if (updated == 0) {
             throw new CustomException(ErrorCode.INVALID_REQUEST);
         }
-
-        offer.reject();
-        counterOfferRepository.save(offer);
+        Long notificationMatchId = requireNotificationMatchId(offer.getQuoteId());
 
         notificationService.createNotification(
                 FcmToken.UserType.DRIVER,
                 offer.getDriverId(),
-                null,
+                notificationMatchId,
                 com.freight.backend.entity.Notification.Type.COUNTER_OFFER_REJECTED,
                 "Shipper rejected your counter offer."
         );
     }
 
-    private Match resolveOrCreateAcceptedMatch(Long quoteId, Long driverId) {
-        Match existing = matchRepository.findByQuoteId(quoteId).orElse(null);
-        if (existing == null || existing.getStatus() == Match.Status.CANCELLED) {
-            Match created = Match.builder()
-                    .quoteId(quoteId)
-                    .driverId(driverId)
-                    .accepted(true)
-                    .acceptedAt(LocalDateTime.now())
-                    .status(Match.Status.READY)
-                    .build();
-            created.assignGroup(null, "SINGLE", 1);
-            return matchRepository.save(created);
-        }
-
+    private Match resolveAcceptedReadyMatch(Long quoteId, Long driverId) {
+        Match existing = findLatestActiveMatch(quoteId);
         if (existing.getStatus() != Match.Status.READY) {
             throw new CustomException(ErrorCode.INVALID_REQUEST);
         }
@@ -179,6 +207,24 @@ public class CounterOfferService {
         Match accepted = matchRepository.findById(existing.getMatchId())
                 .orElseThrow(() -> new CustomException(ErrorCode.MATCH_NOT_FOUND));
         accepted.assignGroup(null, "SINGLE", 1);
-        return matchRepository.save(accepted);
+
+        try {
+            return matchRepository.save(accepted);
+        } catch (ObjectOptimisticLockingFailureException e) {
+            // 낙관적 락 충돌 - 다른 기사가 먼저 수락함
+            log.warn("Counter Offer 수락 중 낙관적 락 충돌 발생. quoteId={}, driverId={}", quoteId, driverId);
+            throw new CustomException(ErrorCode.MATCH_ALREADY_ACCEPTED);
+        }
+    }
+
+    private Long requireNotificationMatchId(Long quoteId) {
+        return findLatestActiveMatch(quoteId).getMatchId();
+    }
+
+    private Match findLatestActiveMatch(Long quoteId) {
+        return matchRepository.findAllByQuoteId(quoteId).stream()
+                .filter(match -> match.getStatus() != Match.Status.CANCELLED)
+                .max(Comparator.comparing(Match::getMatchId))
+                .orElseThrow(() -> new CustomException(ErrorCode.INVALID_REQUEST));
     }
 }

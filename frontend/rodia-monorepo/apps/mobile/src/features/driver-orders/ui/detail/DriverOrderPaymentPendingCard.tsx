@@ -2,11 +2,16 @@ import React from "react";
 import { StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
+import { formatKrw } from "@/shared/lib/format/display";
 import { safeNumber, safeString } from "@/shared/theme/colorUtils";
 import { createThemedStyles, useAppTheme } from "@/shared/theme/useAppTheme";
-import { AppButton } from "@/shared/ui/kit/AppButton";
 import { AppCard } from "@/shared/ui/kit/AppCard";
 import { AppText } from "@/shared/ui/kit/AppText";
+
+type Props = {
+  proposedPrice?: number;
+  proposedMessage?: string | null;
+};
 
 const useStyles = createThemedStyles((theme) => {
   const spacing = safeNumber(theme?.layout?.spacing?.base, 4);
@@ -26,7 +31,7 @@ const useStyles = createThemedStyles((theme) => {
     card: {
       padding: spacing * 5,
       gap: spacing * 4,
-      alignItems: "center",
+      alignItems: "stretch",
     },
     iconWrap: {
       width: 64,
@@ -52,16 +57,37 @@ const useStyles = createThemedStyles((theme) => {
       fontWeight: "600",
       textAlign: "center",
     },
-    hintText: {
+    infoWrap: {
+      gap: spacing * 2,
+    },
+    infoRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: spacing * 2,
+    },
+    infoLabel: {
+      flex: 1,
       color: cTextMuted,
       fontSize: detailSize - 1,
       lineHeight: detailLine,
-      fontWeight: "600",
-      textAlign: "center",
+      fontWeight: "700",
     },
-    button: {
-      width: "100%",
-      minHeight: 48,
+    infoValue: {
+      flex: 1,
+      color: cTextMain,
+      fontSize: detailSize,
+      lineHeight: detailLine,
+      fontWeight: "800",
+      textAlign: "right",
+    },
+    infoValuePrimary: {
+      flex: 1,
+      color: cSecondary,
+      fontSize: detailSize,
+      lineHeight: detailLine,
+      fontWeight: "900",
+      textAlign: "right",
     },
     divider: {
       height: StyleSheet.hairlineWidth,
@@ -71,14 +97,17 @@ const useStyles = createThemedStyles((theme) => {
   });
 });
 
-export function DriverOrderPaymentPendingCard() {
+export function DriverOrderPaymentPendingCard({ proposedPrice, proposedMessage }: Props) {
   const styles = useStyles();
   const theme = useAppTheme();
   const cSecondary = safeString(theme?.colors?.brandSecondary, "#3B82F6");
+  const amount = Number(proposedPrice);
+  const hasAmount = Number.isFinite(amount) && amount > 0;
+  const messageText = typeof proposedMessage === "string" ? proposedMessage.trim() : "";
 
   return (
     <AppCard outlined tone="paymentRequired" style={styles.card}>
-      <View style={styles.iconWrap}>
+      <View style={[styles.iconWrap, { alignSelf: "center" }]}>
         <Ionicons name="time-outline" size={32} color={cSecondary} />
       </View>
 
@@ -90,17 +119,16 @@ export function DriverOrderPaymentPendingCard() {
 
       <View style={styles.divider} />
 
-      <AppText style={styles.hintText}>
-        5분 이상 지연 시 고객센터로 문의해 주세요
-      </AppText>
-
-      <AppButton
-        title="5분 이상 지연 시 고객센터 연결"
-        variant="secondary"
-        disabled
-        style={styles.button}
-        textStyle={{ fontSize: 14, fontWeight: "700" }}
-      />
+      <View style={styles.infoWrap}>
+        <View style={styles.infoRow}>
+          <AppText style={styles.infoLabel}>운임 제안 금액</AppText>
+          <AppText style={styles.infoValuePrimary}>{hasAmount ? formatKrw(amount) : "확인 중"}</AppText>
+        </View>
+        <View style={styles.infoRow}>
+          <AppText style={styles.infoLabel}>제안 메시지</AppText>
+          <AppText style={styles.infoValue}>{messageText || "메시지를 입력하지 않았습니다."}</AppText>
+        </View>
+      </View>
     </AppCard>
   );
 }
