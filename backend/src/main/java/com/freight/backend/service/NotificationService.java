@@ -55,7 +55,7 @@ public class NotificationService {
                 )
         );
 
-        mirrorToAdmins(receiverType, saved, normalizedType, message);
+        mirrorToAdminsAsyncAfterCommit(receiverType, saved, normalizedType, message);
     }
 
     /** 관리자 전용 알림 (정산 이상, 시스템 경고 등) */
@@ -209,6 +209,45 @@ public class NotificationService {
                             "type", normalizedType == null ? "" : normalizedType.name(),
                             "matchId", adminNotification.getMatchId() == null ? "" : String.valueOf(adminNotification.getMatchId())
                     )
+            );
+        }
+    }
+
+    private void mirrorToAdminsAsyncAfterCommit(
+            FcmToken.UserType receiverType,
+            Notification sourceNotification,
+            Notification.Type normalizedType,
+            String message
+    ) {
+        Runnable dispatch = () -> CompletableFuture.runAsync(
+                () -> safeMirrorToAdmins(receiverType, sourceNotification, normalizedType, message)
+        );
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    dispatch.run();
+                }
+            });
+            return;
+        }
+        dispatch.run();
+    }
+
+    private void safeMirrorToAdmins(
+            FcmToken.UserType receiverType,
+            Notification sourceNotification,
+            Notification.Type normalizedType,
+            String message
+    ) {
+        try {
+            mirrorToAdmins(receiverType, sourceNotification, normalizedType, message);
+        } catch (Exception e) {
+            log.warn(
+                    "Admin notification mirror failed. receiverType={}, matchId={}, cause={}",
+                    receiverType,
+                    sourceNotification == null ? null : sourceNotification.getMatchId(),
+                    e.getMessage()
             );
         }
     }

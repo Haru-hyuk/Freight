@@ -12,10 +12,15 @@ import com.freight.backend.gpsload.loadplan.repository.TruckSpecCatalogRepositor
 import com.freight.backend.repository.DriverRepository;
 import com.freight.backend.repository.TruckRepository;
 import jakarta.transaction.Transactional;
+import java.sql.Date;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -23,16 +28,20 @@ import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class TruckService {
     private final TruckRepository truckRepository;
     private final DriverRepository driverRepository;
     private final TruckSpecCatalogRepository truckSpecCatalogRepository;
+    private final JdbcTemplate jdbcTemplate;
 
     @Transactional
     public TruckCreateResponse createTruck(TruckCreateRequest req) {
         Long driverId = getCurrentDriverId();
+        Long truckId = resolveTruckIdForCreate();
 
         Truck truck = Truck.builder()
+                .truckId(truckId)
                 .driverId(driverId)
                 .vehicleType(normalizeVehicleType(req.getVehicleType()))
                 .vehicleBodyType(normalizeVehicleBodyType(req.getVehicleBodyType()))
@@ -51,8 +60,63 @@ public class TruckService {
                 .lastInspectionDate(req.getLastInspectionDate())
                 .build();
 
+        if (truckId != null) {
+            insertTruckManually(truck);
+            return new TruckCreateResponse(truckId);
+        }
+
         Truck saved = truckRepository.save(truck);
         return new TruckCreateResponse(saved.getTruckId());
+    }
+
+    private void insertTruckManually(Truck truck) {
+        LocalDateTime now = LocalDateTime.now();
+        jdbcTemplate.update(
+                """
+                INSERT INTO trucks (
+                    truck_id, approval_status, approved, cargo_height, cargo_length, cargo_width, created_at,
+                    driver_id, image_url, insurance, last_inspection_date, max_volume, max_weight, name,
+                    odometer_km, review_memo, tonnage, updated_at, vehicle_body_type, vehicle_type
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                truck.getTruckId(),
+                "PENDING",
+                Boolean.FALSE,
+                truck.getCargoHeight(),
+                truck.getCargoLength(),
+                truck.getCargoWidth(),
+                Timestamp.valueOf(now),
+                truck.getDriverId(),
+                truck.getImageUrl(),
+                truck.getInsurance(),
+                truck.getLastInspectionDate() == null ? null : Date.valueOf(truck.getLastInspectionDate()),
+                truck.getMaxVolume(),
+                truck.getMaxWeight(),
+                truck.getName(),
+                truck.getOdometerKm(),
+                null,
+                truck.getTonnage(),
+                Timestamp.valueOf(now),
+                truck.getVehicleBodyType(),
+                truck.getVehicleType()
+        );
+    }
+
+    private Long resolveTruckIdForCreate() {
+        try {
+            long autoIncrementColumns = truckRepository.countTruckIdAutoIncrementColumns();
+            if (autoIncrementColumns > 0) {
+                return null;
+            }
+            Long nextTruckId = truckRepository.findNextTruckIdCandidate();
+            if (nextTruckId != null && nextTruckId > 0) {
+                log.warn("Schema fallback: trucks.truck_id is not AUTO_INCREMENT. Assigning manual truckId={}", nextTruckId);
+                return nextTruckId;
+            }
+        } catch (Exception e) {
+            log.warn("Failed to inspect trucks.truck_id auto increment state. Falling back to JPA identity. cause={}", e.getMessage());
+        }
+        return null;
     }
 
     @Transactional

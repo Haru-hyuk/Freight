@@ -100,8 +100,8 @@ export const apiPaths = {
       { truckId },
     ),
 
-  adminSettlementApprovals: resolvePath(env.VITE_API_ADMIN_SETTLEMENT_APPROVALS_PATH, "/api/admin/settlements"),
-  adminSettlementHistory: resolvePath(env.VITE_API_ADMIN_SETTLEMENT_HISTORY_PATH, "/api/admin/settlements"),
+  adminSettlementApprovals: resolvePath(env.VITE_API_ADMIN_SETTLEMENT_APPROVALS_PATH, "/api/admin/settlements/approvals"),
+  adminSettlementHistory: resolvePath(env.VITE_API_ADMIN_SETTLEMENT_HISTORY_PATH, "/api/admin/settlements/approval-history"),
   adminSettlementReview: (settlementId: string) =>
     resolveTemplate(
       adminSettlementReviewTemplate,
