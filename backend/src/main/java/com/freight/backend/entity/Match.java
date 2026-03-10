@@ -110,6 +110,7 @@ public class Match {
     protected void onCreate() {
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();
+        ensureVersionInitialized();
         if (status == null) {
             status = Status.READY;
         }
@@ -123,11 +124,13 @@ public class Match {
 
     @PreUpdate
     protected void onUpdate() {
+        ensureVersionInitialized();
         updatedAt = LocalDateTime.now();
     }
 
     /** 기사가 매칭 수락 */
     public void accept(Long driverId) {
+        ensureVersionInitialized();
         this.driverId = driverId;
         this.accepted = true;
         this.acceptedAt = LocalDateTime.now();
@@ -136,6 +139,7 @@ public class Match {
 
     /** 매칭 그룹 설정 (합짐/노선조립용) */
     public void assignGroup(String groupKey, String groupType, Integer groupOrder) {
+        ensureVersionInitialized();
         this.matchGroupKey = groupKey;
         this.matchGroupType = groupType;
         this.matchGroupOrder = groupOrder;
@@ -144,12 +148,14 @@ public class Match {
 
     /** 매칭 취소 */
     public void cancel() {
+        ensureVersionInitialized();
         this.status = Status.CANCELLED;
         this.updatedAt = LocalDateTime.now();
     }
 
     /** 운송 시작 (위치 공유 활성화) */
     public void startTransit() {
+        ensureVersionInitialized();
         this.status = Status.IN_TRANSIT;
         this.locationSharingEnabled = true;
         this.locationSharingUpdatedAt = LocalDateTime.now();
@@ -157,6 +163,7 @@ public class Match {
 
     /** 운송 완료 (위치 공유 비활성화) */
     public void complete() {
+        ensureVersionInitialized();
         this.status = Status.COMPLETED;
         this.locationSharingEnabled = false;
         this.locationSharingUpdatedAt = LocalDateTime.now();
@@ -164,12 +171,14 @@ public class Match {
 
     /** 위치 공유 설정 변경 */
     public void updateLocationSharing(boolean enabled) {
+        ensureVersionInitialized();
         this.locationSharingEnabled = enabled;
         this.locationSharingUpdatedAt = LocalDateTime.now();
     }
 
     /** 재매칭 위해 매칭 해제 (결제 타임아웃 시) */
     public void releaseForRematch() {
+        ensureVersionInitialized();
         this.driverId = null;
         this.accepted = false;
         this.acceptedAt = null;
@@ -180,5 +189,11 @@ public class Match {
         this.locationSharingEnabled = false;
         this.locationSharingUpdatedAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
+    }
+
+    private void ensureVersionInitialized() {
+        if (this.version == null) {
+            this.version = 0L;
+        }
     }
 }

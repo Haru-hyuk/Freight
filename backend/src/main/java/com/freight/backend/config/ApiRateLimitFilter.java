@@ -131,12 +131,12 @@ public class ApiRateLimitFilter extends OncePerRequestFilter {
                 return null;
             }
 
-            if (current == 1L) {
+            if (Long.valueOf(1L).equals(current)) {
                 long ttlMs = Math.max(1000L, (windowMs - (now % windowMs)) + 2000L);
                 stringRedisTemplate.expire(redisKey, Duration.ofMillis(ttlMs));
             }
 
-            if (current > policy.limit()) {
+            if (current != null && current.longValue() > policy.limit()) {
                 long retryAfterMs = Math.max(1L, windowMs - (now % windowMs));
                 return SlidingWindowBucket.AcquireResult.denied(retryAfterMs);
             }

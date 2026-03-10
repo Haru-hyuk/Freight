@@ -162,13 +162,31 @@ pnpm start
 위 명령은 아래와 동일합니다.
 
 ```bash
-expo start --tunnel
+expo start --lan
+```
+
+Expo Go로 열려면:
+
+```bash
+pnpm expo:go
 ```
 
 또는 캐시 초기화 포함 명시적 실행:
 
 ```bash
-npx expo start -c --dev-client
+npx expo start --lan -c --dev-client
+```
+
+외부 네트워크에서 접속해야 할 때만 터널을 사용합니다.
+
+```bash
+pnpm start:tunnel
+```
+
+Expo Go + 터널이 필요하면:
+
+```bash
+pnpm expo:go:tunnel
 ```
 
 ### `-c` 옵션은 언제 쓰나?
@@ -204,6 +222,16 @@ pnpm api:gen
 ```bash
 npx expo start -c
 ```
+
+### 3) `ngrok tunnel took too long to connect`
+
+기본 개발 환경에서는 터널이 필요 없습니다. 같은 Wi-Fi 또는 같은 LAN에 있다면 아래처럼 LAN 모드로 시작하세요.
+
+```bash
+pnpm start
+```
+
+터널이 꼭 필요하면 `pnpm start:tunnel`로 명시적으로 실행합니다.
 
 #### 해결되지 않으면: `node_modules` + Expo 캐시 전체 초기화
 

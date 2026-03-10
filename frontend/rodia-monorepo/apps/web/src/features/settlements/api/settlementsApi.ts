@@ -15,9 +15,6 @@ type SettlementListPayload = {
   total?: number;
 };
 
-const USE_ADMIN_SETTLEMENT_REVIEW_ENDPOINT =
-  String(import.meta.env.VITE_USE_ADMIN_SETTLEMENT_REVIEW_ENDPOINT ?? "").toLowerCase() === "true";
-
 let settlementsStore: SettlementApprovalRow[] = [...SETTLEMENT_APPROVAL_MOCK_ROWS];
 
 function toRecord(value: unknown): Record<string, unknown> {
@@ -140,7 +137,7 @@ async function fetchRowsByPath(path: string): Promise<SettlementApprovalRow[]> {
 }
 
 async function fetchLiveSettlementRows(): Promise<SettlementApprovalRow[]> {
-  return fetchRowsByPath(apiPaths.adminTransportSettlements);
+  return fetchRowsByPath(apiPaths.adminSettlementApprovals);
 }
 
 function toMatchIdParam(matchId: string | undefined): string | null {
@@ -182,7 +179,7 @@ export async function fetchSettlementApprovalHistory(): Promise<SettlementApprov
     return sortRows(settlementsStore.filter((row) => row.approvalStatus !== "PENDING"));
   }
 
-  const rows = await fetchLiveSettlementRows();
+  const rows = await fetchRowsByPath(apiPaths.adminSettlementHistory);
   return rows.filter((row) => row.approvalStatus !== "PENDING");
 }
 
@@ -209,16 +206,14 @@ export async function reviewSettlement(payload: SettlementReviewPayload): Promis
 
   let reviewed = false;
 
-  if (USE_ADMIN_SETTLEMENT_REVIEW_ENDPOINT) {
-    try {
-      await apiClient.post(apiPaths.adminSettlementReview(payload.settlementId), {
-        action: payload.action,
-        reason: payload.reason,
-      });
-      reviewed = true;
-    } catch {
-      // fallback below
-    }
+  try {
+    await apiClient.post(apiPaths.adminSettlementReview(payload.settlementId), {
+      action: payload.action,
+      reason: payload.reason,
+    });
+    reviewed = true;
+  } catch {
+    // fallback below
   }
 
   if (!reviewed && payload.action === "APPROVE") {

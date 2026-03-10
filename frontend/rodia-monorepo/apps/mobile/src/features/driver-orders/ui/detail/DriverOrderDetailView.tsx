@@ -1207,11 +1207,11 @@ export function DriverOrderDetailView({
             <QuoteModeRouteCard quote={quote ?? (match as unknown as QuoteDetailResponse)} placements={orderedPlacements} />
           ) : null}
 
-          {hasPlacementPayload && !isRunNegotiatingDetail ? (
+          {hasPlacementPayload && !isRunNegotiatingDetail && uiState !== DRIVER_UI_STATE.COMPLETED ? (
             <DriverOrderLoadSimulation placements={orderedPlacements} truckSpec={truckSpec} source={loadPlanSource} />
           ) : null}
 
-          {hasPlacementPayload && !isRunNegotiatingDetail ? (
+          {hasPlacementPayload && !isRunNegotiatingDetail && uiState !== DRIVER_UI_STATE.COMPLETED ? (
             <AppCard style={{ padding: 16 }}>
               <View style={themedStyles.listHeader}>
                 <AppText variant="heading" weight="bold">

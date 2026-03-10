@@ -1036,7 +1036,8 @@ export function RunActiveDetails({
 
   React.useEffect(() => {
     const shouldAutoSubmit =
-      uiState === DRIVER_UI_STATE.TRANSIT_IN_PROGRESS &&
+      (uiState === DRIVER_UI_STATE.PICKUP_IN_PROGRESS ||
+        uiState === DRIVER_UI_STATE.TRANSIT_IN_PROGRESS) &&
       trackingSharingEnabled &&
       safeMatchId > 0 &&
       !isLocationDenied &&

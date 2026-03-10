@@ -1533,44 +1533,44 @@ export function DriverOrdersBoard({
               </Pressable>
             </View>
 
-            <View style={styles.marketScaleCard}>
-              <View style={styles.marketScaleHeader}>
-                <AppText variant="detail" weight="800" color="textMain">
-                  한 번에 묶을 오더 수
+            {recommendMode === "BUNDLED" ? (
+              <View style={styles.marketScaleCard}>
+                <View style={styles.marketScaleHeader}>
+                  <AppText variant="detail" weight="800" color="textMain">
+                    한 번에 묶을 오더 수
+                  </AppText>
+                  <AppText variant="detail" weight="900" color="brandPrimary">
+                    {maxQuotesPerRoute}건 선택
+                  </AppText>
+                </View>
+                <AppText style={styles.marketScaleCaption}>
+                  합짐 노선은 3~5건을 선택하면 조합 추천 폭이 넓어집니다.
                 </AppText>
-                <AppText variant="detail" weight="900" color="brandPrimary">
-                  {maxQuotesPerRoute}건 선택
-                </AppText>
+                <View style={styles.marketScaleStepRow}>
+                  {ROUTE_RECOMMEND_STEPS.map((step) => {
+                    const active = step === maxQuotesPerRoute;
+                    return (
+                      <Pressable
+                        key={`route-step-${step}`}
+                        style={[styles.marketScaleStep, active ? styles.marketScaleStepActive : null]}
+                        onPress={() => {
+                          setMaxQuotesPerRoute(step);
+                          setRecommendAnalysis(null);
+                          setSelectedRecommendKey(null);
+                        }}
+                      >
+                        <AppText style={[styles.marketScaleStepText, active ? styles.marketScaleStepTextActive : null]}>
+                          {step}건
+                        </AppText>
+                        <AppText style={[styles.marketScaleStepHint, active ? styles.marketScaleStepHintActive : null]}>
+                          {ROUTE_RECOMMEND_STEP_HINT[step]}
+                        </AppText>
+                      </Pressable>
+                    );
+                  })}
+                </View>
               </View>
-              <AppText style={styles.marketScaleCaption}>
-                {recommendMode === "SINGLE"
-                  ? "단건 노선은 2~3건 중심으로 추천 정확도가 높습니다."
-                  : "합짐 노선은 3~5건을 선택하면 조합 추천 폭이 넓어집니다."}
-              </AppText>
-              <View style={styles.marketScaleStepRow}>
-                {ROUTE_RECOMMEND_STEPS.map((step) => {
-                  const active = step === maxQuotesPerRoute;
-                  return (
-                    <Pressable
-                      key={`route-step-${step}`}
-                      style={[styles.marketScaleStep, active ? styles.marketScaleStepActive : null]}
-                      onPress={() => {
-                        setMaxQuotesPerRoute(step);
-                        setRecommendAnalysis(null);
-                        setSelectedRecommendKey(null);
-                      }}
-                    >
-                      <AppText style={[styles.marketScaleStepText, active ? styles.marketScaleStepTextActive : null]}>
-                        {step}건
-                      </AppText>
-                      <AppText style={[styles.marketScaleStepHint, active ? styles.marketScaleStepHintActive : null]}>
-                        {ROUTE_RECOMMEND_STEP_HINT[step]}
-                      </AppText>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
+            ) : null}
 
             <View style={styles.marketRecommendHeaderRow}>
               <AppText variant="detail" weight="900" color="textMain">

@@ -215,14 +215,16 @@ export function DispatchTable({ rows, total, loading, onRefresh }: Props) {
                 <div>도착: {selected.arriveAt ?? "-"}</div>
               </div>
 
-              <div className="rounded-lg border border-border bg-background p-3">
-                <div className="font-medium">기사 및 적재</div>
-                <div className="mt-1">기사: {selected.driverName ?? "미배정"}</div>
-                <div>차량: {selected.truckName ?? "대기"}</div>
-                <div>
-                  적재: 사용 {selected.currentVolumeCbm} cbm / 잔여 {selected.remainingVolumeCbm} cbm
+              {selected.matchStatus !== "COMPLETED" ? (
+                <div className="rounded-lg border border-border bg-background p-3">
+                  <div className="font-medium">기사 및 적재</div>
+                  <div className="mt-1">기사: {selected.driverName ?? "미배정"}</div>
+                  <div>차량: {selected.truckName ?? "대기"}</div>
+                  <div>
+                    적재: 사용 {selected.currentVolumeCbm} cbm / 잔여 {selected.remainingVolumeCbm} cbm
+                  </div>
                 </div>
-              </div>
+              ) : null}
 
               {!selected.driverName ? (
                 <div className="rounded-lg border border-border bg-background p-3">

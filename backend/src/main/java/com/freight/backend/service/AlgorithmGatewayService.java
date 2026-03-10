@@ -1841,6 +1841,9 @@ public class AlgorithmGatewayService {
             Map<Long, Quote> quoteById = quoteRepository.findAllById(normalizedQuoteIds).stream()
                     .collect(Collectors.toMap(Quote::getQuoteId, Function.identity()));
             Map<Long, List<QuoteItem>> itemsByQuoteId = fetchQuoteItems(normalizedQuoteIds);
+            if (!fitsAggregateTruckCapacity(truck, normalizedQuoteIds, quoteById, itemsByQuoteId)) {
+                return false;
+            }
 
             if (route.visitOrder() == null || route.visitOrder().isEmpty()) {
                 return loadActiveQuotesPreview(driverId, truckId, truck, normalizedQuoteIds, quoteById, itemsByQuoteId) != null;
@@ -1898,6 +1901,41 @@ public class AlgorithmGatewayService {
         } catch (CustomException ex) {
             return false;
         }
+    }
+
+    private boolean fitsAggregateTruckCapacity(
+            Truck truck,
+            List<Long> quoteIds,
+            Map<Long, Quote> quoteById,
+            Map<Long, List<QuoteItem>> itemsByQuoteId
+    ) {
+        if (truck == null || quoteIds == null || quoteIds.isEmpty()) {
+            return false;
+        }
+
+        double totalWeightKg = 0.0;
+        double totalVolumeCbm = 0.0;
+        for (Long quoteId : quoteIds) {
+            Quote quote = quoteById.get(quoteId);
+            if (quote == null) {
+                return false;
+            }
+            List<QuoteItem> quoteItems = itemsByQuoteId.getOrDefault(quoteId, List.of());
+            totalWeightKg += deriveQuoteWeightKg(quote, quoteItems);
+            totalVolumeCbm += deriveQuoteVolumeCbm(quote, quoteItems);
+        }
+
+        double maxWeightKg = resolveTruckMaxWeightKg(truck);
+        if (maxWeightKg > 0 && totalWeightKg > maxWeightKg) {
+            return false;
+        }
+
+        double maxVolumeCbm = resolveTruckMaxVolumeCbm(truck);
+        if (maxVolumeCbm > 0 && totalVolumeCbm > maxVolumeCbm) {
+            return false;
+        }
+
+        return true;
     }
 
     private List<Long> buildActiveLoadPlanQuoteIds(

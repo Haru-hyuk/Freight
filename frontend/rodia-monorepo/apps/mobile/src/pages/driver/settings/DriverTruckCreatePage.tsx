@@ -549,7 +549,13 @@ export default function DriverTruckCreatePage() {
                   <AppText style={[styles.iosDateActionText, styles.iosDateActionConfirmText]}>확인</AppText>
                 </Pressable>
               </View>
-              <DateTimePicker value={insuranceDateDraft} mode="date" display="spinner" onChange={handleInsuranceDateChange} />
+              <DateTimePicker
+                value={insuranceDateDraft}
+                mode="date"
+                display="spinner"
+                onChange={handleInsuranceDateChange}
+                textColor={theme.colors.textMain}
+              />
             </View>
           </Pressable>
         </Modal>

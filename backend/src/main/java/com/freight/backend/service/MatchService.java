@@ -33,15 +33,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class MatchService {
 
     private final MatchRepository matchRepository;
@@ -179,11 +182,18 @@ public class MatchService {
     public BatchAcceptMatchResponse acceptMatches(Long driverId, BatchAcceptMatchRequest request) {
         List<Long> requestedMatchIds = toDistinctPositiveIds(request == null ? null : request.getMatchIds());
         if (requestedMatchIds.isEmpty()) {
+            log.warn("Batch accept rejected: empty matchIds. driverId={}", driverId);
             throw new CustomException(ErrorCode.INVALID_REQUEST);
         }
 
         List<Match> found = matchRepository.findAllById(requestedMatchIds);
         if (found.size() != requestedMatchIds.size()) {
+            log.warn(
+                    "Batch accept rejected: some matches not found. driverId={}, requestedMatchIds={}, foundCount={}",
+                    driverId,
+                    requestedMatchIds,
+                    found.size()
+            );
             throw new CustomException(ErrorCode.MATCH_NOT_FOUND);
         }
 
@@ -196,13 +206,27 @@ public class MatchService {
         for (Long matchId : requestedMatchIds) {
             Match current = matchById.get(matchId);
             if (current == null) {
+                log.warn("Batch accept rejected: match missing after lookup. driverId={}, matchId={}", driverId, matchId);
                 throw new CustomException(ErrorCode.MATCH_NOT_FOUND);
             }
             if (current.getStatus() != Match.Status.READY) {
+                log.warn(
+                        "Batch accept rejected: match is not READY. driverId={}, matchId={}, status={}, quoteId={}",
+                        driverId,
+                        matchId,
+                        current.getStatus(),
+                        current.getQuoteId()
+                );
                 throw new CustomException(ErrorCode.INVALID_REQUEST);
             }
             int updated = matchRepository.acceptIfAvailable(matchId, driverId, acceptedAt);
             if (updated == 0) {
+                log.warn(
+                        "Batch accept rejected: match already accepted during update. driverId={}, matchId={}, quoteId={}",
+                        driverId,
+                        matchId,
+                        current.getQuoteId()
+                );
                 throw new CustomException(ErrorCode.MATCH_ALREADY_ACCEPTED);
             }
         }
@@ -222,14 +246,22 @@ public class MatchService {
         for (int idx = 0; idx < acceptedMatches.size(); idx++) {
             Match acceptedMatch = acceptedMatches.get(idx);
             int groupOrder = quoteOrderMap.getOrDefault(acceptedMatch.getQuoteId(), idx + 1);
-            acceptedMatch.assignGroup(groupKey, groupType, grouped ? groupOrder : 1);
-            matchRepository.save(acceptedMatch);
+            int updated = matchRepository.assignGroupMetadata(
+                    acceptedMatch.getMatchId(),
+                    groupKey,
+                    groupType,
+                    grouped ? groupOrder : 1,
+                    LocalDateTime.now()
+            );
+            if (updated == 0) {
+                throw new CustomException(ErrorCode.MATCH_NOT_FOUND);
+            }
 
             Quote quote = markQuoteMatched(acceptedMatch.getQuoteId());
             notifyMatchAccepted(quote, acceptedMatch.getMatchId());
         }
 
-        List<MatchResponse> responses = acceptedMatches.stream()
+        List<MatchResponse> responses = matchRepository.findAllById(requestedMatchIds).stream()
                 .sorted(Comparator.comparing(Match::getMatchGroupOrder, Comparator.nullsLast(Comparator.naturalOrder())))
                 .map(MatchResponse::from)
                 .collect(Collectors.toList());
@@ -341,6 +373,7 @@ public class MatchService {
     private void validateTruckCapacityForQuotes(Long driverId, List<Long> quoteIds) {
         List<Long> normalizedQuoteIds = toDistinctPositiveIds(quoteIds);
         if (normalizedQuoteIds.isEmpty()) {
+            log.warn("Batch accept capacity rejected: empty quoteIds. driverId={}", driverId);
             throw new CustomException(ErrorCode.INVALID_REQUEST);
         }
 
@@ -348,6 +381,13 @@ public class MatchService {
         Map<Long, Quote> quoteById = quoteRepository.findAllById(normalizedQuoteIds).stream()
                 .collect(Collectors.toMap(Quote::getQuoteId, quote -> quote));
         if (quoteById.size() != normalizedQuoteIds.size()) {
+            log.warn(
+                    "Batch accept capacity rejected: quote lookup mismatch. driverId={}, truckId={}, requestedQuoteIds={}, foundQuoteIds={}",
+                    driverId,
+                    truck.getTruckId(),
+                    normalizedQuoteIds,
+                    quoteById.keySet()
+            );
             throw new CustomException(ErrorCode.INVALID_REQUEST);
         }
 
@@ -357,6 +397,12 @@ public class MatchService {
         for (Long quoteId : normalizedQuoteIds) {
             Quote quote = quoteById.get(quoteId);
             if (quote == null) {
+                log.warn(
+                        "Batch accept capacity rejected: quote missing during aggregation. driverId={}, truckId={}, quoteId={}",
+                        driverId,
+                        truck.getTruckId(),
+                        quoteId
+                );
                 throw new CustomException(ErrorCode.INVALID_REQUEST);
             }
             List<QuoteItem> quoteItems = itemsByQuoteId.getOrDefault(quoteId, List.of());
@@ -366,11 +412,27 @@ public class MatchService {
 
         double maxWeightKg = safeBigDecimal(truck.getMaxWeight(), 0.0);
         if (maxWeightKg > 0 && totalWeightKg > maxWeightKg) {
+            log.warn(
+                    "Batch accept capacity rejected: overweight. driverId={}, truckId={}, quoteIds={}, totalWeightKg={}, maxWeightKg={}",
+                    driverId,
+                    truck.getTruckId(),
+                    normalizedQuoteIds,
+                    totalWeightKg,
+                    maxWeightKg
+            );
             throw new CustomException(ErrorCode.INVALID_REQUEST);
         }
 
         double maxVolumeCbm = safeBigDecimal(truck.getMaxVolume(), 0.0);
         if (maxVolumeCbm > 0 && totalVolumeCbm > maxVolumeCbm) {
+            log.warn(
+                    "Batch accept capacity rejected: over-volume. driverId={}, truckId={}, quoteIds={}, totalVolumeCbm={}, maxVolumeCbm={}",
+                    driverId,
+                    truck.getTruckId(),
+                    normalizedQuoteIds,
+                    totalVolumeCbm,
+                    maxVolumeCbm
+            );
             throw new CustomException(ErrorCode.INVALID_REQUEST);
         }
 
@@ -379,13 +441,87 @@ public class MatchService {
         loadPlanRequest.setQuoteIds(normalizedQuoteIds);
         Object preview = algorithmGatewayService.previewLoadPlan(driverId, loadPlanRequest);
         if (!(preview instanceof Map<?, ?> previewMap)) {
+            log.warn(
+                    "Batch accept capacity rejected: preview response was not a map. driverId={}, truckId={}, quoteIds={}, previewType={}",
+                    driverId,
+                    truck.getTruckId(),
+                    normalizedQuoteIds,
+                    preview == null ? "null" : preview.getClass().getName()
+            );
             throw new CustomException(ErrorCode.INTERNAL_ERROR);
         }
 
         Object unplaced = previewMap.get("unplaced");
         if (unplaced instanceof Collection<?> unplacedItems && !unplacedItems.isEmpty()) {
-            throw new CustomException(ErrorCode.INVALID_REQUEST);
+            Object truckMeta = previewMap.get("truck");
+            Object statsMeta = previewMap.get("stats");
+            log.warn(
+                    "Batch accept capacity warning: unplaced items remain but acceptance will continue. driverId={}, truckId={}, quoteIds={}, unplacedCount={}, truckMeta={}, stats={}, unplacedItems={}",
+                    driverId,
+                    truck.getTruckId(),
+                    normalizedQuoteIds,
+                    unplacedItems.size(),
+                    summarizePreviewTruckMeta(truckMeta),
+                    summarizePreviewStats(statsMeta),
+                    summarizeUnplacedItems(unplacedItems)
+            );
         }
+    }
+
+    private Object summarizePreviewTruckMeta(Object truckMeta) {
+        if (!(truckMeta instanceof Map<?, ?> truckMap)) {
+            return truckMeta;
+        }
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("truckId", truckMap.get("truckId"));
+        summary.put("vehicleType", truckMap.get("vehicleType"));
+        summary.put("vehicleBodyType", truckMap.get("vehicleBodyType"));
+        summary.put("doorPosition", truckMap.get("doorPosition"));
+        summary.put("length", truckMap.get("length"));
+        summary.put("width", truckMap.get("width"));
+        summary.put("height", truckMap.get("height"));
+        summary.put("maxWeightKg", truckMap.get("maxWeightKg"));
+        summary.put("maxVolumeCbm", truckMap.get("maxVolumeCbm"));
+        return summary;
+    }
+
+    private Object summarizePreviewStats(Object statsMeta) {
+        if (!(statsMeta instanceof Map<?, ?> statsMap)) {
+            return statsMeta;
+        }
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("utilization", statsMap.get("utilization"));
+        summary.put("totalWeight", statsMap.get("totalWeight"));
+        summary.put("placedCount", statsMap.get("placedCount"));
+        summary.put("unplacedCount", statsMap.get("unplacedCount"));
+        summary.put("violations", statsMap.get("violations"));
+        return summary;
+    }
+
+    private List<Map<String, Object>> summarizeUnplacedItems(Collection<?> unplacedItems) {
+        return unplacedItems.stream()
+                .map(this::summarizeUnplacedItem)
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
+    private Map<String, Object> summarizeUnplacedItem(Object item) {
+        if (item instanceof Map<?, ?> itemMap) {
+            Map<String, Object> summary = new LinkedHashMap<>();
+            summary.put("id", itemMap.get("id"));
+            summary.put("length", itemMap.get("length"));
+            summary.put("width", itemMap.get("width"));
+            summary.put("height", itemMap.get("height"));
+            summary.put("weight", itemMap.get("weight"));
+            summary.put("stopOrder", itemMap.get("stopOrder"));
+            summary.put("stackable", itemMap.get("stackable"));
+            summary.put("fragile", itemMap.get("fragile"));
+            summary.put("noStack", itemMap.get("noStack"));
+            summary.put("bottomOnly", itemMap.get("bottomOnly"));
+            summary.put("maxStackWeight", itemMap.get("maxStackWeight"));
+            return summary;
+        }
+        return Map.of("raw", item);
     }
 
     private Truck resolveAcceptedTruck(Long driverId) {
@@ -394,15 +530,29 @@ public class MatchService {
 
         Long selectedTruckId = driver.getSelectedTruckId();
         if (selectedTruckId == null) {
+            log.warn("Batch accept rejected: no selected truck. driverId={}", driverId);
             throw new CustomException(ErrorCode.DRIVER_TRUCK_REQUIRED);
         }
 
         Truck truck = truckRepository.findById(selectedTruckId)
                 .orElseThrow(() -> new CustomException(ErrorCode.DRIVER_TRUCK_REQUIRED));
         if (!driverId.equals(truck.getDriverId())) {
+            log.warn(
+                    "Batch accept rejected: selected truck does not belong to driver. driverId={}, truckId={}, truckDriverId={}",
+                    driverId,
+                    selectedTruckId,
+                    truck.getDriverId()
+            );
             throw new CustomException(ErrorCode.AUTH_FORBIDDEN);
         }
         if (!isApprovedTruck(truck)) {
+            log.warn(
+                    "Batch accept rejected: selected truck is not approved. driverId={}, truckId={}, approved={}, approvalStatus={}",
+                    driverId,
+                    truck.getTruckId(),
+                    truck.getApproved(),
+                    truck.getApprovalStatus()
+            );
             throw new CustomException(ErrorCode.DRIVER_TRUCK_REQUIRED);
         }
         return truck;
@@ -746,6 +896,7 @@ public class MatchService {
 
     @Transactional
     public MatchResponse startTransit(Long driverId, Long matchId) {
+        matchRepository.initializeVersionIfNull(matchId);
         Match match = matchRepository.findById(matchId)
                 .orElseThrow(() -> new CustomException(ErrorCode.MATCH_NOT_FOUND));
 
@@ -849,6 +1000,7 @@ public class MatchService {
 
     @Transactional
     public MatchResponse completeTransit(Long driverId, Long matchId) {
+        matchRepository.initializeVersionIfNull(matchId);
         Match match = matchRepository.findById(matchId)
                 .orElseThrow(() -> new CustomException(ErrorCode.MATCH_NOT_FOUND));
 

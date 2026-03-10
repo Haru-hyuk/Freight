@@ -115,6 +115,15 @@ public interface MatchRepository extends JpaRepository<Match, Long> {
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
             update Match m
+               set m.version = 0
+             where m.matchId = :matchId
+               and m.version is null
+            """)
+    int initializeVersionIfNull(@Param("matchId") Long matchId);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update Match m
                set m.driverId = :driverId,
                    m.accepted = true,
                    m.acceptedAt = :acceptedAt
@@ -126,5 +135,22 @@ public interface MatchRepository extends JpaRepository<Match, Long> {
             @Param("matchId") Long matchId,
             @Param("driverId") Long driverId,
             @Param("acceptedAt") LocalDateTime acceptedAt
+    );
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update Match m
+               set m.matchGroupKey = :groupKey,
+                   m.matchGroupType = :groupType,
+                   m.matchGroupOrder = :groupOrder,
+                   m.updatedAt = :updatedAt
+             where m.matchId = :matchId
+            """)
+    int assignGroupMetadata(
+            @Param("matchId") Long matchId,
+            @Param("groupKey") String groupKey,
+            @Param("groupType") String groupType,
+            @Param("groupOrder") Integer groupOrder,
+            @Param("updatedAt") LocalDateTime updatedAt
     );
 }

@@ -1167,6 +1167,21 @@ export default function QuoteDetailPage() {
   const shouldShowDeliveryTimeline = isPickupInProgress || isTransitInProgress;
   const shouldShowPostPaymentSummary = shouldShowDeliveryTimeline || isCompletedStatus;
   const canShowTrackingCard = (isPickupInProgress || isTransitInProgress) && cancelTargetMatchId > 0;
+  const trackingStops = React.useMemo(() => buildShipperTrackingStops(view.quote, trackingSnapshot), [trackingSnapshot, view.quote]);
+  const hasTrackingCoordinates = trackingStops.length >= 2;
+  const trackingMarkerIconUriByType = React.useMemo(
+    () => ({
+      waypoint: Image.resolveAssetSource(require("../../../../assets/driver/trucks/truck_icon.png")).uri,
+    }),
+    []
+  );
+  const trackingLocationText = React.useMemo(() => {
+    const currentLat = Number(trackingSnapshot?.currentLocation?.lat);
+    const currentLng = Number(trackingSnapshot?.currentLocation?.lng);
+    if (!Number.isFinite(currentLat) || !Number.isFinite(currentLng)) return null;
+    return `${currentLat.toFixed(5)}, ${currentLng.toFixed(5)}`;
+  }, [trackingSnapshot?.currentLocation?.lat, trackingSnapshot?.currentLocation?.lng]);
+  const trackingUpdatedAtText = formatDateTime(trackingSnapshot?.lastReceivedAt, "-");
 
   const loadShipperTracking = React.useCallback(
     async (targetMatchId: number) => {
@@ -1962,6 +1977,37 @@ export default function QuoteDetailPage() {
                   );
                 })}
               </View>
+            </View>
+          ) : null}
+          {canShowTrackingCard ? (
+            <View style={styles.deliveryCard}>
+              <AppText style={styles.deliveryTitle}>기사 위치</AppText>
+              {trackingErrorMessage ? (
+                <AppText style={styles.paymentDoneDesc}>{trackingErrorMessage}</AppText>
+              ) : trackingSnapshot?.locationSharingEnabled === false ? (
+                <AppText style={styles.paymentDoneDesc}>기사가 위치 공유를 켜지 않았습니다.</AppText>
+              ) : hasTrackingCoordinates ? (
+                <>
+                  <RecoRouteWebView
+                    stops={trackingStops}
+                    loading={isTrackingLoading}
+                    markerIconUriByType={trackingMarkerIconUriByType}
+                  />
+                  <AppText style={styles.paymentDoneDesc}>
+                    {trackingLocationText ? `현재 좌표: ${trackingLocationText}` : "기사 위치를 확인하는 중입니다."}
+                  </AppText>
+                  {trackingUpdatedAtText && trackingUpdatedAtText !== "-" ? (
+                    <AppText style={styles.paymentDoneDesc}>최근 수신: {trackingUpdatedAtText}</AppText>
+                  ) : null}
+                  {trackingSnapshot?.missingSignalWarning ? (
+                    <AppText style={styles.paymentDoneDesc}>GPS 신호가 끊겼거나 오래됐습니다.</AppText>
+                  ) : null}
+                </>
+              ) : (
+                <AppText style={styles.paymentDoneDesc}>
+                  {isTrackingLoading ? "기사 위치를 불러오는 중입니다." : "아직 수신된 기사 위치가 없습니다."}
+                </AppText>
+              )}
             </View>
           ) : null}
           {shouldShowPhotoSection ? (
